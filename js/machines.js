@@ -11,18 +11,13 @@ export const MACHINES = [
   { key: 'fom2',       label: 'FOM 2',             group: 'FOM', ops: 1, note: 'Widths' },
   { key: 'fom3',       label: 'FOM 3',             group: 'FOM', ops: 1, note: 'Vent + Widths' },
   { key: 'cnc1',       label: 'CNC 1',             group: 'CNC', ops: 1 },
-  { key: 'cnc2',       label: 'CNC 2',             group: 'CNC', ops: 0 },
+  { key: 'cnc2',       label: 'CNC 2',             group: 'CNC', ops: 1 },
   { key: 'cnc3',       label: 'CNC 3',             group: 'CNC', ops: 1 },
   { key: 'cnc140',     label: 'CNC 140',           group: 'CNC', ops: 1 },
-  { key: 'multipunch', label: 'Multi Punch',       group: 'Punch', ops: 1, note: 'pcs not frames' },
-  { key: 'notching',   label: 'Notching',          group: 'Punch', ops: 0 },
   { key: 'elu1',       label: 'Elumatec Saw #1',   group: 'Saw', ops: 1 },
   { key: 'elu2',       label: 'Elumatec Saw #2',   group: 'Saw', ops: 2 },
-  { key: 'saw1',       label: 'Saw #1',            group: 'Saw', ops: 0 },
-  { key: 'saw3',       label: 'Saw #3',            group: 'Saw', ops: 0 },
-  { key: 'saw4',       label: 'Saw #4',            group: 'Saw', ops: 0 },
-  { key: 'saw5',       label: 'Saw #5',            group: 'Saw', ops: 0 },
-  { key: 'proline',    label: 'Proline',           group: 'Saw', ops: 0 },
+  { key: 'multipunch', label: 'Multi Punch',       group: 'Punch', ops: 1, note: 'pcs not frames' },
+  { key: 'prep',       label: 'Prep',              group: 'Prep', ops: null, note: 'BD Prep' },
 ];
 
 /* Standing rows on the shift update that are not machines but always get
@@ -41,7 +36,7 @@ export const SHIFT_ROWS = [...STANDING_ROWS, ...MACHINES];
 /* Product routing, from the TARGETS sheet. Which work centres a product type
    passes through — used to suggest where an order should go. */
 export const ROUTING = {
-  'Window wall': ['roll-auto', 'saw1', 'fom2', 'multipunch', 'cnc1'],
+  'Window wall': ['roll-auto', 'elu1', 'fom2', 'multipunch', 'cnc1'],
   'Vents': ['roll-auto', 'fom3'],
   'Doors': ['roll-auto', 'fom1', 'cnc1'],
 };

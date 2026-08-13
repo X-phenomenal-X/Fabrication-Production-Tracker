@@ -96,17 +96,21 @@ the usual full-shift crewing (week of Aug 12) — edit as they change.
 
 ## Saws and punch
 - **Elumatec Saw #1**, **Elumatec Saw #2**
-- **Saw #1**, **#3**, **#4**, **#5**, **Proline**
 - **Multi Punch** — counted in pieces, not frames
-- **Notching**
+
+## Prep
+- **Prep** — the BD Prep step
+
+Notching, Saws #1/#3/#4/#5 and Proline are not tracked here.
 
 ## Product routing
-- **Window wall** → Rolling, Saw, FOM 2, Multi Punch, CNC
+- **Window wall** → Rolling, Elumatec Saw, FOM 2, Multi Punch, CNC
 - **Vents** → Rolling, FOM 3
 - **Doors** → Rolling, FOM 1, CNC
 
 ### TODO for the department
 - Confirm the routing above still matches how work is released
+- Add the usual operator count for **Prep** (not in the Shift Assignment sheet)
 - Add cycle times per work centre so the planner can size a shift`,
   },
   {

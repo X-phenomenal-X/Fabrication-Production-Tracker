@@ -26,8 +26,8 @@ function visibleRows() {
   if (Array.isArray(shown) && shown.length) {
     return SHIFT_ROWS.filter((m) => shown.includes(m.key));
   }
-  // Default: the standing rows plus every machine normally crewed.
-  return SHIFT_ROWS.filter((m) => m.ops === undefined || m.ops > 0);
+  // The machine list is now a deliberate short list, so show all of it.
+  return SHIFT_ROWS;
 }
 
 function pickRows(rerender) {
@@ -76,7 +76,7 @@ function composer(rerender) {
       el('th', {}, 'Next in schedule'),
       el('th', {}, 'Notes'))),
     el('tbody', {}, ...rows.map((m) => {
-      const isMachine = m.ops !== undefined;
+      const isMachine = !!m.group;
       return el('tr', {},
         el('td', {},
           el('div.strong', {}, m.label),
@@ -85,7 +85,7 @@ function composer(rerender) {
           ? bind(m.key, 'ops', el('input', {
               type: 'number', min: '0', inputmode: 'numeric',
               style: { padding: '5px 7px', textAlign: 'right' },
-            }), String(m.ops))
+            }), m.ops == null ? '' : String(m.ops))
           : el('span.muted', {}, '—')),
         el('td', {}, bind(m.key, 'done', el('textarea', {
           style: { minHeight: '54px', fontSize: '13px' },
