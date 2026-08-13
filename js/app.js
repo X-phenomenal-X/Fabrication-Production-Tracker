@@ -1,0 +1,112 @@
+/* Shell: tabs, the identity picker, and the render loop. */
+
+import { el, clear, chip } from './ui.js';
+import { state, loadLocal, save, onChange, me, sharedFileName } from './store.js';
+import { renderToday } from './views/today.js';
+import { renderBoard } from './views/board.js';
+import { renderPlanner } from './views/planner.js';
+import { renderShift } from './views/shift.js';
+import { renderGuide } from './views/guide.js';
+import { renderData, initSharedFile, seedGuide } from './views/data.js';
+import { SHIFTS, shiftAt } from './schema.js';
+
+const TABS = [
+  { key: 'today', label: 'Today', render: renderToday },
+  { key: 'board', label: 'Board', render: renderBoard },
+  { key: 'planner', label: 'Planner', render: renderPlanner },
+  { key: 'shift', label: 'Shift Log', render: renderShift },
+  { key: 'guide', label: 'Guide', render: renderGuide },
+  { key: 'data', label: 'Data & Import', render: renderData },
+];
+
+let current = location.hash.slice(1) || 'today';
+if (!TABS.some((t) => t.key === current)) current = 'today';
+
+const root = document.getElementById('app');
+let scheduled = false;
+
+function go(key) {
+  current = key;
+  location.hash = key;
+  scheduleRender();
+  window.scrollTo({ top: 0 });
+}
+
+function whoAmI() {
+  const people = state.people.length ? state.people : [];
+  const sel = el('select', {
+    style: { width: 'auto', minWidth: '120px' },
+    onchange: (e) => {
+      if (e.target.value === '__add') {
+        const name = prompt('Your name');
+        if (name && name.trim()) {
+          const n = name.trim();
+          if (!state.people.includes(n)) state.people.push(n);
+          state.settings.me = n;
+          save();
+        }
+        scheduleRender();
+        return;
+      }
+      state.settings.me = e.target.value || null;
+      save();
+      scheduleRender();
+    },
+  },
+    el('option', { value: '', selected: !state.settings.me }, 'Who are you?'),
+    ...people.map((p) => el('option', { value: p, selected: state.settings.me === p }, p)),
+    el('option', { value: '__add' }, '+ Add name…'));
+  return sel;
+}
+
+function header() {
+  const shift = SHIFTS[shiftAt()];
+  const shared = sharedFileName();
+
+  return el('header.top', {},
+    el('div.brand', {}, 'Cutting',
+      el('small', {}, 'BV Glazing · production tracker')),
+    el('span.chip' + (shift.full ? '' : '.warn'), { title: 'Current shift' },
+      shift.label + (shift.full ? '' : ` · ${shift.crew} crew`)),
+    shared ? chip('shared file', 'ok', 'Connected to ' + shared) : chip('this device only', 'mute',
+      'Not connected to a shared file — updates stay on this computer'),
+    el('nav.tabs', {}, ...TABS.map((t) => el('button', {
+      'aria-current': String(t.key === current),
+      onclick: () => go(t.key),
+    }, t.label))),
+    el('div', { style: { marginLeft: '8px' } }, whoAmI())
+  );
+}
+
+function render() {
+  const tab = TABS.find((t) => t.key === current) || TABS[0];
+  // Views are handed scheduleRender, never render, so a redraw requested from
+  // inside a click or change handler lands after the browser has finished
+  // moving focus — tearing the DOM down mid-event throws.
+  const next = el('main', {}, tab.render(scheduleRender, go));
+  root.replaceChildren(header(), next);
+}
+
+function scheduleRender() {
+  if (scheduled) return;
+  scheduled = true;
+  requestAnimationFrame(() => { scheduled = false; render(); });
+}
+
+window.addEventListener('hashchange', () => {
+  const k = location.hash.slice(1);
+  if (TABS.some((t) => t.key === k) && k !== current) { current = k; scheduleRender(); }
+});
+
+loadLocal();
+seedGuide();
+onChange(scheduleRender);
+render();
+initSharedFile(render);
+
+// Pick up other people's edits when the tab regains focus.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && sharedFileName()) {
+    import('./store.js').then((m) => m.pullSharedFile());
+  }
+});
