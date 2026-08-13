@@ -4,6 +4,7 @@
 import { state } from './store.js';
 import { OPS, QTY_OPS, OP_BY_KEY, CUT_STATUS, PURCH_TONE } from './schema.js';
 import { machineForOp } from './machines.js';
+import { PROFILES, profileForOp, MATERIAL, materialFromPurch } from './profiles.js';
 
 export function today() {
   return new Date().toISOString().slice(0, 10);
@@ -291,4 +292,87 @@ export function unroutedOps() {
     }
   }
   return Array.from(totals.values());
+}
+
+/* ---------- profiles ---------- */
+
+export function materialFor(orderId, profileKey) {
+  const m = state.material[`${orderId}|${profileKey}`];
+  return m && !m.deleted ? m : null;
+}
+
+/** Effective material state for a profile: what someone recorded, or failing
+    that what the schedule's order-level `purch` column implies. */
+export function materialState(order, profileKey) {
+  const rec = materialFor(order.id, profileKey);
+  if (rec?.status) return { status: rec.status, by: rec.by, at: rec.at, note: rec.note, explicit: true };
+  const seeded = materialFromPurch(order.purch);
+  return seeded ? { status: seeded, explicit: false } : { status: null, explicit: false };
+}
+
+/** An order broken down the way the shop thinks about it: by profile type,
+    each with its own piece counts and its own material state. */
+export function profileRollup(order) {
+  const roll = rollup(order);
+  const out = [];
+  for (const p of PROFILES) {
+    const ops = roll.ops.filter((o) => o.kind === 'qty' && profileForOp(o.key) === p.key && o.target);
+    const target = ops.reduce((a, o) => a + o.target, 0);
+    const done = ops.reduce((a, o) => a + o.done, 0);
+    const mat = materialState(order, p.key);
+    // Profiles with no pieces are still shown if someone has recorded material
+    // against them — that is how Service Orders and Hinges get tracked at all.
+    if (!target && !mat.explicit) continue;
+    out.push({
+      profile: p, ops, target, done,
+      remaining: Math.max(0, target - done),
+      pct: target ? Math.round((done / target) * 100) : null,
+      complete: target > 0 && done >= target,
+      material: mat,
+      materialOk: mat.status ? !!MATERIAL[mat.status]?.done : false,
+    });
+  }
+  return out;
+}
+
+/** Order completion, which is what the department is actually judged on. */
+export function completion(order) {
+  const rows = profileRollup(order);
+  const withPieces = rows.filter((r) => r.target > 0);
+  const target = withPieces.reduce((a, r) => a + r.target, 0);
+  const done = withPieces.reduce((a, r) => a + r.done, 0);
+  const profilesDone = withPieces.filter((r) => r.complete).length;
+  const blockedProfiles = rows.filter((r) => r.material.status && !MATERIAL[r.material.status]?.done);
+  return {
+    rows, target, done,
+    remaining: Math.max(0, target - done),
+    pct: target ? Math.round((done / target) * 100) : null,
+    profiles: withPieces.length,
+    profilesDone,
+    complete: target > 0 && done >= target,
+    blockedProfiles,
+  };
+}
+
+/** Department-wide material picture, by profile type. */
+export function materialByProfile(ref = today()) {
+  const out = new Map();
+  for (const p of PROFILES) {
+    out.set(p.key, { profile: p, counts: {}, orders: [], target: 0, remaining: 0 });
+  }
+  for (const o of activeOrders()) {
+    for (const r of profileRollup(o)) {
+      const b = out.get(r.profile.key);
+      if (!b) continue;
+      const st = r.material.status || 'UNKNOWN';
+      b.counts[st] = (b.counts[st] || 0) + 1;
+      b.target += r.target;
+      b.remaining += r.remaining;
+      if (!r.materialOk && r.remaining > 0) b.orders.push({ order: o, row: r });
+    }
+  }
+  for (const b of out.values()) {
+    b.orders.sort((a, c) => ((a.order.cuttingDate || '9999') < (c.order.cuttingDate || '9999') ? -1 : 1));
+  }
+  return out;
 }

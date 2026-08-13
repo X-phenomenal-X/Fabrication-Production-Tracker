@@ -4,6 +4,7 @@ import { el, clear, chip } from './ui.js';
 import { state, loadLocal, save, onChange, me, sharedFileName } from './store.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderBoard } from './views/board.js';
+import { renderMaterials } from './views/materials.js';
 import { renderPlanner } from './views/planner.js';
 import { renderShift } from './views/shift.js';
 import { renderGuide } from './views/guide.js';
@@ -13,6 +14,7 @@ import { SHIFTS, shiftAt } from './schema.js';
 const TABS = [
   { key: 'dashboard', label: 'Dashboard', render: renderDashboard },
   { key: 'board', label: 'Orders', render: renderBoard },
+  { key: 'materials', label: 'Materials', render: renderMaterials },
   { key: 'planner', label: 'Planner', render: renderPlanner },
   { key: 'shift', label: 'Shift Update', render: renderShift },
   { key: 'guide', label: 'Guide', render: renderGuide },

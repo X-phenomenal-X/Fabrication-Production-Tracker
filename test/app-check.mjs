@@ -103,7 +103,18 @@ if (input) {
   await page.waitForTimeout(200);
   step('logged progress = 10');
 }
-await page.screenshot({ path: path.join(SHOT, '4-order.png') });
+// profile grouping + per-profile material + history trail
+const profiles = await page.$$eval('dialog .row > strong', (ns) => ns.map((n) => n.textContent.trim()).filter((t) => /Widths|Heights|Vents|Louvers|Service|Hinges|Extra/.test(t)));
+step('profiles on order: ' + profiles.join(', '));
+const matSel = await page.$('dialog select');
+if (matSel) {
+  await matSel.selectOption('SHORT');
+  await page.waitForTimeout(250);
+  step('set a profile material to Short');
+}
+const hist = await page.$$eval('dialog .list li', (n) => n.length);
+step('history entries on order: ' + hist);
+await (await page.$('dialog')).screenshot({ path: path.join(SHOT, '4-order.png') });
 await page.click('dialog footer button.primary');
 await page.waitForSelector('dialog', { state: 'detached' });
 
@@ -113,6 +124,13 @@ const persisted = await page.evaluate(() => import('/js/store.js').then((m) => {
   return keys.length ? { key: keys[0], val: m.state.progress[keys[0]] } : null;
 }));
 step('persisted progress: ' + JSON.stringify(persisted));
+
+// materials
+await page.click('nav.tabs button:has-text("Materials")');
+await page.waitForSelector('main .panel');
+const matCards = await page.$$eval('main .panel header', (ns) => ns.map((n) => n.childNodes[0]?.textContent?.trim()).filter(Boolean));
+step('material profiles: ' + matCards.join(', '));
+await page.screenshot({ path: path.join(SHOT, '9-materials.png'), fullPage: true });
 
 // planner
 await page.click('nav.tabs button:has-text("Planner")');

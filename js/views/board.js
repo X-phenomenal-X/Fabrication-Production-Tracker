@@ -2,11 +2,13 @@
    progress entry. This is the screen that replaces squinting at 148 columns. */
 
 import { el, clear, chip, bar, fmtDate, fmtNum, fmtWhen, modal, toast } from '../ui.js';
-import { state, setProgress, clearProgress, me } from '../store.js';
+import { state, setProgress, clearProgress, setMaterial, historyFor, me } from '../store.js';
 import {
   activeOrders, rollup, riskOf, reasonFor, RISK, cutTone, purchTone, today, progressFor,
+  profileRollup, completion, materialState,
 } from '../model.js';
 import { CUT_STATUS } from '../schema.js';
+import { MATERIAL, MATERIAL_ORDER } from '../profiles.js';
 
 const filters = {
   q: '',
@@ -49,55 +51,146 @@ function rows() {
 
 /* ---------- order detail ---------- */
 
+const HISTORY_LABEL = {
+  cut: 'Cut',
+  material: 'Material',
+};
+
+function historyPanel(order) {
+  const rows = historyFor(order.id);
+  if (!rows.length) {
+    return el('div', { style: { marginTop: '16px' } },
+      el('h4', { style: { margin: '0 0 6px', fontSize: '13px' } }, 'History'),
+      el('div.small.muted', {}, 'Nothing recorded yet. Every change made here is logged with who and when.'));
+  }
+  return el('div', { style: { marginTop: '16px' } },
+    el('h4', { style: { margin: '0 0 6px', fontSize: '13px' } }, `History (${rows.length})`),
+    el('ul.list', { style: { border: '1px solid var(--line-soft)', borderRadius: '8px', maxHeight: '220px', overflow: 'auto' } },
+      ...rows.slice(0, 80).map((h) => {
+        const [kind, key] = String(h.kind).split(':');
+        const shown = (v) => v == null ? '—' : (MATERIAL[v]?.label || String(v));
+        return el('li', { style: { padding: '7px 12px' } },
+          el('div.row.small', { style: { gap: '8px' } },
+            el('strong', {}, HISTORY_LABEL[kind] || kind),
+            el('span.muted', {}, key || ''),
+            el('span', {}, shown(h.from), ' → ', el('strong', {}, shown(h.to))),
+            el('span.spacer'),
+            el('span.muted.nowrap', {}, `${h.by} · ${fmtWhen(h.at)}`)),
+          h.note ? el('div.small.muted', {}, h.note) : null);
+      })));
+}
+
 export function openOrder(order, rerender) {
-  const roll = rollup(order);
 
   const opsBox = el('div');
+  const histBox = el('div');
+
+  const renderHistory = () => {
+    histBox.replaceChildren(historyPanel(order));
+  };
+
   const renderOps = () => {
     clear(opsBox);
-    const r = rollup(order);
-    for (const op of r.ops) {
-      if (op.kind === 'status') {
-        opsBox.append(el('div.oprow', {},
-          el('span.oplabel', {}, op.label),
-          op.status
-            ? chip(CUT_STATUS[op.status]?.label || op.status, CUT_STATUS[op.status]?.tone || 'mute')
-            : el('span.small.muted', {}, op.text || '—')
-        ));
-        continue;
-      }
+    renderHistory();
+    const comp = completion(order);
 
-      const p = progressFor(order.id, op.key);
-      const input = el('input', {
-        type: 'number', min: '0', max: String(op.target), value: op.done || '',
-        placeholder: '0', inputmode: 'numeric',
+    // Headline: order completion is what the department is judged on.
+    opsBox.append(el('div.row', {
+      style: { marginBottom: '14px', alignItems: 'baseline', gap: '10px' },
+    },
+      el('span', { style: { fontSize: '26px', fontWeight: '700', letterSpacing: '-.02em' } },
+        comp.pct == null ? '—' : comp.pct + '%'),
+      el('span.small.muted', {}, comp.target
+        ? `${fmtNum(comp.done)} of ${fmtNum(comp.target)} pieces · ${comp.profilesDone}/${comp.profiles} profiles complete`
+        : 'no piece counts on this order'),
+      el('span.spacer'),
+      comp.complete ? chip('Order complete', 'ok') : null,
+      comp.blockedProfiles.length
+        ? chip(`${comp.blockedProfiles.length} profile${comp.blockedProfiles.length === 1 ? '' : 's'} waiting on material`, 'bad')
+        : null));
+
+    if (comp.target) {
+      opsBox.append(el('div', { style: { marginBottom: '16px' } }, bar(comp.pct, comp.complete)));
+    }
+
+    for (const row of comp.rows) {
+      const p = row.profile;
+
+      const matSelect = el('select', {
+        style: { maxWidth: '150px' },
+        onchange: (e) => {
+          setMaterial(order.id, p.key, e.target.value || null);
+          requestAnimationFrame(renderOps);
+        },
+      },
+        el('option', { value: '', selected: !row.material.status }, 'Not set'),
+        ...MATERIAL_ORDER.map((k) => el('option', {
+          value: k, selected: row.material.status === k,
+        }, MATERIAL[k].label)));
+
+      const header = el('div.row', { style: { gap: '10px', marginBottom: '6px' } },
+        el('strong', { style: { minWidth: '120px' } }, p.label),
+        row.target
+          ? el('span.row', { style: { gap: '8px', flexWrap: 'nowrap', flex: '1' } },
+              bar(row.pct, row.complete),
+              el('span.mono.small.nowrap', {}, `${fmtNum(row.done)}/${fmtNum(row.target)}`))
+          : el('span.small.muted', { style: { flex: '1' } }, 'no piece count'),
+        el('span.small.muted.hide-sm', {}, 'Material'),
+        matSelect,
+        row.material.status && !row.material.explicit
+          ? chip('from schedule', 'mute', 'Taken from the order-level material column; set it here to override')
+          : null,
+        row.material.status
+          ? chip(MATERIAL[row.material.status].label, MATERIAL[row.material.status].tone)
+          : null);
+
+      const opRows = row.ops.map((op) => {
+        const pr = progressFor(order.id, op.key);
+        const input = el('input', {
+          type: 'number', min: '0', max: String(op.target), value: op.done || '',
+          placeholder: '0', inputmode: 'numeric',
+        });
+        const commit = (v) => {
+          const n = v === '' ? null : Math.max(0, Math.min(op.target, Number(v)));
+          if (n == null) clearProgress(order.id, op.key);
+          else setProgress(order.id, op.key, n);
+          requestAnimationFrame(renderOps);
+        };
+        input.addEventListener('change', () => commit(input.value));
+        return el('div.oprow', {},
+          el('span.oplabel', { title: op.alt || '' }, op.label),
+          el('span.opinput', {}, input),
+          el('span.opqty', {}, `/ ${fmtNum(op.target)}`),
+          bar(op.target ? (op.done / op.target) * 100 : 0, op.complete),
+          el('button.sm.ghost', {
+            title: 'Mark this operation fully cut',
+            onclick: () => commit(String(op.target)),
+          }, 'All'),
+          pr?.by ? el('span.small.muted.nowrap.hide-sm', {}, `${pr.by} · ${fmtWhen(pr.at)}`) : null);
       });
 
-      const commit = (v) => {
-        const n = v === '' ? null : Math.max(0, Math.min(op.target, Number(v)));
-        if (n == null) clearProgress(order.id, op.key);
-        else setProgress(order.id, op.key, n);
-        // Rebuild after the current event finishes: this runs inside the input's
-        // own change handler, and tearing out the focused input mid-event throws.
-        // The store's own emit re-renders the board behind the modal.
-        requestAnimationFrame(renderOps);
-      };
-
-      input.addEventListener('change', () => commit(input.value));
-
-      opsBox.append(el('div.oprow', {},
-        el('span.oplabel', { title: op.alt || '' }, op.label),
-        el('span.opinput', {}, input),
-        el('span.opqty', {}, `/ ${fmtNum(op.target)}`),
-        bar(op.target ? (op.done / op.target) * 100 : 0, op.complete),
-        el('button.sm.ghost', {
-          title: 'Mark this operation fully cut',
-          onclick: () => commit(String(op.target)),
-        }, 'All'),
-        p?.by ? el('span.small.muted.nowrap.hide-sm', {}, `${p.by} · ${fmtWhen(p.at)}`) : null
-      ));
+      opsBox.append(el('div', {
+        style: {
+          padding: '10px 0', borderTop: '1px solid var(--line-soft)',
+        },
+      }, header, ...opRows));
     }
-    if (!r.ops.length) opsBox.append(el('div.empty', {}, 'No cutting operations listed for this order.'));
+
+    // Status-only operations (BD Prep, MTL STATUS) sit outside the profiles.
+    const statusOps = rollup(order).ops.filter((o) => o.kind === 'status');
+    if (statusOps.length) {
+      opsBox.append(el('div', { style: { paddingTop: '10px', borderTop: '1px solid var(--line-soft)' } },
+        el('div.row', { style: { gap: '10px' } },
+          ...statusOps.map((op) => el('span.row', { style: { gap: '6px' } },
+            el('span.small.muted', {}, op.label),
+            op.status
+              ? chip(CUT_STATUS[op.status]?.label || op.status, CUT_STATUS[op.status]?.tone || 'mute')
+              : el('span.small', {}, op.text || '—'))))));
+    }
+
+    if (!comp.rows.length) {
+      opsBox.append(el('div.empty', {}, 'No cutting operations listed for this order.'));
+    }
   };
   renderOps();
 
@@ -133,6 +226,8 @@ export function openOrder(order, rerender) {
 
     el('h4', { style: { margin: '4px 0 8px', fontSize: '13px' } }, 'Cutting operations'),
     opsBox,
+
+    histBox,
 
     el('div.small.muted', { style: { marginTop: '14px' } },
       `Row ${order.row} of the schedule · id ${order.id}`)

@@ -36,7 +36,8 @@ Rebuild and re-copy `Cutting-Tracker.html` whenever the source changes.
 | Tab | What it is |
 |---|---|
 | **Dashboard** | One card per work centre, grouped by department — load, progress, blockers |
-| **Orders** | Every order, filterable, with per-operation piece counts |
+| **Orders** | Every order, grouped by profile type, with piece counts and history |
+| **Materials** | Material status per profile type across the department |
 | **Planner** | Assign orders to a day and shift |
 | **Shift Update** | Laid out by machine, like the existing Shift Update sheet |
 | **Guide** | The department's written process — editable in place |
@@ -93,12 +94,46 @@ The importer cleans up as it reads, and reports everything it did:
   destroy every total. These are listed in the import report so they can be
   fixed at source.
 
+## Profile types
+
+An order is not one lump of aluminium. It is widths, heights, vents and louvers,
+and each can be pulled, on order or short independently. The Daily Schedule
+carries a single `purch` status for the whole order, which is why "the order says
+Pulled but we are still waiting on vents" was invisible.
+
+| Profile | Operations |
+|---|---|
+| Widths | `WIDTHS` |
+| Heights | `HTS` |
+| Vents | `VENT` |
+| Louvers | `LVRS/TC PAN` |
+| Service Orders | tracked by material only |
+| Hinges | tracked by material only |
+| Extra Operations | `PUNCH`, `VYNL.S`, `SP.S`, `WW CNC`, `SLD ROLLING`, `SLD CUTTING`, `ADAPTORS CNC` |
+
+Each profile carries its own material state: Pulled, Stock OK, Part short, At
+paint, On order, Extrusion due, Short, TBD, Not required. Where nothing has been
+recorded the app seeds it from the order's `purch` column and marks it
+**from schedule**, so a real entry is always distinguishable from an inherited one.
+
+## Traceability
+
+Every change is recorded against the order — what changed, from what to what, by
+whom, and when. Each order shows its own history, and it updates live as work is
+logged. The record is append-only and merges across the shared file by id, so no
+one's entries are lost when two people work at once.
+
+Order completion is the headline on every order: percent complete, pieces done
+against pieces required, and how many profiles are finished.
+
 ## What the app owns
 
 The spreadsheet records the *target* — 80 pieces of `WIDTHS`. Nothing in it ever
 recorded how many were actually cut. That is what lives here:
 
 - Piece counts per operation, per order, stamped with who and when
+- Material status per profile type
+- The full change history per order
 - Shift updates by machine
 - Day/shift plans
 - The process guide

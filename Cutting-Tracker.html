@@ -274,6 +274,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     disconnectSharedFile: () => disconnectSharedFile,
     exportJson: () => exportJson,
     grantSharedFile: () => grantSharedFile,
+    historyFor: () => historyFor,
     importJson: () => importJson,
     loadLocal: () => loadLocal,
     log: () => log,
@@ -287,11 +288,13 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     saveGuideDoc: () => saveGuideDoc,
     saveShiftLog: () => saveShiftLog,
     setImport: () => setImport,
+    setMaterial: () => setMaterial,
     setPlan: () => setPlan,
     setProgress: () => setProgress,
     sharedFileName: () => sharedFileName,
     state: () => state,
     supportsSharedFile: () => supportsSharedFile,
+    trace: () => trace,
     uid: () => uid
   });
   function onChange(fn) {
@@ -314,11 +317,36 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     state.audit.unshift({ at: now(), who: me(), what, detail });
     if (state.audit.length > 800) state.audit.length = 800;
   }
+  function trace(orderId, kind, from, to, note) {
+    state.history.unshift({
+      id: uid(),
+      orderId,
+      kind,
+      from: from ?? null,
+      to: to ?? null,
+      note: note || null,
+      at: now(),
+      by: me()
+    });
+    if (state.history.length > 5e3) state.history.length = 5e3;
+  }
+  function historyFor(orderId) {
+    return state.history.filter((h) => h.orderId === orderId);
+  }
   function setProgress(orderId, opKey, done, note) {
     const key = `${orderId}|${opKey}`;
     const prev = state.progress[key];
     state.progress[key] = { done, at: now(), by: me(), note: note ?? prev?.note ?? null };
     log("progress", `${orderId} ${opKey} \u2192 ${done}`);
+    trace(orderId, `cut:${opKey}`, prev?.done ?? null, done, note);
+    save();
+  }
+  function setMaterial(orderId, profileKey, status, note) {
+    const key = `${orderId}|${profileKey}`;
+    const prev = state.material[key];
+    state.material[key] = { status, note: note ?? null, at: now(), by: me() };
+    log("material", `${orderId} ${profileKey} \u2192 ${status}`);
+    trace(orderId, `material:${profileKey}`, prev?.status ?? null, status, note);
     save();
   }
   function clearProgress(orderId, opKey) {
@@ -376,6 +404,8 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       prep: state.prep,
       screens: state.screens,
       progress: state.progress,
+      material: state.material,
+      history: state.history,
       shiftLogs: state.shiftLogs,
       plan: state.plan,
       guide: state.guide,
@@ -456,6 +486,11 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   function mergeSnapshot(remote) {
     if (!remote) return;
     state.progress = mergeRecords(state.progress, remote.progress);
+    state.material = mergeRecords(state.material, remote.material);
+    const haveIds = new Set(state.history.map((h) => h.id));
+    for (const h of remote.history || []) if (!haveIds.has(h.id)) state.history.push(h);
+    state.history.sort((a, b) => a.at < b.at ? 1 : -1);
+    if (state.history.length > 5e3) state.history.length = 5e3;
     state.shiftLogs = mergeRecords(state.shiftLogs, remote.shiftLogs);
     state.plan = mergeRecords(state.plan, remote.plan);
     state.guide = mergeRecords(state.guide, remote.guide);
@@ -580,6 +615,10 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         screens: [],
         progress: {},
         // `${orderId}|${opKey}` -> { done, at, by, note }
+        material: {},
+        // `${orderId}|${profileKey}` -> { status, note, at, by }
+        history: [],
+        // every change, newest first — the traceability record
         shiftLogs: {},
         // id -> log
         plan: {},
@@ -1017,6 +1056,68 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     return groups;
   }
 
+  // js/profiles.js
+  var PROFILES = [
+    { key: "widths", label: "Widths", ops: ["widths"] },
+    { key: "heights", label: "Heights", ops: ["hts"] },
+    { key: "vents", label: "Vents", ops: ["vent"] },
+    { key: "louvers", label: "Louvers", ops: ["lvrs"] },
+    { key: "service", label: "Service Orders", ops: [] },
+    { key: "hinges", label: "Hinges", ops: [] },
+    { key: "extra", label: "Extra Operations", ops: ["punch", "vynls", "sps", "wwcnc", "sldroll", "sldcut", "adaptors"] }
+  ];
+  var PROFILE_BY_KEY = Object.fromEntries(PROFILES.map((p) => [p.key, p]));
+  var PROFILE_OF_OP = (() => {
+    const map = {};
+    for (const p of PROFILES) for (const op of p.ops) map[op] = p.key;
+    return map;
+  })();
+  function profileForOp(opKey) {
+    return PROFILE_OF_OP[opKey] || "extra";
+  }
+  var MATERIAL = {
+    PULLED: { label: "Pulled", tone: "ok", done: true },
+    STOCK_OK: { label: "Stock OK", tone: "ok", done: true },
+    PARTIAL: { label: "Part short", tone: "warn", done: false },
+    AT_PAINT: { label: "At paint", tone: "work", done: false },
+    ON_ORDER: { label: "On order", tone: "bad", done: false },
+    EXT_DUE: { label: "Extrusion due", tone: "bad", done: false },
+    SHORT: { label: "Short", tone: "bad", done: false },
+    TBD: { label: "TBD", tone: "bad", done: false },
+    NA: { label: "Not required", tone: "mute", done: true }
+  };
+  var MATERIAL_ORDER = [
+    "PULLED",
+    "STOCK_OK",
+    "PARTIAL",
+    "AT_PAINT",
+    "ON_ORDER",
+    "EXT_DUE",
+    "SHORT",
+    "TBD",
+    "NA"
+  ];
+  function materialFromPurch(purch) {
+    switch (purch) {
+      case "PULLED":
+        return "PULLED";
+      case "STOCK OK":
+        return "STOCK_OK";
+      case "@ PAINT":
+        return "AT_PAINT";
+      case "ON ORDER":
+        return "ON_ORDER";
+      case "EXT DUE":
+        return "EXT_DUE";
+      case "TBD":
+        return "TBD";
+      case "NA":
+        return "NA";
+      default:
+        return null;
+    }
+  }
+
   // js/model.js
   function today() {
     return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -1247,6 +1348,79 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     }
     return Array.from(totals.values());
   }
+  function materialFor(orderId, profileKey) {
+    const m = state.material[`${orderId}|${profileKey}`];
+    return m && !m.deleted ? m : null;
+  }
+  function materialState(order, profileKey) {
+    const rec = materialFor(order.id, profileKey);
+    if (rec?.status) return { status: rec.status, by: rec.by, at: rec.at, note: rec.note, explicit: true };
+    const seeded = materialFromPurch(order.purch);
+    return seeded ? { status: seeded, explicit: false } : { status: null, explicit: false };
+  }
+  function profileRollup(order) {
+    const roll = rollup(order);
+    const out = [];
+    for (const p of PROFILES) {
+      const ops = roll.ops.filter((o) => o.kind === "qty" && profileForOp(o.key) === p.key && o.target);
+      const target = ops.reduce((a, o) => a + o.target, 0);
+      const done = ops.reduce((a, o) => a + o.done, 0);
+      const mat = materialState(order, p.key);
+      if (!target && !mat.explicit) continue;
+      out.push({
+        profile: p,
+        ops,
+        target,
+        done,
+        remaining: Math.max(0, target - done),
+        pct: target ? Math.round(done / target * 100) : null,
+        complete: target > 0 && done >= target,
+        material: mat,
+        materialOk: mat.status ? !!MATERIAL[mat.status]?.done : false
+      });
+    }
+    return out;
+  }
+  function completion(order) {
+    const rows2 = profileRollup(order);
+    const withPieces = rows2.filter((r) => r.target > 0);
+    const target = withPieces.reduce((a, r) => a + r.target, 0);
+    const done = withPieces.reduce((a, r) => a + r.done, 0);
+    const profilesDone = withPieces.filter((r) => r.complete).length;
+    const blockedProfiles = rows2.filter((r) => r.material.status && !MATERIAL[r.material.status]?.done);
+    return {
+      rows: rows2,
+      target,
+      done,
+      remaining: Math.max(0, target - done),
+      pct: target ? Math.round(done / target * 100) : null,
+      profiles: withPieces.length,
+      profilesDone,
+      complete: target > 0 && done >= target,
+      blockedProfiles
+    };
+  }
+  function materialByProfile(ref = today()) {
+    const out = /* @__PURE__ */ new Map();
+    for (const p of PROFILES) {
+      out.set(p.key, { profile: p, counts: {}, orders: [], target: 0, remaining: 0 });
+    }
+    for (const o of activeOrders()) {
+      for (const r of profileRollup(o)) {
+        const b = out.get(r.profile.key);
+        if (!b) continue;
+        const st = r.material.status || "UNKNOWN";
+        b.counts[st] = (b.counts[st] || 0) + 1;
+        b.target += r.target;
+        b.remaining += r.remaining;
+        if (!r.materialOk && r.remaining > 0) b.orders.push({ order: o, row: r });
+      }
+    }
+    for (const b of out.values()) {
+      b.orders.sort((a, c) => (a.order.cuttingDate || "9999") < (c.order.cuttingDate || "9999") ? -1 : 1);
+    }
+    return out;
+  }
 
   // js/views/board.js
   init_store();
@@ -1284,53 +1458,166 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     };
     return out.sort(sorters[filters.sort] || sorters.urgency);
   }
+  var HISTORY_LABEL = {
+    cut: "Cut",
+    material: "Material"
+  };
+  function historyPanel(order) {
+    const rows2 = historyFor(order.id);
+    if (!rows2.length) {
+      return el(
+        "div",
+        { style: { marginTop: "16px" } },
+        el("h4", { style: { margin: "0 0 6px", fontSize: "13px" } }, "History"),
+        el("div.small.muted", {}, "Nothing recorded yet. Every change made here is logged with who and when.")
+      );
+    }
+    return el(
+      "div",
+      { style: { marginTop: "16px" } },
+      el("h4", { style: { margin: "0 0 6px", fontSize: "13px" } }, `History (${rows2.length})`),
+      el(
+        "ul.list",
+        { style: { border: "1px solid var(--line-soft)", borderRadius: "8px", maxHeight: "220px", overflow: "auto" } },
+        ...rows2.slice(0, 80).map((h) => {
+          const [kind, key] = String(h.kind).split(":");
+          const shown = (v) => v == null ? "\u2014" : MATERIAL[v]?.label || String(v);
+          return el(
+            "li",
+            { style: { padding: "7px 12px" } },
+            el(
+              "div.row.small",
+              { style: { gap: "8px" } },
+              el("strong", {}, HISTORY_LABEL[kind] || kind),
+              el("span.muted", {}, key || ""),
+              el("span", {}, shown(h.from), " \u2192 ", el("strong", {}, shown(h.to))),
+              el("span.spacer"),
+              el("span.muted.nowrap", {}, `${h.by} \xB7 ${fmtWhen(h.at)}`)
+            ),
+            h.note ? el("div.small.muted", {}, h.note) : null
+          );
+        })
+      )
+    );
+  }
   function openOrder(order, rerender) {
-    const roll = rollup(order);
     const opsBox = el("div");
+    const histBox = el("div");
+    const renderHistory = () => {
+      histBox.replaceChildren(historyPanel(order));
+    };
     const renderOps = () => {
       clear(opsBox);
-      const r = rollup(order);
-      for (const op of r.ops) {
-        if (op.kind === "status") {
-          opsBox.append(el(
+      renderHistory();
+      const comp = completion(order);
+      opsBox.append(el(
+        "div.row",
+        {
+          style: { marginBottom: "14px", alignItems: "baseline", gap: "10px" }
+        },
+        el(
+          "span",
+          { style: { fontSize: "26px", fontWeight: "700", letterSpacing: "-.02em" } },
+          comp.pct == null ? "\u2014" : comp.pct + "%"
+        ),
+        el("span.small.muted", {}, comp.target ? `${fmtNum(comp.done)} of ${fmtNum(comp.target)} pieces \xB7 ${comp.profilesDone}/${comp.profiles} profiles complete` : "no piece counts on this order"),
+        el("span.spacer"),
+        comp.complete ? chip("Order complete", "ok") : null,
+        comp.blockedProfiles.length ? chip(`${comp.blockedProfiles.length} profile${comp.blockedProfiles.length === 1 ? "" : "s"} waiting on material`, "bad") : null
+      ));
+      if (comp.target) {
+        opsBox.append(el("div", { style: { marginBottom: "16px" } }, bar(comp.pct, comp.complete)));
+      }
+      for (const row of comp.rows) {
+        const p = row.profile;
+        const matSelect = el(
+          "select",
+          {
+            style: { maxWidth: "150px" },
+            onchange: (e) => {
+              setMaterial(order.id, p.key, e.target.value || null);
+              requestAnimationFrame(renderOps);
+            }
+          },
+          el("option", { value: "", selected: !row.material.status }, "Not set"),
+          ...MATERIAL_ORDER.map((k) => el("option", {
+            value: k,
+            selected: row.material.status === k
+          }, MATERIAL[k].label))
+        );
+        const header2 = el(
+          "div.row",
+          { style: { gap: "10px", marginBottom: "6px" } },
+          el("strong", { style: { minWidth: "120px" } }, p.label),
+          row.target ? el(
+            "span.row",
+            { style: { gap: "8px", flexWrap: "nowrap", flex: "1" } },
+            bar(row.pct, row.complete),
+            el("span.mono.small.nowrap", {}, `${fmtNum(row.done)}/${fmtNum(row.target)}`)
+          ) : el("span.small.muted", { style: { flex: "1" } }, "no piece count"),
+          el("span.small.muted.hide-sm", {}, "Material"),
+          matSelect,
+          row.material.status && !row.material.explicit ? chip("from schedule", "mute", "Taken from the order-level material column; set it here to override") : null,
+          row.material.status ? chip(MATERIAL[row.material.status].label, MATERIAL[row.material.status].tone) : null
+        );
+        const opRows = row.ops.map((op) => {
+          const pr = progressFor(order.id, op.key);
+          const input = el("input", {
+            type: "number",
+            min: "0",
+            max: String(op.target),
+            value: op.done || "",
+            placeholder: "0",
+            inputmode: "numeric"
+          });
+          const commit = (v) => {
+            const n = v === "" ? null : Math.max(0, Math.min(op.target, Number(v)));
+            if (n == null) clearProgress(order.id, op.key);
+            else setProgress(order.id, op.key, n);
+            requestAnimationFrame(renderOps);
+          };
+          input.addEventListener("change", () => commit(input.value));
+          return el(
             "div.oprow",
             {},
-            el("span.oplabel", {}, op.label),
-            op.status ? chip(CUT_STATUS[op.status]?.label || op.status, CUT_STATUS[op.status]?.tone || "mute") : el("span.small.muted", {}, op.text || "\u2014")
-          ));
-          continue;
-        }
-        const p = progressFor(order.id, op.key);
-        const input = el("input", {
-          type: "number",
-          min: "0",
-          max: String(op.target),
-          value: op.done || "",
-          placeholder: "0",
-          inputmode: "numeric"
+            el("span.oplabel", { title: op.alt || "" }, op.label),
+            el("span.opinput", {}, input),
+            el("span.opqty", {}, `/ ${fmtNum(op.target)}`),
+            bar(op.target ? op.done / op.target * 100 : 0, op.complete),
+            el("button.sm.ghost", {
+              title: "Mark this operation fully cut",
+              onclick: () => commit(String(op.target))
+            }, "All"),
+            pr?.by ? el("span.small.muted.nowrap.hide-sm", {}, `${pr.by} \xB7 ${fmtWhen(pr.at)}`) : null
+          );
         });
-        const commit = (v) => {
-          const n = v === "" ? null : Math.max(0, Math.min(op.target, Number(v)));
-          if (n == null) clearProgress(order.id, op.key);
-          else setProgress(order.id, op.key, n);
-          requestAnimationFrame(renderOps);
-        };
-        input.addEventListener("change", () => commit(input.value));
+        opsBox.append(el("div", {
+          style: {
+            padding: "10px 0",
+            borderTop: "1px solid var(--line-soft)"
+          }
+        }, header2, ...opRows));
+      }
+      const statusOps = rollup(order).ops.filter((o) => o.kind === "status");
+      if (statusOps.length) {
         opsBox.append(el(
-          "div.oprow",
-          {},
-          el("span.oplabel", { title: op.alt || "" }, op.label),
-          el("span.opinput", {}, input),
-          el("span.opqty", {}, `/ ${fmtNum(op.target)}`),
-          bar(op.target ? op.done / op.target * 100 : 0, op.complete),
-          el("button.sm.ghost", {
-            title: "Mark this operation fully cut",
-            onclick: () => commit(String(op.target))
-          }, "All"),
-          p?.by ? el("span.small.muted.nowrap.hide-sm", {}, `${p.by} \xB7 ${fmtWhen(p.at)}`) : null
+          "div",
+          { style: { paddingTop: "10px", borderTop: "1px solid var(--line-soft)" } },
+          el(
+            "div.row",
+            { style: { gap: "10px" } },
+            ...statusOps.map((op) => el(
+              "span.row",
+              { style: { gap: "6px" } },
+              el("span.small.muted", {}, op.label),
+              op.status ? chip(CUT_STATUS[op.status]?.label || op.status, CUT_STATUS[op.status]?.tone || "mute") : el("span.small", {}, op.text || "\u2014")
+            ))
+          )
         ));
       }
-      if (!r.ops.length) opsBox.append(el("div.empty", {}, "No cutting operations listed for this order."));
+      if (!comp.rows.length) {
+        opsBox.append(el("div.empty", {}, "No cutting operations listed for this order."));
+      }
     };
     renderOps();
     const field = (k, v) => el(
@@ -1375,6 +1662,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       ) : null,
       el("h4", { style: { margin: "4px 0 8px", fontSize: "13px" } }, "Cutting operations"),
       opsBox,
+      histBox,
       el(
         "div.small.muted",
         { style: { marginTop: "14px" } },
@@ -1921,6 +2209,153 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       )
     );
     return el("div", {}, header2, stats, warn, ...sections, footer);
+  }
+
+  // js/views/materials.js
+  init_store();
+  var openProfile = null;
+  function statusChips(counts) {
+    const order = [...MATERIAL_ORDER, "UNKNOWN"];
+    return order.filter((k) => counts[k]).map((k) => chip(
+      `${counts[k]} ${k === "UNKNOWN" ? "not set" : MATERIAL[k].label}`,
+      k === "UNKNOWN" ? "mute" : MATERIAL[k].tone
+    ));
+  }
+  function profileCard(data, rerender) {
+    const p = data.profile;
+    const waiting = data.orders.length;
+    const isOpen = openProfile === p.key;
+    return el(
+      "div.panel",
+      {},
+      el(
+        "header",
+        {},
+        p.label,
+        el("span.spacer"),
+        el("span.small.muted", {}, `${fmtNum(data.remaining)} pieces left`)
+      ),
+      el(
+        "div.body",
+        {},
+        el("div.tag-row", { style: { marginBottom: "10px" } }, ...statusChips(data.counts)),
+        el(
+          "div.row",
+          {},
+          waiting ? el(
+            "span.small",
+            {},
+            el("strong", {}, `${waiting} order${waiting === 1 ? "" : "s"}`),
+            " waiting on material"
+          ) : el("span.small.muted", {}, "Nothing waiting on material."),
+          el("span.spacer"),
+          waiting ? el("button.sm", {
+            onclick: () => {
+              openProfile = isOpen ? null : p.key;
+              rerender();
+            }
+          }, isOpen ? "Hide" : "Show") : null
+        )
+      ),
+      isOpen && waiting ? el("div.tbl-wrap", {}, el(
+        "table",
+        {},
+        el("thead", {}, el(
+          "tr",
+          {},
+          el("th", {}, "W/O"),
+          el("th", {}, "Project"),
+          el("th", {}, "Floor"),
+          el("th.hide-sm", {}, "Cut by"),
+          el("th.num", {}, "Left"),
+          el("th", {}, "Material")
+        )),
+        el("tbody", {}, ...data.orders.slice(0, 60).map(({ order, row }) => el(
+          "tr",
+          {},
+          el(
+            "td",
+            { style: { cursor: "pointer" }, onclick: () => openOrder(order, rerender) },
+            el("span.mono.strong", {}, order.wo)
+          ),
+          el("td", {}, order.project || "\u2014"),
+          el("td", {}, order.floor || "\u2014"),
+          el("td.hide-sm.nowrap", {}, fmtDate(order.cuttingDate)),
+          el("td.num", {}, fmtNum(row.remaining)),
+          el(
+            "td",
+            {},
+            el(
+              "select",
+              {
+                style: { maxWidth: "150px" },
+                onchange: (e) => {
+                  setMaterial(order.id, p.key, e.target.value || null);
+                  toast(`${order.wo} \xB7 ${p.label} \u2192 ${e.target.value ? MATERIAL[e.target.value].label : "not set"}`);
+                  rerender();
+                }
+              },
+              el("option", { value: "", selected: !row.material.status }, "Not set"),
+              ...MATERIAL_ORDER.map((k) => el("option", {
+                value: k,
+                selected: row.material.status === k
+              }, MATERIAL[k].label))
+            ),
+            row.material.status && !row.material.explicit ? el("div.small.muted", {}, "from schedule") : row.material.by ? el("div.small.muted", {}, `${row.material.by} \xB7 ${fmtWhen(row.material.at)}`) : null
+          )
+        )))
+      )) : null
+    );
+  }
+  function renderMaterials(rerender, go2) {
+    if (!state.orders.length) {
+      return el(
+        "div.panel",
+        {},
+        el(
+          "div.empty",
+          {},
+          el("h3", {}, "No schedule loaded yet"),
+          el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
+        )
+      );
+    }
+    const data = materialByProfile();
+    const totalWaiting = Array.from(data.values()).reduce((a, b) => a + b.orders.length, 0);
+    const head = el(
+      "div.panel",
+      {},
+      el(
+        "div.body",
+        {},
+        el(
+          "div.row",
+          {},
+          el(
+            "div",
+            {},
+            el("div", { style: { fontWeight: "700", fontSize: "16px" } }, "Material by profile"),
+            el(
+              "div.small.muted",
+              {},
+              "The schedule carries one status per order. This tracks each profile separately."
+            )
+          ),
+          el("span.spacer"),
+          totalWaiting ? chip(`${totalWaiting} waiting on material`, "bad") : chip("Nothing waiting", "ok")
+        )
+      )
+    );
+    return el(
+      "div",
+      {},
+      head,
+      el(
+        "div.grid.two",
+        { style: { marginTop: "16px" } },
+        ...PROFILES.map((p) => profileCard(data.get(p.key), rerender))
+      )
+    );
   }
 
   // js/views/planner.js
@@ -3649,6 +4084,7 @@ are read as headings, not orders. Repeated header rows and separators are ignore
   var TABS = [
     { key: "dashboard", label: "Dashboard", render: renderDashboard },
     { key: "board", label: "Orders", render: renderBoard },
+    { key: "materials", label: "Materials", render: renderMaterials },
     { key: "planner", label: "Planner", render: renderPlanner },
     { key: "shift", label: "Shift Update", render: renderShift },
     { key: "guide", label: "Guide", render: renderGuide },

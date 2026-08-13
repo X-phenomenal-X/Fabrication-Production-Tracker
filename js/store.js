@@ -20,6 +20,8 @@ export const state = {
   prep: [],
   screens: [],
   progress: {},   // `${orderId}|${opKey}` -> { done, at, by, note }
+  material: {},   // `${orderId}|${profileKey}` -> { status, note, at, by }
+  history: [],    // every change, newest first — the traceability record
   shiftLogs: {},  // id -> log
   plan: {},       // `${date}|${shift}` -> { ids, at, by }
   guide: {},      // id -> doc
@@ -60,6 +62,20 @@ export function log(what, detail) {
   if (state.audit.length > 800) state.audit.length = 800;
 }
 
+/** Append to the per-order traceability record. Unlike `audit`, this is keyed
+    by order so an order's whole history can be shown on the order itself. */
+export function trace(orderId, kind, from, to, note) {
+  state.history.unshift({
+    id: uid(), orderId, kind, from: from ?? null, to: to ?? null,
+    note: note || null, at: now(), by: me(),
+  });
+  if (state.history.length > 5000) state.history.length = 5000;
+}
+
+export function historyFor(orderId) {
+  return state.history.filter((h) => h.orderId === orderId);
+}
+
 /* ---------- mutations ---------- */
 
 export function setProgress(orderId, opKey, done, note) {
@@ -67,6 +83,16 @@ export function setProgress(orderId, opKey, done, note) {
   const prev = state.progress[key];
   state.progress[key] = { done, at: now(), by: me(), note: note ?? prev?.note ?? null };
   log('progress', `${orderId} ${opKey} → ${done}`);
+  trace(orderId, `cut:${opKey}`, prev?.done ?? null, done, note);
+  save();
+}
+
+export function setMaterial(orderId, profileKey, status, note) {
+  const key = `${orderId}|${profileKey}`;
+  const prev = state.material[key];
+  state.material[key] = { status, note: note ?? null, at: now(), by: me() };
+  log('material', `${orderId} ${profileKey} → ${status}`);
+  trace(orderId, `material:${profileKey}`, prev?.status ?? null, status, note);
   save();
 }
 
@@ -135,6 +161,8 @@ function snapshot() {
     prep: state.prep,
     screens: state.screens,
     progress: state.progress,
+    material: state.material,
+    history: state.history,
     shiftLogs: state.shiftLogs,
     plan: state.plan,
     guide: state.guide,
@@ -231,6 +259,13 @@ function mergeRecords(mine = {}, theirs = {}) {
 function mergeSnapshot(remote) {
   if (!remote) return;
   state.progress = mergeRecords(state.progress, remote.progress);
+  state.material = mergeRecords(state.material, remote.material);
+
+  // History is append-only, so merge by id and re-sort newest first.
+  const haveIds = new Set(state.history.map((h) => h.id));
+  for (const h of remote.history || []) if (!haveIds.has(h.id)) state.history.push(h);
+  state.history.sort((a, b) => (a.at < b.at ? 1 : -1));
+  if (state.history.length > 5000) state.history.length = 5000;
   state.shiftLogs = mergeRecords(state.shiftLogs, remote.shiftLogs);
   state.plan = mergeRecords(state.plan, remote.plan);
   state.guide = mergeRecords(state.guide, remote.guide);
