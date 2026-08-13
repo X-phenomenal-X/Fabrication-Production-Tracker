@@ -48,10 +48,12 @@ export const OPS = [
   { key: 'punch', col: 30, label: 'PUNCH', kind: 'qty', alt: 'WIDTHS' },
   { key: 'vynls', col: 31, label: 'VYNL.S', kind: 'qty' },
   { key: 'sps', col: 32, label: 'SP.S', kind: 'qty' },
+  // Louvres belong to Cutting, so this column stays despite the "PAN" in its name.
   { key: 'lvrs', col: 33, label: 'LVRS/TC PAN', kind: 'qty' },
   { key: 'vent', col: 34, label: 'VENT', kind: 'qty' },
   { key: 'wwcnc', col: 35, label: 'WW CNC', kind: 'qty' },
-  { key: 'cpcut', col: 36, label: 'CP CUTTING', kind: 'status' },
+  // Column 36, CP CUTTING (sub-header "C CHANNEL (PANEL)"), is panel work and
+  // belongs to another department. Deliberately not tracked here.
   { key: 'sldroll', col: 37, label: 'SLD ROLLING', kind: 'qty' },
   { key: 'sldcut', col: 38, label: 'SLD CUTTING', kind: 'qty' },
   { key: 'adaptors', col: 39, label: 'ADAPTORS CNC', kind: 'qty' },
@@ -153,6 +155,15 @@ export function isWorkOrder(v) {
 /** Numeric ERP work orders sort and match against the WIP export; the rest don't. */
 export function isErpWorkOrder(v) {
   return v != null && /^\d{3,7}$/.test(String(v).trim());
+}
+
+/** Panel work belongs to another department. A row counts as panel-only when it
+    is labelled as panels AND carries no cutting piece counts — so an ordinary
+    order that merely mentions panels is never dropped. */
+export function isPanelOnly(project, floor, hasCuttingWork) {
+  if (hasCuttingWork) return false;
+  const text = `${project || ''} ${floor || ''}`;
+  return /\bpanels?\b/i.test(text);
 }
 
 export const SHIFTS = {

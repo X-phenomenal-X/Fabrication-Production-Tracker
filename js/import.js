@@ -4,7 +4,7 @@
 import { readXlsx } from './xlsx.js';
 import {
   SHEET, FIELDS, OPS, isJunkRow, isWorkOrder, isErpWorkOrder, normCutStatus, normPurch,
-  SECTION_HINTS, BANNER_MAX_FILLED,
+  SECTION_HINTS, BANNER_MAX_FILLED, isPanelOnly,
 } from './schema.js';
 
 const PHANTOM_BEFORE = Date.UTC(1990, 0, 1); // 1899-12-16 etc. are formula artifacts
@@ -118,7 +118,6 @@ function parseDailySheet(sheet, report) {
       shipDate: asDate(cell(cells, FIELDS.shipDate)),
       glazingDate: asDate(cell(cells, FIELDS.glazingDate)),
       cuttingDate: asDate(cell(cells, FIELDS.cuttingDate)),
-      panelsToGlazing: asDate(cell(cells, FIELDS.panelsToGlazing)),
       bdRec: asDate(cell(cells, FIELDS.bdRec)),
       purch: normPurch(cell(cells, FIELDS.purch)),
       extStatus: asText(cell(cells, FIELDS.extStatus)),
@@ -167,6 +166,13 @@ function parseDailySheet(sheet, report) {
           report.unknownStatus.push({ row: row.r, op: op.label, value: txt });
         }
       }
+    }
+
+    // Panel work belongs to another department.
+    const hasCuttingWork = Object.values(o.ops).some((v) => v.target > 0 || v.status);
+    if (isPanelOnly(o.project, o.floor, hasCuttingWork)) {
+      report.panelRows.push({ row: row.r, wo, project: o.project, floor: o.floor });
+      continue;
     }
 
     orders.push(o);
@@ -257,6 +263,7 @@ export async function importWorkbook(arrayBuffer, { fileName = 'schedule.xlsx' }
     errorCells: [],
     unknownStatus: [],
     suspectQty: [],
+    panelRows: [],
     sheetsFound: [],
     sheetsMissing: [],
   };

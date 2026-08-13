@@ -63,6 +63,16 @@ function changeReport(diff, report) {
     quality.push(el('li', {}, el('strong', {}, `${report.skipped.length} rows skipped`),
       el('div.small.muted', {}, report.skipped.slice(0, 6).map((s) => `row ${s.row}: ${s.value ?? ''} (${s.reason})`).join(' · '))));
   }
+  if (report.panelRows?.length) {
+    quality.push(el('li', {}, el('strong', {}, `${report.panelRows.length} panel-only rows left out`),
+      el('div.small.muted', {}, 'Panel work belongs to another department. ' +
+        report.panelRows.slice(0, 5).map((r) => `${r.wo} ${r.floor || r.project || ''}`).join(' · '))));
+  }
+  if (report.suspectQty?.length) {
+    quality.push(el('li', {}, el('strong', {}, `${report.suspectQty.length} impossible piece counts ignored`),
+      el('div.small.muted', {}, report.suspectQty.slice(0, 5)
+        .map((r) => `W/O ${r.wo} ${r.op} = ${r.value} (${r.why})`).join(' · '))));
+  }
   if (report.errorCells.length) {
     quality.push(el('li', {}, el('strong', {}, `${report.errorCells.length} formula errors in the sheet`),
       el('div.small.muted', {}, 'Cells containing #REF!, #VALUE! or #N/A were read as blank. Worth fixing in the source file.')));

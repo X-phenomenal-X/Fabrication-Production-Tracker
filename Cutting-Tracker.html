@@ -256,13 +256,8 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __esm = (fn, res, err) => function __init() {
-    if (err) throw err[0];
-    try {
-      return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-    } catch (e) {
-      throw err = [e], e;
-    }
+  var __esm = (fn, res) => function __init() {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
   };
   var __export = (target, all) => {
     for (var name in all)
@@ -822,10 +817,12 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     { key: "punch", col: 30, label: "PUNCH", kind: "qty", alt: "WIDTHS" },
     { key: "vynls", col: 31, label: "VYNL.S", kind: "qty" },
     { key: "sps", col: 32, label: "SP.S", kind: "qty" },
+    // Louvres belong to Cutting, so this column stays despite the "PAN" in its name.
     { key: "lvrs", col: 33, label: "LVRS/TC PAN", kind: "qty" },
     { key: "vent", col: 34, label: "VENT", kind: "qty" },
     { key: "wwcnc", col: 35, label: "WW CNC", kind: "qty" },
-    { key: "cpcut", col: 36, label: "CP CUTTING", kind: "status" },
+    // Column 36, CP CUTTING (sub-header "C CHANNEL (PANEL)"), is panel work and
+    // belongs to another department. Deliberately not tracked here.
     { key: "sldroll", col: 37, label: "SLD ROLLING", kind: "qty" },
     { key: "sldcut", col: 38, label: "SLD CUTTING", kind: "qty" },
     { key: "adaptors", col: 39, label: "ADAPTORS CNC", kind: "qty" },
@@ -935,6 +932,11 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   }
   function isErpWorkOrder(v) {
     return v != null && /^\d{3,7}$/.test(String(v).trim());
+  }
+  function isPanelOnly(project, floor, hasCuttingWork) {
+    if (hasCuttingWork) return false;
+    const text = `${project || ""} ${floor || ""}`;
+    return /\bpanels?\b/i.test(text);
   }
   var SHIFTS = {
     DAY: { key: "DAY", label: "Day", short: "D", from: 7, to: 15, full: true },
@@ -2234,9 +2236,14 @@ of those pieces are actually done \u2014 the spreadsheet only ever held the targ
 - **ADAPTORS CNC**
 
 ## Operations tracked as a status
-- **CP CUTTING**
 - **BD Prep**
 - **MTL STATUS**
+
+## Not tracked here
+- **CP CUTTING** (C CHANNEL / PANEL) \u2014 panel work, another department
+- Panel-only orders are left out of the import entirely
+
+**LVRS/TC PAN** is kept despite the name: louvres are Cutting's work.
 
 ### TODO for the department
 - Add the machine or station that each operation runs on
@@ -2752,7 +2759,6 @@ are read as headings, not orders. Repeated header rows and separators are ignore
         shipDate: asDate(cell(cells, FIELDS.shipDate)),
         glazingDate: asDate(cell(cells, FIELDS.glazingDate)),
         cuttingDate: asDate(cell(cells, FIELDS.cuttingDate)),
-        panelsToGlazing: asDate(cell(cells, FIELDS.panelsToGlazing)),
         bdRec: asDate(cell(cells, FIELDS.bdRec)),
         purch: normPurch(cell(cells, FIELDS.purch)),
         extStatus: asText(cell(cells, FIELDS.extStatus)),
@@ -2797,6 +2803,11 @@ are read as headings, not orders. Repeated header rows and separators are ignore
             report.unknownStatus.push({ row: row.r, op: op.label, value: txt });
           }
         }
+      }
+      const hasCuttingWork = Object.values(o.ops).some((v) => v.target > 0 || v.status);
+      if (isPanelOnly(o.project, o.floor, hasCuttingWork)) {
+        report.panelRows.push({ row: row.r, wo, project: o.project, floor: o.floor });
+        continue;
       }
       orders.push(o);
     }
@@ -2881,6 +2892,7 @@ are read as headings, not orders. Repeated header rows and separators are ignore
       errorCells: [],
       unknownStatus: [],
       suspectQty: [],
+      panelRows: [],
       sheetsFound: [],
       sheetsMissing: []
     };
@@ -3025,6 +3037,22 @@ are read as headings, not orders. Repeated header rows and separators are ignore
         {},
         el("strong", {}, `${report.skipped.length} rows skipped`),
         el("div.small.muted", {}, report.skipped.slice(0, 6).map((s) => `row ${s.row}: ${s.value ?? ""} (${s.reason})`).join(" \xB7 "))
+      ));
+    }
+    if (report.panelRows?.length) {
+      quality.push(el(
+        "li",
+        {},
+        el("strong", {}, `${report.panelRows.length} panel-only rows left out`),
+        el("div.small.muted", {}, "Panel work belongs to another department. " + report.panelRows.slice(0, 5).map((r) => `${r.wo} ${r.floor || r.project || ""}`).join(" \xB7 "))
+      ));
+    }
+    if (report.suspectQty?.length) {
+      quality.push(el(
+        "li",
+        {},
+        el("strong", {}, `${report.suspectQty.length} impossible piece counts ignored`),
+        el("div.small.muted", {}, report.suspectQty.slice(0, 5).map((r) => `W/O ${r.wo} ${r.op} = ${r.value} (${r.why})`).join(" \xB7 "))
       ));
     }
     if (report.errorCells.length) {

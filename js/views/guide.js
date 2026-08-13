@@ -62,9 +62,14 @@ of those pieces are actually done — the spreadsheet only ever held the target.
 - **ADAPTORS CNC**
 
 ## Operations tracked as a status
-- **CP CUTTING**
 - **BD Prep**
 - **MTL STATUS**
+
+## Not tracked here
+- **CP CUTTING** (C CHANNEL / PANEL) — panel work, another department
+- Panel-only orders are left out of the import entirely
+
+**LVRS/TC PAN** is kept despite the name: louvres are Cutting's work.
 
 ### TODO for the department
 - Add the machine or station that each operation runs on
