@@ -9,18 +9,19 @@ top, plus the tracking the spreadsheet never had.
 
 ## Running it
 
-Open `index.html` through a web server (not by double-clicking — browsers block
-JavaScript modules loaded from `file://`).
+**The easy way — no install, no server.** Download `Cutting-Tracker.html` and
+double-click it. It is one self-contained file: put it on the shared drive and
+anyone can open it. Use Chrome or Edge.
 
-The simplest options, from the folder containing `index.html`:
+**For development**, serve the unbundled source (browsers block JavaScript
+modules loaded over `file://`, so the split files need a server):
 
 ```
-python -m http.server 8000      # then open http://localhost:8000
-npx serve                       # or any other static server
+npm run serve       # http://localhost:8000
+npm run build       # regenerate Cutting-Tracker.html after changing source
 ```
 
-Chrome or Edge is needed for the shared-file feature. Everything else works in
-any modern browser.
+Rebuild and re-copy `Cutting-Tracker.html` whenever the source changes.
 
 ## First run
 
