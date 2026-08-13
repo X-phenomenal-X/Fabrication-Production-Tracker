@@ -35,7 +35,7 @@ step('localStorage usable: ' + await page.evaluate(() => {
 step('File System Access available: ' + await page.evaluate(() => 'showOpenFilePicker' in window));
 
 // import the workbook through the real UI
-await page.click('nav.tabs button:has-text("Data & Import")');
+await page.click('nav.tabs button:has-text("Setup")');
 await page.waitForSelector('.drop');
 const chooser = page.waitForEvent('filechooser');
 await page.click('.drop button:has-text("Choose file")');
@@ -46,7 +46,7 @@ step(`import parsed ${orders} orders from file://`);
 await page.click('dialog footer button.primary');
 await page.waitForSelector('dialog', { state: 'detached' });
 
-await page.click('nav.tabs button:has-text("Board")');
+await page.click('nav.tabs button:has-text("Orders")');
 await page.waitForSelector('table tbody tr');
 step('board rows: ' + await page.$$eval('table tbody tr', (r) => r.length));
 

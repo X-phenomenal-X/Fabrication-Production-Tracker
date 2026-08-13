@@ -3,6 +3,7 @@
 
 import { state } from './store.js';
 import { OPS, QTY_OPS, OP_BY_KEY, CUT_STATUS, PURCH_TONE } from './schema.js';
+import { machineForOp } from './machines.js';
 
 export function today() {
   return new Date().toISOString().slice(0, 10);
@@ -197,3 +198,97 @@ export function shiftWindow(date, shift) {
 
 export const ALL_OPS = OPS;
 export const QTY_OP_LIST = QTY_OPS;
+
+/* ---------- work centres ---------- */
+
+export function opRouting() {
+  return state.settings.opRouting || {};
+}
+
+/** Every operation on every active order, grouped by the machine that runs it.
+    This is what makes "what is on FOM 2 today" answerable. */
+export function byMachine({ ref = today() } = {}) {
+  const overrides = opRouting();
+  const out = new Map();
+
+  const bucket = (key) => {
+    if (!out.has(key)) {
+      out.set(key, { key, target: 0, done: 0, orders: [], blocked: 0, late: 0 });
+    }
+    return out.get(key);
+  };
+
+  for (const o of activeOrders()) {
+    const risk = riskOf(o, ref);
+    const roll = rollup(o);
+    // Which machines this order touches, and how much work sits on each.
+    const perMachine = new Map();
+
+    for (const op of roll.ops) {
+      const m = machineForOp(op.key, overrides);
+      if (!m) continue;
+      if (!perMachine.has(m)) perMachine.set(m, { target: 0, done: 0, ops: [], statusOnly: 0 });
+      const e = perMachine.get(m);
+      if (op.kind === 'qty') {
+        if (!op.target) continue;
+        e.target += op.target;
+        e.done += op.done;
+        e.ops.push(op);
+      } else if (op.status && op.status !== 'OK' && op.status !== 'DONE' && op.status !== 'NA') {
+        // e.g. BD Prep still showing NR — work for Prep with no piece count
+        e.statusOnly++;
+        e.ops.push(op);
+      }
+    }
+
+    for (const [m, e] of perMachine) {
+      const b = bucket(m);
+      b.target += e.target;
+      b.done += e.done;
+      b.statusOnly = (b.statusOnly || 0) + (e.statusOnly || 0);
+      if (e.done < e.target || e.statusOnly) {
+        b.orders.push({ order: o, risk, target: e.target, done: e.done, ops: e.ops });
+        if (risk === RISK.BLOCKED) b.blocked++;
+        if (risk === RISK.LATE) b.late++;
+      }
+    }
+  }
+
+  for (const b of out.values()) {
+    b.remaining = Math.max(0, b.target - b.done);
+    b.pct = b.target ? Math.round((b.done / b.target) * 100) : 0;
+    b.orders.sort((x, y) => x.risk.rank - y.risk.rank ||
+      ((x.order.cuttingDate || '9999') < (y.order.cuttingDate || '9999') ? -1 : 1));
+  }
+  return out;
+}
+
+/** Machines that have at least one operation routed to them. A machine not in
+    this set is unconfigured, which is different from a machine that is simply
+    caught up — the dashboard says so rather than showing a bare zero. */
+export function routedMachines() {
+  const overrides = opRouting();
+  const set = new Set();
+  for (const op of OPS) {
+    const m = machineForOp(op.key, overrides);
+    if (m) set.add(m);
+  }
+  return set;
+}
+
+/** Operations that carry work but have no work centre assigned. */
+export function unroutedOps() {
+  const overrides = opRouting();
+  const totals = new Map();
+  for (const o of activeOrders()) {
+    for (const op of rollup(o).ops) {
+      if (op.kind !== 'qty' || !op.target) continue;
+      if (machineForOp(op.key, overrides)) continue;
+      const t = totals.get(op.key) || { op, target: 0, orders: 0 };
+      t.target += op.target;
+      t.orders++;
+      totals.set(op.key, t);
+    }
+  }
+  return Array.from(totals.values());
+}

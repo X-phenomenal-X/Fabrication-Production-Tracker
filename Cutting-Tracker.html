@@ -770,7 +770,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   // js/app.js
   init_store();
 
-  // js/views/today.js
+  // js/views/dashboard.js
   init_store();
 
   // js/model.js
@@ -951,6 +951,72 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     return "NIGHT";
   }
 
+  // js/machines.js
+  var MACHINES = [
+    { key: "roll-auto", label: "Rolling (Auto)", group: "Rolling", ops: 4, note: "Etas" },
+    { key: "roll-man", label: "Rolling (Manual)", group: "Rolling", ops: 2, note: "Iota" },
+    { key: "fom1", label: "FOM 1", group: "FOM", ops: 1, note: "8900 + Screen" },
+    { key: "fom2", label: "FOM 2", group: "FOM", ops: 1, note: "Widths" },
+    { key: "fom3", label: "FOM 3", group: "FOM", ops: 1, note: "Vent + Widths" },
+    { key: "cnc1", label: "CNC 1", group: "CNC", ops: 1 },
+    { key: "cnc2", label: "CNC 2", group: "CNC", ops: 1 },
+    { key: "cnc3", label: "CNC 3", group: "CNC", ops: 1 },
+    { key: "cnc140", label: "CNC 140", group: "CNC", ops: 1 },
+    { key: "elu1", label: "Elumatec Saw #1", group: "Saw", ops: 1 },
+    { key: "elu2", label: "Elumatec Saw #2", group: "Saw", ops: 2 },
+    { key: "multipunch", label: "Multi Punch", group: "Punch", ops: 1, note: "pcs not frames" },
+    { key: "prep", label: "Prep", group: "Prep", ops: null, note: "BD Prep" }
+  ];
+  var STANDING_ROWS = [
+    { key: "service", label: "Service Orders" },
+    { key: "k1285", label: "K1285 Pulls" },
+    { key: "backorder", label: "Back Order" }
+  ];
+  var MACHINE_BY_KEY = Object.fromEntries(
+    [...MACHINES, ...STANDING_ROWS].map((m) => [m.key, m])
+  );
+  var SHIFT_ROWS = [...STANDING_ROWS, ...MACHINES];
+  var OP_MACHINE_DEFAULT = {
+    sldroll: { machine: "roll-auto", assumed: false },
+    // SLD ROLLING
+    punch: { machine: "multipunch", assumed: false },
+    // PUNCH
+    bdprep: { machine: "prep", assumed: false },
+    // BD Prep (status, not a piece count)
+    wwcnc: { machine: "cnc1", assumed: false },
+    // WW CNC
+    adaptors: { machine: "cnc1", assumed: false },
+    // ADAPTORS CNC
+    sldcut: { machine: "elu1", assumed: false },
+    // SLD CUTTING
+    vent: { machine: "fom3", assumed: false },
+    // FOM 3 is vents + widths
+    widths: { machine: "fom2", assumed: true },
+    // sub-header says VERT. CNC
+    hts: { machine: "elu1", assumed: true },
+    // sub-header says VERT. CUT
+    vynls: { machine: "fom1", assumed: true },
+    sps: { machine: "fom1", assumed: true },
+    lvrs: { machine: "fom3", assumed: true }
+  };
+  function machineForOp(opKey, overrides) {
+    const o = overrides?.[opKey];
+    if (o !== void 0) return o || null;
+    return OP_MACHINE_DEFAULT[opKey]?.machine || null;
+  }
+  function isAssumed(opKey, overrides) {
+    if (overrides && overrides[opKey] !== void 0) return false;
+    return !!OP_MACHINE_DEFAULT[opKey]?.assumed;
+  }
+  function machinesByGroup() {
+    const groups = /* @__PURE__ */ new Map();
+    for (const m of MACHINES) {
+      if (!groups.has(m.group)) groups.set(m.group, []);
+      groups.get(m.group).push(m);
+    }
+    return groups;
+  }
+
   // js/model.js
   function today() {
     return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -1106,6 +1172,80 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     if (shift === "DAY") return [mk(date, 7), mk(date, 15)];
     if (shift === "AFT") return [mk(date, 15), mk(date, 23)];
     return [mk(date, 23), mk(addDays(date, 1), 7)];
+  }
+  function opRouting() {
+    return state.settings.opRouting || {};
+  }
+  function byMachine({ ref = today() } = {}) {
+    const overrides = opRouting();
+    const out = /* @__PURE__ */ new Map();
+    const bucket = (key) => {
+      if (!out.has(key)) {
+        out.set(key, { key, target: 0, done: 0, orders: [], blocked: 0, late: 0 });
+      }
+      return out.get(key);
+    };
+    for (const o of activeOrders()) {
+      const risk = riskOf(o, ref);
+      const roll = rollup(o);
+      const perMachine = /* @__PURE__ */ new Map();
+      for (const op of roll.ops) {
+        const m = machineForOp(op.key, overrides);
+        if (!m) continue;
+        if (!perMachine.has(m)) perMachine.set(m, { target: 0, done: 0, ops: [], statusOnly: 0 });
+        const e = perMachine.get(m);
+        if (op.kind === "qty") {
+          if (!op.target) continue;
+          e.target += op.target;
+          e.done += op.done;
+          e.ops.push(op);
+        } else if (op.status && op.status !== "OK" && op.status !== "DONE" && op.status !== "NA") {
+          e.statusOnly++;
+          e.ops.push(op);
+        }
+      }
+      for (const [m, e] of perMachine) {
+        const b = bucket(m);
+        b.target += e.target;
+        b.done += e.done;
+        b.statusOnly = (b.statusOnly || 0) + (e.statusOnly || 0);
+        if (e.done < e.target || e.statusOnly) {
+          b.orders.push({ order: o, risk, target: e.target, done: e.done, ops: e.ops });
+          if (risk === RISK.BLOCKED) b.blocked++;
+          if (risk === RISK.LATE) b.late++;
+        }
+      }
+    }
+    for (const b of out.values()) {
+      b.remaining = Math.max(0, b.target - b.done);
+      b.pct = b.target ? Math.round(b.done / b.target * 100) : 0;
+      b.orders.sort((x, y) => x.risk.rank - y.risk.rank || ((x.order.cuttingDate || "9999") < (y.order.cuttingDate || "9999") ? -1 : 1));
+    }
+    return out;
+  }
+  function routedMachines() {
+    const overrides = opRouting();
+    const set = /* @__PURE__ */ new Set();
+    for (const op of OPS) {
+      const m = machineForOp(op.key, overrides);
+      if (m) set.add(m);
+    }
+    return set;
+  }
+  function unroutedOps() {
+    const overrides = opRouting();
+    const totals = /* @__PURE__ */ new Map();
+    for (const o of activeOrders()) {
+      for (const op of rollup(o).ops) {
+        if (op.kind !== "qty" || !op.target) continue;
+        if (machineForOp(op.key, overrides)) continue;
+        const t = totals.get(op.key) || { op, target: 0, orders: 0 };
+        t.target += op.target;
+        t.orders++;
+        totals.set(op.key, t);
+      }
+    }
+    return Array.from(totals.values());
   }
 
   // js/views/board.js
@@ -1412,27 +1552,244 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     return el("div", {}, head, el("div.panel", {}, el("div.body.flush", {}, el("div.tbl-wrap", {}, table))));
   }
 
-  // js/views/today.js
-  function statTile(n, label, tone = "") {
-    return el(
-      "div.stat" + (tone ? "." + tone : ""),
+  // js/views/dashboard.js
+  function editRouting(rerender) {
+    const overrides = { ...opRouting() };
+    const body = el(
+      "div",
       {},
-      el("div.n", {}, typeof n === "number" ? fmtNum(n) : n),
-      el("div.k", {}, label)
+      el(
+        "p.small.muted",
+        { style: { marginTop: 0 } },
+        "Which machine runs each cutting operation. Rows marked ",
+        chip("assumed", "warn"),
+        " are the app's best guess from the column names \u2014 please correct them."
+      ),
+      el("div", {}, ...QTY_OPS.map((op) => {
+        const current2 = overrides[op.key] !== void 0 ? overrides[op.key] : OP_MACHINE_DEFAULT[op.key]?.machine || "";
+        const assumed = isAssumed(op.key, opRouting());
+        return el(
+          "div.oprow",
+          {},
+          el("span.oplabel", { title: op.alt || "" }, op.label),
+          op.alt ? el("span.small.muted.hide-sm", { style: { width: "80px" } }, op.alt) : el("span", { style: { width: "80px" } }),
+          assumed ? chip("assumed", "warn") : el("span", { style: { width: "62px" } }),
+          el(
+            "select",
+            {
+              style: { maxWidth: "190px" },
+              onchange: (e) => {
+                overrides[op.key] = e.target.value;
+              }
+            },
+            el("option", { value: "", selected: !current2 }, "Not tracked"),
+            ...MACHINES.map((m) => el("option", {
+              value: m.key,
+              selected: current2 === m.key
+            }, m.label))
+          )
+        );
+      }))
+    );
+    modal("Which machine runs each operation", body, {
+      wide: true,
+      actions: [
+        {
+          label: "Reset to defaults",
+          onClick: (dlg) => {
+            delete state.settings.opRouting;
+            save();
+            dlg.close();
+            toast("Routing reset");
+            rerender();
+          }
+        },
+        {
+          label: "Save",
+          class: "primary",
+          onClick: (dlg) => {
+            state.settings.opRouting = overrides;
+            save();
+            dlg.close();
+            toast("Routing saved");
+            rerender();
+          }
+        }
+      ]
+    });
+  }
+  function openMachine(key, data, rerender) {
+    const m = MACHINE_BY_KEY[key];
+    const rows2 = data?.orders || [];
+    const body = el(
+      "div",
+      {},
+      el(
+        "div.stats",
+        { style: { marginBottom: "16px", border: "1px solid var(--line-soft)", borderRadius: "8px", overflow: "hidden" } },
+        el("div.stat", {}, el("div.n", {}, fmtNum(data?.remaining || 0)), el("div.k", {}, "Pieces left")),
+        el("div.stat", {}, el("div.n", {}, (data?.pct || 0) + "%"), el("div.k", {}, "Complete")),
+        el("div.stat" + (data?.blocked ? ".bad" : ""), {}, el("div.n", {}, fmtNum(data?.blocked || 0)), el("div.k", {}, "Blocked")),
+        el("div.stat" + (data?.late ? ".bad" : ""), {}, el("div.n", {}, fmtNum(data?.late || 0)), el("div.k", {}, "Late"))
+      ),
+      rows2.length ? el("div.tbl-wrap", {}, el(
+        "table",
+        {},
+        el("thead", {}, el(
+          "tr",
+          {},
+          el("th", {}, "W/O"),
+          el("th", {}, "Project"),
+          el("th", {}, "Floor"),
+          el("th", {}, "Status"),
+          el("th.hide-sm", {}, "Cut by"),
+          el("th", {}, "On this machine")
+        )),
+        el("tbody", {}, ...rows2.slice(0, 100).map(({ order, risk, target, done, ops }) => el(
+          "tr",
+          {
+            style: { cursor: "pointer" },
+            onclick: () => openOrder(order, rerender)
+          },
+          el("td", {}, el("span.mono.strong", {}, order.wo)),
+          el("td", {}, order.project || "\u2014"),
+          el("td", {}, order.floor || "\u2014"),
+          el(
+            "td",
+            {},
+            chip(risk.label, risk.tone),
+            (() => {
+              const w = reasonFor(order, risk);
+              return w ? el("div.small.muted", {}, w) : null;
+            })()
+          ),
+          el("td.hide-sm.nowrap", {}, fmtDate(order.cuttingDate)),
+          el(
+            "td",
+            {},
+            el(
+              "div.row",
+              { style: { gap: "8px", flexWrap: "nowrap" } },
+              bar(target ? done / target * 100 : 0, done >= target),
+              el("span.mono.small.nowrap", {}, `${fmtNum(done)}/${fmtNum(target)}`)
+            ),
+            el("div.small.muted", {}, ops.map((o) => o.label).join(", "))
+          )
+        )))
+      )) : el("div.empty", {}, "Nothing outstanding on this machine.")
+    );
+    modal(`${m?.label || key}${m?.note ? " \u2014 " + m.note : ""}`, body, { wide: true });
+  }
+  function machineCard(m, data, routed, rerender) {
+    const remaining = data?.remaining || 0;
+    const pct = data?.pct || 0;
+    const orders = data?.orders || [];
+    const statusOnly = data?.statusOnly || 0;
+    const isRouted = routed.has(m.key);
+    const head = el(
+      "header",
+      {},
+      m.label,
+      el("span.spacer"),
+      m.ops != null ? chip(`${m.ops} ops`, "mute") : chip("ops ?", "warn")
+    );
+    if (!isRouted) {
+      return el(
+        "div.panel",
+        {},
+        head,
+        el(
+          "div.body",
+          {},
+          m.note ? el("div.small.muted", { style: { marginTop: "-6px", marginBottom: "8px" } }, m.note) : null,
+          el("div.small.muted", {}, "No operations routed here yet."),
+          el("button.sm", {
+            style: { marginTop: "8px" },
+            onclick: (e) => {
+              e.stopPropagation();
+              editRouting(rerender);
+            }
+          }, "Assign work")
+        )
+      );
+    }
+    return el(
+      "div.panel",
+      {
+        style: { cursor: "pointer" },
+        onclick: () => openMachine(m.key, data, rerender)
+      },
+      head,
+      el(
+        "div.body",
+        {},
+        m.note ? el("div.small.muted", { style: { marginTop: "-6px", marginBottom: "8px" } }, m.note) : null,
+        remaining || !statusOnly ? el(
+          "div",
+          {},
+          el(
+            "div.row",
+            { style: { alignItems: "baseline", gap: "8px" } },
+            el(
+              "span",
+              { style: { fontSize: "24px", fontWeight: "700", letterSpacing: "-.02em" } },
+              fmtNum(remaining)
+            ),
+            el("span.small.muted", {}, "pieces left"),
+            el("span.spacer"),
+            el("span.small.muted", {}, `${orders.length} order${orders.length === 1 ? "" : "s"}`)
+          ),
+          el("div", { style: { margin: "8px 0 6px" } }, bar(pct, pct >= 100)),
+          el(
+            "div.row.small.muted",
+            {},
+            `${pct}% complete`,
+            el("span.spacer"),
+            data?.blocked ? chip(`${data.blocked} blocked`, "bad") : null,
+            data?.late ? chip(`${data.late} late`, "bad") : null
+          )
+        ) : el(
+          "div",
+          {},
+          // Prep and similar are tracked by status, not by piece count.
+          el(
+            "div.row",
+            { style: { alignItems: "baseline", gap: "8px" } },
+            el(
+              "span",
+              { style: { fontSize: "24px", fontWeight: "700", letterSpacing: "-.02em" } },
+              fmtNum(statusOnly)
+            ),
+            el("span.small.muted", {}, "orders outstanding")
+          ),
+          el("div.small.muted", { style: { marginTop: "4px" } }, "Tracked by status, not piece count")
+        ),
+        !remaining && !statusOnly ? el("div.small.muted", { style: { marginTop: "8px" } }, "All caught up.") : null,
+        orders.length ? el(
+          "ul.list",
+          { style: { marginTop: "8px", fontSize: "12.5px" } },
+          ...orders.slice(0, 3).map(({ order, target, done }) => el(
+            "li",
+            {
+              style: { padding: "5px 0", borderBottom: "none" }
+            },
+            el(
+              "div.row",
+              { style: { gap: "6px" } },
+              el("span.mono.strong", {}, order.wo),
+              el(
+                "span.muted",
+                { style: { flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
+                `${order.project || ""} ${order.floor || ""}`
+              ),
+              target ? el("span.mono.small", {}, fmtNum(Math.max(0, target - done))) : el("span.small.muted", {}, "prep")
+            )
+          ))
+        ) : null
+      )
     );
   }
-  function lastHandover() {
-    const logs = Object.values(state.shiftLogs).filter((l) => l && !l.deleted).sort((a, b) => a.at < b.at ? 1 : -1);
-    return logs[0] || null;
-  }
-  function renderToday(rerender, go2) {
-    const s = summary();
-    const nowShift = shiftAt();
-    const shift = SHIFTS[nowShift];
-    const date = today();
-    const q = queue({ limit: 12 });
-    const blocked = q.filter((x) => x.risk.key === "BLOCKED");
-    const handover = lastHandover();
+  function renderDashboard(rerender, go2) {
     if (!state.orders.length) {
       return el(
         "div.panel",
@@ -1442,11 +1799,20 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
           {},
           el("h3", {}, "No schedule loaded yet"),
           el("p", {}, "Import the Daily Schedule workbook to get started."),
-          el("button.primary", { onclick: () => go2("data") }, "Go to Data & Import")
+          el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
         )
       );
     }
-    const shiftStrip = el(
+    const s = summary();
+    const data = byMachine();
+    const unrouted = unroutedOps();
+    const routed = routedMachines();
+    const shift = SHIFTS[shiftAt()];
+    const date = today();
+    const [from, to] = shiftWindow(date, shiftAt());
+    const logged = workInWindow(from, to);
+    const piecesThisShift = logged.reduce((a, w) => a + (w.done || 0), 0);
+    const header2 = el(
       "div.panel",
       {},
       el(
@@ -1462,24 +1828,16 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
             el(
               "div",
               { style: { fontSize: "18px", fontWeight: "700" } },
-              `${shift.label} shift`,
-              shift.full ? "" : " \u2014 skeleton crew"
+              `${shift.label} shift`
             )
           ),
           el("span.spacer"),
-          shift.full ? chip("Full operations", "ok") : chip(`${shift.crew} on tonight`, "warn")
-        ),
-        !shift.full ? el(
-          "div.banner.warn",
-          { style: { marginTop: "12px" } },
-          el(
-            "div",
-            {},
-            el("strong", {}, "Midnight runs a 3-person crew. "),
-            "Plan single-station work and anything that does not need a second pair of hands. ",
-            "Leave multi-operator setups for the day shift."
-          )
-        ) : null
+          shift.full ? chip("Full operations", "ok") : chip(`${shift.crew} operators tonight`, "warn"),
+          el("button.sm", { onclick: (e) => {
+            e.stopPropagation();
+            go2("shift");
+          } }, "Post shift update")
+        )
       )
     );
     const stats = el(
@@ -1491,198 +1849,78 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         el(
           "div.stats",
           {},
-          statTile(s.total, "Active orders"),
-          statTile(s.blocked, "Blocked", s.blocked ? "bad" : ""),
-          statTile(s.late, "Past cut date", s.late ? "bad" : ""),
-          statTile(s.due, "Due this week", s.due ? "warn" : ""),
-          statTile(s.done, "Cut complete", "ok"),
-          statTile(s.pct + "%", "Pieces cut")
+          el("div.stat", {}, el("div.n", {}, fmtNum(s.total)), el("div.k", {}, "Active orders")),
+          el("div.stat" + (s.blocked ? ".bad" : ""), {}, el("div.n", {}, fmtNum(s.blocked)), el("div.k", {}, "Blocked")),
+          el("div.stat" + (s.late ? ".bad" : ""), {}, el("div.n", {}, fmtNum(s.late)), el("div.k", {}, "Past cut date")),
+          el("div.stat" + (s.due ? ".warn" : ""), {}, el("div.n", {}, fmtNum(s.due)), el("div.k", {}, "Due this week")),
+          el("div.stat", {}, el("div.n", {}, fmtNum(s.pieces - s.piecesDone)), el("div.k", {}, "Pieces left")),
+          el("div.stat.ok", {}, el("div.n", {}, fmtNum(piecesThisShift)), el("div.k", {}, "Cut this shift"))
         )
       )
     );
-    const [from, to] = shiftWindow(date, nowShift);
-    const workLog = workInWindow(from, to);
-    const piecesThisShift = workLog.reduce((a, w) => a + (w.done || 0), 0);
-    const shiftWork = el(
+    const warn = unrouted.length ? el(
       "div.panel",
       {},
       el(
-        "header",
-        {},
-        "Logged this shift",
-        el("span.spacer"),
-        el("span.small.muted", {}, `${fmtNum(piecesThisShift)} pieces \xB7 ${workLog.length} entries`)
-      ),
-      workLog.length ? el("ul.list", {}, ...workLog.slice(0, 8).map((w) => el(
-        "li",
-        {},
-        el(
-          "div.row",
-          {},
-          el("span.mono.strong", {}, w.order.wo),
-          el("span", {}, w.op?.label || ""),
-          el("span.spacer"),
-          el("span.mono.small", {}, fmtNum(w.done)),
-          el("span.small.muted.nowrap", {}, `${w.by} \xB7 ${fmtWhen(w.at)}`)
-        )
-      ))) : el("div.empty", {}, "Nothing logged yet this shift.")
-    );
-    const queuePanel = el(
-      "div.panel",
-      {},
-      el(
-        "header",
-        {},
-        "Cut queue \u2014 most urgent first",
-        el("span.spacer"),
-        el("button.sm.ghost", { onclick: () => go2("board") }, "Full board \u2192")
-      ),
-      el("div.body.flush", {}, el(
-        "div.tbl-wrap",
-        {},
-        el(
-          "table",
-          {},
-          el("thead", {}, el(
-            "tr",
-            {},
-            el("th", {}, "W/O"),
-            el("th", {}, "Project"),
-            el("th", {}, "Floor"),
-            el("th", {}, "Why"),
-            el("th.hide-sm", {}, "Cut by"),
-            el("th", {}, "Left")
-          )),
-          el("tbody", {}, ...q.map(({ order, risk, roll }) => el(
-            "tr",
-            {
-              style: { cursor: "pointer" },
-              onclick: () => openOrder(order, rerender)
-            },
-            el("td", {}, el("span.mono.strong", {}, order.wo)),
-            el("td", {}, order.project || "\u2014"),
-            el("td", {}, order.floor || "\u2014"),
-            el(
-              "td",
-              {},
-              chip(risk.label, risk.tone),
-              (() => {
-                const why = reasonFor(order, risk);
-                return why ? el("div.small.muted", {}, why) : null;
-              })()
-            ),
-            el("td.hide-sm.nowrap", {}, fmtDate(order.cuttingDate)),
-            el("td", {}, roll.target ? el(
-              "div.row",
-              { style: { gap: "8px", flexWrap: "nowrap" } },
-              bar(roll.pct, roll.complete),
-              el("span.mono.small.nowrap", {}, fmtNum(roll.remaining))
-            ) : el("span.small.muted", {}, "\u2014"))
-          )))
-        )
-      ))
-    );
-    const blockPanel = blocked.length ? el(
-      "div.panel",
-      {},
-      el("header", {}, `Blocked \u2014 needs material or a decision (${blocked.length})`),
-      el("ul.list", {}, ...blocked.slice(0, 8).map(({ order }) => el(
-        "li",
-        {},
-        el(
-          "div.row",
-          {},
-          el("span.mono.strong", {}, order.wo),
-          el("span", {}, order.project || "\u2014"),
-          el("span.small.muted", {}, order.floor || ""),
-          el("span.spacer"),
-          order.purch ? chip(order.purch, purchTone(order)) : null,
-          order.extStatus ? el("span.small.muted.hide-sm", {}, order.extStatus) : null
-        ),
-        order.notes ? el("div.small.muted", { style: { marginTop: "3px" } }, order.notes) : null
-      )))
-    ) : null;
-    const handoverPanel = el(
-      "div.panel",
-      {},
-      el(
-        "header",
-        {},
-        "Last handover",
-        el("span.spacer"),
-        el("button.sm.ghost", { onclick: () => go2("shift") }, "Shift log \u2192")
-      ),
-      handover ? el(
         "div.body",
         {},
         el(
-          "div.row",
-          { style: { marginBottom: "8px" } },
-          chip(`${SHIFTS[handover.shift]?.label || handover.shift} \xB7 ${fmtDate(handover.date)}`, "mute"),
-          el("span.small.muted", {}, `${handover.by} \xB7 ${fmtWhen(handover.at)}`)
-        ),
-        handover.notes ? el("p", { style: { margin: "0 0 8px" } }, handover.notes) : null,
-        handover.carryOver ? el("div.banner.warn", {}, el("div", {}, el("strong", {}, "Carrying over: "), handover.carryOver)) : null,
-        handover.issues ? el(
-          "div.banner.bad",
-          { style: { marginTop: "8px" } },
-          el("div", {}, el("strong", {}, "Issues: "), handover.issues)
-        ) : null
-      ) : el("div.empty", {}, "No shift updates posted yet.")
-    );
-    const planPanel = el(
-      "div.panel",
-      {},
-      el(
-        "header",
-        {},
-        "Today's plan",
-        el("span.spacer"),
-        el("button.sm.ghost", { onclick: () => go2("planner") }, "Planner \u2192")
-      ),
-      el(
-        "div.body",
-        {},
-        el("div.grid.three", {}, ...SHIFT_ORDER.map((k) => {
-          const ids = planFor(date, k);
-          return el(
+          "div.banner.warn",
+          {},
+          el(
             "div",
             {},
+            el("strong", {}, `${unrouted.length} operation${unrouted.length === 1 ? "" : "s"} not assigned to a machine \u2014 `),
+            `${fmtNum(unrouted.reduce((a, u) => a + u.target, 0))} pieces are missing from the cards below. `,
+            unrouted.map((u) => u.op.label).join(", "),
             el(
-              "div.row",
-              { style: { marginBottom: "6px" } },
-              el("strong", {}, SHIFTS[k].label),
-              SHIFTS[k].full ? null : chip("3 crew", "warn")
-            ),
-            ids.length ? el("ul.list", { style: { fontSize: "13px" } }, ...ids.slice(0, 6).map((id) => {
-              const o = orderById(id);
-              if (!o) return null;
-              const r = rollup(o);
-              return el(
-                "li",
-                { style: { padding: "5px 0", borderBottom: "none" } },
-                el("span.mono.strong", {}, o.wo),
-                " ",
-                el("span.small.muted", {}, `${o.project || ""} ${o.floor || ""}`),
-                r.target ? el("span.small.muted", {}, ` \xB7 ${fmtNum(r.remaining)} left`) : null
-              );
-            })) : el("div.small.muted", {}, "Nothing assigned.")
-          );
-        }))
+              "div",
+              { style: { marginTop: "8px" } },
+              el("button.sm", { onclick: () => editRouting(rerender) }, "Assign them")
+            )
+          )
+        )
       )
-    );
-    return el(
-      "div",
-      {},
-      shiftStrip,
-      stats,
+    ) : null;
+    const groups = machinesByGroup();
+    const sections = [];
+    for (const [group, list] of groups) {
+      sections.push(el(
+        "div",
+        { style: { marginTop: "18px" } },
+        el(
+          "div.row",
+          { style: { marginBottom: "10px" } },
+          el(
+            "h2",
+            { style: { margin: 0, fontSize: "13px", textTransform: "uppercase", letterSpacing: ".06em", color: "var(--ink-2)" } },
+            group
+          ),
+          el(
+            "span.small.muted",
+            {},
+            fmtNum(list.reduce((a, m) => a + (data.get(m.key)?.remaining || 0), 0)) + " pieces left"
+          )
+        ),
+        el("div.grid.three", {}, ...list.map((m) => machineCard(m, data.get(m.key), routed, rerender)))
+      ));
+    }
+    const footer = el(
+      "div.panel",
+      { style: { marginTop: "18px" } },
       el(
-        "div.grid.two",
-        { style: { marginTop: "16px" } },
-        el("div", {}, queuePanel, blockPanel),
-        el("div", {}, planPanel, shiftWork, handoverPanel)
+        "div.body",
+        {},
+        el(
+          "div.row.small.muted",
+          {},
+          `Operations are matched to machines by a routing table.`,
+          el("span.spacer"),
+          el("button.sm.ghost", { onclick: () => editRouting(rerender) }, "Edit machine routing")
+        )
       )
     );
+    return el("div", {}, header2, stats, warn, ...sections, footer);
   }
 
   // js/views/planner.js
@@ -1859,34 +2097,6 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 
   // js/views/shift.js
   init_store();
-
-  // js/machines.js
-  var MACHINES = [
-    { key: "roll-auto", label: "Rolling (Auto)", group: "Rolling", ops: 4, note: "Etas" },
-    { key: "roll-man", label: "Rolling (Manual)", group: "Rolling", ops: 2, note: "Iota" },
-    { key: "fom1", label: "FOM 1", group: "FOM", ops: 1, note: "8900 + Screen" },
-    { key: "fom2", label: "FOM 2", group: "FOM", ops: 1, note: "Widths" },
-    { key: "fom3", label: "FOM 3", group: "FOM", ops: 1, note: "Vent + Widths" },
-    { key: "cnc1", label: "CNC 1", group: "CNC", ops: 1 },
-    { key: "cnc2", label: "CNC 2", group: "CNC", ops: 1 },
-    { key: "cnc3", label: "CNC 3", group: "CNC", ops: 1 },
-    { key: "cnc140", label: "CNC 140", group: "CNC", ops: 1 },
-    { key: "elu1", label: "Elumatec Saw #1", group: "Saw", ops: 1 },
-    { key: "elu2", label: "Elumatec Saw #2", group: "Saw", ops: 2 },
-    { key: "multipunch", label: "Multi Punch", group: "Punch", ops: 1, note: "pcs not frames" },
-    { key: "prep", label: "Prep", group: "Prep", ops: null, note: "BD Prep" }
-  ];
-  var STANDING_ROWS = [
-    { key: "service", label: "Service Orders" },
-    { key: "k1285", label: "K1285 Pulls" },
-    { key: "backorder", label: "Back Order" }
-  ];
-  var MACHINE_BY_KEY = Object.fromEntries(
-    [...MACHINES, ...STANDING_ROWS].map((m) => [m.key, m])
-  );
-  var SHIFT_ROWS = [...STANDING_ROWS, ...MACHINES];
-
-  // js/views/shift.js
   var draft = {
     date: today(),
     shift: shiftAt(),
@@ -3437,15 +3647,15 @@ are read as headings, not orders. Repeated header rows and separators are ignore
 
   // js/app.js
   var TABS = [
-    { key: "today", label: "Today", render: renderToday },
-    { key: "board", label: "Board", render: renderBoard },
+    { key: "dashboard", label: "Dashboard", render: renderDashboard },
+    { key: "board", label: "Orders", render: renderBoard },
     { key: "planner", label: "Planner", render: renderPlanner },
-    { key: "shift", label: "Shift Log", render: renderShift },
+    { key: "shift", label: "Shift Update", render: renderShift },
     { key: "guide", label: "Guide", render: renderGuide },
-    { key: "data", label: "Data & Import", render: renderData }
+    { key: "setup", label: "Setup", render: renderData }
   ];
-  var current = location.hash.slice(1) || "today";
-  if (!TABS.some((t) => t.key === current)) current = "today";
+  var current = location.hash.slice(1) || "dashboard";
+  if (!TABS.some((t) => t.key === current)) current = "dashboard";
   var root = document.getElementById("app");
   var scheduled = false;
   function go(key) {

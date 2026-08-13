@@ -35,12 +35,40 @@ Rebuild and re-copy `Cutting-Tracker.html` whenever the source changes.
 
 | Tab | What it is |
 |---|---|
-| **Today** | Current shift, the cut queue in urgency order, what is blocked, last handover |
-| **Board** | Every order, filterable, with per-operation piece counts |
+| **Dashboard** | One card per work centre, grouped by department — load, progress, blockers |
+| **Orders** | Every order, filterable, with per-operation piece counts |
 | **Planner** | Assign orders to a day and shift |
-| **Shift Log** | The shift update, laid out by machine like the existing sheet |
+| **Shift Update** | Laid out by machine, like the existing Shift Update sheet |
 | **Guide** | The department's written process — editable in place |
-| **Data & Import** | Load a revision, manage the shared file, export a backup |
+| **Setup** | Load a revision, machine routing, shared file, backups |
+
+## Work centres
+
+Thirteen, in five departments:
+
+| Department | Machines |
+|---|---|
+| Rolling | Rolling (Auto/Etas), Rolling (Manual/Iota) |
+| FOM | FOM 1 (8900 + screen), FOM 2 (widths), FOM 3 (vents + widths) |
+| CNC | CNC 1, CNC 2, CNC 3, CNC 140 |
+| Saw | Elumatec Saw #1, Elumatec Saw #2 |
+| Punch | Multi Punch |
+| Prep | Prep (BD Prep) |
+
+### Machine routing
+
+Each cutting operation is mapped to the work centre that runs it, which is what
+makes "what is on FOM 2 today" answerable. Some mappings are certain from the
+column names (`SLD ROLLING` → Rolling, `PUNCH` → Multi Punch, `BD Prep` → Prep);
+the rest are the app's best guess and are flagged **assumed** until a human
+confirms them.
+
+**Edit it in Setup → machine routing.** Edits are stored per-department and
+survive re-import. A machine with nothing routed to it says so rather than
+showing a zero, so an unconfigured machine never looks like an idle one.
+
+Prep is tracked by status rather than piece count, because `BD Prep` is a status
+column — its card shows orders outstanding.
 
 ## What it reads from the workbook
 

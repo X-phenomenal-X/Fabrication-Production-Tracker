@@ -33,6 +33,40 @@ export const MACHINE_BY_KEY = Object.fromEntries(
 
 export const SHIFT_ROWS = [...STANDING_ROWS, ...MACHINES];
 
+/* Which work centre each cutting operation runs on. This is what lets the app
+   answer "what is on FOM 2 today" instead of only "what is on this order".
+
+   Some are unambiguous from the column names (SLD ROLLING is rolling, PUNCH is
+   the multi punch, BD Prep is prep). The rest are a starting guess and are
+   marked `assumed` so the app can flag them and the department can correct them
+   in Setup. Edits are stored in settings and survive re-import. */
+export const OP_MACHINE_DEFAULT = {
+  sldroll:  { machine: 'roll-auto',  assumed: false }, // SLD ROLLING
+  punch:    { machine: 'multipunch', assumed: false }, // PUNCH
+  bdprep:   { machine: 'prep',       assumed: false }, // BD Prep (status, not a piece count)
+  wwcnc:    { machine: 'cnc1',       assumed: false }, // WW CNC
+  adaptors: { machine: 'cnc1',       assumed: false }, // ADAPTORS CNC
+  sldcut:   { machine: 'elu1',       assumed: false }, // SLD CUTTING
+  vent:     { machine: 'fom3',       assumed: false }, // FOM 3 is vents + widths
+  widths:   { machine: 'fom2',       assumed: true },  // sub-header says VERT. CNC
+  hts:      { machine: 'elu1',       assumed: true },  // sub-header says VERT. CUT
+  vynls:    { machine: 'fom1',       assumed: true },
+  sps:      { machine: 'fom1',       assumed: true },
+  lvrs:     { machine: 'fom3',       assumed: true },
+};
+
+/** Resolve an operation to a work centre, honouring the department's edits. */
+export function machineForOp(opKey, overrides) {
+  const o = overrides?.[opKey];
+  if (o !== undefined) return o || null;          // '' means deliberately unassigned
+  return OP_MACHINE_DEFAULT[opKey]?.machine || null;
+}
+
+export function isAssumed(opKey, overrides) {
+  if (overrides && overrides[opKey] !== undefined) return false; // a human set it
+  return !!OP_MACHINE_DEFAULT[opKey]?.assumed;
+}
+
 /* Product routing, from the TARGETS sheet. Which work centres a product type
    passes through — used to suggest where an order should go. */
 export const ROUTING = {

@@ -2,7 +2,7 @@
 
 import { el, clear, chip } from './ui.js';
 import { state, loadLocal, save, onChange, me, sharedFileName } from './store.js';
-import { renderToday } from './views/today.js';
+import { renderDashboard } from './views/dashboard.js';
 import { renderBoard } from './views/board.js';
 import { renderPlanner } from './views/planner.js';
 import { renderShift } from './views/shift.js';
@@ -11,16 +11,16 @@ import { renderData, initSharedFile, seedGuide } from './views/data.js';
 import { SHIFTS, shiftAt } from './schema.js';
 
 const TABS = [
-  { key: 'today', label: 'Today', render: renderToday },
-  { key: 'board', label: 'Board', render: renderBoard },
+  { key: 'dashboard', label: 'Dashboard', render: renderDashboard },
+  { key: 'board', label: 'Orders', render: renderBoard },
   { key: 'planner', label: 'Planner', render: renderPlanner },
-  { key: 'shift', label: 'Shift Log', render: renderShift },
+  { key: 'shift', label: 'Shift Update', render: renderShift },
   { key: 'guide', label: 'Guide', render: renderGuide },
-  { key: 'data', label: 'Data & Import', render: renderData },
+  { key: 'setup', label: 'Setup', render: renderData },
 ];
 
-let current = location.hash.slice(1) || 'today';
-if (!TABS.some((t) => t.key === current)) current = 'today';
+let current = location.hash.slice(1) || 'dashboard';
+if (!TABS.some((t) => t.key === current)) current = 'dashboard';
 
 const root = document.getElementById('app');
 let scheduled = false;

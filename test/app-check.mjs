@@ -58,7 +58,7 @@ await page.evaluate(() => {
 step('identity set');
 
 // import the workbook
-await page.click('nav.tabs button:has-text("Data & Import")');
+await page.click('nav.tabs button:has-text("Setup")');
 await page.waitForSelector('.drop');
 const chooser = page.waitForEvent('filechooser');
 await page.click('.drop button:has-text("Choose file")');
@@ -74,15 +74,17 @@ await page.waitForSelector('dialog', { state: 'detached' });
 step('workbook loaded');
 
 // today
-await page.click('nav.tabs button:has-text("Today")');
+await page.click('nav.tabs button:has-text("Dashboard")');
 await page.waitForSelector('.stats');
 const stats = await page.$$eval('main .stat', (ns) =>
   ns.map((n) => n.querySelector('.k').textContent + '=' + n.querySelector('.n').textContent));
-step('today stats: ' + stats.join(' '));
-await page.screenshot({ path: path.join(SHOT, '2-today.png'), fullPage: true });
+step('dashboard stats: ' + stats.slice(0, 6).join(' '));
+const cards = await page.$$eval('main .panel header', (ns) => ns.map((n) => n.childNodes[0]?.textContent?.trim()).filter(Boolean));
+step('machine cards: ' + cards.filter((c) => /FOM|CNC|Rolling|Elumatec|Punch|Prep/.test(c)).join(', '));
+await page.screenshot({ path: path.join(SHOT, '2-dashboard.png'), fullPage: true });
 
 // board + order detail + progress entry
-await page.click('nav.tabs button:has-text("Board")');
+await page.click('nav.tabs button:has-text("Orders")');
 await page.waitForSelector('table tbody tr');
 const boardRows = await page.$$eval('table tbody tr', (r) => r.length);
 step(`board rows: ${boardRows}`);
@@ -124,7 +126,7 @@ step('planned an order');
 await page.screenshot({ path: path.join(SHOT, '5-planner.png'), fullPage: true });
 
 // shift log
-await page.click('nav.tabs button:has-text("Shift Log")');
+await page.click('nav.tabs button:has-text("Shift Update")');
 await page.waitForSelector('textarea');
 await page.fill('table tbody tr:first-child textarea', '1- Parcel 29 service order complete');
 await page.fill('.panel .body textarea', 'Blade change on Elumatec 2 at 11pm.');
@@ -143,7 +145,7 @@ await page.screenshot({ path: path.join(SHOT, '7-guide.png'), fullPage: true });
 
 // phone layout
 await page.setViewportSize({ width: 390, height: 844 });
-await page.click('nav.tabs button:has-text("Today")');
+await page.click('nav.tabs button:has-text("Dashboard")');
 await page.waitForTimeout(300);
 await page.screenshot({ path: path.join(SHOT, '8-phone.png'), fullPage: true });
 step('phone layout captured');
