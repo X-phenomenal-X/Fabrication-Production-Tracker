@@ -742,6 +742,47 @@ const suFallback = await page.evaluate(() =>
 step('Multi Punch falls back to the workbook: ' + (!suFallback));
 if (suFallback) throw new Error('a machine with no written update claims to have one');
 
+/* ---------- the die lookup ---------- */
+
+/* A die on the schedule is a rolled sub-assembly, not one extrusion. The
+   section book says what it is made of, and the schedule and the book write
+   the same number differently — S80.106 against SA80-106 — which is the part
+   that had to be got right. */
+await gotoTab('Rolling');
+const dieCheck = await page.evaluate(() => import('/js/dies.js').then((d) => {
+  const known = d.lookupDie('S80.106');
+  const bare = d.lookupDie('80-105');
+  return {
+    total: d.SUBASSEMBLIES.length,
+    sa: known.assembly?.sa || null,
+    desc: known.assembly?.desc || null,
+    parts: d.componentsOf(known.assembly).map((c) => `${c.role}:${c.die}${c.qty > 1 ? '×' + c.qty : ''}`),
+    usedInCount: bare.usedIn.length,
+    usedIncludes: bare.usedIn.some((r) => r.sa === 'SA80-106'),
+    missing: d.lookupDie('ZZ9.999').assembly,
+  };
+}));
+step('die lookup: ' + JSON.stringify(dieCheck));
+if (dieCheck.total < 900) throw new Error('the section book did not load');
+if (dieCheck.sa !== 'SA80-106') throw new Error('S80.106 did not resolve to SA80-106');
+// The example the department gave: exterior 80-113, thermal break 84-901 top
+// and bottom, interior 80-105.
+const want = ['Exterior:80-113', 'Thermal break:84-901×2', 'Interior:80-105'];
+if (JSON.stringify(dieCheck.parts) !== JSON.stringify(want)) {
+  throw new Error('components wrong: ' + JSON.stringify(dieCheck.parts));
+}
+if (!dieCheck.usedIncludes) throw new Error('the reverse lookup does not find SA80-106 from 80-105');
+if (dieCheck.missing) throw new Error('an unknown die should resolve to nothing');
+
+// And it opens from a die on a line.
+await page.click('.line .dielink');
+await page.waitForSelector('dialog .diecard');
+const shown = await page.$eval('.diecard-sa', (n) => n.textContent.trim());
+step('lookup opened from a line: ' + shown);
+await page.screenshot({ path: path.join(SHOT, 'die-lookup.png') });
+await page.click('dialog header button');
+await page.waitForSelector('dialog', { state: 'detached' });
+
 /* ---------- staging ---------- */
 
 /* The step before the first machine, and the one the department judges itself

@@ -10,6 +10,7 @@ import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
 import { renderToday } from './views/today.js';
 import { renderStaging } from './views/staging.js';
+import { dieDialog } from './views/dies.js';
 import { renderShiftUpdate } from './views/shiftupdate.js';
 import { renderRush } from './views/rush.js';
 import { renderData, initSharedFile } from './views/data.js';
@@ -156,6 +157,13 @@ function header() {
     // name picker as a gear rather than taking a tenth slot in a nav row that
     // had already run out of width.
     el('div.hdr-right', {},
+      // The section book, one tap from anywhere. Staging and rolling both ask
+      // "what goes into this" all shift.
+      el('button.iconbtn.hdr-dies', {
+        'aria-label': 'Die lookup',
+        title: 'Look up a die in the section book',
+        onclick: () => dieDialog(''),
+      }, icon('search', { size: 18 })),
       el('button.iconbtn.hdr-setup' + (current === 'setup' ? '.on' : ''), {
         'aria-label': 'Setup',
         'aria-current': String(current === 'setup'),

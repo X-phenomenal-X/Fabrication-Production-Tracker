@@ -1540,6 +1540,7 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
 @media (max-width: 720px) {
   button, .btn, button.sm, .pill, .subtabs button, .dgroup-pick, .dgroup-toggle,
   .linkbtn, .iconbtn, .line-iconbtn, .bulk-btn, .bulk-x, .sug-chip, .badge-route,
+  .dielink, .diepart, .dieused-row,
   input, select, textarea, .donetoggle, .line-pick, .su-recentrow {
     min-height: var(--tap);
   }
@@ -1767,4 +1768,60 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .hdr-setup.on {
   background: var(--accent-soft); color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* ---------- die lookup ---------- */
+
+/* The die badge is now a way in to the section book, so it reads as pressable
+   without becoming another button in a row already full of them. */
+/* A real target at every width, not just on a phone — it is a button now, and
+   32px is the floor everywhere else in the app. */
+.dielink { cursor: pointer; box-shadow: none; min-height: 32px; padding: 4px var(--s2); }
+.dielink:hover:not(:disabled) {
+  background: var(--accent); color: var(--on-fill); border-color: transparent;
+}
+
+.dielookup .diesearch { margin-bottom: var(--s4); }
+.dielookup .diesearch input { width: 100%; padding-left: 40px; }
+.dieresults { min-height: 200px; }
+
+.diecard {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: var(--s4); background: var(--panel-2);
+}
+.diecard-head { display: flex; align-items: center; gap: var(--s2); }
+.diecard-sa { font-size: var(--t-xl); font-weight: 800; letter-spacing: -0.02em; }
+.diecard-desc { margin-top: var(--s1); color: var(--ink-2); }
+
+.dieparts { margin-top: var(--s4); display: grid; gap: var(--s2); }
+.diepart {
+  display: flex; align-items: center; gap: var(--s3);
+  width: 100%; text-align: left; justify-content: flex-start;
+  padding: var(--s2) var(--s3); background: var(--panel);
+}
+.diepart-role {
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--ink-3); min-width: 96px;
+}
+.diepart-die { font-size: var(--t-lg); font-weight: 800; }
+.diepart-go { margin-left: auto; color: var(--ink-3); }
+
+.dieused { margin-top: var(--s5); }
+.dieused-list { display: grid; gap: var(--s1); margin-top: var(--s2); }
+.dieused-row {
+  display: flex; align-items: center; gap: var(--s3);
+  width: 100%; text-align: left; justify-content: flex-start;
+  padding: var(--s2) var(--s3); background: none; border-color: transparent;
+  box-shadow: none;
+}
+.dieused-row:hover:not(:disabled) { background: var(--panel-2); border-color: var(--line); }
+.dieused-row .muted { flex: 1; overflow-wrap: anywhere; }
+.dieused-row svg { color: var(--ink-3); flex-shrink: 0; }
+.dieother { margin-top: var(--s5); }
+
+/* Last in the sheet, after the die styles above — a rule that comes first
+   loses to an equal-specificity one declared later, which is exactly how the
+   die link shipped at 32px on a phone twice. */
+@media (max-width: 720px) {
+  .dielink, .diepart, .dieused-row { min-height: var(--tap); }
 }

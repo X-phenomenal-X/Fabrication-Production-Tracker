@@ -17,6 +17,7 @@ import {
   stagingQueue, hasTasks, machineConfig, taskStatusKey, today, addDays,
 } from '../model.js';
 import { MACHINE_BY_KEY } from '../machines.js';
+import { dieDialog } from './dies.js';
 import { SHIFTS, SHIFT_ORDER, shiftAt } from '../shifts.js';
 
 const vs = { q: '', showStaged: true };
@@ -57,7 +58,10 @@ function stageRow(row, rerender) {
     el('div.line-main', {},
       el('div.line-id', {},
         el('span.mono.strong', {}, task.wo),
-        task.die ? el('span.die', {}, task.die) : null,
+        task.die ? el('button.die.dielink', {
+          title: `What is ${task.die} made of?`,
+          onclick: () => dieDialog(task.die),
+        }, task.die) : null,
         chip(machineLabel(machine), 'mute'),
         rush.on ? el('span.badge-rush' + (rush.late || rush.soon ? '.hot' : ''), {},
           icon('bolt', { size: 11 }), 'RUSH') : null),

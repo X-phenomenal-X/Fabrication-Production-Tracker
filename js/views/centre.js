@@ -25,6 +25,7 @@ import {
 } from '../model.js';
 import { backOrderDialog } from './backorders.js';
 import { manualJobDialog } from './manual.js';
+import { dieDialog } from './dies.js';
 import { rushDialog } from './rush.js';
 import {
   machinesByGroup, assignableIn, hasQueue, canMoveIn, MACHINE_BY_KEY,
@@ -140,7 +141,12 @@ function taskLine(row, vs, rerender, group) {
     el('div.line-main', {},
       el('div.line-id', {},
         el('span.mono.strong', {}, t.wo),
-        t.die ? el('span.die' + (t.edited?.die ? '.edited' : ''), {}, t.die) : null,
+        // The die is a rolled sub-assembly, not one extrusion. Tapping it says
+        // what it is made of — which is what staging has to pull.
+        t.die ? el('button.die.dielink' + (t.edited?.die ? '.edited' : ''), {
+          title: `What is ${t.die} made of?`,
+          onclick: (e) => { e.stopPropagation(); dieDialog(t.die); },
+        }, t.die) : null,
         rush.on ? el('span.badge-rush' + (rush.late || rush.soon ? '.hot' : ''), {
           title: rush.needBy
             ? `Rush — needed by ${fmtDate(rush.needBy)}${rush.late ? ' (past)' : ''}`
