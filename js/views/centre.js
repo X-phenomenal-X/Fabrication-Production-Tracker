@@ -19,10 +19,11 @@ import {
 import {
   groupedQueue, machineSummary, openCountFor, runningNow, taskStatusKey, hasTasks,
   shiftUpdateFor, taskNoteFor, machineConfig, resolveBackOrder, resolveRush,
-  isAssigned, taskByKey, staleImports, shiftUpdateAge,
+  isAssigned, taskByKey, staleImports, shiftUpdateAge, manualIdFor,
   TRACK_STATUS_ORDER, TRACK_STATUS,
 } from '../model.js';
 import { backOrderDialog } from './backorders.js';
+import { manualJobDialog } from './manual.js';
 import { rushDialog } from './rush.js';
 import {
   machinesByGroup, assignableIn, hasQueue, canMoveIn, MACHINE_BY_KEY,
@@ -151,6 +152,11 @@ function taskLine(row, vs, rerender, group) {
         t.editedAt ? el('span.badge-edited', {
           title: `Edited by ${t.editedBy} · ${fmtWhen(t.editedAt)}`,
         }, 'edited') : null,
+        // Not in either workbook. Worth saying on the row, because it changes
+        // what a re-import will and will not bring up to date.
+        t.manual ? el('span.badge-manual', {
+          title: `Added by hand by ${t.by} · ${fmtWhen(t.at)} — not in the workbook`,
+        }, icon('pencil', { size: 10 }), 'added here') : null,
         // Without this a job that someone moved just appears on a machine the
         // workbook never put it on, and the machine it left cannot tell where
         // it went.
@@ -204,9 +210,15 @@ function taskLine(row, vs, rerender, group) {
         title: bo.on ? 'Edit back order' : 'Flag as back order',
         onclick: () => backOrderDialog(t, rerender),
       }, icon('alert', { size: 15 })),
-      el('button.line-iconbtn', {
-        title: 'Edit this line and see its history',
-        onclick: () => editLine(row, rerender),
+      el('button.line-iconbtn' + (t.manual ? '.manual' : ''), {
+        title: t.manual
+          ? 'Edit this job — it was added by hand'
+          : 'Edit this line and see its history',
+        // A manual job has no workbook row behind it, so it is edited at the
+        // source rather than through an overlay on a sheet that has no entry.
+        onclick: () => (t.manual
+          ? manualJobDialog({ machine: t.machine, task: t, rerender })
+          : editLine(row, rerender)),
       }, icon('pencil', { size: 15 }))),
 
     el('div.line-status', {}, statusControl(row, vs, rerender)));
@@ -659,7 +671,13 @@ export function makeCentreView(group) {
               el('button.iconbtn', {
                 title: 'Set up this machine',
                 onclick: () => machineSettings(machine, rerender),
-              }, icon('gear', { size: 16 }))),
+              }, icon('gear', { size: 16 })),
+              // Work the schedules do not have yet — a remake, a service
+              // order, anything phoned in — goes on the machine it will run on.
+              el('button.iconbtn', {
+                title: `Add a job to ${machine.label}`,
+                onclick: () => manualJobDialog({ machine: machine.key, rerender }),
+              }, icon('plus', { size: 17 }))),
             el('div.centre-sub', {},
               machine.note || '',
               machine.ops != null ? `${machine.note ? ' · ' : ''}${machine.ops} operator${machine.ops === 1 ? '' : 's'}` : ''))),

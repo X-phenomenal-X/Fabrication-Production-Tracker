@@ -1395,6 +1395,93 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
 .badge-moved svg { flex-shrink: 0; opacity: .7; }
 .movebtn .muted { line-height: 1.3; }
 
+/* ---------- today ---------- */
+
+/* The day's own list: things no schedule knows about. */
+.todo-add { display: flex; gap: var(--s2); flex-wrap: wrap; margin-bottom: var(--s4); }
+.todo-add input[type="text"], .todo-add input:not([type]) { flex: 1; min-width: 200px; }
+
+.todo-list { border: 1px solid var(--line-soft); border-radius: var(--r-sm); overflow: hidden; }
+.todo {
+  display: flex; align-items: flex-start; gap: var(--s3);
+  padding: var(--s3) var(--s4);
+}
+.todo-check {
+  display: flex; align-items: center; justify-content: center;
+  width: var(--tap); height: var(--tap); margin: -6px 0 -6px -10px;
+  flex-shrink: 0; cursor: pointer; border-radius: var(--r-sm);
+}
+.todo-check:hover { background: var(--accent-soft); }
+.todo-main { flex: 1; min-width: 0; }
+.todo-text { font-weight: 600; overflow-wrap: anywhere; }
+.todo-meta {
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  margin-top: 3px; font-size: var(--t-sm); color: var(--ink-3);
+}
+.todo-who { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: var(--ink-2); }
+
+/* A finished job stays visible for the rest of the day — seeing what has been
+   cleared is half of what the list is for — but stops competing for attention. */
+.todo.done .todo-text { color: var(--ink-3); text-decoration: line-through; }
+.todo.done { background: var(--panel-2); }
+/* Carried over from a previous day. Amber, because it has been open a while. */
+.todo.carried:not(.done) { box-shadow: inset 3px 0 0 var(--warn); }
+
+/* The derived half: counts that lead somewhere rather than being read here. */
+.attgrid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: var(--s3);
+}
+.att {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: var(--s3) var(--s4); min-height: 84px; text-align: left;
+  border-radius: var(--r-sm); background: var(--panel-2);
+  border: 1px solid var(--line); justify-content: center;
+}
+.att:hover { border-color: var(--accent); background: var(--accent-soft); }
+.att-n { font-size: var(--t-xl); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.att-k {
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink-3);
+}
+.att-hint { font-size: var(--t-xs); color: var(--ink-3); font-weight: 500; }
+.att.bad  { background: var(--bad-soft);  border-color: color-mix(in srgb, var(--bad) 26%, transparent); }
+.att.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 26%, transparent); }
+.att.work { background: var(--work-soft); border-color: color-mix(in srgb, var(--work) 26%, transparent); }
+.att.bad .att-n  { color: var(--bad); }
+.att.warn .att-n { color: var(--warn); }
+.att.work .att-n { color: var(--work); }
+
+.today-shift {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  margin-top: var(--s4); padding: var(--s3) var(--s4);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, var(--line));
+  background: var(--warn-soft); border-radius: var(--r-sm);
+}
+.today-shift svg { flex-shrink: 0; color: var(--warn); }
+.today-shift.ok {
+  background: var(--ok-soft);
+  border-color: color-mix(in srgb, var(--ok) 26%, transparent);
+}
+.today-shift.ok svg { color: var(--ok); }
+
+.today-line { cursor: default; }
+.today-line:hover { background: transparent; }
+
+/* ---------- jobs added by hand ---------- */
+
+/* Not in either workbook, which changes what a re-import will bring up to
+   date — so the row says so rather than looking like a scheduled line. */
+.badge-manual {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+  background: var(--work-soft); color: var(--work);
+  padding: 2px 7px 2px 5px; border-radius: var(--r-xs);
+  border: 1px solid color-mix(in srgb, var(--work) 20%, transparent);
+}
+.badge-manual svg { flex-shrink: 0; opacity: .75; }
+.line-iconbtn.manual { color: var(--work); }
+
 /* ---------- phone tap targets ----------
 
    Last in the sheet on purpose. Everything above sets the size a control wants
@@ -1557,6 +1644,17 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 .su-staledown svg { flex-shrink: 0; margin-top: 2px; }
 
+/* Panel headers carry a title, chips and a trailing count. On a phone that is
+   three flex items in 360px, and they were squeezing into two-word columns
+   — "TO / DO" — rather than wrapping. The title keeps its line; the rest wrap
+   underneath it. */
+@media (max-width: 720px) {
+  .panel > h2, .panel > header { flex-wrap: wrap; row-gap: var(--s1); }
+  .panel > header h2 { white-space: nowrap; }
+  .panel > header .spacer { display: none; }
+  .panel > header > .small.muted { flex-basis: 100%; }
+}
+
 /* ---------- header at narrower widths ----------
 
    Ordered after the base header rules so these actually win. The tagline is
@@ -1567,12 +1665,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 /* Bounded below at 721px on purpose: the phone has its own header rules
    further up, and being the later block these would otherwise override them
    and put the two-row header back over its 96px budget. */
-@media (min-width: 721px) and (max-width: 1460px) {
+@media (min-width: 721px) and (max-width: 1660px) {
   .brand small { display: none; }
   header.top { gap: var(--s3); padding-left: var(--s4); padding-right: var(--s4); }
 }
 
-@media (min-width: 721px) and (max-width: 1330px) {
+@media (min-width: 721px) and (max-width: 1560px) {
   nav.tabs { gap: var(--s2); }
   nav.tabs button { padding: 6px 11px; }
   .whopick { min-width: 110px; max-width: 150px; }

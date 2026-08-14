@@ -80,8 +80,31 @@ export function effectiveTaskStatus(t) {
 
 /** All machine-schedule lines, excluding the Rolling "Complete" archive
     (finished by definition, not part of day-to-day tracking). */
+/** Every line the app schedules: the imported ones, plus the jobs added by
+    hand. A manual job is dropped once the workbook catches up and imports a
+    line with the same key — the workbook's version then carries the status,
+    note and history the manual one had, because the key is identical. */
 export function tasksInScope() {
-  return (state.tasks || []).filter((t) => !t.archived);
+  const imported = (state.tasks || []).filter((t) => !t.archived);
+  const manual = Object.values(state.manualTasks || {});
+  if (!manual.length) return imported;
+
+  const have = new Set(imported.map(taskStatusKey));
+  return imported.concat(manual.filter((t) => !t.archived && !have.has(taskStatusKey(t))));
+}
+
+/** The stored record behind a manual job, by its task id. */
+export function manualIdFor(task) {
+  if (!task?.manual) return null;
+  return String(task.id).replace(/^manual:/, '');
+}
+
+/** A manual job whose work order and die now also arrive in the workbook. It
+    is hidden from the queues by tasksInScope(); this is what lets Setup say so
+    rather than leaving someone wondering where their line went. */
+export function supersededManualTasks() {
+  const have = new Set((state.tasks || []).filter((t) => !t.archived).map(taskStatusKey));
+  return Object.values(state.manualTasks || {}).filter((t) => have.has(taskStatusKey(t)));
 }
 
 export function hasTasks() {
@@ -459,4 +482,54 @@ export function workInShift(machineKey, date, shift) {
     out.push({ task, to: h.to, by: h.by, at: h.at });
   }
   return out.sort((a, b) => (a.at < b.at ? -1 : 1));
+}
+
+/* ---------- today ---------- */
+
+/** The day's own list: everything dated today, plus anything still unfinished
+    from before. An open job does not stop mattering at midnight — it follows
+    the day forward, marked with the day it was written, so the list is a real
+    account of what is outstanding rather than a fresh empty page each morning. */
+export function openTodos(ref = today()) {
+  const all = Object.values(state.todos || {});
+  const mine = all.filter((t) => t.date <= ref);
+  const open = mine.filter((t) => !t.done)
+    .sort((a, b) => (a.date === b.date ? (a.at < b.at ? -1 : 1) : (a.date < b.date ? -1 : 1)));
+  const done = all.filter((t) => t.done && t.date === ref)
+    .sort((a, b) => ((a.doneAt || '') < (b.doneAt || '') ? 1 : -1));
+  return { open, done, carried: open.filter((t) => t.date < ref).length };
+}
+
+/** What the schedules themselves say needs attention today, across every
+    machine. Derived — nothing here is stored, so it cannot drift from the
+    pages it points at. */
+export function todayBoard(ref = today()) {
+  const rows = tasksInScope().map((t) => {
+    const task = resolveTask(t);
+    return {
+      task,
+      machine: assignedMachine(task),
+      status: effectiveTaskStatus(task),
+      rush: resolveRush(task, ref),
+      bo: resolveBackOrder(task),
+    };
+  });
+  const open = rows.filter((r) => r.status.key !== 'DONE');
+
+  return {
+    running: open.filter((r) => r.status.key === 'IN_PROGRESS'),
+    dueToday: open.filter((r) => r.task.cuttingDate === ref),
+    overdue: open.filter((r) => r.task.cuttingDate && r.task.cuttingDate < ref),
+    rushNow: open.filter((r) => r.rush.on && (!r.rush.needBy || r.rush.needBy <= ref)),
+    backOrders: open.filter((r) => r.bo.on),
+    finishedToday: rows.filter((r) => r.status.key === 'DONE'
+      && String(r.status.at || '').slice(0, 10) === ref),
+  };
+}
+
+/** Whether the current shift has been written up yet — the one thing on the
+    day's list that has a deadline attached to the shift rather than the job. */
+export function shiftWritten(date, shift) {
+  const log = state.shiftLogs?.[`${date}|${shift}`];
+  return !!(log && (Object.keys(log.rows || {}).length || (log.notes || '').trim()));
 }

@@ -157,6 +157,52 @@ status silently loses the back-order half — 67 open lines in the sample data.
 It is parsed into its own flag and shown as a red **B/O** badge beside the
 status, and counted in the header.
 
+## Adding a job by hand
+
+The schedules are the source of truth, but the floor runs work that is not on
+them yet — a remake for a broken piece, a service order phoned in, a job the
+office has not entered. **＋ next to the machine name** adds one.
+
+A manual job is task-shaped and keyed exactly like an imported line, so every
+overlay already in the app works on it with nothing special: status, note,
+rush, back order, moving it to another machine, history. It carries an
+`added here` badge, because whether a line came from the workbook changes what
+a re-import will bring up to date.
+
+It is stored in `state.manualTasks`, **not** in `state.tasks`. That is the
+whole point: `setMachineImport()` replaces every task belonging to an imported
+machine, so a manual job living in `tasks` would be wiped by the next
+re-import of the workbook covering its machine — which is exactly when someone
+would be relying on it. `test/app-check.mjs` adds a job, sets it In Progress,
+re-imports the CNC workbook, and asserts both the job and its status survive.
+
+It also **steps aside on its own**. Once the workbook imports a line with the
+same machine, work order and die, `tasksInScope()` drops the manual copy — and
+because the key is identical, the workbook's line inherits the status, note and
+history that were recorded against it.
+
+## Today
+
+One page for "what has to happen", in two halves.
+
+The top half is the department's own list — jobs no schedule knows about.
+Chase the mill, change a blade, walk a drawing over, ring the shipper. Typed
+in, ticked off, attributed. **An unfinished job follows the day forward**
+rather than vanishing at midnight, carried with an amber rail and a `from
+Aug 13` chip, because something outstanding does not stop being outstanding.
+Finished ones stay visible until the end of the day — seeing what has been
+cleared is half of what the list is for.
+
+The bottom half is derived and stores nothing: running now, overdue, due
+today, rush needed today or already past, back orders — each a way in to the
+page that actually handles it, so this is a starting point rather than a fifth
+place to record the same thing. Underneath, whether the **current shift has
+been written up**, which is the one item on the day's list whose deadline is
+attached to the shift rather than to a job.
+
+The list works with no schedule loaded; only the derived half waits on an
+import.
+
 ## Rush
 
 Nothing in either workbook says "this one first" — a rush is always somebody
@@ -548,7 +594,7 @@ counting assignees instead of shortages.
   is most of the confirmation you get that a tap landed.
 - Light and dark both ship; the palette is defined once as tokens and only the
   values change under `prefers-color-scheme: dark`.
-- **Navigation is two groups, not eight pages.** The four production centres
+- **Navigation is two groups, not nine pages.** The four production centres
   read as a solid segmented control; the four department tools sit past a
   divider, quieter, because they are visited rather than lived in. Rush and
   Back Orders carry an outstanding count on the tab, so nobody has to open a

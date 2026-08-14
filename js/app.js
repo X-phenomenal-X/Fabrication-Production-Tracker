@@ -1,13 +1,14 @@
 /* Shell: tabs, the identity picker, and the render loop. */
 
 import { el, clear, chip, icon } from './ui.js';
-import { allRush, allBackOrders, hasTasks } from './model.js';
+import { allRush, allBackOrders, hasTasks, openTodos } from './model.js';
 import {
   state, loadLocal, save, onChange, me, sharedFileName, cloudEnabled, cloudHost,
   initCloud, pullCloud, pullSharedFile,
 } from './store.js';
 import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
+import { renderToday } from './views/today.js';
 import { renderShiftUpdate } from './views/shiftupdate.js';
 import { renderRush } from './views/rush.js';
 import { renderData, initSharedFile } from './views/data.js';
@@ -24,8 +25,9 @@ import { SHIFTS, shiftAt } from './shifts.js';
 const TABS = [
   { key: 'rolling', label: 'Rolling', kind: 'centre', render: makeCentreView('Rolling') },
   { key: 'fom', label: 'FOM', kind: 'centre', render: makeCentreView('FOM') },
-  { key: 'cnc', label: 'CNC & FMC', kind: 'centre', render: makeCentreView('CNC') },
-  { key: 'punch', label: 'Multi Punch', kind: 'centre', render: makeCentreView('Punch') },
+  { key: 'cnc', label: 'CNC & FMC', short: 'CNC', kind: 'centre', render: makeCentreView('CNC') },
+  { key: 'punch', label: 'Multi Punch', short: 'Punch', kind: 'centre', render: makeCentreView('Punch') },
+  { key: 'today', label: 'Today', kind: 'tool', icon: 'list', render: renderToday },
   { key: 'rush', label: 'Rush', kind: 'tool', icon: 'bolt', render: renderRush },
   { key: 'backorders', label: 'Back Orders', short: 'B/O', kind: 'tool', icon: 'alert', render: renderBackOrders },
   { key: 'shift', label: 'Shift Update', short: 'Shift', kind: 'tool', icon: 'note', render: renderShiftUpdate },
@@ -78,6 +80,12 @@ function whoAmI() {
    should not have to open Rush to learn there is rush work. Cheap enough to
    recompute per render — both walk the same in-memory task list the page does. */
 function toolBadge(key) {
+  // The day's list works with no schedule loaded, so its count is not gated
+  // on an import the way the schedule-derived ones are.
+  if (key === 'today') {
+    const n = openTodos().open.length;
+    return n ? el('span.tab-badge.warn', {}, String(n)) : null;
+  }
   if (!hasTasks()) return null;
   if (key === 'rush') {
     const n = allRush().length;

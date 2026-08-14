@@ -42,6 +42,13 @@ export const state = {
   taskHistory: [],  // every change to a line, newest first
   machineConfig: {}, // machineKey -> { label, note, ops, hidden }
   shiftLogs: {},    // `${date}|${shift}` -> { date, shift, rows, notes, at, by }
+  /* Jobs added by hand, kept in their own map rather than in `tasks`.
+     setMachineImport() replaces every task belonging to an imported machine,
+     so a manual job living in `tasks` would be wiped by the next re-import of
+     the workbook covering its machine — which is precisely when someone would
+     be relying on it. */
+  manualTasks: {},  // id -> task-shaped record, plus { manual, at, by }
+  todos: {},        // id -> { text, date, done, assignee, at, by, doneAt, doneBy }
   people: [],
   settings: { me: null },
 };
@@ -296,6 +303,102 @@ export function clearTaskEdits(key, sheet = {}) {
 }
 
 /** Save (or update) the shift update for one date and shift. */
+/* ---------- jobs added by hand ---------- */
+
+export const MANUAL_FIELDS = ['wo', 'project', 'floor', 'die', 'qty', 'cuttingDate', 'comments'];
+
+/** Add a job the workbook does not have. It is task-shaped, so every overlay —
+    status, note, rush, back order, assignment, history — works on it with no
+    special casing anywhere downstream. */
+export function addManualTask(fields) {
+  const id = uid();
+  const task = {
+    id: `manual:${id}`,
+    manual: true,
+    machine: fields.machine,
+    sheet: 'Added by hand',
+    row: null,
+    wo: String(fields.wo || '').trim(),
+    project: fields.project?.trim() || null,
+    floor: fields.floor?.trim() || null,
+    die: fields.die?.trim() || null,
+    qty: fields.qty == null || fields.qty === '' ? null : Number(fields.qty),
+    status: null,
+    cuttingDate: fields.cuttingDate || null,
+    shipDate: null,
+    material: null,
+    comments: fields.comments?.trim() || null,
+    setup: null,
+    rollingEta: null,
+    dayShift: null,
+    shifts: null,
+    pinHole: null,
+    bo: null,
+    boRaw: null,
+    boStat: null,
+    backOrder: false,
+    archived: false,
+    at: now(),
+    by: me(),
+  };
+  state.manualTasks = { ...state.manualTasks, [id]: task };
+  logChange(`${task.machine}|${task.wo}|${task.die || ''}`, 'manual', null, null, 'added');
+  save();
+  return task;
+}
+
+export function updateManualTask(id, patch) {
+  const cur = state.manualTasks?.[id];
+  if (!cur) return;
+  const next = { ...cur, ...patch, at: now(), by: me() };
+  state.manualTasks = { ...state.manualTasks, [id]: next };
+  save();
+}
+
+export function deleteManualTask(id) {
+  const cur = state.manualTasks?.[id];
+  if (!cur) return;
+  const rest = { ...state.manualTasks };
+  delete rest[id];
+  state.manualTasks = rest;
+  logChange(`${cur.machine}|${cur.wo}|${cur.die || ''}`, 'manual', null, 'added', 'removed');
+  save();
+}
+
+/* ---------- today's list ---------- */
+
+/** A job to do that no schedule knows about: chase a supplier, change a blade,
+    walk a drawing over. Dated, so the list is about a day rather than growing
+    forever, but an unfinished one follows the day forward — see openTodos(). */
+export function addTodo(text, { date, assignee = null } = {}) {
+  const body = String(text || '').trim();
+  if (!body) return null;
+  const id = uid();
+  state.todos = {
+    ...state.todos,
+    [id]: { id, text: body, date, assignee, done: false, at: now(), by: me() },
+  };
+  save();
+  return id;
+}
+
+export function setTodo(id, patch) {
+  const cur = state.todos?.[id];
+  if (!cur) return;
+  const next = { ...cur, ...patch, at: now() };
+  if (patch.done === true && !cur.done) { next.doneAt = now(); next.doneBy = me(); }
+  if (patch.done === false) { next.doneAt = null; next.doneBy = null; }
+  state.todos = { ...state.todos, [id]: next };
+  save();
+}
+
+export function deleteTodo(id) {
+  const rest = { ...state.todos };
+  delete rest[id];
+  state.todos = rest;
+  save();
+}
+
 export function saveShiftLog(date, shift, patch) {
   const key = `${date}|${shift}`;
   const cur = state.shiftLogs[key] || { date, shift, rows: {} };
@@ -359,6 +462,8 @@ function snapshot() {
     taskHistory: state.taskHistory,
     machineConfig: state.machineConfig,
     shiftLogs: state.shiftLogs,
+    manualTasks: state.manualTasks,
+    todos: state.todos,
     people: state.people,
     settings: state.settings,
   };
@@ -485,6 +590,8 @@ function mergeSnapshot(remote) {
   if (state.taskHistory.length > HISTORY_CAP) state.taskHistory.length = HISTORY_CAP;
   state.machineConfig = mergeRecords(state.machineConfig, remote.machineConfig);
   state.shiftLogs = mergeRecords(state.shiftLogs, remote.shiftLogs);
+  state.manualTasks = mergeRecords(state.manualTasks, remote.manualTasks);
+  state.todos = mergeRecords(state.todos, remote.todos);
   state.people = Array.from(new Set([...(state.people || []), ...(remote.people || [])]));
 
   // Machine tasks come from whichever side imported them most recently.

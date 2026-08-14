@@ -299,6 +299,46 @@ export function makeFixture({ today = '2026-08-14', volume = 'heavy' } = {}) {
         notes: 'Full crew on afternoons.', at: iso(base - 3600000), by: 'Sunil',
       },
     },
+    /* Jobs the workbook does not have. One ordinary remake, one that the
+       workbook has since caught up with — same machine, work order and die as
+       an imported line, so it must be hidden from the queues rather than
+       shown twice. */
+    manualTasks: {
+      m1: {
+        id: 'manual:m1', manual: true, machine: 'fom2', sheet: 'Added by hand',
+        row: null, wo: '90114', project: 'Elm Court', floor: 'PH-N',
+        die: 'S80.117', qty: 6, status: null, cuttingDate: day(0), shipDate: null,
+        material: null, comments: 'Remake for two broken pieces — site is waiting.',
+        setup: null, rollingEta: null, dayShift: null, shifts: null, pinHole: null,
+        bo: null, boRaw: null, boStat: null, backOrder: false, archived: false,
+        at: iso(base - 5400000), by: 'Dee',
+      },
+      m2: {
+        id: 'manual:m2', manual: true, machine: tasks[0].machine, sheet: 'Added by hand',
+        row: null, wo: tasks[0].wo, project: tasks[0].project, floor: tasks[0].floor,
+        die: tasks[0].die, qty: 10, status: null, cuttingDate: day(0), shipDate: null,
+        material: null, comments: 'Added before the workbook had it.',
+        setup: null, rollingEta: null, dayShift: null, shifts: null, pinHole: null,
+        bo: null, boRaw: null, boStat: null, backOrder: false, archived: false,
+        at: iso(base - 90000000), by: 'Marek',
+      },
+    },
+
+    /* The day's list, including one carried over unfinished from yesterday and
+       one already ticked off, so both states render. */
+    todos: {
+      t1: { id: 't1', text: 'Chase the mill on S80.234 — promised week of the 25th',
+        date: day(-1), assignee: 'Krystyna Wojciechowska', done: false,
+        at: iso(base - 100000000), by: 'Abhay' },
+      t2: { id: 't2', text: 'Blade change on FOM 2 before afternoons',
+        date: day(0), assignee: 'Marek', done: false, at: iso(base - 7200000), by: 'Abhay' },
+      t3: { id: 't3', text: 'Walk the Bayfront podium drawings over to the office',
+        date: day(0), assignee: null, done: false, at: iso(base - 3600000), by: 'Sunil' },
+      t4: { id: 't4', text: 'Book the trailer for Friday', date: day(0),
+        assignee: 'Abhay', done: true, doneAt: iso(base - 1800000), doneBy: 'Abhay',
+        at: iso(base - 9000000), by: 'Abhay' },
+    },
+
     people: PEOPLE,
     settings: { me: 'Abhay' },
   };

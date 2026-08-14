@@ -1410,6 +1410,93 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
 .badge-moved svg { flex-shrink: 0; opacity: .7; }
 .movebtn .muted { line-height: 1.3; }
 
+/* ---------- today ---------- */
+
+/* The day's own list: things no schedule knows about. */
+.todo-add { display: flex; gap: var(--s2); flex-wrap: wrap; margin-bottom: var(--s4); }
+.todo-add input[type="text"], .todo-add input:not([type]) { flex: 1; min-width: 200px; }
+
+.todo-list { border: 1px solid var(--line-soft); border-radius: var(--r-sm); overflow: hidden; }
+.todo {
+  display: flex; align-items: flex-start; gap: var(--s3);
+  padding: var(--s3) var(--s4);
+}
+.todo-check {
+  display: flex; align-items: center; justify-content: center;
+  width: var(--tap); height: var(--tap); margin: -6px 0 -6px -10px;
+  flex-shrink: 0; cursor: pointer; border-radius: var(--r-sm);
+}
+.todo-check:hover { background: var(--accent-soft); }
+.todo-main { flex: 1; min-width: 0; }
+.todo-text { font-weight: 600; overflow-wrap: anywhere; }
+.todo-meta {
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  margin-top: 3px; font-size: var(--t-sm); color: var(--ink-3);
+}
+.todo-who { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: var(--ink-2); }
+
+/* A finished job stays visible for the rest of the day — seeing what has been
+   cleared is half of what the list is for — but stops competing for attention. */
+.todo.done .todo-text { color: var(--ink-3); text-decoration: line-through; }
+.todo.done { background: var(--panel-2); }
+/* Carried over from a previous day. Amber, because it has been open a while. */
+.todo.carried:not(.done) { box-shadow: inset 3px 0 0 var(--warn); }
+
+/* The derived half: counts that lead somewhere rather than being read here. */
+.attgrid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: var(--s3);
+}
+.att {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: var(--s3) var(--s4); min-height: 84px; text-align: left;
+  border-radius: var(--r-sm); background: var(--panel-2);
+  border: 1px solid var(--line); justify-content: center;
+}
+.att:hover { border-color: var(--accent); background: var(--accent-soft); }
+.att-n { font-size: var(--t-xl); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.att-k {
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink-3);
+}
+.att-hint { font-size: var(--t-xs); color: var(--ink-3); font-weight: 500; }
+.att.bad  { background: var(--bad-soft);  border-color: color-mix(in srgb, var(--bad) 26%, transparent); }
+.att.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 26%, transparent); }
+.att.work { background: var(--work-soft); border-color: color-mix(in srgb, var(--work) 26%, transparent); }
+.att.bad .att-n  { color: var(--bad); }
+.att.warn .att-n { color: var(--warn); }
+.att.work .att-n { color: var(--work); }
+
+.today-shift {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  margin-top: var(--s4); padding: var(--s3) var(--s4);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, var(--line));
+  background: var(--warn-soft); border-radius: var(--r-sm);
+}
+.today-shift svg { flex-shrink: 0; color: var(--warn); }
+.today-shift.ok {
+  background: var(--ok-soft);
+  border-color: color-mix(in srgb, var(--ok) 26%, transparent);
+}
+.today-shift.ok svg { color: var(--ok); }
+
+.today-line { cursor: default; }
+.today-line:hover { background: transparent; }
+
+/* ---------- jobs added by hand ---------- */
+
+/* Not in either workbook, which changes what a re-import will bring up to
+   date — so the row says so rather than looking like a scheduled line. */
+.badge-manual {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+  background: var(--work-soft); color: var(--work);
+  padding: 2px 7px 2px 5px; border-radius: var(--r-xs);
+  border: 1px solid color-mix(in srgb, var(--work) 20%, transparent);
+}
+.badge-manual svg { flex-shrink: 0; opacity: .75; }
+.line-iconbtn.manual { color: var(--work); }
+
 /* ---------- phone tap targets ----------
 
    Last in the sheet on purpose. Everything above sets the size a control wants
@@ -1572,6 +1659,17 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 .su-staledown svg { flex-shrink: 0; margin-top: 2px; }
 
+/* Panel headers carry a title, chips and a trailing count. On a phone that is
+   three flex items in 360px, and they were squeezing into two-word columns
+   — "TO / DO" — rather than wrapping. The title keeps its line; the rest wrap
+   underneath it. */
+@media (max-width: 720px) {
+  .panel > h2, .panel > header { flex-wrap: wrap; row-gap: var(--s1); }
+  .panel > header h2 { white-space: nowrap; }
+  .panel > header .spacer { display: none; }
+  .panel > header > .small.muted { flex-basis: 100%; }
+}
+
 /* ---------- header at narrower widths ----------
 
    Ordered after the base header rules so these actually win. The tagline is
@@ -1582,12 +1680,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 /* Bounded below at 721px on purpose: the phone has its own header rules
    further up, and being the later block these would otherwise override them
    and put the two-row header back over its 96px budget. */
-@media (min-width: 721px) and (max-width: 1460px) {
+@media (min-width: 721px) and (max-width: 1660px) {
   .brand small { display: none; }
   header.top { gap: var(--s3); padding-left: var(--s4); padding-right: var(--s4); }
 }
 
-@media (min-width: 721px) and (max-width: 1330px) {
+@media (min-width: 721px) and (max-width: 1560px) {
   nav.tabs { gap: var(--s2); }
   nav.tabs button { padding: 6px 11px; }
   .whopick { min-width: 110px; max-width: 150px; }
@@ -1886,7 +1984,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
         bolt: "M13 2 4 14h6l-1 8 9-12h-6z",
         arrow: "M5 12h13M12 5l7 7-7 7",
-        cloud: "M17.5 19a4.5 4.5 0 0 0 .3-9A6.5 6.5 0 0 0 5.3 11 4 4 0 0 0 6 19z"
+        cloud: "M17.5 19a4.5 4.5 0 0 0 .3-9A6.5 6.5 0 0 0 5.3 11 4 4 0 0 0 6 19z",
+        plus: "M12 5v14M5 12h14",
+        list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
+        square: "M4 4h16v16H4z"
       };
     }
   });
@@ -2051,6 +2152,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     // machineKey -> { label, note, ops, hidden }
     shiftLogs: {},
     // `${date}|${shift}` -> { date, shift, rows, notes, at, by }
+    /* Jobs added by hand, kept in their own map rather than in `tasks`.
+       setMachineImport() replaces every task belonging to an imported machine,
+       so a manual job living in `tasks` would be wiped by the next re-import of
+       the workbook covering its machine — which is precisely when someone would
+       be relying on it. */
+    manualTasks: {},
+    // id -> task-shaped record, plus { manual, at, by }
+    todos: {},
+    // id -> { text, date, done, assignee, at, by, doneAt, doneBy }
     people: [],
     settings: { me: null }
   };
@@ -2222,6 +2332,90 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     delete state.taskEdit[key];
     save();
   }
+  function addManualTask(fields) {
+    const id = uid();
+    const task = {
+      id: `manual:${id}`,
+      manual: true,
+      machine: fields.machine,
+      sheet: "Added by hand",
+      row: null,
+      wo: String(fields.wo || "").trim(),
+      project: fields.project?.trim() || null,
+      floor: fields.floor?.trim() || null,
+      die: fields.die?.trim() || null,
+      qty: fields.qty == null || fields.qty === "" ? null : Number(fields.qty),
+      status: null,
+      cuttingDate: fields.cuttingDate || null,
+      shipDate: null,
+      material: null,
+      comments: fields.comments?.trim() || null,
+      setup: null,
+      rollingEta: null,
+      dayShift: null,
+      shifts: null,
+      pinHole: null,
+      bo: null,
+      boRaw: null,
+      boStat: null,
+      backOrder: false,
+      archived: false,
+      at: now(),
+      by: me()
+    };
+    state.manualTasks = { ...state.manualTasks, [id]: task };
+    logChange(`${task.machine}|${task.wo}|${task.die || ""}`, "manual", null, null, "added");
+    save();
+    return task;
+  }
+  function updateManualTask(id, patch) {
+    const cur = state.manualTasks?.[id];
+    if (!cur) return;
+    const next = { ...cur, ...patch, at: now(), by: me() };
+    state.manualTasks = { ...state.manualTasks, [id]: next };
+    save();
+  }
+  function deleteManualTask(id) {
+    const cur = state.manualTasks?.[id];
+    if (!cur) return;
+    const rest = { ...state.manualTasks };
+    delete rest[id];
+    state.manualTasks = rest;
+    logChange(`${cur.machine}|${cur.wo}|${cur.die || ""}`, "manual", null, "added", "removed");
+    save();
+  }
+  function addTodo(text, { date: date2, assignee = null } = {}) {
+    const body = String(text || "").trim();
+    if (!body) return null;
+    const id = uid();
+    state.todos = {
+      ...state.todos,
+      [id]: { id, text: body, date: date2, assignee, done: false, at: now(), by: me() }
+    };
+    save();
+    return id;
+  }
+  function setTodo(id, patch) {
+    const cur = state.todos?.[id];
+    if (!cur) return;
+    const next = { ...cur, ...patch, at: now() };
+    if (patch.done === true && !cur.done) {
+      next.doneAt = now();
+      next.doneBy = me();
+    }
+    if (patch.done === false) {
+      next.doneAt = null;
+      next.doneBy = null;
+    }
+    state.todos = { ...state.todos, [id]: next };
+    save();
+  }
+  function deleteTodo(id) {
+    const rest = { ...state.todos };
+    delete rest[id];
+    state.todos = rest;
+    save();
+  }
   function saveShiftLog(date2, shift, patch) {
     const key = `${date2}|${shift}`;
     const cur = state.shiftLogs[key] || { date: date2, shift, rows: {} };
@@ -2273,6 +2467,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       taskHistory: state.taskHistory,
       machineConfig: state.machineConfig,
       shiftLogs: state.shiftLogs,
+      manualTasks: state.manualTasks,
+      todos: state.todos,
       people: state.people,
       settings: state.settings
     };
@@ -2376,6 +2572,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     if (state.taskHistory.length > HISTORY_CAP) state.taskHistory.length = HISTORY_CAP;
     state.machineConfig = mergeRecords(state.machineConfig, remote.machineConfig);
     state.shiftLogs = mergeRecords(state.shiftLogs, remote.shiftLogs);
+    state.manualTasks = mergeRecords(state.manualTasks, remote.manualTasks);
+    state.todos = mergeRecords(state.todos, remote.todos);
     state.people = Array.from(/* @__PURE__ */ new Set([...state.people || [], ...remote.people || []]));
     for (const kind of ["rolling", "cnc"]) {
       const mine = state.machineMeta?.[kind]?.importedAt || "";
@@ -3221,7 +3419,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     return { ...TRACK_STATUS[bucket], overridden: false };
   }
   function tasksInScope() {
-    return (state.tasks || []).filter((t) => !t.archived);
+    const imported = (state.tasks || []).filter((t) => !t.archived);
+    const manual = Object.values(state.manualTasks || {});
+    if (!manual.length) return imported;
+    const have = new Set(imported.map(taskStatusKey));
+    return imported.concat(manual.filter((t) => !t.archived && !have.has(taskStatusKey(t))));
+  }
+  function manualIdFor(task) {
+    if (!task?.manual) return null;
+    return String(task.id).replace(/^manual:/, "");
   }
   function hasTasks() {
     return tasksInScope().length > 0;
@@ -3475,6 +3681,38 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       out.push({ task, to: h.to, by: h.by, at: h.at });
     }
     return out.sort((a, b) => a.at < b.at ? -1 : 1);
+  }
+  function openTodos(ref = today()) {
+    const all = Object.values(state.todos || {});
+    const mine = all.filter((t) => t.date <= ref);
+    const open = mine.filter((t) => !t.done).sort((a, b) => a.date === b.date ? a.at < b.at ? -1 : 1 : a.date < b.date ? -1 : 1);
+    const done = all.filter((t) => t.done && t.date === ref).sort((a, b) => (a.doneAt || "") < (b.doneAt || "") ? 1 : -1);
+    return { open, done, carried: open.filter((t) => t.date < ref).length };
+  }
+  function todayBoard(ref = today()) {
+    const rows = tasksInScope().map((t) => {
+      const task = resolveTask(t);
+      return {
+        task,
+        machine: assignedMachine(task),
+        status: effectiveTaskStatus(task),
+        rush: resolveRush(task, ref),
+        bo: resolveBackOrder(task)
+      };
+    });
+    const open = rows.filter((r) => r.status.key !== "DONE");
+    return {
+      running: open.filter((r) => r.status.key === "IN_PROGRESS"),
+      dueToday: open.filter((r) => r.task.cuttingDate === ref),
+      overdue: open.filter((r) => r.task.cuttingDate && r.task.cuttingDate < ref),
+      rushNow: open.filter((r) => r.rush.on && (!r.rush.needBy || r.rush.needBy <= ref)),
+      backOrders: open.filter((r) => r.bo.on),
+      finishedToday: rows.filter((r) => r.status.key === "DONE" && String(r.status.at || "").slice(0, 10) === ref)
+    };
+  }
+  function shiftWritten(date2, shift) {
+    const log = state.shiftLogs?.[`${date2}|${shift}`];
+    return !!(log && (Object.keys(log.rows || {}).length || (log.notes || "").trim()));
   }
 
   // js/views/centre.js
@@ -3838,6 +4076,141 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       );
     });
     return el("div.centre", {}, head, ...sections2);
+  }
+
+  // js/views/manual.js
+  init_ui();
+  var FIELDS = [
+    {
+      key: "wo",
+      label: "Work order",
+      type: "text",
+      required: true,
+      placeholder: "31942",
+      hint: "What the job is called on the floor"
+    },
+    { key: "die", label: "Die", type: "text", placeholder: "S80.104" },
+    { key: "project", label: "Project", type: "text", placeholder: "Harbour Point" },
+    { key: "floor", label: "Floor / Tag", type: "text", placeholder: "12A" },
+    { key: "qty", label: "Quantity", type: "number", placeholder: "0" },
+    { key: "cuttingDate", label: "Cutting date", type: "date" }
+  ];
+  function manualJobDialog({ machine, task = null, rerender }) {
+    const editing = !!task;
+    const id = editing ? manualIdFor(task) : null;
+    const inputs = {};
+    const field = (f) => {
+      const val = editing ? task[f.key] ?? "" : f.key === "cuttingDate" ? today() : "";
+      const input = el("input", {
+        type: f.type === "number" ? "number" : f.type === "date" ? "date" : "text",
+        value: val === null ? "" : String(val),
+        placeholder: f.placeholder || "",
+        ...f.type === "number" ? { min: "0", inputmode: "decimal" } : {}
+      });
+      inputs[f.key] = input;
+      return el(
+        "label.field",
+        {},
+        el("span", {}, f.label, f.required ? el("em.of-total", {}, "required") : null),
+        input,
+        f.hint ? el("div.small.muted", { style: { marginTop: "4px" } }, f.hint) : null
+      );
+    };
+    const group = MACHINE_BY_KEY[machine]?.group;
+    const choices = group ? MACHINES.filter((m) => m.group === group) : MACHINES;
+    const machineSel = el(
+      "select",
+      {},
+      ...choices.map((m) => el("option", {
+        value: m.key,
+        selected: m.key === machine
+      }, machineConfig(m).label))
+    );
+    const comments = el("textarea", {
+      value: editing ? task.comments || "" : "",
+      placeholder: "Why it is being run, who asked for it, anything the next shift needs",
+      style: { minHeight: "76px" }
+    });
+    const body = el(
+      "div",
+      {},
+      el(
+        "p.small.muted",
+        { style: { marginTop: 0 } },
+        editing ? "This job was added by hand, so it is not in either workbook. Everything recorded against it behaves exactly like a scheduled line." : "For work the schedules do not have yet \u2014 a remake, a service order, anything phoned in. It survives re-importing the workbooks, and steps aside on its own if the same work order and die later arrive in one."
+      ),
+      el(
+        "label.field",
+        { style: { marginBottom: "12px" } },
+        el("span", {}, "Machine"),
+        machineSel
+      ),
+      el("div.grid", {
+        style: { gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: "12px" }
+      }, ...FIELDS.map(field)),
+      el(
+        "label.field",
+        { style: { marginTop: "12px" } },
+        el("span", {}, "Notes"),
+        comments
+      ),
+      editing && task.at ? el(
+        "div.small.muted",
+        { style: { marginTop: "10px" } },
+        `Added by ${task.by} \xB7 ${fmtWhen(task.at)}`
+      ) : null
+    );
+    const read = () => {
+      const out = { machine: machineSel.value, comments: comments.value };
+      for (const f of FIELDS) {
+        const raw = inputs[f.key].value.trim();
+        out[f.key] = raw === "" ? null : f.type === "number" ? Number(raw) : raw;
+      }
+      return out;
+    };
+    const dlg = modal(editing ? `Edit job \u2014 ${task.wo}` : "Add a job", body, {
+      actions: [
+        editing ? {
+          label: "Delete",
+          class: "danger",
+          onClick: async (d) => {
+            const ok = await confirmDialog(
+              "Delete this job?",
+              `W/O ${task.wo} was added by hand. Deleting it also drops the status, notes and history recorded against it.`,
+              { confirmLabel: "Delete", danger: true }
+            );
+            if (!ok) return;
+            deleteManualTask(id);
+            d.close();
+            toast("Job deleted");
+            rerender();
+          }
+        } : null,
+        {
+          label: editing ? "Save" : "Add job",
+          class: "primary",
+          onClick: (d) => {
+            const fields = read();
+            if (!fields.wo) {
+              toast("A work order is needed \u2014 it is how the line is identified");
+              inputs.wo.focus();
+              return;
+            }
+            if (editing) {
+              updateManualTask(id, fields);
+              toast("Saved");
+            } else {
+              addManualTask(fields);
+              toast(`Added W/O ${fields.wo} to ${machineConfig(MACHINE_BY_KEY[fields.machine]).label}`);
+            }
+            d.close();
+            rerender();
+          }
+        }
+      ].filter(Boolean)
+    });
+    inputs.wo.focus();
+    return dlg;
   }
 
   // js/views/rush.js
@@ -4312,6 +4685,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           t.editedAt ? el("span.badge-edited", {
             title: `Edited by ${t.editedBy} \xB7 ${fmtWhen(t.editedAt)}`
           }, "edited") : null,
+          // Not in either workbook. Worth saying on the row, because it changes
+          // what a re-import will and will not bring up to date.
+          t.manual ? el("span.badge-manual", {
+            title: `Added by hand by ${t.by} \xB7 ${fmtWhen(t.at)} \u2014 not in the workbook`
+          }, icon("pencil", { size: 10 }), "added here") : null,
           // Without this a job that someone moved just appears on a machine the
           // workbook never put it on, and the machine it left cannot tell where
           // it went.
@@ -4388,9 +4766,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           title: bo.on ? "Edit back order" : "Flag as back order",
           onclick: () => backOrderDialog(t, rerender)
         }, icon("alert", { size: 15 })),
-        el("button.line-iconbtn", {
-          title: "Edit this line and see its history",
-          onclick: () => editLine(row, rerender)
+        el("button.line-iconbtn" + (t.manual ? ".manual" : ""), {
+          title: t.manual ? "Edit this job \u2014 it was added by hand" : "Edit this line and see its history",
+          // A manual job has no workbook row behind it, so it is edited at the
+          // source rather than through an overlay on a sheet that has no entry.
+          onclick: () => t.manual ? manualJobDialog({ machine: t.machine, task: t, rerender }) : editLine(row, rerender)
         }, icon("pencil", { size: 15 }))
       ),
       el("div.line-status", {}, statusControl(row, vs, rerender))
@@ -4937,7 +5317,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
                 el("button.iconbtn", {
                   title: "Set up this machine",
                   onclick: () => machineSettings(machine, rerender)
-                }, icon("gear", { size: 16 }))
+                }, icon("gear", { size: 16 })),
+                // Work the schedules do not have yet — a remake, a service
+                // order, anything phoned in — goes on the machine it will run on.
+                el("button.iconbtn", {
+                  title: `Add a job to ${machine.label}`,
+                  onclick: () => manualJobDialog({ machine: machine.key, rerender })
+                }, icon("plus", { size: 17 }))
               ),
               el(
                 "div.centre-sub",
@@ -5030,7 +5416,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     };
   }
 
-  // js/views/shiftupdate.js
+  // js/views/today.js
   init_ui();
 
   // js/shifts.js
@@ -5047,14 +5433,331 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     return "NIGHT";
   }
 
+  // js/views/today.js
+  function machineLabel3(key) {
+    const m = MACHINE_BY_KEY[key];
+    return m ? machineConfig(m).label : key;
+  }
+  function todoRow(item, ref, rerender) {
+    const carried = item.date < ref;
+    return el(
+      "li.todo" + (item.done ? ".done" : "") + (carried ? ".carried" : ""),
+      {},
+      el(
+        "label.todo-check",
+        {},
+        el("input", {
+          type: "checkbox",
+          checked: !!item.done,
+          "aria-label": (item.done ? "Mark not done: " : "Mark done: ") + item.text,
+          onchange: (e) => {
+            setTodo(item.id, { done: e.target.checked });
+            rerender();
+          }
+        })
+      ),
+      el(
+        "div.todo-main",
+        {},
+        el("div.todo-text", {}, item.text),
+        el(
+          "div.todo-meta",
+          {},
+          // Where a carried job came from matters: three days old is a different
+          // conversation from written this morning.
+          carried ? chip(`from ${fmtDate(item.date)}`, "warn") : null,
+          item.assignee ? el("span.todo-who", {}, icon("dot", { size: 10 }), item.assignee) : null,
+          item.done ? el("span.muted", {}, `done by ${item.doneBy} \xB7 ${fmtWhen(item.doneAt)}`) : el("span.muted", {}, `added by ${item.by} \xB7 ${fmtWhen(item.at)}`)
+        )
+      ),
+      el("button.line-iconbtn", {
+        title: "Remove",
+        onclick: async () => {
+          const ok = await confirmDialog(
+            "Remove this?",
+            item.text,
+            { confirmLabel: "Remove", danger: true }
+          );
+          if (!ok) return;
+          deleteTodo(item.id);
+          toast("Removed");
+          rerender();
+        }
+      }, icon("x", { size: 15 }))
+    );
+  }
+  function listPanel(ref, rerender) {
+    const { open, done, carried } = openTodos(ref);
+    const input = el("input", {
+      placeholder: "Something that needs doing today\u2026",
+      "aria-label": "What needs doing",
+      onkeydown: (e) => {
+        if (e.key === "Enter") add();
+      }
+    });
+    const people = state.people || [];
+    const who = el(
+      "select",
+      { "aria-label": "Who it is for", style: { width: "auto", minWidth: "150px" } },
+      el("option", { value: "" }, "Anyone"),
+      ...people.map((p) => el("option", { value: p, selected: p === me() }, p))
+    );
+    function add() {
+      const text = input.value.trim();
+      if (!text) return;
+      addTodo(text, { date: ref, assignee: who.value || null });
+      input.value = "";
+      rerender();
+    }
+    return el(
+      "div.panel",
+      {},
+      el(
+        "header",
+        {},
+        icon("list", { size: 14 }),
+        el("h2", {}, "To do"),
+        open.length ? chip(`${open.length} open`, carried ? "warn" : "mute") : null,
+        carried ? chip(`${carried} carried over`, "warn") : null,
+        el("span.spacer"),
+        done.length ? el("span.small.muted", {}, `${done.length} done today`) : null
+      ),
+      el(
+        "div.body",
+        {},
+        el(
+          "div.todo-add",
+          {},
+          input,
+          who,
+          el("button.primary", { onclick: add }, icon("plus", { size: 15 }), "Add")
+        ),
+        open.length || done.length ? el(
+          "ul.list.todo-list",
+          {},
+          ...open.map((t) => todoRow(t, ref, rerender)),
+          ...done.map((t) => todoRow(t, ref, rerender))
+        ) : el(
+          "div.empty",
+          {},
+          el("div.empty-icon", {}, icon("check", { size: 28 })),
+          el("h3", {}, "Nothing on the list"),
+          el("div", {}, "Anything the schedules do not cover goes here \u2014 chasing material, a blade change, a call to make.")
+        )
+      )
+    );
+  }
+  function attentionCard({ label, rows, tone, hint, go: go2, tab }) {
+    const n = rows.length;
+    return el(
+      "button.att" + (n && tone ? "." + tone : ""),
+      {
+        onclick: () => go2(tab),
+        title: `Open ${label}`
+      },
+      el("span.att-n", {}, fmtNum(n)),
+      el("span.att-k", {}, label),
+      el("span.att-hint", {}, n ? hint : "nothing outstanding")
+    );
+  }
+  function pileList(title, rows, tone, cap = 5) {
+    if (!rows.length) return null;
+    return el(
+      "section.dgroup",
+      {},
+      el(
+        "div.dgroup-head",
+        {},
+        el("span.dgroup-label." + tone, {}, title),
+        el("span.dgroup-count", {}, String(rows.length))
+      ),
+      el(
+        "div.dgroup-body",
+        {},
+        ...rows.slice(0, cap).map(({ task, machine }) => el(
+          "div.line.today-line",
+          {},
+          el(
+            "div.line-main",
+            {},
+            el(
+              "div.line-id",
+              {},
+              el("span.mono.strong", {}, task.wo),
+              task.die ? el("span.die", {}, task.die) : null,
+              chip(machineLabel3(machine), "mute")
+            ),
+            el(
+              "div.line-where",
+              {},
+              el("span", {}, task.project || "\u2014"),
+              task.floor ? el("span.muted", {}, " \xB7 " + task.floor) : null
+            )
+          ),
+          el(
+            "div.line-qty",
+            {},
+            el("span.mono", {}, fmtNum(task.qty)),
+            el("span.small.muted", {}, "pcs")
+          ),
+          el("div.line-date.hide-sm", {}, fmtDate(task.cuttingDate))
+        )),
+        rows.length > cap ? el(
+          "div.small.muted",
+          { style: { padding: "10px 16px" } },
+          `and ${rows.length - cap} more`
+        ) : null
+      )
+    );
+  }
+  function renderToday(rerender, go2) {
+    const ref = today();
+    const shiftKey = shiftAt();
+    const shift = SHIFTS[shiftKey];
+    const head = el(
+      "div.centre-head",
+      {},
+      el(
+        "div.row.centre-title-row",
+        {},
+        el(
+          "div.centre-ident",
+          {},
+          el("span.centre-rail", { "aria-hidden": "true" }),
+          el(
+            "div",
+            {},
+            el("h1.centre-title", {}, "Today"),
+            el(
+              "div.centre-sub",
+              {},
+              fmtDate(ref, { withDay: true }),
+              el("span.dot-sep", {}, "\xB7"),
+              `${shift.label} shift`,
+              el("span.dot-sep", {}, "\xB7"),
+              me()
+            )
+          )
+        ),
+        el("span.spacer")
+      )
+    );
+    if (!hasTasks()) {
+      return el(
+        "div.centre",
+        {},
+        head,
+        listPanel(ref, rerender),
+        el("div.panel", { style: { marginTop: "16px" } }, el(
+          "div.empty",
+          {},
+          el("div.empty-icon", {}, icon("upload", { size: 28 })),
+          el("h3", {}, "No schedule loaded yet"),
+          el("p", {}, "Import the workbooks and this page also shows what is running, late, due and short across every machine."),
+          el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
+        ))
+      );
+    }
+    const b = todayBoard(ref);
+    const written = shiftWritten(ref, shiftKey);
+    return el(
+      "div.centre",
+      {},
+      head,
+      listPanel(ref, rerender),
+      el(
+        "div.panel",
+        { style: { marginTop: "16px" } },
+        el(
+          "header",
+          {},
+          icon("note", { size: 14 }),
+          el("h2", {}, "From the schedules"),
+          el("span.small.muted", {}, "across every machine"),
+          el("span.spacer"),
+          el("span.small.muted", {}, `${b.finishedToday.length} finished today`)
+        ),
+        el(
+          "div.body",
+          {},
+          el(
+            "div.attgrid",
+            {},
+            attentionCard({
+              label: "running now",
+              rows: b.running,
+              tone: "work",
+              hint: "on the machines",
+              go: go2,
+              tab: "rolling"
+            }),
+            attentionCard({
+              label: "overdue",
+              rows: b.overdue,
+              tone: "bad",
+              hint: "past their cutting date",
+              go: go2,
+              tab: "rolling"
+            }),
+            attentionCard({
+              label: "due today",
+              rows: b.dueToday,
+              tone: "warn",
+              hint: "cutting date is today",
+              go: go2,
+              tab: "rolling"
+            }),
+            attentionCard({
+              label: "rush",
+              rows: b.rushNow,
+              tone: "warn",
+              hint: "needed today or already past",
+              go: go2,
+              tab: "rush"
+            }),
+            attentionCard({
+              label: "back orders",
+              rows: b.backOrders,
+              tone: "bad",
+              hint: "short of material",
+              go: go2,
+              tab: "backorders"
+            })
+          ),
+          // The one job on the day's list with a deadline attached to the shift
+          // rather than to a machine.
+          el(
+            "div.today-shift" + (written ? ".ok" : ""),
+            {},
+            icon(written ? "check" : "pencil", { size: 15 }),
+            el(
+              "div",
+              {},
+              el("strong", {}, written ? `${shift.label} shift update written` : `${shift.label} shift update not written yet`),
+              el("div.small.muted", {}, written ? "Anything else this shift can be added to it." : "Write it up before the shift ends so the next one knows where things stand.")
+            ),
+            el("span.spacer"),
+            el("button" + (written ? "" : ".primary"), {
+              onclick: () => go2("shift")
+            }, written ? "Open it" : "Write it")
+          )
+        )
+      ),
+      pileList("Overdue", b.overdue, "bad"),
+      pileList("Due today", b.dueToday, "warn"),
+      pileList("Running now", b.running, "mute")
+    );
+  }
+
   // js/views/shiftupdate.js
+  init_ui();
   var CENTRES = [
     ["Rolling", "Rolling"],
     ["FOM", "FOM"],
     ["CNC", "CNC & FMC"],
     ["Punch", "Multi Punch"]
   ];
-  var FIELDS = [
+  var FIELDS2 = [
     ["done", "Work done / in progress"],
     ["next", "Next in schedule"],
     ["notes", "Notes"]
@@ -5124,7 +5827,7 @@ ${text}` : text;
         const used = has(field, text);
         return el("button.sug-chip" + (used ? ".used" : ""), {
           type: "button",
-          title: used ? "Already in the update" : "Add to " + FIELDS.find(([f]) => f === field)[1],
+          title: used ? "Already in the update" : "Add to " + FIELDS2.find(([f]) => f === field)[1],
           onclick: () => {
             if (add(field, text)) rerender();
           }
@@ -5358,7 +6061,7 @@ ${add.join("\n")}` : add.join("\n");
       for (const m of rows) {
         const r = log.rows[m.key];
         out.push(`${m.label}${r.ops ? `  (${r.ops} ops)` : ""}`);
-        for (const [field, label] of FIELDS) {
+        for (const [field, label] of FIELDS2) {
           if (!r[field]) continue;
           out.push(`  ${label}:`);
           for (const line of String(r[field]).split("\n")) {
@@ -5408,7 +6111,7 @@ ${add.join("\n")}` : add.join("\n");
               el("strong", {}, m.label),
               r.ops ? chip(`${r.ops} ops`, "mute") : null
             ),
-            el("div.suread-cols", {}, ...FIELDS.map(([field, label]) => r[field] ? el(
+            el("div.suread-cols", {}, ...FIELDS2.map(([field, label]) => r[field] ? el(
               "div.suread-col",
               {},
               el("div.su-label", {}, label),
@@ -6304,8 +7007,9 @@ create policy "tracker update" on tracker_state for update using (true) with che
   var TABS = [
     { key: "rolling", label: "Rolling", kind: "centre", render: makeCentreView("Rolling") },
     { key: "fom", label: "FOM", kind: "centre", render: makeCentreView("FOM") },
-    { key: "cnc", label: "CNC & FMC", kind: "centre", render: makeCentreView("CNC") },
-    { key: "punch", label: "Multi Punch", kind: "centre", render: makeCentreView("Punch") },
+    { key: "cnc", label: "CNC & FMC", short: "CNC", kind: "centre", render: makeCentreView("CNC") },
+    { key: "punch", label: "Multi Punch", short: "Punch", kind: "centre", render: makeCentreView("Punch") },
+    { key: "today", label: "Today", kind: "tool", icon: "list", render: renderToday },
     { key: "rush", label: "Rush", kind: "tool", icon: "bolt", render: renderRush },
     { key: "backorders", label: "Back Orders", short: "B/O", kind: "tool", icon: "alert", render: renderBackOrders },
     { key: "shift", label: "Shift Update", short: "Shift", kind: "tool", icon: "note", render: renderShiftUpdate },
@@ -6351,6 +7055,10 @@ create policy "tracker update" on tracker_state for update using (true) with che
     return sel;
   }
   function toolBadge(key) {
+    if (key === "today") {
+      const n = openTodos().open.length;
+      return n ? el("span.tab-badge.warn", {}, String(n)) : null;
+    }
     if (!hasTasks()) return null;
     if (key === "rush") {
       const n = allRush().length;

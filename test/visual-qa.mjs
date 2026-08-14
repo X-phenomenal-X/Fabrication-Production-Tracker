@@ -60,6 +60,7 @@ const VIEWPORTS = [
 ];
 
 const SCREENS = [
+  { hash: 'today', name: 'today' },
   { hash: 'rolling', name: 'rolling' },
   { hash: 'fom', name: 'fom' },
   { hash: 'cnc', name: 'cnc' },

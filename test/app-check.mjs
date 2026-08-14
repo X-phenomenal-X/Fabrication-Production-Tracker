@@ -71,7 +71,7 @@ step('app booted');
 const tabs = await page.$$eval('nav.tabs button', (ns) =>
   ns.map((n) => (n.getAttribute('aria-label') || n.textContent).trim()));
 step('tabs: ' + tabs.join(', '));
-if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Rush,Back Orders,Shift Update,Setup') {
+if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Today,Rush,Back Orders,Shift Update,Setup') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -733,6 +733,91 @@ const suFallback = await page.evaluate(() =>
   document.querySelector('.su').classList.contains('written'));
 step('Multi Punch falls back to the workbook: ' + (!suFallback));
 if (suFallback) throw new Error('a machine with no written update claims to have one');
+
+/* ---------- a job added by hand ---------- */
+
+// It must appear in the queue like any other line, take a status, and survive
+// a re-import of the workbook covering its machine — which is the whole reason
+// manual jobs are not stored in `tasks`.
+await gotoTab('FOM');
+const beforeAdd = await page.$$eval('.line', (ns) => ns.length);
+await page.click('.centre-head button[title^="Add a job"]');
+await page.waitForSelector('dialog[open]');
+await page.fill('dialog input[placeholder="31942"]', '90210');
+await page.fill('dialog input[placeholder="S80.104"]', 'S80.999');
+await page.fill('dialog input[placeholder="Harbour Point"]', 'Remake job');
+await page.fill('dialog input[placeholder="0"]', '7');
+await page.click('dialog footer button.primary');
+await page.waitForSelector('dialog', { state: 'detached' });
+await page.waitForTimeout(200);
+
+const manual = await page.evaluate(() => import('/js/store.js').then((m) => {
+  const t = Object.values(m.state.manualTasks)[0];
+  return t ? { wo: t.wo, die: t.die, qty: t.qty, machine: t.machine, by: t.by, manual: t.manual } : null;
+}));
+step('manual job stored: ' + JSON.stringify(manual));
+if (!manual || manual.wo !== '90210') throw new Error('the added job was not stored');
+
+await page.fill('.centre-filters input[type="search"]', '90210');
+await page.waitForTimeout(300);
+const manualRow = await page.$$eval('.line', (ns) => ns.map((n) => ({
+  wo: n.querySelector('.line-id .mono')?.textContent.trim(),
+  badge: !!n.querySelector('.badge-manual'),
+})));
+step('manual job on the queue: ' + JSON.stringify(manualRow));
+if (!manualRow.length || manualRow[0].wo !== '90210') throw new Error('the added job is not in the queue');
+if (!manualRow[0].badge) throw new Error('the added job is not marked as added by hand');
+
+// give it a status, then re-import the workbook it belongs to
+await page.click('.line .seg-btn:nth-child(2)');
+await page.waitForTimeout(200);
+await gotoTab('Setup');
+{
+  const ch = page.waitForEvent('filechooser');
+  await page.click('.drop:has-text("CNC workbook") button');
+  await (await ch).setFiles(CNC);
+  await page.waitForSelector('dialog .stat', { timeout: 120000 });
+  await page.click('dialog header button');
+  await page.waitForSelector('dialog', { state: 'detached' });
+}
+const survived = await page.evaluate(() => import('/js/store.js').then((m) => {
+  const t = Object.values(m.state.manualTasks)[0];
+  const k = `${t.machine}|${t.wo}|${t.die || ''}`;
+  return { present: !!t, status: m.state.taskStatus[k]?.status || null };
+}));
+step('manual job after re-importing CNC: ' + JSON.stringify(survived));
+if (!survived.present) throw new Error('re-importing the workbook wiped a job added by hand');
+if (survived.status !== 'IN_PROGRESS') throw new Error('the added job lost its status on re-import');
+
+/* ---------- today's list ---------- */
+
+await gotoTab('Today');
+await page.waitForSelector('.todo-add input');
+await page.fill('.todo-add input', 'Chase the mill on S80.999');
+await page.click('.todo-add button.primary');
+await page.waitForTimeout(200);
+const todos = await page.evaluate(() => import('/js/store.js').then((m) =>
+  Object.values(m.state.todos).map((t) => ({ text: t.text, done: t.done, by: t.by }))));
+step('today list: ' + JSON.stringify(todos));
+if (!todos.length || todos[0].text !== 'Chase the mill on S80.999') {
+  throw new Error('the to-do was not stored');
+}
+
+await page.click('.todo .todo-check input');
+await page.waitForTimeout(200);
+const ticked = await page.evaluate(() => import('/js/store.js').then((m) => {
+  const t = Object.values(m.state.todos)[0];
+  return { done: t.done, doneBy: t.doneBy, hasAt: !!t.doneAt };
+}));
+step('ticked off: ' + JSON.stringify(ticked));
+if (!ticked.done || !ticked.doneBy || !ticked.hasAt) throw new Error('ticking a to-do recorded nothing');
+
+// the derived half reflects the schedules
+const board = await page.$$eval('.att', (ns) => ns.map((n) =>
+  n.querySelector('.att-k').textContent + '=' + n.querySelector('.att-n').textContent));
+step('today board: ' + board.join(' '));
+if (board.length !== 5) throw new Error('the today board lost a card');
+await page.screenshot({ path: path.join(SHOT, 'today.png'), fullPage: true });
 
 // phone
 await page.click('nav.tabs button:has-text("Rolling")');

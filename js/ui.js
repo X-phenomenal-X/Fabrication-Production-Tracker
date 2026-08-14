@@ -172,6 +172,9 @@ const ICON_PATHS = {
   bolt: 'M13 2 4 14h6l-1 8 9-12h-6z',
   arrow: 'M5 12h13M12 5l7 7-7 7',
   cloud: 'M17.5 19a4.5 4.5 0 0 0 .3-9A6.5 6.5 0 0 0 5.3 11 4 4 0 0 0 6 19z',
+  plus: 'M12 5v14M5 12h14',
+  list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+  square: 'M4 4h16v16H4z',
 };
 
 export function icon(name, { size = 16, cls = '' } = {}) {
