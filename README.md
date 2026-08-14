@@ -192,6 +192,35 @@ exactly `Exterior 80-113 · Thermal break 84-901 ×2 · Interior 80-105`, that t
 reverse lookup finds it from `80-105`, and that an unknown die resolves to
 nothing rather than a wrong guess.
 
+### The drawings
+
+Each series also has a drawings PDF: one page per sub-assembly, a section
+through the assembled profile with every component called out where it sits.
+The listing tells you `80-113` is the exterior; the drawing tells you which
+piece that is on the rack.
+
+`js/drawings.js` carries **481 of them, 1.5 MB**, keyed by sub-assembly. Each
+page is cropped to the drawing itself — the revision table, the components
+table and the title block are dropped, since the first two repeat what the app
+already knows and the third is letterhead — then rendered 1-bit at 720px and
+encoded as lossless WebP. That takes a page from ~280 KB of PDF to about 3 KB,
+which is what makes carrying hundreds of them inside a single offline file
+possible at all. They keep a white ground in dark mode: inverted line art no
+longer matches the paper drawing next to the machine.
+
+**Coverage is partial and the app says so.** Fifteen of the eighteen drawing
+sets are in — 8000, 8000HTX and 8700 are each over the size ceiling of the
+transport used to fetch them and failed every attempt. Against the current
+schedules that is 77 of the 164 dies in use; the gap is almost entirely the
+8000 series, which is the biggest. `drawingFor()` returns null rather than a
+broken image and the lookup shows "No section drawing for this series yet", so
+the missing ones degrade quietly. Dropping those three PDFs in and re-running
+the extractor fills them:
+
+```
+tools/extract-drawings.py <dir-of-drawing-pdfs> js/drawings.js
+```
+
 ### Regenerating it
 
 The book is a folder of PDFs in Drive — one drawing set and one **Listing** per

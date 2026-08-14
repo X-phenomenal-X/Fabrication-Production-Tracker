@@ -10,7 +10,7 @@
 
 import { el, chip, icon, toast, modal } from '../ui.js';
 import {
-  lookupDie, searchDies, componentsOf, dieForms, SUBASSEMBLIES,
+  lookupDie, searchDies, componentsOf, dieForms, drawingFor, SUBASSEMBLIES,
 } from '../dies.js';
 
 function componentRow(c, open) {
@@ -44,6 +44,24 @@ function detail(result, open) {
         el('span.spacer'),
         chip(assembly.series + ' series', 'mute')),
       assembly.desc ? el('div.diecard-desc', {}, assembly.desc) : null,
+
+      // The section through the assembled profile, with every component called
+      // out where it sits. The listing tells you 80-113 is the exterior; this
+      // tells you which piece that is on the rack.
+      (() => {
+        const src = drawingFor(assembly.sa);
+        if (!src) {
+          return el('div.diedrawing-none', {},
+            icon('alert', { size: 14 }),
+            el('span', {}, 'No section drawing for this series yet.'));
+        }
+        return el('div.diedrawing', {},
+          el('img', {
+            src,
+            alt: `Section drawing of ${assembly.sa}`,
+            loading: 'lazy',
+          }));
+      })(),
       assembly.note ? el('div.banner.warn', { style: { marginTop: '10px' } },
         el('div', {}, assembly.note)) : null,
 

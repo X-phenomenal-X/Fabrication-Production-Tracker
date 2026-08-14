@@ -15,6 +15,7 @@
    extrusion — and either can be asked for, so both are tried. */
 
 import { SUBASSEMBLIES } from './subassemblies.js';
+import { DRAWINGS, DRAWING_PREFIX } from './drawings.js';
 
 const PARTS = ['exterior', 'upperTB', 'lowerTB', 'interior'];
 
@@ -113,6 +114,21 @@ export function componentsOf(assembly) {
   }
   if (assembly.interior) out.push({ role: 'Interior', die: assembly.interior, qty: 1 });
   return out;
+}
+
+/** The section drawing for a sub-assembly, as a data URI, or null.
+
+    The listing says 80-113 is the exterior; the drawing shows which piece that
+    actually is and where it sits in the assembly. Not every series has one —
+    the book is a set of PDFs and some are simply not in hand — so every caller
+    has to cope with null rather than assume. */
+export function drawingFor(sa) {
+  const body = DRAWINGS[sa] || DRAWINGS[String(sa || '').replace(/[A-Z]+$/, '')];
+  return body ? DRAWING_PREFIX + body : null;
+}
+
+export function drawingCount() {
+  return Object.keys(DRAWINGS).length;
 }
 
 export { SUBASSEMBLIES };

@@ -774,6 +774,19 @@ if (JSON.stringify(dieCheck.parts) !== JSON.stringify(want)) {
 if (!dieCheck.usedIncludes) throw new Error('the reverse lookup does not find SA80-106 from 80-105');
 if (dieCheck.missing) throw new Error('an unknown die should resolve to nothing');
 
+// Drawings ride along with the data, and every caller copes with their
+// absence — the book is a set of PDFs and not all of them are in hand.
+const drawCheck = await page.evaluate(() => import('/js/dies.js').then((d) => ({
+  count: d.drawingCount(),
+  hasOne: !!d.drawingFor('SA83-001'),
+  isImage: (d.drawingFor('SA83-001') || '').startsWith('data:image/webp;base64,'),
+  missingIsNull: d.drawingFor('SA99-999'),
+})));
+step('drawings: ' + JSON.stringify(drawCheck));
+if (drawCheck.count < 400) throw new Error('the drawings did not load');
+if (!drawCheck.hasOne || !drawCheck.isImage) throw new Error('a known drawing did not resolve to an image');
+if (drawCheck.missingIsNull !== null) throw new Error('an unknown drawing should be null, not a broken image');
+
 // And it opens from a die on a line.
 await page.click('.line .dielink');
 await page.waitForSelector('dialog .diecard');

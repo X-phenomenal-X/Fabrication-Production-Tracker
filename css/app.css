@@ -1838,3 +1838,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   /* Roomier to hit on a phone, still not competing with the work order. */
   .dielink { min-height: 30px; padding: 3px var(--s4); }
 }
+
+/* The section drawing. Line art on white, so it keeps a white ground in dark
+   mode rather than being inverted into something that no longer matches the
+   paper drawing beside the machine. */
+.diedrawing {
+  margin-top: var(--s4); padding: var(--s3);
+  background: #fff; border: 1px solid var(--line); border-radius: var(--r-sm);
+  overflow-x: auto;
+}
+.diedrawing img { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 auto; }
+
+.diedrawing-none {
+  display: flex; align-items: center; gap: var(--s2);
+  margin-top: var(--s4); padding: var(--s3);
+  font-size: var(--t-sm); color: var(--ink-2);
+  background: var(--panel); border: 1px dashed var(--line); border-radius: var(--r-sm);
+}
+.diedrawing-none svg { color: var(--ink-3); flex-shrink: 0; }
