@@ -174,6 +174,54 @@ function header() {
   );
 }
 
+/* Keeping the nav usable on a phone.
+
+   Nine pages are about 790px of tabs and a 390px phone gives the scroller
+   about 150px of that, so most of the nav is always off-screen — that part is
+   forced by the 96px header budget and is not going away. What is not forced
+   is landing on Rush and seeing "Rolling  FOM": the header is rebuilt on every
+   render, so the scroller came back at zero every time and the page you were
+   actually on was never in it.
+
+   So the scroll position is carried across rebuilds, and the active tab is
+   centred only when it *changes*. Centring on every render would drag the row
+   back under someone's thumb mid-scroll, and renders happen constantly. */
+let navScroll = 0;
+let navCentredOn = null;
+
+function paintNavEdges(nav) {
+  const room = nav.scrollWidth - nav.clientWidth;
+  // Fades stand in for a scrollbar, which is hidden here: they say there is
+  // more that way, and on which side.
+  nav.classList.toggle('can-l', room > 1 && nav.scrollLeft > 1);
+  nav.classList.toggle('can-r', room > 1 && nav.scrollLeft < room - 1);
+}
+
+function settleNav() {
+  const nav = root.querySelector('nav.tabs');
+  if (!nav) return;
+  nav.scrollLeft = navScroll;
+
+  if (navCentredOn !== current) {
+    const on = nav.querySelector('button[aria-current="true"]');
+    // Centred rather than merely scrolled into view, so its neighbours stay
+    // half-visible — which is the only hint on the page that the row moves.
+    if (on) {
+      const nr = nav.getBoundingClientRect();
+      const br = on.getBoundingClientRect();
+      nav.scrollLeft += (br.left + br.width / 2) - (nr.left + nr.width / 2);
+    }
+    navCentredOn = current;
+  }
+
+  navScroll = nav.scrollLeft;
+  paintNavEdges(nav);
+  nav.addEventListener('scroll', () => {
+    navScroll = nav.scrollLeft;
+    paintNavEdges(nav);
+  }, { passive: true });
+}
+
 /* Sticky sections inside a page need to know how tall the app header is, or
    they slide underneath it and hide their own first line. Measured rather than
    assumed, because the header wraps differently at every width. */
@@ -199,6 +247,7 @@ function render() {
   const next = el('main', {}, tab.render(scheduleRender, go));
   root.replaceChildren(header(), next);
   measureHeader();
+  settleNav();
 }
 
 function scheduleRender() {
@@ -206,6 +255,13 @@ function scheduleRender() {
   scheduled = true;
   requestAnimationFrame(() => { scheduled = false; render(); });
 }
+
+// Rotating a phone changes how much of the nav fits, and nothing else about
+// the app needs to redraw for that.
+window.addEventListener('resize', () => {
+  const nav = root.querySelector('nav.tabs');
+  if (nav) paintNavEdges(nav);
+}, { passive: true });
 
 window.addEventListener('hashchange', () => {
   const k = location.hash.slice(1);

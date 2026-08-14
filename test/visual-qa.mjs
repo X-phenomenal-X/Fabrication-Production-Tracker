@@ -61,6 +61,7 @@ const VIEWPORTS = [
 
 const SCREENS = [
   { hash: 'today', name: 'today' },
+  { hash: 'staging', name: 'staging' },
   { hash: 'rolling', name: 'rolling' },
   { hash: 'fom', name: 'fom' },
   { hash: 'cnc', name: 'cnc' },
@@ -129,6 +130,36 @@ for (const theme of ['light', 'dark']) {
       if (vp.shoot) {
         const file = `${screen.name}-${vp.name}-${theme}.png`;
         await page.screenshot({ path: path.join(SHOT, file), fullPage: true });
+      }
+
+      /* --- you can see which page you are on ---
+
+         The nav scrolls sideways on anything narrower than a monitor, and the
+         header is rebuilt on every render, so the scroller used to come back
+         at zero: on a phone, every page past FOM highlighted a tab that was
+         hundreds of pixels off-screen. Nothing caught it, because nothing
+         asked. Setup is the exception — it is the gear, not a nav tab. */
+      if (screen.hash !== 'setup') {
+        const nav = await page.evaluate(() => {
+          const n = document.querySelector('nav.tabs');
+          const on = n.querySelector('button[aria-current="true"]');
+          if (!on) return { missing: true };
+          const nr = n.getBoundingClientRect();
+          const br = on.getBoundingClientRect();
+          return {
+            label: on.getAttribute('aria-label'),
+            // Fully inside the scroller's window, not merely overlapping it —
+            // half a tab is not an answer to "where am I".
+            shown: br.left >= nr.left - 1 && br.right <= nr.right + 1,
+            off: Math.round(Math.max(nr.left - br.left, br.right - nr.right)),
+          };
+        });
+        if (nav.missing) {
+          fail(`${screen.name} @ ${vp.name}/${theme}: no nav tab is marked current`);
+        } else if (!nav.shown) {
+          fail(`${screen.name} @ ${vp.name}/${theme}: the "${nav.label}" tab is `
+            + `${nav.off}px outside the nav — you cannot see which page you are on`);
+        }
       }
 
       // --- horizontal overflow ---

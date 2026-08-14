@@ -218,6 +218,30 @@ nav.tabs {
   padding: 2px 0;
 }
 nav.tabs::-webkit-scrollbar { display: none; }
+/* The scrollbar is hidden, so the edges say it scrolls instead: a tab fading
+   out at the rim reads as "more that way" where a hard cut reads as the end
+   of the list. Toggled from app.js, per side, only when there is something
+   over there — a permanent fade would lie about the last tab. Masked rather
+   than overlaid with a gradient, because the header is translucent and any
+   solid colour picked here would be wrong over whatever scrolls beneath. */
+/* Held as a variable because the fade has to stay small relative to the
+   scroller: 26px off each end of a phone's 150px window hides most of the
+   neighbouring tab, which is the thing the fade exists to reveal. */
+nav.tabs { --navfade: 22px; }
+nav.tabs.can-l {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--navfade));
+  mask-image: linear-gradient(to right, transparent, #000 var(--navfade));
+}
+nav.tabs.can-r {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--navfade)), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--navfade)), transparent);
+}
+nav.tabs.can-l.can-r {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--navfade),
+    #000 calc(100% - var(--navfade)), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 var(--navfade),
+    #000 calc(100% - var(--navfade)), transparent);
+}
 .tabgroup { flex-shrink: 0; }
 .tabgroup { display: flex; align-items: center; gap: var(--s1); }
 .tabgroup.centres {
@@ -482,7 +506,7 @@ dialog footer button { min-height: var(--ctl-lg); }
   .brand::before { height: 15px; width: 7px; }
   .hdr-id .chip { font-size: 11px; padding: 1px 7px; }
 
-  nav.tabs { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; gap: var(--s2); }
+  nav.tabs { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; gap: var(--s2); --navfade: 12px; }
   nav.tabs::-webkit-scrollbar { display: none; }
   nav.tabs button { min-height: var(--tap); padding: 6px 13px; font-size: var(--t-sm); }
   .tabgroup.centres { padding: 2px; }
@@ -1576,8 +1600,11 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
   .line-iconbtn, .iconbtn { width: var(--tap); height: var(--tap); }
   .pill { padding-left: var(--s4); padding-right: var(--s4); }
 
+  /* Narrow enough to hand the width back to the nav, wide enough to still
+     read a first name — which is all this has to do, since its job is
+     noticing you are signed in as somebody else, not reading your own name. */
   .whopick {
-    min-width: 0; width: 104px; max-width: 104px;
+    min-width: 0; width: 88px; max-width: 88px;
     padding: 6px var(--s2); font-size: var(--t-sm);
   }
 
@@ -9336,6 +9363,33 @@ create policy "tracker update" on tracker_state for update using (true) with che
       )
     );
   }
+  var navScroll = 0;
+  var navCentredOn = null;
+  function paintNavEdges(nav) {
+    const room = nav.scrollWidth - nav.clientWidth;
+    nav.classList.toggle("can-l", room > 1 && nav.scrollLeft > 1);
+    nav.classList.toggle("can-r", room > 1 && nav.scrollLeft < room - 1);
+  }
+  function settleNav() {
+    const nav = root.querySelector("nav.tabs");
+    if (!nav) return;
+    nav.scrollLeft = navScroll;
+    if (navCentredOn !== current) {
+      const on = nav.querySelector('button[aria-current="true"]');
+      if (on) {
+        const nr = nav.getBoundingClientRect();
+        const br = on.getBoundingClientRect();
+        nav.scrollLeft += br.left + br.width / 2 - (nr.left + nr.width / 2);
+      }
+      navCentredOn = current;
+    }
+    navScroll = nav.scrollLeft;
+    paintNavEdges(nav);
+    nav.addEventListener("scroll", () => {
+      navScroll = nav.scrollLeft;
+      paintNavEdges(nav);
+    }, { passive: true });
+  }
   function measureHeader() {
     const h = root.querySelector("header.top");
     if (!h) return;
@@ -9353,6 +9407,7 @@ create policy "tracker update" on tracker_state for update using (true) with che
     const next = el("main", {}, tab.render(scheduleRender, go));
     root.replaceChildren(header(), next);
     measureHeader();
+    settleNav();
   }
   function scheduleRender() {
     if (scheduled) return;
@@ -9362,6 +9417,10 @@ create policy "tracker update" on tracker_state for update using (true) with che
       render();
     });
   }
+  window.addEventListener("resize", () => {
+    const nav = root.querySelector("nav.tabs");
+    if (nav) paintNavEdges(nav);
+  }, { passive: true });
   window.addEventListener("hashchange", () => {
     const k = location.hash.slice(1);
     if (TABS.some((t) => t.key === k) && k !== current) {
