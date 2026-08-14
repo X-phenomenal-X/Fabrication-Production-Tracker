@@ -217,7 +217,7 @@ await page.waitForTimeout(300);
 step('bulk undone');
 
 // a note can be added to a line
-await page.locator('.line-notebtn').first().click();
+await page.locator('.line-iconbtn[title="Add a note"]').first().click();
 await page.waitForSelector('dialog textarea');
 await page.fill('dialog textarea', 'Waiting on 3 bars from the mill.');
 await page.click('dialog footer button.primary');
@@ -226,6 +226,54 @@ const noteCount = await page.evaluate(() => import('/js/store.js').then((m) =>
   Object.keys(m.state.taskNote).length));
 step('notes stored: ' + noteCount);
 if (!noteCount) throw new Error('note was not saved');
+
+// a line can be edited, and the edit is recorded with who and when
+const editLine = page.locator('.line').first();
+const woEdited = (await editLine.locator('.line-id .mono').textContent()).trim();
+await editLine.locator('.line-iconbtn[title="Edit this line and see its history"]').click();
+await page.waitForSelector('dialog .editfield input');
+await (await page.$('dialog')).screenshot({ path: path.join(SHOT, 'edit-dialog-before.png') });
+const qtyInput = page.locator('dialog .editfield').filter({ hasText: 'Qty' }).locator('input');
+const qtyBefore = await qtyInput.inputValue();
+await qtyInput.fill(String(Number(qtyBefore || 0) + 5));
+await page.click('dialog footer button.primary');
+await page.waitForTimeout(300);
+const edits = await page.evaluate(() => import('/js/store.js').then((m) => ({
+  edits: Object.entries(m.state.taskEdit).map(([k, v]) => ({ k, f: v.fields, by: v.by })),
+  hist: m.state.taskHistory.filter((h) => h.kind === 'field').length,
+})));
+step(`edited ${woEdited} qty ${qtyBefore} -> +5 · overrides=${edits.edits.length} field-history=${edits.hist}`);
+if (!edits.edits.length) throw new Error('edit override was not stored');
+if (!edits.hist) throw new Error('field change was not recorded in history');
+
+// the edit shows on the line and survives a re-import
+const editedBadge = await page.locator('.line').first().locator('.badge-edited').count();
+step('edited badge on line: ' + (editedBadge ? 'yes' : 'no'));
+if (!editedBadge) throw new Error('edited badge not shown');
+
+// reopen to capture the history trail
+await page.locator('.line').first().locator('.line-iconbtn[title="Edit this line and see its history"]').click();
+await page.waitForSelector('dialog .hist');
+const histRows = await page.$$eval('dialog .hist li', (n) => n.length);
+step('history entries shown on the line: ' + histRows);
+await (await page.$('dialog')).screenshot({ path: path.join(SHOT, 'edit-dialog.png') });
+await page.click('dialog header button');
+await page.waitForSelector('dialog', { state: 'detached' });
+
+await page.click('nav.tabs button:has-text("Setup")');
+await page.waitForSelector('.drop');
+const ch3 = page.waitForEvent('filechooser');
+await page.click('.drop:has-text("Rolling workbook") button');
+await (await ch3).setFiles(ROLLING);
+await page.waitForSelector('dialog .stat', { timeout: 120000 });
+await page.click('dialog header button');
+await page.waitForSelector('dialog', { state: 'detached' });
+const editsAfter = await page.evaluate(() => import('/js/store.js').then((m) =>
+  Object.keys(m.state.taskEdit).length));
+step('edit overrides after re-import: ' + editsAfter);
+if (!editsAfter) throw new Error('edits lost on re-import');
+await page.click('nav.tabs button:has-text("Rolling")');
+await page.waitForFunction(() => document.querySelector('.centre-title'));
 
 // machine can be renamed
 await page.locator('.iconbtn').first().click();

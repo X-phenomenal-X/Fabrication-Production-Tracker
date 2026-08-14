@@ -390,14 +390,15 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 .line-qty .mono { font-size: 14.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .line-date { flex-shrink: 0; width: 68px; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
 
-.line-notebtn {
-  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+.line-tools { flex-shrink: 0; display: flex; gap: 2px; }
+.line-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; padding: 0; border-radius: 7px;
   background: none; border: 1px solid transparent; color: var(--ink-3); cursor: pointer;
   transition: color .12s, background .12s, border-color .12s;
 }
-.line-notebtn:hover { color: var(--ink); background: var(--panel); border-color: var(--line); }
-.line-notebtn.has { color: var(--warn); }
+.line-iconbtn:hover { color: var(--ink); background: var(--panel); border-color: var(--line); }
+.line-iconbtn.has { color: var(--warn); }
 
 /* segmented status control */
 
@@ -515,6 +516,49 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 
+/* ---------- edited lines & history ---------- */
+
+.badge-edited {
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  background: var(--accent-soft); color: var(--accent);
+  padding: 2px 7px; border-radius: 5px;
+}
+.die.edited { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+
+.edithead {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line-soft);
+}
+.editfield > span { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.edited-tag {
+  font-style: normal; font-size: 10.5px; font-weight: 700;
+  background: var(--accent-soft); color: var(--accent);
+  padding: 1px 6px; border-radius: 4px;
+}
+
+.hist-title {
+  margin: 20px 0 8px; font-size: 12px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--ink-2);
+}
+.hist {
+  list-style: none; margin: 0; padding: 0;
+  border: 1px solid var(--line-soft); border-radius: 8px;
+  max-height: 240px; overflow: auto;
+}
+.hist li { padding: 8px 12px; border-bottom: 1px solid var(--line-soft); }
+.hist li:last-child { border-bottom: 0; }
+.hist-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.hist-kind {
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--ink-3); min-width: 54px;
+}
+.hist-field {
+  font-family: var(--mono); font-size: 11.5px;
+  background: var(--panel-2); padding: 1px 6px; border-radius: 4px; color: var(--ink-2);
+}
+.hist-change { color: var(--ink); }
+.hist-who { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+
 </style>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#9986;</text></svg>">
 </head>
@@ -539,12 +583,16 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   // js/store.js
   var store_exports = {};
   __export(store_exports, {
+    EDITABLE_FIELDS: () => EDITABLE_FIELDS,
+    clearTaskEdits: () => clearTaskEdits,
     connectSharedFile: () => connectSharedFile,
     disconnectSharedFile: () => disconnectSharedFile,
     exportJson: () => exportJson,
     grantSharedFile: () => grantSharedFile,
+    historyFor: () => historyFor,
     importJson: () => importJson,
     loadLocal: () => loadLocal,
+    logChange: () => logChange,
     me: () => me,
     now: () => now,
     onChange: () => onChange,
@@ -555,6 +603,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     save: () => save,
     setMachineConfig: () => setMachineConfig,
     setMachineImport: () => setMachineImport,
+    setTaskFields: () => setTaskFields,
     setTaskNote: () => setTaskNote,
     setTaskStatus: () => setTaskStatus,
     setTaskStatusMany: () => setTaskStatusMany,
@@ -579,8 +628,26 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   function me() {
     return state.settings.me || "Unassigned";
   }
+  function logChange(key, kind, field, from, to) {
+    state.taskHistory.unshift({
+      id: uid(),
+      key,
+      kind,
+      field: field || null,
+      from: from ?? null,
+      to: to ?? null,
+      at: now(),
+      by: me()
+    });
+    if (state.taskHistory.length > HISTORY_CAP) state.taskHistory.length = HISTORY_CAP;
+  }
+  function historyFor(key) {
+    return (state.taskHistory || []).filter((h) => h.key === key);
+  }
   function setTaskStatus(key, status) {
+    const prev = state.taskStatus[key]?.status ?? null;
     state.taskStatus[key] = { status, at: now(), by: me() };
+    if (prev !== status) logChange(key, "status", null, prev, status);
     save();
   }
   function setTaskStatusMany(keys, status) {
@@ -588,6 +655,9 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     const at = now();
     const by = me();
     for (const k of keys) state.taskStatus[k] = { status, at, by };
+    for (const { key, prev } of before) {
+      if (prev !== status) logChange(key, "status", null, prev, status);
+    }
     save();
     return before;
   }
@@ -595,15 +665,42 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     const at = now();
     const by = me();
     for (const { key, prev } of before) {
+      const cur = state.taskStatus[key]?.status ?? null;
       if (prev == null) delete state.taskStatus[key];
       else state.taskStatus[key] = { status: prev, at, by };
+      if (cur !== prev) logChange(key, "undo", null, cur, prev);
     }
     save();
   }
   function setTaskNote(key, text) {
     const t = String(text || "").trim();
+    const prev = state.taskNote[key]?.text ?? null;
     if (!t) delete state.taskNote[key];
     else state.taskNote[key] = { text: t, at: now(), by: me() };
+    if (prev !== (t || null)) logChange(key, "note", null, prev, t || null);
+    save();
+  }
+  function setTaskFields(key, patch, sheet = {}) {
+    const cur = state.taskEdit[key]?.fields || {};
+    const fields = { ...cur };
+    for (const { key: f } of EDITABLE_FIELDS) {
+      if (!(f in patch)) continue;
+      const next = patch[f];
+      const shown = f in cur ? cur[f] : sheet[f] ?? null;
+      const same = (a, b) => (a ?? null) === (b ?? null);
+      if (same(next, shown)) continue;
+      if (same(next, sheet[f])) delete fields[f];
+      else fields[f] = next;
+      logChange(key, "field", f, shown, next);
+    }
+    if (Object.keys(fields).length) state.taskEdit[key] = { fields, at: now(), by: me() };
+    else delete state.taskEdit[key];
+    save();
+  }
+  function clearTaskEdits(key, sheet = {}) {
+    const cur = state.taskEdit[key]?.fields || {};
+    for (const [f, v] of Object.entries(cur)) logChange(key, "field", f, v, sheet[f] ?? null);
+    delete state.taskEdit[key];
     save();
   }
   function setMachineConfig(key, patch) {
@@ -633,6 +730,8 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       taskStatus: state.taskStatus,
       shiftUpdate: state.shiftUpdate,
       taskNote: state.taskNote,
+      taskEdit: state.taskEdit,
+      taskHistory: state.taskHistory,
       machineConfig: state.machineConfig,
       people: state.people,
       settings: state.settings
@@ -715,6 +814,11 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     if (!remote) return;
     state.taskStatus = mergeRecords(state.taskStatus, remote.taskStatus);
     state.taskNote = mergeRecords(state.taskNote, remote.taskNote);
+    state.taskEdit = mergeRecords(state.taskEdit, remote.taskEdit);
+    const seen = new Set(state.taskHistory.map((h) => h.id));
+    for (const h of remote.taskHistory || []) if (!seen.has(h.id)) state.taskHistory.push(h);
+    state.taskHistory.sort((a, b) => a.at < b.at ? 1 : -1);
+    if (state.taskHistory.length > HISTORY_CAP) state.taskHistory.length = HISTORY_CAP;
     state.machineConfig = mergeRecords(state.machineConfig, remote.machineConfig);
     state.people = Array.from(/* @__PURE__ */ new Set([...state.people || [], ...remote.people || []]));
     for (const kind of ["rolling", "cnc"]) {
@@ -815,7 +919,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   function resetAll() {
     localStorage.removeItem(LS_KEY);
   }
-  var LS_KEY, IDB_NAME, IDB_STORE, RETIRED_KEYS, state, saveTimer, listeners, fileHandle;
+  var LS_KEY, IDB_NAME, IDB_STORE, RETIRED_KEYS, state, saveTimer, listeners, HISTORY_CAP, EDITABLE_FIELDS, fileHandle;
   var init_store = __esm({
     "js/store.js"() {
       LS_KEY = "bv.cutting.v1";
@@ -848,6 +952,10 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         // latest Shift Update sheet: { date, shift, machines }
         taskNote: {},
         // `${machine}|${wo}|${die}` -> { text, at, by }
+        taskEdit: {},
+        // same key -> { fields: {...}, at, by } — corrections to the sheet
+        taskHistory: [],
+        // every change to a line, newest first
         machineConfig: {},
         // machineKey -> { label, note, ops, hidden }
         people: [],
@@ -855,6 +963,14 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       };
       saveTimer = null;
       listeners = /* @__PURE__ */ new Set();
+      HISTORY_CAP = 4e3;
+      EDITABLE_FIELDS = [
+        { key: "project", label: "Project", type: "text" },
+        { key: "floor", label: "Floor / Tag", type: "text" },
+        { key: "die", label: "Die", type: "text" },
+        { key: "qty", label: "Qty", type: "number" },
+        { key: "cuttingDate", label: "Cutting date", type: "date" }
+      ];
       fileHandle = null;
     }
   });
@@ -980,7 +1096,9 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     alert: "M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
     undo: "M3 7v6h6M3 13a9 9 0 1 0 3-7.7L3 8",
     x: "M18 6 6 18M6 6l12 12",
-    upload: "M12 16V4M7 9l5-5 5 5M4 20h16"
+    upload: "M12 16V4M7 9l5-5 5 5M4 20h16",
+    pencil: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
+    clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2"
   };
   function icon(name, { size = 16, cls = "" } = {}) {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -1052,7 +1170,23 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   };
   var TRACK_STATUS_ORDER = ["NOT_STARTED", "IN_PROGRESS", "DONE"];
   function taskStatusKey(t) {
-    return `${t.machine}|${t.wo}|${t.die || ""}`;
+    const src = t.origin || t;
+    return `${t.machine}|${src.wo}|${src.die || ""}`;
+  }
+  function resolveTask(task) {
+    const key = taskStatusKey(task);
+    const override = state.taskEdit?.[key];
+    if (!override?.fields || !Object.keys(override.fields).length) return task;
+    const out = { ...task, origin: task.origin || { ...task }, edited: {} };
+    for (const { key: f } of EDITABLE_FIELDS) {
+      if (f in override.fields) {
+        out[f] = override.fields[f];
+        out.edited[f] = true;
+      }
+    }
+    out.editedAt = override.at;
+    out.editedBy = override.by;
+    return out;
   }
   function effectiveTaskStatus(t) {
     const override = state.taskStatus[taskStatusKey(t)];
@@ -1071,7 +1205,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     return tasksInScope().length > 0;
   }
   function tasksForMachine(machineKey) {
-    return tasksInScope().filter((t) => t.machine === machineKey).map((task) => ({ task, status: effectiveTaskStatus(task) })).sort((a, b) => (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1);
+    return tasksInScope().filter((t) => t.machine === machineKey).map((t) => resolveTask(t)).map((task) => ({ task, status: effectiveTaskStatus(task) })).sort((a, b) => (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1);
   }
   function openCountFor(machineKey) {
     return tasksForMachine(machineKey).filter((r) => r.status.key !== "DONE").length;
@@ -1298,13 +1432,16 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
           "div.line-id",
           {},
           el("span.mono.strong", {}, t.wo),
-          t.die ? el("span.die", {}, t.die) : null,
+          t.die ? el("span.die" + (t.edited?.die ? ".edited" : ""), {}, t.die) : null,
           t.backOrder ? el(
             "span.badge-bo",
             { title: "Back order \u2014 short of material" },
             icon("alert", { size: 11 }),
             "B/O"
-          ) : null
+          ) : null,
+          t.editedAt ? el("span.badge-edited", {
+            title: `Edited by ${t.editedBy} \xB7 ${fmtWhen(t.editedAt)}`
+          }, "edited") : null
         ),
         el(
           "div.line-where",
@@ -1328,13 +1465,137 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         el("span.small.muted", {}, "pcs")
       ),
       el("div.line-date.hide-sm", {}, fmtDate(t.cuttingDate)),
-      el("button.line-notebtn" + (note ? ".has" : ""), {
-        title: note ? "Edit note" : "Add a note",
-        onclick: () => noteEditor(row, rerender)
-      }, icon("note", { size: 15 })),
+      el(
+        "div.line-tools",
+        {},
+        el("button.line-iconbtn" + (note ? ".has" : ""), {
+          title: note ? "Edit note" : "Add a note",
+          onclick: () => noteEditor(row, rerender)
+        }, icon("note", { size: 15 })),
+        el("button.line-iconbtn", {
+          title: "Edit this line and see its history",
+          onclick: () => editLine(row, rerender)
+        }, icon("pencil", { size: 15 }))
+      ),
       el("div.line-status", {}, statusControl(row, vs, rerender))
     );
     return node;
+  }
+  var HISTORY_LABEL = { status: "Status", note: "Note", field: "Edited", undo: "Undone" };
+  function historyList(key) {
+    const rows = historyFor(key);
+    if (!rows.length) {
+      return el(
+        "div.small.muted",
+        {},
+        "No changes recorded yet. Everything done here is logged with who and when."
+      );
+    }
+    const shown = (v) => {
+      if (v == null || v === "") return "\u2014";
+      return TRACK_STATUS[v]?.label || String(v);
+    };
+    return el("ul.hist", {}, ...rows.slice(0, 60).map((h) => el(
+      "li",
+      {},
+      el(
+        "div.hist-row",
+        {},
+        el("span.hist-kind", {}, HISTORY_LABEL[h.kind] || h.kind),
+        h.field ? el("span.hist-field", {}, h.field) : null,
+        el(
+          "span.hist-change",
+          {},
+          el("span.muted", {}, shown(h.from)),
+          " \u2192 ",
+          el("strong", {}, shown(h.to))
+        ),
+        el("span.spacer"),
+        el("span.hist-who", {}, `${h.by} \xB7 ${fmtWhen(h.at)}`)
+      )
+    )));
+  }
+  function editLine(row, rerender) {
+    const t = row.task;
+    const key = taskStatusKey(t);
+    const sheet = t.origin || t;
+    const inputs = {};
+    const fields = EDITABLE_FIELDS.map((f) => {
+      const val = t[f.key] ?? "";
+      const input = el("input", {
+        type: f.type === "number" ? "number" : f.type === "date" ? "date" : "text",
+        value: val === null ? "" : String(val),
+        ...f.type === "number" ? { min: "0", inputmode: "decimal" } : {}
+      });
+      inputs[f.key] = input;
+      const differs = t.edited?.[f.key];
+      return el(
+        "label.field.editfield",
+        {},
+        el(
+          "span",
+          {},
+          f.label,
+          differs ? el(
+            "em.edited-tag",
+            { title: `Workbook says: ${sheet[f.key] ?? "\u2014"}` },
+            `edited \xB7 sheet: ${sheet[f.key] ?? "\u2014"}`
+          ) : null
+        ),
+        input
+      );
+    });
+    const body = el(
+      "div",
+      {},
+      el(
+        "div.edithead",
+        {},
+        el("span.mono.strong", {}, `W/O ${t.wo}`),
+        el("span.small.muted", {}, "The work order cannot be changed \u2014 it identifies the line.")
+      ),
+      el(
+        "div.grid",
+        { style: { gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: "12px" } },
+        ...fields
+      ),
+      t.editedAt ? el(
+        "div.small.muted",
+        { style: { marginTop: "10px" } },
+        `Last edited by ${t.editedBy} \xB7 ${fmtWhen(t.editedAt)}`
+      ) : null,
+      el("h4.hist-title", {}, "History"),
+      historyList(key)
+    );
+    modal(`Edit line \u2014 ${t.wo}${sheet.die ? " \xB7 " + sheet.die : ""}`, body, {
+      wide: true,
+      actions: [
+        t.edited && Object.keys(t.edited).length ? {
+          label: "Revert to workbook",
+          onClick: (dlg) => {
+            clearTaskEdits(key, sheet);
+            dlg.close();
+            toast("Reverted to what the workbook says");
+            rerender();
+          }
+        } : null,
+        {
+          label: "Save changes",
+          class: "primary",
+          onClick: (dlg) => {
+            const patch = {};
+            for (const f of EDITABLE_FIELDS) {
+              const raw = inputs[f.key].value.trim();
+              patch[f.key] = raw === "" ? null : f.type === "number" ? Number(raw) : raw;
+            }
+            setTaskFields(key, patch, sheet);
+            dlg.close();
+            toast("Saved");
+            rerender();
+          }
+        }
+      ].filter(Boolean)
+    });
   }
   function dateGroup(group, vs, rerender) {
     const isOpen = vs.open[group.key] ?? group.open;

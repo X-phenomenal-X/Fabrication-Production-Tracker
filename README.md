@@ -83,6 +83,39 @@ status silently loses the back-order half — 67 open lines in the sample data.
 It is parsed into its own flag and shown as a red **B/O** badge beside the
 status, and counted in the header.
 
+## Editing a line
+
+Any line can be corrected by hand: **project, floor/tag, die, quantity and
+cutting date**. Open a line with the pencil icon.
+
+The **work order cannot be changed** — it is half the line's identity.
+
+An edit is an *overlay*, not a rewrite of the imported data. The workbook's own
+value is kept alongside it, so the edit dialog shows `edited · sheet: 16` next
+to a quantity you changed to 21, and **Revert to workbook** puts it back.
+Because overlays are keyed by the imported work order and die — never the
+edited ones — correcting a die does not orphan that line's status, note or
+history, and edits survive re-importing the workbook.
+
+Edited lines carry an **edited** badge in the queue.
+
+## History — who changed what, when
+
+Every change to a line is recorded: status changes, bulk changes, undos, notes,
+and each edited field with its before and after value. Each entry is stamped
+with the person and the time, and the trail is shown at the bottom of the line's
+edit dialog.
+
+```
+EDITED   qty     16 → 21          Abhay · just now
+NOTE     — → Waiting on 3 bars from the mill.   Abhay · just now
+STATUS   — → Done                 Abhay · just now
+```
+
+The log is append-only and merges by entry id across the shared file, so two
+people working at once both keep their entries rather than one overwriting the
+other.
+
 ## Notes
 
 Any line can carry a free-text note — what is holding it up, what was short,
@@ -122,8 +155,8 @@ screen, and the dashboard.
 The stored data went with it. On first load the app rewrites its saved payload
 without the retired fields, so an existing install — and the shared JSON on the
 network drive — sheds them rather than carrying them indefinitely. State now
-holds only `tasks`, `machineMeta`, `taskStatus`, `shiftUpdate`, `people` and
-`settings`.
+holds only `tasks`, `machineMeta`, `taskStatus`, `taskNote`, `taskEdit`,
+`taskHistory`, `machineConfig`, `shiftUpdate`, `people` and `settings`.
 
 ## Sharing
 
@@ -145,8 +178,9 @@ node build.mjs && node test/standalone-check.mjs   # same against the built file
 ```
 
 `test/app-check.mjs` writes screenshots to `test/screens/`. It covers the
-status control, undo, bulk apply, notes, machine rename, and that a status
-survives both a reload and a re-import.
+status control, undo, bulk apply, notes, line editing, the history trail,
+machine rename, and that both a status and an edit survive a reload and a
+re-import.
 
 ## Interface notes
 

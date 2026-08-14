@@ -12,7 +12,8 @@ import {
 } from '../ui.js';
 import {
   setTaskStatus, setTaskStatusMany, restoreTaskStatus, setTaskNote,
-  setMachineConfig, state,
+  setMachineConfig, setTaskFields, clearTaskEdits, historyFor,
+  EDITABLE_FIELDS, state,
 } from '../store.js';
 import {
   groupedQueue, machineSummary, openCountFor, taskStatusKey, hasTasks,
@@ -119,9 +120,12 @@ function taskLine(row, vs, rerender) {
     el('div.line-main', {},
       el('div.line-id', {},
         el('span.mono.strong', {}, t.wo),
-        t.die ? el('span.die', {}, t.die) : null,
+        t.die ? el('span.die' + (t.edited?.die ? '.edited' : ''), {}, t.die) : null,
         t.backOrder ? el('span.badge-bo', { title: 'Back order — short of material' },
-          icon('alert', { size: 11 }), 'B/O') : null),
+          icon('alert', { size: 11 }), 'B/O') : null,
+        t.editedAt ? el('span.badge-edited', {
+          title: `Edited by ${t.editedBy} · ${fmtWhen(t.editedAt)}`,
+        }, 'edited') : null),
       el('div.line-where', {},
         el('span', {}, t.project || '—'),
         t.floor ? el('span.muted', {}, ' · ' + t.floor) : null),
@@ -137,14 +141,100 @@ function taskLine(row, vs, rerender) {
 
     el('div.line-date.hide-sm', {}, fmtDate(t.cuttingDate)),
 
-    el('button.line-notebtn' + (note ? '.has' : ''), {
-      title: note ? 'Edit note' : 'Add a note',
-      onclick: () => noteEditor(row, rerender),
-    }, icon('note', { size: 15 })),
+    el('div.line-tools', {},
+      el('button.line-iconbtn' + (note ? '.has' : ''), {
+        title: note ? 'Edit note' : 'Add a note',
+        onclick: () => noteEditor(row, rerender),
+      }, icon('note', { size: 15 })),
+      el('button.line-iconbtn', {
+        title: 'Edit this line and see its history',
+        onclick: () => editLine(row, rerender),
+      }, icon('pencil', { size: 15 }))),
 
     el('div.line-status', {}, statusControl(row, vs, rerender)));
 
   return node;
+}
+
+/* ---------- edit a line ---------- */
+
+const HISTORY_LABEL = { status: 'Status', note: 'Note', field: 'Edited', undo: 'Undone' };
+
+function historyList(key) {
+  const rows = historyFor(key);
+  if (!rows.length) {
+    return el('div.small.muted', {},
+      'No changes recorded yet. Everything done here is logged with who and when.');
+  }
+  const shown = (v) => {
+    if (v == null || v === '') return '—';
+    return TRACK_STATUS[v]?.label || String(v);
+  };
+  return el('ul.hist', {}, ...rows.slice(0, 60).map((h) => el('li', {},
+    el('div.hist-row', {},
+      el('span.hist-kind', {}, HISTORY_LABEL[h.kind] || h.kind),
+      h.field ? el('span.hist-field', {}, h.field) : null,
+      el('span.hist-change', {},
+        el('span.muted', {}, shown(h.from)), ' → ', el('strong', {}, shown(h.to))),
+      el('span.spacer'),
+      el('span.hist-who', {}, `${h.by} · ${fmtWhen(h.at)}`)))));
+}
+
+function editLine(row, rerender) {
+  const t = row.task;
+  const key = taskStatusKey(t);
+  const sheet = t.origin || t;
+
+  const inputs = {};
+  const fields = EDITABLE_FIELDS.map((f) => {
+    const val = t[f.key] ?? '';
+    const input = el('input', {
+      type: f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text',
+      value: val === null ? '' : String(val),
+      ...(f.type === 'number' ? { min: '0', inputmode: 'decimal' } : {}),
+    });
+    inputs[f.key] = input;
+    const differs = t.edited?.[f.key];
+    return el('label.field.editfield', {},
+      el('span', {}, f.label,
+        differs ? el('em.edited-tag', { title: `Workbook says: ${sheet[f.key] ?? '—'}` },
+          `edited · sheet: ${sheet[f.key] ?? '—'}`) : null),
+      input);
+  });
+
+  const body = el('div', {},
+    el('div.edithead', {},
+      el('span.mono.strong', {}, `W/O ${t.wo}`),
+      el('span.small.muted', {}, 'The work order cannot be changed — it identifies the line.')),
+    el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: '12px' } },
+      ...fields),
+    t.editedAt ? el('div.small.muted', { style: { marginTop: '10px' } },
+      `Last edited by ${t.editedBy} · ${fmtWhen(t.editedAt)}`) : null,
+    el('h4.hist-title', {}, 'History'),
+    historyList(key));
+
+  modal(`Edit line — ${t.wo}${sheet.die ? ' · ' + sheet.die : ''}`, body, {
+    wide: true,
+    actions: [
+      t.edited && Object.keys(t.edited).length ? {
+        label: 'Revert to workbook', onClick: (dlg) => {
+          clearTaskEdits(key, sheet);
+          dlg.close(); toast('Reverted to what the workbook says'); rerender();
+        },
+      } : null,
+      {
+        label: 'Save changes', class: 'primary', onClick: (dlg) => {
+          const patch = {};
+          for (const f of EDITABLE_FIELDS) {
+            const raw = inputs[f.key].value.trim();
+            patch[f.key] = raw === '' ? null : (f.type === 'number' ? Number(raw) : raw);
+          }
+          setTaskFields(key, patch, sheet);
+          dlg.close(); toast('Saved'); rerender();
+        },
+      },
+    ].filter(Boolean),
+  });
 }
 
 /* ---------- date groups ---------- */

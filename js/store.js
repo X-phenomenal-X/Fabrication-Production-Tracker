@@ -28,6 +28,8 @@ export const state = {
   taskStatus: {},   // `${machine}|${wo}|${die}` -> { status, at, by }
   shiftUpdate: null, // latest Shift Update sheet: { date, shift, machines }
   taskNote: {},     // `${machine}|${wo}|${die}` -> { text, at, by }
+  taskEdit: {},     // same key -> { fields: {...}, at, by } — corrections to the sheet
+  taskHistory: [],  // every change to a line, newest first
   machineConfig: {}, // machineKey -> { label, note, ops, hidden }
   people: [],
   settings: { me: null },
@@ -57,6 +59,25 @@ export function me() {
   return state.settings.me || 'Unassigned';
 }
 
+/* ---------- history ---------- */
+
+const HISTORY_CAP = 4000;
+
+/** Record one change to one line. `key` is the stable line key, so an entry
+    stays attached to its line across re-imports. */
+export function logChange(key, kind, field, from, to) {
+  state.taskHistory.unshift({
+    id: uid(), key, kind, field: field || null,
+    from: from ?? null, to: to ?? null,
+    at: now(), by: me(),
+  });
+  if (state.taskHistory.length > HISTORY_CAP) state.taskHistory.length = HISTORY_CAP;
+}
+
+export function historyFor(key) {
+  return (state.taskHistory || []).filter((h) => h.key === key);
+}
+
 /* ---------- mutations ---------- */
 
 /** Status of a single machine-schedule line: Not started / In Progress / Done.
@@ -65,7 +86,9 @@ export function me() {
     row would silently orphan an operator's update the next time the Rolling
     or CNC workbook is reloaded. */
 export function setTaskStatus(key, status) {
+  const prev = state.taskStatus[key]?.status ?? null;
   state.taskStatus[key] = { status, at: now(), by: me() };
+  if (prev !== status) logChange(key, 'status', null, prev, status);
   save();
 }
 
@@ -76,6 +99,9 @@ export function setTaskStatusMany(keys, status) {
   const at = now();
   const by = me();
   for (const k of keys) state.taskStatus[k] = { status, at, by };
+  for (const { key, prev } of before) {
+    if (prev !== status) logChange(key, 'status', null, prev, status);
+  }
   save();
   return before;
 }
@@ -85,8 +111,10 @@ export function restoreTaskStatus(before) {
   const at = now();
   const by = me();
   for (const { key, prev } of before) {
+    const cur = state.taskStatus[key]?.status ?? null;
     if (prev == null) delete state.taskStatus[key];
     else state.taskStatus[key] = { status: prev, at, by };
+    if (cur !== prev) logChange(key, 'undo', null, cur, prev);
   }
   save();
 }
@@ -95,8 +123,54 @@ export function restoreTaskStatus(before) {
     was short, anything the next shift needs. Empty text clears it. */
 export function setTaskNote(key, text) {
   const t = String(text || '').trim();
+  const prev = state.taskNote[key]?.text ?? null;
   if (!t) delete state.taskNote[key];
   else state.taskNote[key] = { text: t, at: now(), by: me() };
+  if (prev !== (t || null)) logChange(key, 'note', null, prev, t || null);
+  save();
+}
+
+/* Fields of a line that can be corrected by hand. The work order is not among
+   them: it is half the line's identity, and the stable key is built from the
+   *imported* work order and die, never the edited values — otherwise editing a
+   die would orphan that line's status, note and history at the same moment. */
+export const EDITABLE_FIELDS = [
+  { key: 'project', label: 'Project', type: 'text' },
+  { key: 'floor', label: 'Floor / Tag', type: 'text' },
+  { key: 'die', label: 'Die', type: 'text' },
+  { key: 'qty', label: 'Qty', type: 'number' },
+  { key: 'cuttingDate', label: 'Cutting date', type: 'date' },
+];
+
+/** Apply corrections to a line. `sheet` is what the workbook currently says,
+    used to record what each value changed from and to drop an override that
+    matches the sheet again. */
+export function setTaskFields(key, patch, sheet = {}) {
+  const cur = state.taskEdit[key]?.fields || {};
+  const fields = { ...cur };
+
+  for (const { key: f } of EDITABLE_FIELDS) {
+    if (!(f in patch)) continue;
+    const next = patch[f];
+    const shown = f in cur ? cur[f] : (sheet[f] ?? null);
+    const same = (a, b) => (a ?? null) === (b ?? null);
+    if (same(next, shown)) continue;
+
+    if (same(next, sheet[f])) delete fields[f];   // back in step with the sheet
+    else fields[f] = next;
+    logChange(key, 'field', f, shown, next);
+  }
+
+  if (Object.keys(fields).length) state.taskEdit[key] = { fields, at: now(), by: me() };
+  else delete state.taskEdit[key];
+  save();
+}
+
+/** Drop every correction on a line and go back to what the workbook says. */
+export function clearTaskEdits(key, sheet = {}) {
+  const cur = state.taskEdit[key]?.fields || {};
+  for (const [f, v] of Object.entries(cur)) logChange(key, 'field', f, v, sheet[f] ?? null);
+  delete state.taskEdit[key];
   save();
 }
 
@@ -137,6 +211,8 @@ function snapshot() {
     taskStatus: state.taskStatus,
     shiftUpdate: state.shiftUpdate,
     taskNote: state.taskNote,
+    taskEdit: state.taskEdit,
+    taskHistory: state.taskHistory,
     machineConfig: state.machineConfig,
     people: state.people,
     settings: state.settings,
@@ -236,6 +312,13 @@ function mergeSnapshot(remote) {
   if (!remote) return;
   state.taskStatus = mergeRecords(state.taskStatus, remote.taskStatus);
   state.taskNote = mergeRecords(state.taskNote, remote.taskNote);
+  state.taskEdit = mergeRecords(state.taskEdit, remote.taskEdit);
+
+  // History is append-only: merge by id and keep it newest-first.
+  const seen = new Set(state.taskHistory.map((h) => h.id));
+  for (const h of remote.taskHistory || []) if (!seen.has(h.id)) state.taskHistory.push(h);
+  state.taskHistory.sort((a, b) => (a.at < b.at ? 1 : -1));
+  if (state.taskHistory.length > HISTORY_CAP) state.taskHistory.length = HISTORY_CAP;
   state.machineConfig = mergeRecords(state.machineConfig, remote.machineConfig);
   state.people = Array.from(new Set([...(state.people || []), ...(remote.people || [])]));
 

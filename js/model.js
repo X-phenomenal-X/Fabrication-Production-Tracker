@@ -2,7 +2,7 @@
    tasks — one row per (work order, die, machine) from the Rolling and CNC
    workbooks. */
 
-import { state } from './store.js';
+import { state, EDITABLE_FIELDS } from './store.js';
 
 export function today() {
   return new Date().toISOString().slice(0, 10);
@@ -31,9 +31,35 @@ export function nextTrackStatus(key) {
 /** Stable identity for a machine-schedule line. Deliberately excludes the
     sheet row number that `task.id` carries — that number shifts on every
     re-import, which would silently orphan an operator's status update the
-    next time the Rolling or CNC workbook is reloaded. */
+    next time the Rolling or CNC workbook is reloaded.
+
+    Built from the *imported* work order and die (`origin`), never the edited
+    ones, so correcting a die does not move the line's status, note and
+    history to a different key. Note `task.sheet` is already the sheet name
+    from the importer, hence `origin` for the pre-edit values. */
 export function taskStatusKey(t) {
-  return `${t.machine}|${t.wo}|${t.die || ''}`;
+  const src = t.origin || t;
+  return `${t.machine}|${src.wo}|${src.die || ''}`;
+}
+
+/** A line as it should be shown: what the workbook says, with any corrections
+    laid over it. `origin` keeps the untouched original so the edit dialog can
+    show what changed, and `edited` marks which fields differ. */
+export function resolveTask(task) {
+  const key = taskStatusKey(task);
+  const override = state.taskEdit?.[key];
+  if (!override?.fields || !Object.keys(override.fields).length) return task;
+
+  const out = { ...task, origin: task.origin || { ...task }, edited: {} };
+  for (const { key: f } of EDITABLE_FIELDS) {
+    if (f in override.fields) {
+      out[f] = override.fields[f];
+      out.edited[f] = true;
+    }
+  }
+  out.editedAt = override.at;
+  out.editedBy = override.by;
+  return out;
 }
 
 /** What a line actually shows: an operator's own update always wins. Failing
@@ -66,6 +92,7 @@ export function hasTasks() {
 export function tasksForMachine(machineKey) {
   return tasksInScope()
     .filter((t) => t.machine === machineKey)
+    .map((t) => resolveTask(t))
     .map((task) => ({ task, status: effectiveTaskStatus(task) }))
     .sort((a, b) => ((a.task.cuttingDate || '9999') < (b.task.cuttingDate || '9999') ? -1 : 1));
 }

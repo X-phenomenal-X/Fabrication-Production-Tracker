@@ -383,14 +383,15 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 .line-qty .mono { font-size: 14.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .line-date { flex-shrink: 0; width: 68px; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
 
-.line-notebtn {
-  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+.line-tools { flex-shrink: 0; display: flex; gap: 2px; }
+.line-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; padding: 0; border-radius: 7px;
   background: none; border: 1px solid transparent; color: var(--ink-3); cursor: pointer;
   transition: color .12s, background .12s, border-color .12s;
 }
-.line-notebtn:hover { color: var(--ink); background: var(--panel); border-color: var(--line); }
-.line-notebtn.has { color: var(--warn); }
+.line-iconbtn:hover { color: var(--ink); background: var(--panel); border-color: var(--line); }
+.line-iconbtn.has { color: var(--warn); }
 
 /* segmented status control */
 
@@ -507,3 +508,46 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---------- edited lines & history ---------- */
+
+.badge-edited {
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  background: var(--accent-soft); color: var(--accent);
+  padding: 2px 7px; border-radius: 5px;
+}
+.die.edited { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+
+.edithead {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line-soft);
+}
+.editfield > span { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.edited-tag {
+  font-style: normal; font-size: 10.5px; font-weight: 700;
+  background: var(--accent-soft); color: var(--accent);
+  padding: 1px 6px; border-radius: 4px;
+}
+
+.hist-title {
+  margin: 20px 0 8px; font-size: 12px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--ink-2);
+}
+.hist {
+  list-style: none; margin: 0; padding: 0;
+  border: 1px solid var(--line-soft); border-radius: 8px;
+  max-height: 240px; overflow: auto;
+}
+.hist li { padding: 8px 12px; border-bottom: 1px solid var(--line-soft); }
+.hist li:last-child { border-bottom: 0; }
+.hist-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.hist-kind {
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--ink-3); min-width: 54px;
+}
+.hist-field {
+  font-family: var(--mono); font-size: 11.5px;
+  background: var(--panel-2); padding: 1px 6px; border-radius: 4px; color: var(--ink-2);
+}
+.hist-change { color: var(--ink); }
+.hist-who { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
