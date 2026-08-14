@@ -34,7 +34,7 @@ export function rushDialog(task, rerender) {
   const cur = rushFor(key) || {};
   const resolved = resolveRush(task);
 
-  const flag = el('input', { type: 'checkbox', checked: resolved.on, style: { width: 'auto' } });
+  const flag = el('input', { type: 'checkbox', checked: resolved.on });
   const needBy = el('input', { type: 'date', value: cur.needBy || '' });
 
   // Cutting date is what the sheet plans against; the rush date is when it is
@@ -170,9 +170,11 @@ export function renderRush(rerender, go) {
 
   const head = el('div.centre-head', {},
     el('div.row.centre-title-row', {},
-      el('div', {},
-        el('h1.centre-title', {}, 'Rush'),
-        el('div.centre-sub', {}, 'Lines that jump the queue, across every centre')),
+      el('div.centre-ident', {},
+        el('span.centre-rail', { 'aria-hidden': 'true' }),
+        el('div', {},
+          el('h1.centre-title', {}, 'Rush'),
+          el('div.centre-sub', {}, 'Lines that jump the queue, across every centre'))),
       el('span.spacer'),
       el('div.centre-stats', {},
         el('div.cstat' + (all.length ? '.warn' : ''), {},
@@ -210,11 +212,18 @@ export function renderRush(rerender, go) {
         el('span.dgroup-label.' + b.tone, {}, b.label),
         el('span.dgroup-count', {}, String(byBucket.get(b.key).length))),
 
-      el('div.dgroup-body', {}, ...byBucket.get(b.key).map(({ task, rush, machine }) =>
-        el('div.line.rush-line', {
+      el('div.dgroup-body', {}, ...byBucket.get(b.key).map(({ task, rush, machine }) => {
+        const late = rush.late || rush.needBy === ref;
+        return el('div.line.rush-line' + (late ? '.is-late' : '.rush'), {
           style: { cursor: 'pointer' },
           onclick: () => rushDialog(task, rerender),
         },
+          // Need-by leads the row here, not the work order: on this page the
+          // question is what runs first, and the date is the answer.
+          el('div.rush-when' + (late ? '.late' : ''), {},
+            el('div.rush-need', {}, rush.needBy ? fmtDate(rush.needBy) : 'No date'),
+            el('div.rush-needcap', {}, rush.needBy ? 'needed by' : 'not set')),
+
           el('div.line-main', {},
             el('div.line-id', {},
               el('span.mono.strong', {}, task.wo),
@@ -223,22 +232,19 @@ export function renderRush(rerender, go) {
             el('div.line-where', {},
               el('span', {}, task.project || '—'),
               task.floor ? el('span.muted', {}, ' · ' + task.floor) : null),
-            rush.reason || rush.assignee ? el('div.line-rushband', {},
-              icon('bolt', { size: 12 }),
+            // Who was told is half of what a rush *is*. A rush nobody owns is
+            // the one most likely to be missed, so it says so outright rather
+            // than showing nothing.
+            el('div.line-rushband' + (rush.assignee ? '' : '.nobody'), {},
+              icon(rush.assignee ? 'bolt' : 'alert', { size: 13 }),
               el('span', {},
-                rush.assignee ? el('strong', {}, rush.assignee) : null,
-                rush.reason
-                  ? el('span', {}, `${rush.assignee ? ' — ' : ''}${rush.reason}`)
-                  : null)) : null),
+                el('strong', {}, rush.assignee || 'Nobody told'),
+                rush.reason ? el('span', {}, ' — ' + rush.reason) : null))),
 
           el('div.line-qty', {},
             el('span.mono', {}, fmtNum(task.qty)),
-            el('span.small.muted', {}, 'pcs')),
-
-          el('div.line-date', {},
-            el('div.rush-need' + (rush.late || rush.needBy === ref ? '.late' : ''), {},
-              rush.needBy ? fmtDate(rush.needBy) : '—'),
-            el('div.small.muted', {}, 'needed')))))));
+            el('span.small.muted', {}, 'pcs')));
+      }))));
 
   return el('div.centre', {}, head, ...sections);
 }

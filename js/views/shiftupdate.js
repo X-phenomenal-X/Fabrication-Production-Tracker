@@ -126,8 +126,8 @@ function suggestions(row, entry, rerender) {
   const has = (field, text) => (row[field] || '')
     .split('\n').some((l) => l.trim() === text.trim());
 
-  const group = (label, field, items) => (items.length
-    ? el('div.sug', {},
+  const group = (label, field, items, cls = '') => (items.length
+    ? el('div.sug' + cls, {},
         el('span.sug-label', {}, label),
         el('div.sug-items', {}, ...items.map((text) => {
           // Suggestions already written into the box stay visible but read as
@@ -152,11 +152,33 @@ function suggestions(row, entry, rerender) {
     ? `From the workbook${sheet.date ? ` · ${fmtDate(sheet.date)}${age && age.days ? ` (${age.label})` : ''}` : ''}`
     : '';
 
-  return el('div.sugs', {},
-    group(`Moved this shift · ${tracked.length}`, 'done', tracked),
-    sheet ? group(from, 'done', sheet.done || []) : null,
-    sheet ? group('Next, from the workbook', 'next', sheet.next || []) : null,
-    sheet ? group('Workbook notes', 'notes', sheet.notes || []) : null);
+  // Two sources, and they are not equally trustworthy. What the tracker watched
+  // happen during *this* shift is fact; the workbook block is a snapshot from
+  // whenever the file was last saved and may be days old. They are kept in
+  // separate blocks, each saying where it came from, so nobody pastes last
+  // Wednesday's schedule into tonight's update.
+  const live = tracked.length
+    ? el('div.sugblock.live', {},
+        el('div.sugblock-head', {},
+          icon('check', { size: 13 }),
+          el('span', {}, 'What this shift moved'),
+          el('span.sugblock-count', {}, String(tracked.length))),
+        group('Add to work done', 'done', tracked))
+    : null;
+
+  const fromSheet = sheet && ((sheet.done || []).length || (sheet.next || []).length || (sheet.notes || []).length)
+    ? el('div.sugblock.sheet', {},
+        el('div.sugblock-head', {},
+          icon('note', { size: 13 }),
+          el('span', {}, from || 'From the workbook'),
+          age && age.days ? chip(age.label, age.tone) : null),
+        group('Work done', 'done', sheet.done || []),
+        group('Next in schedule', 'next', sheet.next || []),
+        group('Notes', 'notes', sheet.notes || []))
+    : null;
+
+  if (!live && !fromSheet) return null;
+  return el('div.sugs', {}, live, fromSheet);
 }
 
 /** The tracker's own record of what moved, phrased the way the sheet is. */
@@ -206,11 +228,18 @@ function card(machine, rerender) {
       }, icon('undo', { size: 11 }), 'Pull last update')
     : null;
 
-  return el('div.sucard' + (filled ? '.filled' : ''), {},
+  return el('div.sucard' + (filled ? '.filled' : '') + (sheet?.down ? '.down' : ''), {},
+    // A machine being down is the biggest thing that can be true of it this
+    // shift — it outranks everything else on the card and gets its own band
+    // rather than a chip lost in a header row.
+    sheet?.down ? el('div.sucard-down', {},
+      icon('alert', { size: 15 }),
+      el('strong', {}, machine.label + ' is down'),
+      el('span', {}, 'Say what happened and what is needed in Notes')) : null,
     el('div.sucard-head', {},
+      filled ? el('span.sucard-tick', { title: 'Written up' }, icon('check', { size: 13 })) : null,
       el('span.sucard-name', {}, machine.label),
       machine.note ? el('span.sucard-sub', {}, machine.note) : null,
-      sheet?.down ? chip('Down', 'bad') : null,
       el('span.spacer'),
       pullAll,
       machine.standing ? null : el('label.sucard-ops', {},
@@ -415,11 +444,27 @@ export function renderShiftUpdate(rerender, go) {
     .sort((a, b) => ((a.date + SHIFT_ORDER.indexOf(a.shift)) < (b.date + SHIFT_ORDER.indexOf(b.shift)) ? 1 : -1));
   const saved = currentLog();
 
-  const head = el('div.centre-head', {},
+  // How far through the update the writer is. The same count the footer shows,
+  // but at the top where it answers "is this nearly done" before scrolling.
+  const draft = loadDraft();
+  const allRows = sections();
+  const total = allRows.reduce((a, s) => a + s.rows.length, 0);
+  const filled = allRows.reduce(
+    (a, s) => a + s.rows.filter((m) => hasContent(draft.rows[m.key])).length, 0);
+  const pct = total ? Math.round((filled / total) * 100) : 0;
+
+  const head = el('div.centre-head.su-head-page' + (view.mode === 'read' ? '.reading' : ''), {},
     el('div.row.centre-title-row', {},
-      el('div', {},
-        el('h1.centre-title', {}, 'Shift update'),
-        el('div.centre-sub', {}, `Writing as ${me()}`)),
+      el('div.centre-ident', {},
+        el('span.centre-rail', { 'aria-hidden': 'true' }),
+        el('div', {},
+          el('h1.centre-title', {}, 'Shift update'),
+          el('div.centre-sub', {},
+            fmtDate(view.date, { withDay: true }),
+            el('span.dot-sep', {}, '·'),
+            SHIFTS[view.shift].label,
+            el('span.dot-sep', {}, '·'),
+            view.mode === 'read' ? 'Reading' : `Writing as ${me()}`))),
       el('span.spacer'),
       el('div.su-when', {},
         el('input.su-date', {
@@ -436,18 +481,28 @@ export function renderShiftUpdate(rerender, go) {
           onclick: () => { view.shift = k; dropDraft(); rerender(); },
         }, SHIFTS[k].label))))),
 
+    // Writing and reading are different jobs on the same data, so the switch
+    // between them is a real control rather than one pill among the filters.
     el('div.centre-filters', {},
-      el('div.filterpills', {}, ...[['write', 'Write'], ['read', 'Read']].map(([k, label]) =>
-        el('button.pill', {
-          'aria-current': String(view.mode === k),
-          onclick: () => { view.mode = k; rerender(); },
-        }, label))),
+      el('div.seg.su-mode', { role: 'group', 'aria-label': 'Mode' },
+        ...[['write', 'Write', 'pencil'], ['read', 'Read', 'note']].map(([k, label, ic]) =>
+          el('button.seg-btn' + (view.mode === k ? '.on' : ''), {
+            'aria-pressed': String(view.mode === k),
+            onclick: () => { view.mode = k; rerender(); },
+          }, icon(ic, { size: 15 }), el('span', {}, label)))),
       saved ? chip('saved', 'ok') : chip('not written yet', 'warn'),
       SHIFTS[view.shift].full ? null : chip(`${SHIFTS[view.shift].crew}-person crew`, 'mute'),
       el('span.spacer'),
       posted.length
         ? el('span.small.muted', {}, `${posted.length} update${posted.length === 1 ? '' : 's'} on file`)
-        : null));
+        : null),
+
+    view.mode === 'write' ? el('div.progress', {
+      title: `${filled} of ${total} machines written up`,
+    }, el('i', { style: { width: pct + '%' } })) : null,
+    view.mode === 'write'
+      ? el('div.progress-cap', {}, `${filled} of ${total} written up`)
+      : null);
 
   const recent = posted.length ? el('div.panel.su-recent', {},
     el('header', {}, 'Recent updates'),

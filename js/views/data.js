@@ -33,19 +33,51 @@ async function handleMachineFile(file, kind, rerender) {
     const r = result.report;
     setMachineImport(result);
     toast(`Loaded ${result.tasks.length} lines from ${file.name}`);
+
+    // A sheet that came in empty is worth as much attention as one that was
+    // missing: both mean a machine's queue will be blank, and the difference
+    // between "the tab was renamed" and "the tab is genuinely clear" is the
+    // difference between a bug and a quiet day.
+    const empty = r.sheets.filter((sh) => !sh.rows);
+    const unknown = r.sheets.filter((sh) => !MACHINE_BY_KEY[sh.machine]);
+
     modal(`Imported ${file.name}`, el('div', {},
-      el('div.stats', { style: { border: '1px solid var(--line-soft)', borderRadius: '8px', overflow: 'hidden', marginBottom: '14px' } },
+      el('div.stats.import-stats', {},
         el('div.stat', {}, el('div.n', {}, fmtNum(r.count)), el('div.k', {}, 'Lines')),
-        el('div.stat', {}, el('div.n', {}, String(r.sheets.length)), el('div.k', {}, 'Sheets'))),
-      el('ul.list', { style: { border: '1px solid var(--line-soft)', borderRadius: '8px' } },
+        el('div.stat', {}, el('div.n', {}, String(r.sheets.length)), el('div.k', {}, 'Sheets read')),
+        el('div.stat' + (r.missing.length ? '.bad' : ''), {},
+          el('div.n', {}, String(r.missing.length)), el('div.k', {}, 'Not found'))),
+      el('ul.list.import-sheets', {},
         ...r.sheets.map((sh) => el('li', {},
           el('div.row.small', {},
             el('strong', {}, sh.sheet),
             el('span.muted', {}, MACHINE_BY_KEY[sh.machine]?.label || sh.machine),
+            !MACHINE_BY_KEY[sh.machine] ? chip('unrecognised machine', 'warn') : null,
+            !sh.rows ? chip('no rows', 'warn') : null,
             el('span.spacer'),
             el('span.mono', {}, fmtNum(sh.rows) + ' rows'))))),
-      r.missing.length ? el('div.banner.warn', { style: { marginTop: '12px' } },
-        el('div', {}, 'Sheets not found: ' + r.missing.join(', '))) : null));
+
+      r.missing.length ? el('div.banner.bad', { style: { marginTop: '12px' } },
+        el('div', {},
+          el('strong', {}, `${r.missing.length} sheet${r.missing.length > 1 ? 's were' : ' was'} not found: `),
+          r.missing.join(', '),
+          el('div.small', { style: { marginTop: '4px' } },
+            'Those machines will show an empty queue. Usually the tab was renamed '
+            + 'or hidden in Excel — check the workbook and import again.'))) : null,
+
+      empty.length ? el('div.banner.warn', { style: { marginTop: '12px' } },
+        el('div', {},
+          el('strong', {}, 'Read but empty: '),
+          empty.map((sh) => sh.sheet).join(', '),
+          el('div.small', { style: { marginTop: '4px' } },
+            'The tab was found with no schedule rows in it.'))) : null,
+
+      unknown.length ? el('div.banner.warn', { style: { marginTop: '12px' } },
+        el('div', {},
+          el('strong', {}, 'Machines this app does not know: '),
+          unknown.map((sh) => sh.machine).join(', '),
+          el('div.small', { style: { marginTop: '4px' } },
+            'Their lines were loaded but will not appear on any centre page.'))) : null));
     rerender();
   } catch (e) {
     modal('Import failed', el('div', {},
@@ -216,6 +248,46 @@ function cloudSection(rerender) {
 
 /* ---------- view ---------- */
 
+/* Getting a fresh install usable is four things in order, and until they are
+   done the page is a to-do list rather than a settings screen. Once they are,
+   it collapses to a single line of confirmation instead of nagging. */
+function firstRun(rerender) {
+  const mm = state.machineMeta || {};
+  const sharing = cloudStatus().on || !!sharedFileName();
+
+  const steps = [
+    { n: 1, label: 'Import the Rolling schedule', done: !!mm.rolling,
+      hint: 'Auto, Manual and Complete sheets' },
+    { n: 2, label: 'Import the CNC schedule', done: !!mm.cnc,
+      hint: 'FOM 1–3, Multi Punch, CNC & FMC, and the shift update' },
+    { n: 3, label: 'Set up sharing', done: sharing,
+      hint: 'Cloud sync for phones, or one file on the shared drive' },
+    { n: 4, label: 'Add the crew', done: (state.people || []).length > 0,
+      hint: 'So every change is recorded against a name' },
+  ];
+  const left = steps.filter((s) => !s.done);
+
+  if (!left.length) {
+    return el('div.panel.setup-done', {},
+      el('div.body.row', {},
+        el('span.setup-tick', {}, icon('check', { size: 14 })),
+        el('strong', {}, 'Set up and ready'),
+        el('span.small.muted', {},
+          `${fmtNum((state.tasks || []).length)} lines loaded · `
+          + `${cloudStatus().on ? 'syncing to the cloud' : sharedFileName() ? 'sharing a file' : ''}`
+          + ` · ${state.people.length} on the crew`)));
+  }
+
+  return el('div.panel.setup-steps', {},
+    el('header', {}, `Getting started — ${steps.length - left.length} of ${steps.length} done`),
+    el('div.body.flush', {},
+      el('ol.setup-list', {}, ...steps.map((s) => el('li.setup-step' + (s.done ? '.done' : ''), {},
+        el('span.setup-num', {}, s.done ? icon('check', { size: 14 }) : String(s.n)),
+        el('div', {},
+          el('div.setup-label', {}, s.label),
+          el('div.small.muted', {}, s.hint)))))));
+}
+
 export function renderData(rerender) {
   const mm = state.machineMeta || {};
   const slot = (label, key, node) => el('div', {},
@@ -323,9 +395,14 @@ export function renderData(rerender) {
 
   const cloudPanel = cloudSection(rerender);
 
-  /* backup */
-  const backupPanel = el('div.panel', {},
-    el('header', {}, 'Backup & transfer'),
+  /* Backup and reset. Kept apart from everything above and folded shut by
+     default: these are the rarely-used controls, and one of them wipes the
+     device. It should take a deliberate click to even see it. */
+  const backupPanel = el('details.panel.setup-advanced', {},
+    el('summary', {},
+      icon('chevron', { size: 14 }),
+      el('span', {}, 'Backup, transfer and reset'),
+      el('span.small.muted', {}, 'Rarely needed')),
     el('div.body', {},
       el('div.row', {},
         el('button', {
@@ -347,7 +424,16 @@ export function renderData(rerender) {
             });
             document.body.append(inp); inp.click(); inp.remove();
           },
-        }, 'Import a backup'),
+        }, 'Import a backup')),
+      el('div.small.muted', { style: { marginTop: '10px' } },
+        'Export writes one JSON file containing the loaded schedules and every status set against them.'),
+
+      el('div.dangerzone', {},
+        el('div', {},
+          el('strong', {}, 'Clear this device'),
+          el('div.small.muted', {},
+            'Deletes the loaded schedules and every status set in this browser. '
+            + 'A shared file or cloud project is not touched.')),
         el('span.spacer'),
         el('button.danger', {
           onclick: async () => {
@@ -358,9 +444,7 @@ export function renderData(rerender) {
               location.reload();
             }
           },
-        }, 'Clear this device')),
-      el('div.small.muted', { style: { marginTop: '10px' } },
-        'Export writes one JSON file containing the loaded schedules and every status set against them.')));
+        }, 'Clear this device'))));
 
   /* people */
   const peopleInput = el('input', { placeholder: 'Add a name', style: { maxWidth: '220px' } });
@@ -391,8 +475,11 @@ export function renderData(rerender) {
             }, '×'))))
         : el('div.small.muted', {}, 'No names yet. Add the people on your crew so updates are attributed.')));
 
-  return el('div', {}, importPanel,
+  return el('div', {},
+    firstRun(rerender),
+    el('div', { style: { marginTop: '16px' } }, importPanel),
     el('div.grid.two', { style: { marginTop: '16px' } },
       el('div', {}, cloudPanel, sharedPanel),
-      el('div', {}, backupPanel, peoplePanel)));
+      el('div', {}, peoplePanel)),
+    el('div', { style: { marginTop: '16px' } }, backupPanel));
 }

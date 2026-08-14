@@ -51,11 +51,13 @@ const step = (s) => console.log('  •', s);
 
 /* Rendering is deferred to the next frame, so the click alone proves nothing.
    Waiting on the nav rather than the page title, because a machine that has
-   been renamed no longer has the title the test started with. */
+   been renamed no longer has the title the test started with — and on the
+   tab's aria-label rather than its text, because a tool tab's text now also
+   carries a short label and an outstanding-count badge. */
 const gotoTab = async (name) => {
-  await page.click(`nav.tabs button:has-text("${name}")`);
+  await page.click(`nav.tabs button[aria-label="${name}"]`);
   await page.waitForFunction(
-    (n) => document.querySelector('nav.tabs button[aria-current="true"]')?.textContent.trim() === n,
+    (n) => document.querySelector('nav.tabs button[aria-current="true"]')?.getAttribute('aria-label') === n,
     name);
   await page.waitForTimeout(120);
 };
@@ -64,7 +66,10 @@ await page.goto(base + '/index.html');
 await page.waitForSelector('header.top');
 step('app booted');
 
-const tabs = await page.$$eval('nav.tabs button', (ns) => ns.map((n) => n.textContent.trim()));
+// The nav carries a long and a short label per tool and shows one by width, so
+// read the tab's stated accessible name rather than its concatenated text.
+const tabs = await page.$$eval('nav.tabs button', (ns) =>
+  ns.map((n) => (n.getAttribute('aria-label') || n.textContent).trim()));
 step('tabs: ' + tabs.join(', '));
 if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Rush,Back Orders,Shift Update,Setup') {
   throw new Error('unexpected nav: ' + tabs.join(','));

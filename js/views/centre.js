@@ -118,7 +118,13 @@ function taskLine(row, vs, rerender, group) {
   const selected = vs.selected.has(key);
   const canMove = canMoveIn(group);
 
-  const node = el('div.line' + (selected ? '.sel' : '') + (rush.on ? '.rush' : ''), {},
+  // The rail down the left edge is picked in CSS by priority; the row only has
+  // to say which states apply.
+  const node = el('div.line'
+    + (selected ? '.sel' : '')
+    + (rush.on ? '.rush' : '')
+    + (bo.on ? '.is-bo' : '')
+    + (t.editedAt ? '.is-edited' : ''), {},
     el('label.line-pick', {},
       el('input', {
         type: 'checkbox', checked: selected, 'aria-label': `Select ${t.wo}`,
@@ -415,7 +421,8 @@ function nowRunningLine(row, rerender) {
     el('div.nowrun-meta', {},
       el('span.mono', {}, fmtNum(t.qty)),
       el('span.small.muted', {}, 'pcs'),
-      since ? el('span.small.muted.nowrun-since', {}, `since ${since}`) : null),
+      since ? el('span.small.muted.nowrun-since', {},
+        icon('clock', { size: 13 }), `running ${since}`) : null),
     el('button.nowrun-done', {
       title: 'Mark this line done',
       onclick: (e) => {
@@ -440,11 +447,14 @@ const NOWRUN_CAP = 6;
 function nowRunningPanel(machine, rerender, vs) {
   const rows = runningNow(machine.key);
 
+  // An idle machine gets a real answer rather than a blank: it is one of the
+  // three questions this page exists to answer, and "nothing" is a valid one.
   if (!rows.length) {
     return el('div.nowrun', {},
       el('div.nowrun-empty', {},
-        icon('dot', { size: 12 }),
-        el('span', {}, 'Nothing running on ' + machine.label + ' right now')));
+        icon('dot', { size: 18 }),
+        el('span', {}, 'Nothing running on ' + machine.label,
+          el('span.muted', {}, ' — set a line to In Progress and it shows up here'))));
   }
 
   const expanded = vs.nowExpanded[machine.key];
@@ -628,22 +638,27 @@ export function makeCentreView(group) {
 
     const head = el('div.centre-head', {},
       el('div.row.centre-title-row', {},
-        el('div', {},
-          el('div.row', { style: { gap: '8px' } },
-            el('h1.centre-title', {}, machine.label),
-            el('button.iconbtn', {
-              title: 'Set up this machine',
-              onclick: () => machineSettings(machine, rerender),
-            }, icon('gear', { size: 15 }))),
-          el('div.small.muted', {},
-            machine.note || '',
-            machine.ops != null ? `${machine.note ? ' · ' : ''}${machine.ops} operator${machine.ops === 1 ? '' : 's'}` : '')),
+        el('div.centre-ident', {},
+          el('span.centre-rail', { 'aria-hidden': 'true' }),
+          el('div', {},
+            el('div.row', { style: { gap: '2px' } },
+              el('h1.centre-title', {}, machine.label),
+              el('button.iconbtn', {
+                title: 'Set up this machine',
+                onclick: () => machineSettings(machine, rerender),
+              }, icon('gear', { size: 16 }))),
+            el('div.centre-sub', {},
+              machine.note || '',
+              machine.ops != null ? `${machine.note ? ' · ' : ''}${machine.ops} operator${machine.ops === 1 ? '' : 's'}` : ''))),
         el('span.spacer'),
+        // Read in the order the questions get asked on the floor: what is
+        // running, what is left, what is late, what jumps the queue, what is
+        // short of material.
         el('div.centre-stats', {},
-          stat(sum.open, 'open'),
           stat(sum.inProgress, 'running', 'work'),
-          stat(sum.rush, 'rush', 'warn'),
+          stat(sum.open, 'open'),
           stat(sum.overdue, 'overdue', 'bad'),
+          stat(sum.rush, 'rush', 'warn'),
           stat(sum.backOrder, 'B/O', 'bad'))),
 
       // How much of this machine's book is finished — the one number that

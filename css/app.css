@@ -8,11 +8,13 @@
   --line-soft: #e8ecf1;
   --ink: #131c26;
   --ink-2: #55657a;
-  /* #64748b, not the lighter grey this used to be: at 2.9:1 on white the old
-     value failed WCAG AA, and this token carries most of the secondary text on
-     the page — stat labels, dates, counts. Under shop lighting and glare that
-     is the difference between readable and squinted at. Now 4.8:1. */
-  --ink-3: #64748b;
+  /* This token carries most of the secondary text on the page — stat labels,
+     dates, counts — so it is set against the *darkest* surface it ever lands
+     on, not against white. #64748b cleared 4.76:1 on the panel but only 4.2:1
+     on the page background, which is where half of it actually sits. #5c6b7f
+     is 5.4 / 5.2 / 4.8 across panel, panel-2 and bg: AA everywhere, including
+     under glare. */
+  --ink-3: #5c6b7f;
 
   --accent: #1667d8;
   --accent-soft: #e7f0fd;
@@ -35,6 +37,14 @@
      costing any contrast. Transparent in light mode, where shadow does the job. */
   --sheen: transparent;
 
+  /* Text and overlays that sit *on* a filled semantic colour. In light mode
+     the five semantics are dark enough to take white (5.3:1 at worst); in dark
+     mode they are deliberately light, and white on them lands around 2:1 — so
+     the ink flips instead. One token, because every filled surface in the app
+     has the same problem. */
+  --on-fill: #ffffff;
+  --on-fill-soft: rgba(255,255,255,.24);
+
   --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 32%, transparent);
 
   --radius: 10px;
@@ -42,6 +52,38 @@
   --r-lg: 14px;
 
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ---- scales ----
+
+     Everything below is measured off one ladder rather than chosen per
+     component, so a panel on the Rush page and a panel on Setup are the same
+     object. Sizes are set for a monitor mounted a step or two back from the
+     operator, not for a laptop at arm's length. */
+
+  --t-xs: 12px;      /* eyebrow labels, badges — never body text */
+  --t-sm: 13.5px;    /* secondary lines: project, floor, timestamps */
+  --t-md: 15px;      /* body, and every control */
+  --t-lg: 17px;      /* work orders in a queue */
+  --t-xl: 22px;      /* stat numbers */
+  --t-2xl: 30px;     /* the machine you are looking at */
+
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 20px; --s6: 24px; --s7: 32px;
+
+  --r-xs: 5px;
+  --r-pill: 999px;
+
+  /* Control heights. --ctl is the ordinary one; --ctl-lg is for the actions an
+     operator hits with gloves on, all shift; --tap is the floor for anything
+     tappable on a phone, per WCAG 2.5.5. */
+  --ctl: 40px;
+  --ctl-lg: 48px;
+  --tap: 44px;
+  --box: 22px;       /* checkboxes — the control itself, inside a --tap label */
+
+  /* The app header measures itself into this on every render, so sticky
+     sections below can clear it instead of sliding underneath. */
+  --hdr-h: 56px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -66,6 +108,10 @@
     --work: #b393f5;
     --work-soft: #261b4080;
 
+    /* 7.5:1 or better on every filled semantic in this theme; white was 2.5:1. */
+    --on-fill: #0d1319;
+    --on-fill-soft: rgba(13,19,25,.22);
+
     --shadow-1: 0 1px 2px rgba(0,0,0,.4);
     --shadow-2: 0 2px 6px rgba(0,0,0,.45), 0 8px 20px rgba(0,0,0,.32);
     --shadow-3: 0 8px 24px rgba(0,0,0,.5), 0 24px 56px rgba(0,0,0,.36);
@@ -79,7 +125,9 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* 15px, up from 14. The screens this runs on are wall-mounted or sat back
+     from, and a point of body size is the cheapest legibility there is. */
+  font: var(--t-md)/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -93,17 +141,10 @@ input[type="number"], .nowrun-meta, td.num, th.num {
   font-variant-numeric: tabular-nums;
 }
 
-/* Keyboard focus was invisible before this: the only focus styling was on
-   inputs. Everything interactive now shows the same ring, and only for
-   keyboard users, so pointer users never see it. */
-:focus-visible {
-  outline: none;
-  box-shadow: var(--ring);
-  border-radius: var(--r-sm);
-}
-input:focus-visible, select:focus-visible, textarea:focus-visible {
-  border-radius: 8px;
-}
+/* Focus styling lives at the end of this sheet, not here — see the block
+   below the phone overrides. Anything that sets its own box-shadow (which is
+   most controls now) would otherwise win on specificity and leave keyboard
+   users with no visible focus at all. */
 
 /* ---------- layout ---------- */
 
@@ -118,41 +159,103 @@ header.top {
   backdrop-filter: saturate(1.6) blur(12px);
   -webkit-backdrop-filter: saturate(1.6) blur(12px);
   border-bottom: 1px solid var(--line);
-  padding: 10px 18px;
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: var(--s2) var(--s5);
+  display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap;
 }
 @supports not (backdrop-filter: blur(1px)) {
   header.top { background: var(--panel); }
 }
 
+.hdr-id { display: flex; align-items: center; gap: var(--s2); min-width: 0; flex-shrink: 0; }
+
+/* The tagline is decoration and the nav is not, so the tagline goes first —
+   and it has to go well before the nav starts scrolling, or a 1280px
+   production monitor hides Setup behind an overflow nobody looks for. */
+@media (max-width: 1460px) {
+  .brand small { display: none; }
+  header.top { gap: var(--s3); padding-left: var(--s4); padding-right: var(--s4); }
+}
+/* At 1280 the eight spelled-out pages plus the brand, two chips and the name
+   picker no longer fit. The tools fall back to their short labels — the same
+   pair the phone uses — rather than letting Setup slide off the end. */
+@media (max-width: 1330px) {
+  nav.tabs button { padding: 6px 11px; }
+  nav.tabs { gap: var(--s2); }
+  .whopick { min-width: 120px; max-width: 150px; }
+  .has-short .tab-label { display: none; }
+  .has-short .tab-short { display: inline; }
+}
+
 .brand {
-  font-weight: 700; letter-spacing: -0.015em; font-size: 15px;
-  display: flex; align-items: baseline; gap: 9px;
+  font-weight: 700; letter-spacing: -0.015em; font-size: var(--t-md);
+  display: flex; align-items: baseline; gap: var(--s2);
 }
 /* The department name carries a mark in the accent so the header has one
    fixed point the eye can return to. */
 .brand::before {
   content: ''; align-self: center;
-  width: 9px; height: 18px; border-radius: 3px; margin-right: 1px;
+  width: 9px; height: 20px; border-radius: 3px; margin-right: 1px;
   background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--work)));
 }
-.brand small { font-weight: 500; color: var(--ink-3); font-size: 12px; letter-spacing: 0; }
+.brand small { font-weight: 500; color: var(--ink-3); font-size: var(--t-xs); letter-spacing: 0; }
 
-nav.tabs { display: flex; gap: 2px; flex-wrap: wrap; margin-left: auto; }
+/* Navigation is two jobs, not eight pages. The four production centres are
+   what an operator touches all shift and read as a solid segmented control;
+   the four department tools sit past a divider, quieter, because they are
+   visited rather than lived in. */
+/* The nav scrolls sideways whenever it has to, at every width — not below a
+   breakpoint. Eight pages plus a brand plus a name picker do not fit a
+   1024px tablet either, and a header that silently pushes the whole page
+   sideways is worse than one that scrolls on purpose. */
+nav.tabs {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: nowrap;
+  /* basis 0, not auto: with auto the nav asks for its full content width and
+     pushes the name picker onto a second row on a desk monitor. */
+  flex: 1 1 0%; min-width: 0; overflow-x: auto;
+  scrollbar-width: none; -ms-overflow-style: none;
+  padding: 2px 0;
+}
+nav.tabs::-webkit-scrollbar { display: none; }
+.tabgroup { flex-shrink: 0; }
+.tabgroup { display: flex; align-items: center; gap: var(--s1); }
+.tabgroup.centres {
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: 3px;
+  box-shadow: var(--sheen);
+}
 nav.tabs button {
-  position: relative;
+  position: relative; min-height: 36px;
+  display: inline-flex; align-items: center; gap: 7px;
   border: 1px solid transparent; background: none; color: var(--ink-2);
-  padding: 7px 13px; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 500;
+  padding: 6px 14px; border-radius: var(--r-xs); cursor: pointer; font: inherit;
+  font-weight: 600; font-size: var(--t-sm); box-shadow: none; white-space: nowrap;
   transition: color .14s, background .14s;
 }
-nav.tabs button:hover { background: var(--panel-2); color: var(--ink); }
-nav.tabs button[aria-current="true"] {
+nav.tabs button:hover:not([aria-current="true"]) { background: var(--panel); color: var(--ink); border-color: var(--line-soft); }
+.tabgroup.centres button[aria-current="true"] {
+  background: var(--accent); color: var(--on-fill); border-color: transparent;
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.tabgroup.tools button { color: var(--ink-3); font-weight: 550; }
+.tabgroup.tools button[aria-current="true"] {
   background: var(--accent-soft); color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 22%, transparent);
-  font-weight: 600;
+  font-weight: 700;
 }
+/* A tool with something outstanding says so on the nav, so nobody has to open
+   Rush to find out there is rush work. */
+.tab-badge {
+  font-size: 11px; font-weight: 800; min-width: 19px; padding: 0 5px;
+  border-radius: var(--r-pill); font-variant-numeric: tabular-nums;
+  background: var(--bad); color: var(--on-fill); line-height: 18px;
+}
+.tab-badge.warn { background: var(--warn); }
+.tabsep { width: 1px; align-self: stretch; margin: 4px 0; background: var(--line); flex-shrink: 0; }
 
-main { flex: 1; padding: 20px 18px 18px; max-width: 1500px; width: 100%; margin: 0 auto; }
+.hdr-right { display: flex; align-items: center; gap: var(--s2); flex-shrink: 0; }
+.whopick { width: auto; min-width: 140px; max-width: 190px; }
+
+main { flex: 1; padding: var(--s5) var(--s5) var(--s5); max-width: 1500px; width: 100%; margin: 0 auto; }
 
 /* ---------- primitives ---------- */
 
@@ -176,10 +279,14 @@ main { flex: 1; padding: 20px 18px 18px; max-width: 1500px; width: 100%; margin:
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
 .grid.three { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 
+/* Every button is at least --ctl tall. Nothing here is a decorative link that
+   happens to be a button — they all get hit with a glove on. */
 button, .btn {
   font: inherit; font-weight: 550; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+  min-height: var(--ctl);
   background: var(--panel); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 8px; padding: 7px 13px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 16px;
   box-shadow: var(--shadow-1);
   transition: border-color .14s, background .14s, box-shadow .14s, transform .1s;
 }
@@ -187,7 +294,13 @@ button:hover:not(:disabled) { border-color: var(--ink-3); box-shadow: var(--shad
 /* A press that visibly gives is worth more here than anywhere else: with
    gloves on, the tap feedback is most of the confirmation you get. */
 button:active:not(:disabled) { transform: translateY(1px); box-shadow: var(--shadow-1); }
-button:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+/* Disabled has to read as "not now", not as "low contrast text". Opacity alone
+   took the label under 3:1; a flat recessed surface says it without that. */
+button:disabled {
+  opacity: 1; cursor: not-allowed; box-shadow: none;
+  background: var(--panel-2); color: var(--ink-3);
+  border-color: var(--line-soft);
+}
 button.primary {
   background: var(--accent); border-color: transparent; color: #fff;
   box-shadow: var(--shadow-1), 0 1px 3px color-mix(in srgb, var(--accent) 40%, transparent);
@@ -196,19 +309,28 @@ button.primary:hover:not(:disabled) {
   filter: brightness(1.07);
   box-shadow: var(--shadow-2), 0 2px 8px color-mix(in srgb, var(--accent) 45%, transparent);
 }
+button.primary:disabled { background: var(--panel-2); color: var(--ink-3); }
 button.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
-button.ghost { border-color: transparent; background: none; color: var(--ink-2); }
+button.ghost { border-color: transparent; background: none; color: var(--ink-2); box-shadow: none; }
 button.ghost:hover { background: var(--panel-2); color: var(--ink); }
-button.sm { padding: 4px 9px; font-size: 12px; }
+/* Still a full tap target — only the text and the padding shrink. */
+button.sm { padding: 4px 12px; font-size: var(--t-sm); min-height: 36px; min-width: 36px; }
 
 input, select, textarea {
   font: inherit; color: var(--ink); background: var(--panel);
-  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; width: 100%;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 8px 12px; width: 100%; min-height: var(--ctl);
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
-textarea { resize: vertical; min-height: 70px; line-height: 1.55; }
+textarea { resize: vertical; min-height: 76px; line-height: 1.55; }
+/* Checkboxes are the one control that cannot grow with its padding, so they
+   are sized outright — 13px was the smallest thing on every screen. */
+input[type="checkbox"], input[type="radio"] {
+  width: var(--box); height: var(--box); min-height: 0;
+  accent-color: var(--accent); flex-shrink: 0;
+}
 label.field { display: block; }
-label.field > span { display: block; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; font-weight: 500; }
+label.field > span { display: block; font-size: var(--t-sm); color: var(--ink-2); margin-bottom: var(--s1); font-weight: 600; }
 
 .chip {
   display: inline-flex; align-items: center; gap: 5px;
@@ -291,9 +413,30 @@ dialog {
 }
 @keyframes dialogin { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
 dialog::backdrop { background: rgba(8,12,16,.55); backdrop-filter: blur(2px); }
-dialog header { padding: 14px 18px; border-bottom: 1px solid var(--line-soft); font-weight: 650; display: flex; align-items: center; }
-dialog .body { padding: 18px; max-height: 65vh; overflow: auto; }
-dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); display: flex; gap: 8px; justify-content: flex-end; }
+/* The body scrolls, the footer never does — a dialog whose Save has slid off
+   the bottom of a phone is a broken dialog. */
+dialog {
+  display: flex; flex-direction: column; max-height: calc(100vh - var(--s7));
+}
+dialog:not([open]) { display: none; }
+dialog header {
+  padding: var(--s3) var(--s5); border-bottom: 1px solid var(--line-soft);
+  font-weight: 700; font-size: var(--t-lg); display: flex; align-items: center; gap: var(--s2);
+  flex-shrink: 0;
+}
+dialog .body { padding: var(--s5); overflow: auto; flex: 1; min-height: 0; }
+dialog footer {
+  padding: var(--s3) var(--s5); border-top: 1px solid var(--line-soft);
+  display: flex; gap: var(--s2); justify-content: flex-end; flex-wrap: wrap; flex-shrink: 0;
+}
+dialog footer button { min-height: var(--ctl-lg); }
+
+@media (max-width: 720px) {
+  dialog { width: calc(100% - var(--s5)); max-height: calc(100vh - var(--s5)); }
+  dialog .body { padding: var(--s4); }
+  dialog footer { padding: var(--s3) var(--s4) calc(var(--s3) + env(safe-area-inset-bottom, 0px)); }
+  dialog footer button { flex: 1; }
+}
 
 .doc { line-height: 1.65; }
 .doc h3 { margin: 18px 0 6px; font-size: 15px; }
@@ -319,80 +462,121 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 
 /* ---------- phone ---------- */
 
+.tab-short { display: none; }
+
 @media (max-width: 720px) {
-  main { padding: 12px; }
-  header.top { padding: 8px 12px; gap: 8px; }
+  main { padding: var(--s3); }
 
-  /* The header was costing ~150px before any content on a 390px-wide phone:
-     brand and chips wrapping, then the nav, then the name picker alone on a
-     third row. Sending the nav last lets brand, chips and picker share the
-     top row, and dropping the tagline — decoration — buys the rest. */
-  nav.tabs { order: 10; }
+  /* Two rows, and a hard budget of 96px for both.
+     Row 1 is identity only — brand, shift, sync — and deliberately carries no
+     tap target, because a third 44px control here is what put the old header
+     at 121px. Row 2 is where the fingers go: the centre scroller takes the
+     width it needs and the name picker stays pinned beside it, so who-you-are
+     never scrolls out of reach. */
+  header.top { padding: 6px var(--s3) 7px; gap: 6px; row-gap: 6px; }
+  .hdr-id { flex-basis: 100%; gap: 6px; }
   .brand small { display: none; }
-  .brand { font-size: 14px; }
-  header.top > div:last-of-type { margin-left: auto !important; }
-  header.top select { padding: 5px 8px; font-size: 13px; }
+  .brand { font-size: var(--t-sm); }
+  .brand::before { height: 15px; width: 7px; }
+  .hdr-id .chip { font-size: 11px; padding: 1px 7px; }
 
-  /* Eight tabs wrap to three rows and eat the screen; one scrolling row keeps
-     the header the same height however many pages there are. */
-  nav.tabs { width: 100%; margin-left: 0; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  nav.tabs { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; gap: var(--s2); }
   nav.tabs::-webkit-scrollbar { display: none; }
-  nav.tabs button { padding: 7px 11px; font-size: 13px; white-space: nowrap; }
+  nav.tabs button { min-height: var(--tap); padding: 6px 13px; font-size: var(--t-sm); }
+  .tabgroup.centres { padding: 2px; }
+  .tabgroup.tools { gap: 2px; }
+  .has-short .tab-label { display: none; }
+  .has-short .tab-short { display: inline; }
+
+  .hdr-right { margin-left: 0; flex-shrink: 0; }
 
   .hide-sm { display: none !important; }
   .oplabel { width: 88px; }
-  .stat .n { font-size: 19px; }
-  .cstat { padding: 8px 6px; min-width: 0; }
-  .cstat b { font-size: 19px; }
-  .centre-title { font-size: 22px; }
+  .stat .n { font-size: 20px; }
+  .cstat { padding: var(--s2) 4px; min-width: 0; }
+  .centre-title { font-size: 23px; }
 }
 
 /* ---------- work-centre page ---------- */
 
 .centre { padding-bottom: 90px; animation: pagein .18s ease-out; }
-@keyframes pagein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+/* Opacity only, deliberately. A transform on this element makes it the
+   containing block for its `position: fixed` descendants while the animation
+   runs, which threw the bulk-action bar to the bottom of a 9,000px document
+   for 180ms after every single re-render — and every selection re-renders. */
+@keyframes pagein { from { opacity: 0; } to { opacity: 1; } }
 
+/* Clears the app header rather than sliding under it. --hdr-h is measured on
+   every render in app.js, so this stays right through wrapping and zoom. */
 .centre-head {
-  position: sticky; top: 0; z-index: 20;
+  position: sticky; top: var(--hdr-h); z-index: 20;
   background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  padding: 16px 0 12px;
-  margin: -20px 0 4px;
+  padding: var(--s4) 0 var(--s3);
+  margin: calc(var(--s5) * -1) 0 var(--s1);
   border-bottom: 1px solid var(--line);
 }
 @supports not (backdrop-filter: blur(1px)) {
   .centre-head { background: var(--bg); }
 }
-.centre-title-row { gap: 16px; }
-.centre-title { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; }
+.centre-title-row { gap: var(--s4); align-items: flex-start; }
+
+/* Which machine you are looking at is the most important word on the page —
+   an operator glancing at a shared monitor has to be certain the queue below
+   is theirs. Name, accent rail and what it runs, as one block. */
+.centre-ident {
+  display: flex; align-items: stretch; gap: var(--s3); min-width: 0;
+}
+.centre-rail {
+  width: 5px; border-radius: var(--r-pill); flex-shrink: 0;
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 50%, var(--work)));
+}
+.centre-title {
+  margin: 0; font-size: var(--t-2xl); font-weight: 800;
+  letter-spacing: -0.03em; line-height: 1.1;
+}
+.centre-sub { font-size: var(--t-sm); color: var(--ink-3); margin-top: 3px; }
 
 .iconbtn {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; padding: 0; border-radius: 7px;
+  width: var(--ctl); height: var(--ctl); padding: 0; border-radius: var(--r-sm);
   background: none; border: 1px solid transparent; color: var(--ink-3); cursor: pointer;
+  box-shadow: none; min-height: 0;
   transition: color .12s, background .12s, border-color .12s;
 }
 .iconbtn:hover { color: var(--ink); background: var(--panel-2); border-color: var(--line); }
 
+/* One operational strip, read left to right in the order the questions get
+   asked: what is running, what is left, what is late, what jumps the queue,
+   what is short. */
 .centre-stats {
   display: flex; gap: 1px; background: var(--line);
   border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
   box-shadow: var(--shadow-1), var(--sheen);
 }
-.cstat { background: var(--panel); padding: 9px 16px; text-align: center; min-width: 70px; }
+.cstat {
+  background: var(--panel); padding: var(--s2) var(--s5); text-align: center; min-width: 78px;
+}
 /* These five numbers are the whole reason to look at the top of the page, so
    they are sized to be read from a step back rather than leaned into. */
-.cstat b { display: block; font-size: 21px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.cstat b { display: block; font-size: var(--t-xl); font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
 .cstat i {
-  display: block; font-style: normal; font-size: 10px; text-transform: uppercase;
-  letter-spacing: .07em; color: var(--ink-3); font-weight: 700; margin-top: 2px;
+  display: block; font-style: normal; font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink-3); font-weight: 800; margin-top: 2px;
 }
 /* A zero is good news on every one of the coloured stats, so it stays neutral
-   and only a real count takes the alarm colour. */
+   and only a real count takes the alarm colour — and a real count takes a
+   tinted cell too, so the strip can be read from across the bay. */
+.cstat.bad  { background: var(--bad-soft); }
+.cstat.work { background: var(--work-soft); }
+.cstat.warn { background: var(--warn-soft); }
 .cstat.bad b  { color: var(--bad); }
 .cstat.work b { color: var(--work); }
 .cstat.warn b { color: var(--warn); }
+/* The number takes the alarm colour; the label stays neutral ink. Tinting the
+   label too put 10px text at 1.3:1 against the tinted cell in dark mode. */
+.cstat.bad i, .cstat.warn i, .cstat.work i { color: var(--ink-2); }
 
 .progress {
   height: 5px; border-radius: 999px; background: var(--line-soft);
@@ -407,68 +591,88 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 
 /* sub-tabs */
 
-.subtabs { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 13px; }
+.subtabs { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s3); }
 .subtabs button {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 8px 15px; border-radius: 999px; font-weight: 600; font-size: 13px;
+  display: inline-flex; align-items: center; gap: var(--s2);
+  min-height: var(--ctl);
+  padding: var(--s2) var(--s5); border-radius: var(--r-pill); font-weight: 700; font-size: var(--t-md);
   background: var(--panel); border: 1px solid var(--line); color: var(--ink-2); cursor: pointer;
   transition: background .14s, color .14s, border-color .14s, transform .1s;
 }
 .subtabs button:hover { border-color: var(--ink-3); color: var(--ink); }
 .subtabs button:active { transform: scale(.97); }
 .subtabs button[aria-current="true"] {
-  background: var(--accent); border-color: var(--accent); color: #fff;
+  background: var(--accent); border-color: var(--accent); color: var(--on-fill);
   box-shadow: 0 1px 5px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .subtab-count {
-  font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  font-size: var(--t-xs); font-weight: 800; padding: 2px var(--s2); border-radius: var(--r-pill);
   background: var(--panel-2); color: var(--ink-2); font-variant-numeric: tabular-nums;
 }
-.subtabs button[aria-current="true"] .subtab-count { background: rgba(255,255,255,.24); color: #fff; }
+.subtabs button[aria-current="true"] .subtab-count { background: var(--on-fill-soft); color: var(--on-fill); }
 
 /* filters */
 
-.centre-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.centre-filters { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin-top: var(--s3); }
 .searchwrap { position: relative; flex-shrink: 0; }
-.searchwrap input { width: 260px; padding-left: 32px; }
-.searchicon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
+.searchwrap input { width: 300px; padding-left: 38px; }
+.searchicon { position: absolute; left: var(--s3); top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
 
-.filterpills { display: flex; gap: 4px; flex-wrap: wrap; }
+.filterpills { display: flex; gap: var(--s1); flex-wrap: wrap; }
 .pill {
-  padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  min-height: 36px;
+  padding: var(--s1) var(--s4); border-radius: var(--r-pill); font-size: var(--t-sm); font-weight: 600;
   background: none; border: 1px solid var(--line); color: var(--ink-2); cursor: pointer;
+  box-shadow: none;
   transition: background .12s, color .12s, border-color .12s;
 }
 .pill:hover { color: var(--ink); border-color: var(--ink-3); }
-.pill[aria-current="true"] { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
-.donetoggle { gap: 6px; color: var(--ink-2); cursor: pointer; }
-.donetoggle input { width: auto; }
+.pill[aria-current="true"] {
+  background: var(--accent-soft); color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent); font-weight: 700;
+}
+.donetoggle {
+  gap: var(--s2); color: var(--ink-2); cursor: pointer;
+  min-height: var(--ctl); padding: 0 var(--s2); border-radius: var(--r-sm);
+}
+.donetoggle:hover { background: var(--panel-2); color: var(--ink); }
+.donetoggle input { width: var(--box); }
 
 /* date groups */
 
-.dgroup { margin-top: 18px; }
-.dgroup-head { display: flex; align-items: center; gap: 8px; padding: 2px; }
+.dgroup { margin-top: var(--s5); }
+.dgroup-head { display: flex; align-items: center; gap: var(--s2); padding: 0; }
 .dgroup-toggle {
-  display: flex; align-items: center; gap: 9px;
-  background: none; border: none; padding: 3px 2px; cursor: pointer; font: inherit;
+  display: flex; align-items: center; gap: var(--s2);
+  background: none; border: none; box-shadow: none;
+  padding: var(--s1) var(--s2) var(--s1) 0; cursor: pointer; font: inherit;
+  min-height: var(--ctl);
 }
 .dgroup-caret { color: var(--ink-3); display: inline-flex; transition: transform .18s cubic-bezier(.4,0,.2,1); }
 .dgroup-caret.open { transform: rotate(90deg); }
+/* These separate a hundred rows into "now" and "later". Bigger than the rows
+   they head, so scrolling past one registers. */
 .dgroup-label {
-  font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em;
+  font-size: var(--t-sm); font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
   color: var(--ink-2); transition: color .12s;
 }
 .dgroup-toggle:hover .dgroup-label { color: var(--ink); }
 .dgroup-label.bad { color: var(--bad); }
 .dgroup-label.warn { color: var(--warn); }
 .dgroup-count {
-  font-size: 11px; font-weight: 700; color: var(--ink-3); font-variant-numeric: tabular-nums;
+  font-size: var(--t-xs); font-weight: 800; color: var(--ink-2); font-variant-numeric: tabular-nums;
   background: var(--panel-2); border: 1px solid var(--line-soft);
-  padding: 1px 8px; border-radius: 999px;
+  padding: 2px 9px; border-radius: var(--r-pill);
 }
+/* An overdue or due-today bucket colours its count too, so the alarm reads
+   before the word does. */
+.dgroup-label.bad + .dgroup-count { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.dgroup-label.warn + .dgroup-count { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
 .dgroup-pick {
-  background: none; border: none; color: var(--ink-3); font-size: 12px; font-weight: 600;
-  cursor: pointer; padding: 3px 8px; border-radius: 6px;
+  background: none; border: none; box-shadow: none;
+  color: var(--ink-2); font-size: var(--t-sm); font-weight: 700;
+  cursor: pointer; padding: var(--s2) var(--s3); border-radius: var(--r-sm);
+  min-height: var(--ctl);
 }
 .dgroup-pick:hover { color: var(--accent); background: var(--accent-soft); }
 .dgroup-body {
@@ -480,55 +684,89 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 
 /* a scheduled line */
 
+/* A row carries a 4px rail down its left edge for its most urgent state.
+   Rails stack in one place rather than competing: selection wins while it
+   lasts because it is the operator's own doing, then shortage, then rush,
+   then a hand-edited line. The badge and icon on the row say which it is —
+   the rail only has to make it findable while scrolling. */
 .line {
-  display: flex; align-items: center; gap: 13px;
-  padding: 12px 14px; border-bottom: 1px solid var(--line-soft);
+  position: relative;
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s3) var(--s4) var(--s3) var(--s5);
+  border-bottom: 1px solid var(--line-soft);
   transition: background .12s, box-shadow .12s;
 }
 .line:last-of-type { border-bottom: 0; }
 .line:hover { background: var(--panel-2); }
-/* A selected row is picked out by a spine as well as a tint: the tint alone is
-   the same cue the rush and running states already use, and on a glared screen
-   three tints are hard to tell apart. */
-.line.sel { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.line::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  background: transparent;
+}
+.line.is-edited::before { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.line.rush::before { background: var(--warn); }
+.line.is-bo::before { background: var(--bad); }
+.line.sel { background: var(--accent-soft); }
+.line.sel::before { background: var(--accent); }
 
-.line-pick { display: flex; align-items: center; flex-shrink: 0; cursor: pointer; }
-.line-pick input { width: 17px; height: 17px; cursor: pointer; accent-color: var(--accent); }
+/* The checkbox itself stays a checkbox, but the label around it is a full tap
+   target — selecting a line was the single smallest thing on every screen. */
+.line-pick {
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; cursor: pointer;
+  width: var(--tap); height: var(--tap); margin: calc(var(--s2) * -1) 0 calc(var(--s2) * -1) -10px;
+  border-radius: var(--r-sm);
+}
+.line-pick:hover { background: var(--accent-soft); }
+.line-pick input { cursor: pointer; }
 
 .line-main { flex: 1; min-width: 0; }
-.line-id { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.line-id { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
 /* The work order is what anyone is scanning for down a long list, so it is the
-   heaviest thing on the row. */
-.line-id .mono { font-size: 15px; font-weight: 700; letter-spacing: -0.015em; color: var(--ink); }
+   heaviest thing on the row by a clear margin — and it wraps rather than
+   truncating, because a half-shown work order is worse than a wrapped one. */
+.line-id .mono {
+  font-size: var(--t-lg); font-weight: 800; letter-spacing: -0.02em; color: var(--ink);
+  overflow-wrap: anywhere;
+}
+/* The die is the other thing read off a row at speed. Monospaced, boxed, and
+   never allowed to blend into the project text beside it. */
 .die {
-  font-family: var(--mono); font-size: 11.5px; font-weight: 700;
+  font-family: var(--mono); font-size: var(--t-xs); font-weight: 700;
   background: var(--accent-soft); color: var(--accent);
-  padding: 2px 7px; border-radius: 5px; letter-spacing: -0.01em;
+  padding: 3px var(--s2); border-radius: var(--r-xs); letter-spacing: -0.01em;
   border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
+  white-space: nowrap;
 }
 .badge-bo {
   display: inline-flex; align-items: center; gap: 3px;
-  font-size: 10.5px; font-weight: 800; letter-spacing: .04em;
-  background: var(--bad-soft); color: var(--bad); padding: 2px 7px; border-radius: 5px;
+  font-size: 11px; font-weight: 800; letter-spacing: .04em;
+  background: var(--bad-soft); color: var(--bad); padding: 3px var(--s2); border-radius: var(--r-xs);
 }
-.line-where { font-size: 13px; color: var(--ink-2); margin-top: 3px; }
+.line-where {
+  font-size: var(--t-sm); color: var(--ink-2); margin-top: 3px;
+  overflow-wrap: anywhere;
+}
 .line-note { margin-top: 3px; }
 .line-usernote {
-  display: flex; align-items: flex-start; gap: 5px; margin-top: 5px;
-  font-size: 12.5px; color: var(--ink-2);
-  background: var(--warn-soft); border-radius: 6px; padding: 4px 8px;
+  display: flex; align-items: flex-start; gap: var(--s2); margin-top: var(--s2);
+  font-size: var(--t-sm); color: var(--ink-2);
+  background: var(--warn-soft); border-radius: var(--r-xs); padding: var(--s1) var(--s2);
+  overflow-wrap: anywhere;
 }
-.line-usernote svg { flex-shrink: 0; margin-top: 2px; color: var(--warn); }
+.line-usernote svg { flex-shrink: 0; margin-top: 3px; color: var(--warn); }
 
-.line-qty { flex-shrink: 0; text-align: right; min-width: 62px; display: flex; align-items: baseline; gap: 4px; justify-content: flex-end; }
-.line-qty .mono { font-size: 14.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.line-date { flex-shrink: 0; width: 68px; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.line-qty { flex-shrink: 0; text-align: right; min-width: 72px; display: flex; align-items: baseline; gap: var(--s1); justify-content: flex-end; }
+.line-qty .mono { font-size: var(--t-lg); font-weight: 800; font-variant-numeric: tabular-nums; }
+.line-date { flex-shrink: 0; width: 74px; font-size: var(--t-sm); color: var(--ink-2); white-space: nowrap; }
 
-.line-tools { flex-shrink: 0; display: flex; gap: 2px; }
+/* Five icons per row is a lot of target in a small space. They get real size
+   and a gap wide enough that a gloved thumb cannot catch two at once. */
+.line-tools { flex-shrink: 0; display: flex; gap: var(--s1); }
 .line-iconbtn {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; padding: 0; border-radius: 7px;
+  width: var(--ctl); height: var(--ctl); padding: 0; border-radius: var(--r-sm);
   background: none; border: 1px solid transparent; color: var(--ink-3); cursor: pointer;
+  box-shadow: none; min-height: 0;
   transition: color .12s, background .12s, border-color .12s;
 }
 .line-iconbtn:hover { color: var(--ink); background: var(--panel); border-color: var(--line); }
@@ -536,24 +774,29 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 
 /* segmented status control */
 
+/* Three explicit states, each its own target, each at least --ctl tall. The
+   selected one names itself in words as well as colour and icon; the other two
+   stay icon-only so the control does not grow to the width of three labels. */
 .line-status { flex-shrink: 0; }
 .seg {
   display: inline-flex; background: var(--panel-2);
-  border: 1px solid var(--line); border-radius: 9px; padding: 2px; gap: 2px;
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 3px; gap: 3px;
 }
 .seg-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 11px; border-radius: 7px; border: none; background: none;
-  color: var(--ink-3); font-size: 12.5px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 36px; min-width: 40px;
+  padding: 6px var(--s3); border-radius: var(--r-sm); border: none; background: none;
+  color: var(--ink-3); font-size: var(--t-sm); font-weight: 700; cursor: pointer;
+  box-shadow: none;
   transition: background .15s, color .15s, box-shadow .15s;
 }
 .seg-btn:hover { color: var(--ink); background: var(--panel); }
 .seg-btn .seg-label { display: none; }
-.seg-btn.on { background: var(--panel); box-shadow: 0 1px 3px rgba(16,24,32,.12); }
+.seg-btn.on { background: var(--panel); box-shadow: var(--shadow-1); }
 .seg-btn.on .seg-label { display: inline; }
 .seg-btn.on.mute { color: var(--ink-2); }
-.seg-btn.on.work { color: var(--work); background: var(--work-soft); box-shadow: none; }
-.seg-btn.on.ok   { color: var(--ok);   background: var(--ok-soft);   box-shadow: none; }
+.seg-btn.on.work { color: var(--work); background: var(--work-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--work) 30%, transparent); }
+.seg-btn.on.ok   { color: var(--ok);   background: var(--ok-soft);   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ok) 30%, transparent); }
 
 .showmore { margin: 10px 14px 12px; }
 
@@ -568,19 +811,20 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   animation: bulkin .18s cubic-bezier(.4,0,.2,1);
 }
 @keyframes bulkin { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
-.bulk-count { font-size: 13px; font-weight: 600; white-space: nowrap; }
-.bulkbar .spacer { margin-left: 4px; }
+.bulk-count { font-size: var(--t-md); font-weight: 700; white-space: nowrap; }
+.bulkbar .spacer { margin-left: var(--s1); }
 .bulk-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: rgba(255,255,255,.14); border: none; color: inherit;
-  padding: 7px 13px; border-radius: 999px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: var(--s2);
+  min-height: var(--tap);
+  background: rgba(255,255,255,.14); border: none; color: inherit; box-shadow: none;
+  padding: var(--s2) var(--s4); border-radius: var(--r-pill); font-size: var(--t-sm); font-weight: 700; cursor: pointer;
   transition: background .12s;
 }
-.bulk-btn:hover { background: rgba(255,255,255,.28); }
+.bulk-btn:hover:not(:disabled) { background: rgba(255,255,255,.28); border-color: transparent; }
 .bulk-x {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; padding: 0; border-radius: 999px;
-  background: none; border: none; color: inherit; opacity: .65; cursor: pointer;
+  width: var(--tap); height: var(--tap); min-height: 0; padding: 0; border-radius: var(--r-pill);
+  background: none; border: none; color: inherit; opacity: .7; cursor: pointer; box-shadow: none;
 }
 .bulk-x:hover { opacity: 1; background: rgba(255,255,255,.14); }
 
@@ -602,7 +846,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 .badge-down {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
-  background: var(--bad); color: #fff; padding: 3px 9px; border-radius: 999px;
+  background: var(--bad); color: var(--on-fill); padding: 3px 9px; border-radius: 999px;
 }
 .su-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; padding: 13px 15px; }
 .su-label { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); margin-bottom: 5px; }
@@ -627,22 +871,41 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 .toast-action button:hover { background: rgba(255,255,255,.32); }
 
 @media (max-width: 860px) {
-  .seg-btn { padding: 8px 9px; }
+  .seg-btn { padding: 6px var(--s2); }
   .seg-btn.on .seg-label { display: none; }
 }
 
 @media (max-width: 720px) {
-  .centre-head { position: static; margin: -12px 0 4px; }
-  .centre-title { font-size: 19px; }
+  .centre-head { position: static; margin: calc(var(--s3) * -1) 0 var(--s1); }
+  .centre-title { font-size: 23px; }
   .centre-stats { width: 100%; }
-  .cstat { flex: 1; min-width: 0; padding: 7px 4px; }
+  .cstat { flex: 1; min-width: 0; padding: var(--s2) 2px; }
+  .cstat b { font-size: 20px; }
+  .cstat i { font-size: 9.5px; letter-spacing: .04em; }
   .searchwrap { flex: 1; }
   .searchwrap input { width: 100%; }
-  .line { flex-wrap: wrap; gap: 9px; padding: 12px; }
-  .line-main { flex-basis: calc(100% - 34px); }
-  .line-status { margin-left: auto; }
-  .seg-btn { padding: 9px 12px; }
-  .bulkbar { left: 12px; right: 12px; transform: none; border-radius: 14px; }
+
+  /* A row becomes three bands on a phone: what the job is, then the numbers
+     and the tools, then the status control across the full width — the one
+     thing on the row an operator actually presses, given the whole edge to
+     land on rather than a corner shared with five icon buttons. */
+  .line { flex-wrap: wrap; gap: var(--s2); padding: var(--s3) var(--s3) var(--s3) var(--s4); }
+  .line-main { flex-basis: calc(100% - var(--tap) - var(--s3)); }
+  .line-qty { min-width: 0; }
+  .line-tools { margin-left: auto; }
+  .line-status { flex-basis: 100%; margin-left: 0; }
+  .seg { width: 100%; }
+  .seg-btn { flex: 1; min-height: var(--tap); padding: 6px var(--s2); }
+  .seg-btn.on .seg-label { display: inline; }
+
+  .dgroup-body { border-radius: var(--r-sm); }
+  /* Above the phone's home indicator, not under it. */
+  .bulkbar {
+    left: var(--s3); right: var(--s3); transform: none; border-radius: var(--r-lg);
+    bottom: calc(var(--s4) + env(safe-area-inset-bottom, 0px));
+    flex-wrap: wrap; padding: var(--s2) var(--s3);
+  }
+  .bulk-btn { flex: 1; justify-content: center; }
   @keyframes bulkin { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 }
 
@@ -710,33 +973,51 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line-soft);
 }
 .bo-flagrow {
-  gap: 10px; align-items: flex-start; padding: 11px 13px;
-  background: var(--bad-soft); border-radius: 8px; cursor: pointer;
+  gap: var(--s3); align-items: flex-start; padding: var(--s3) var(--s4);
+  background: var(--bad-soft); border-radius: var(--r-sm); cursor: pointer;
+  min-height: var(--tap);
 }
-.bo-flagrow input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--bad); }
+.bo-flagrow input { margin-top: 1px; accent-color: var(--bad); }
 .of-total { font-style: normal; color: var(--ink-3); font-weight: 500; margin-left: 5px; }
 
+/* One chase list per person. The heading is the person. */
+.bo-grouphead {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s1) var(--s2) 0; min-height: var(--ctl);
+}
+.bo-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: var(--r-pill); flex-shrink: 0;
+  background: var(--accent-soft); color: var(--accent);
+  font-size: var(--t-sm); font-weight: 800;
+}
+.bo-grouphead.none .bo-avatar { background: var(--bad-soft); color: var(--bad); }
 .bo-who {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12.5px; font-weight: 800; letter-spacing: .03em;
+  display: inline-flex; align-items: center; gap: var(--s2);
+  font-size: var(--t-lg); font-weight: 800; letter-spacing: -0.015em;
   color: var(--ink); text-transform: none;
 }
-.bo-who.none { color: var(--warn); }
+.bo-grouphead.none .bo-who { color: var(--bad); }
 
 .bo-line .line-main { flex: 1; }
-.bo-short { color: var(--bad); font-weight: 700; }
+.bo-qty { min-width: 96px; flex-wrap: wrap; justify-content: flex-end; }
+.bo-short { color: var(--bad); font-weight: 800; }
 .line-bonote {
-  display: flex; align-items: flex-start; gap: 5px; margin-top: 4px;
-  font-size: 12.5px; color: var(--ink-2);
+  display: flex; align-items: flex-start; gap: var(--s2); margin-top: var(--s1);
+  font-size: var(--t-sm); color: var(--ink-2); overflow-wrap: anywhere;
 }
-.line-bonote svg { flex-shrink: 0; margin-top: 2px; color: var(--bad); }
+.line-bonote svg { flex-shrink: 0; margin-top: 3px; color: var(--ink-3); }
+.line-bonote.from-sheet svg { color: var(--bad); }
 .bo-sheetnote {
-  display: flex; align-items: flex-start; gap: 6px; margin-top: 12px;
-  font-size: 12.5px; color: var(--ink-2);
-  background: var(--panel-2); border: 1px solid var(--line-soft);
-  border-radius: 7px; padding: 8px 10px;
+  display: flex; align-items: flex-start; gap: var(--s2); margin-top: var(--s3);
+  font-size: var(--t-sm); color: var(--ink-2);
+  background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 22%, transparent);
+  border-radius: var(--r-sm); padding: var(--s3);
 }
 .bo-sheetnote svg { flex-shrink: 0; margin-top: 2px; color: var(--warn); }
+.bo-sheetnote strong { color: var(--ink); }
+/* Long enough to actually explain the third state, so it gets room to read. */
+.bo-tristate { color: var(--ink-2); line-height: 1.5; margin-top: 3px; max-width: 60ch; }
 
 /* ---------- shift update page ---------- */
 
@@ -752,8 +1033,15 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 .linkbtn:hover { background: var(--accent-soft); }
 
 .su-when { display: flex; flex-direction: column; align-items: flex-end; gap: 0; }
-.su-when .subtabs { margin-top: 8px; }
-.su-date { width: auto; padding: 6px 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.su-when .subtabs { margin-top: var(--s2); }
+.su-date { width: auto; padding: var(--s2) var(--s3); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Writing and reading are different jobs, and the page says which one it is
+   in — a mode you can be in by accident is a mode that loses work. */
+.su-mode { flex-shrink: 0; }
+.su-mode .seg-btn { min-width: 0; }
+.su-mode .seg-btn.on { color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent); }
+.su-head-page.reading { border-bottom-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
 
 /* One card per machine. Two up on a desk monitor, one up on a tablet at the
    machine — the shift update is written on both. */
@@ -768,40 +1056,83 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   overflow: hidden; transition: border-color .16s ease, box-shadow .16s ease;
 }
 .sucard:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-/* A filled-in card gets a green spine, so what is left to write is obvious
-   at a glance without reading any of it. Kept off box-shadow so it survives
-   the focus ring. */
+/* A written-up card is obvious without reading a word of it: green spine,
+   green header, and a tick against the machine name. What is left to write is
+   then simply everything that is still plain. Kept off box-shadow so it
+   survives the focus ring. */
 .sucard.filled::before {
-  content: ''; position: absolute; inset: 0 auto 0 0; width: 3px;
-  background: var(--ok);
+  content: ''; position: absolute; inset: 0 auto 0 0; width: 4px;
+  background: var(--ok); z-index: 1;
 }
+.sucard.filled .sucard-head {
+  background: var(--ok-soft);
+  border-bottom-color: color-mix(in srgb, var(--ok) 22%, transparent);
+}
+.sucard-tick {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: var(--r-pill); flex-shrink: 0;
+  background: var(--ok); color: var(--on-fill);
+}
+
+/* Down is not a status chip. It is the headline for that machine's shift. */
+.sucard.down { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.sucard-down {
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  padding: var(--s3) var(--s4); background: var(--bad); color: var(--on-fill);
+  font-size: var(--t-sm);
+}
+.sucard-down strong { font-size: var(--t-md); font-weight: 800; letter-spacing: .01em; }
+.sucard-down span { opacity: .85; }
+.sucard-down svg { flex-shrink: 0; }
 
 .sucard-head {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 9px 13px; border-bottom: 1px solid var(--line-soft); background: var(--panel-2);
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  padding: var(--s2) var(--s4); border-bottom: 1px solid var(--line-soft); background: var(--panel-2);
+  min-height: var(--ctl);
 }
-.sucard-name { font-weight: 700; font-size: 13.5px; letter-spacing: -0.01em; }
-.sucard-sub { font-size: 11px; color: var(--ink-3); }
-.sucard-ops { display: flex; align-items: center; gap: 6px; }
+.sucard-name { font-weight: 800; font-size: var(--t-md); letter-spacing: -0.01em; }
+.sucard-sub { font-size: var(--t-xs); color: var(--ink-3); }
+.sucard-ops { display: flex; align-items: center; gap: var(--s2); }
 .sucard-ops > span { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); }
-.sucard-ops input { width: 58px; padding: 4px 7px; text-align: center; font-variant-numeric: tabular-nums; }
+.sucard-ops input { width: 64px; padding: 4px var(--s2); text-align: center; font-variant-numeric: tabular-nums; }
 
-.sucard-body { padding: 12px 13px; display: grid; gap: 11px; }
-.sucard-body textarea { min-height: 0; font-size: 13px; }
+.sucard-body { padding: var(--s3) var(--s4); display: grid; gap: var(--s3); }
+.sucard-body textarea { min-height: 0; font-size: var(--t-sm); }
 
-.sugs { padding: 0 13px 11px; display: grid; gap: 7px; }
-.sug { display: flex; align-items: flex-start; gap: 8px; }
+/* Two sources of suggestion, boxed apart. What the tracker watched happen this
+   shift is fact; the workbook block is a snapshot that may be days old, and
+   mixing them is how yesterday's schedule ends up in tonight's update. */
+.sugs { padding: 0 var(--s4) var(--s3); display: grid; gap: var(--s2); }
+.sugblock { border: 1px solid var(--line-soft); border-radius: var(--r-sm); overflow: hidden; }
+.sugblock.live { border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+.sugblock-head {
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  padding: var(--s2) var(--s3);
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+  background: var(--panel-2); color: var(--ink-2);
+}
+.sugblock.live .sugblock-head { background: var(--ok-soft); color: var(--ok); }
+.sugblock-count {
+  margin-left: auto; font-variant-numeric: tabular-nums;
+  background: var(--ok); color: var(--on-fill);
+  border-radius: var(--r-pill); padding: 1px 7px;
+}
+.sugblock .sug { padding: var(--s2) var(--s3); }
+.sugblock .sug + .sug { border-top: 1px solid var(--line-soft); }
+
+.sug { display: flex; align-items: flex-start; gap: var(--s2); }
 .sug-label {
-  flex-shrink: 0; width: 108px; padding-top: 4px;
+  flex-shrink: 0; width: 104px; padding-top: var(--s2);
   font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
   color: var(--ink-3); line-height: 1.3;
 }
-.sug-items { display: flex; flex-wrap: wrap; gap: 4px; }
+.sug-items { display: flex; flex-wrap: wrap; gap: var(--s1); }
 .sug-chip {
-  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
-  padding: 3px 8px; border-radius: 999px; cursor: pointer;
-  font-size: 11.5px; font-weight: 500; text-align: left;
+  display: inline-flex; align-items: center; gap: var(--s1); max-width: 100%;
+  min-height: 32px; padding: var(--s1) var(--s3); border-radius: var(--r-pill); cursor: pointer;
+  font-size: var(--t-sm); font-weight: 500; text-align: left;
   background: var(--panel-2); color: var(--ink-2); border: 1px dashed var(--line);
+  box-shadow: none;
   transition: all .14s ease;
 }
 .sug-chip:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); border-style: solid; }
@@ -880,13 +1211,45 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 .line-iconbtn.rush { color: var(--warn); }
 .line-iconbtn.moved { color: var(--accent); }
 
-.rush-flagrow { align-items: flex-start; gap: 10px; margin-top: 14px; }
-.rush-flagrow input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--warn); }
-.rush-quick { display: flex; gap: 2px; margin-top: 5px; flex-wrap: wrap; }
+.rush-flagrow {
+  align-items: flex-start; gap: var(--s3); margin-top: var(--s4);
+  padding: var(--s3) var(--s4); min-height: var(--tap);
+  background: var(--warn-soft); border-radius: var(--r-sm); cursor: pointer;
+}
+.rush-flagrow input { margin-top: 1px; accent-color: var(--warn); }
+.rush-quick { display: flex; gap: var(--s1); margin-top: var(--s2); flex-wrap: wrap; }
 
 .rush-line .line-main { flex: 1; }
-.rush-need { font-weight: 700; font-variant-numeric: tabular-nums; }
-.rush-need.late { color: var(--bad); }
+.rush-line.is-late::before { background: var(--bad); }
+
+/* The need-by date leads the row on this page — it is what the list is sorted
+   and bucketed by, and what someone is scanning for. */
+.rush-when {
+  flex-shrink: 0; width: 96px; text-align: left;
+  padding-right: var(--s3); border-right: 1px solid var(--line-soft);
+  margin-right: var(--s1);
+}
+.rush-need {
+  font-weight: 800; font-size: var(--t-lg); font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em; line-height: 1.15; color: var(--warn);
+}
+.rush-when.late .rush-need { color: var(--bad); }
+.rush-needcap {
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--ink-3); margin-top: 2px;
+}
+
+/* A rush nobody was told about is the one that gets missed. */
+.line-rushband.nobody { color: var(--bad); }
+.line-rushband.nobody svg { color: var(--bad); }
+
+@media (max-width: 720px) {
+  .rush-when {
+    width: auto; border-right: 0; padding-right: 0; margin-right: 0;
+    flex-basis: 100%; display: flex; align-items: baseline; gap: var(--s2);
+  }
+  .rush-needcap { margin-top: 0; }
+}
 
 /* ---------- putting a line on a machine ---------- */
 
@@ -910,57 +1273,89 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 /* The first thing anyone switching to a machine's tab wants to know: what is
    it actually doing right now. Sits above everything else on the page rather
    than wherever it happens to land in the date-grouped queue below. */
+/* Question one of three, so it outranks everything below it: a heavy purple
+   rail, a filled header rather than a tinted one, and rows with more air than
+   the queue gets. */
 .nowrun {
-  margin-top: 16px;
+  margin-top: var(--s4);
   border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--panel); overflow: hidden;
 }
-.nowrun.active { box-shadow: inset 3px 0 0 var(--work); }
-
-.nowrun-empty {
-  display: flex; align-items: center; gap: 8px;
-  padding: 11px 14px; background: var(--panel-2); color: var(--ink-3); font-size: 13px;
+.nowrun.active {
+  border-color: color-mix(in srgb, var(--work) 32%, var(--line));
+  box-shadow: inset 5px 0 0 var(--work), var(--shadow-2), var(--sheen);
 }
+
+/* An idle machine is a real answer, not an absence of one. Said plainly, in
+   the same slot the running work would occupy. */
+.nowrun-empty {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s4) var(--s5); background: var(--panel-2);
+  color: var(--ink-2); font-size: var(--t-md); font-weight: 600;
+}
+.nowrun-empty svg { color: var(--ink-3); flex-shrink: 0; }
+.nowrun-empty .muted { font-weight: 500; }
 
 .nowrun-head {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 14px; background: var(--work-soft); color: var(--work);
-  font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s3) var(--s5); background: var(--work); color: var(--on-fill);
+  font-size: var(--t-xs); font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
 }
 .nowrun-count {
-  margin-left: auto; background: var(--work); color: #fff;
-  border-radius: 999px; padding: 1px 9px; font-size: 11px; font-weight: 800;
+  margin-left: auto; background: var(--on-fill-soft); color: var(--on-fill);
+  border-radius: var(--r-pill); padding: 2px 10px; font-size: var(--t-xs); font-weight: 800;
 }
 
 .nowrun-line {
-  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-  padding: 12px 14px; border-bottom: 1px solid var(--line-soft);
+  display: flex; align-items: center; gap: var(--s5); flex-wrap: wrap;
+  padding: var(--s4) var(--s5); border-bottom: 1px solid var(--line-soft);
 }
 .nowrun-line:last-child { border-bottom: 0; }
-.nowrun-main { flex: 1; min-width: 160px; }
+.nowrun-line:hover { background: var(--panel-2); }
+.nowrun-main { flex: 1; min-width: 180px; }
+/* Quantity and how long it has been running, as one readable pair rather than
+   three fragments spread across the row. */
 .nowrun-meta {
-  display: flex; align-items: baseline; gap: 6px; flex-shrink: 0;
-  font-size: 13px;
+  display: flex; align-items: baseline; gap: var(--s2); flex-shrink: 0;
+  font-size: var(--t-sm);
 }
-.nowrun-since { white-space: nowrap; margin-left: 4px; }
+.nowrun-meta .mono { font-size: var(--t-lg); font-weight: 800; }
+.nowrun-since {
+  white-space: nowrap; margin-left: var(--s3);
+  display: inline-flex; align-items: center; gap: var(--s1);
+}
+/* The one action an operator takes over and over, so it is the biggest target
+   in the app. */
 .nowrun-done {
-  flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
-  padding: 6px 13px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
-  background: var(--ok-soft); color: var(--ok); border: 1px solid transparent;
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: var(--s2);
+  min-height: var(--ctl-lg); padding: 0 var(--s5); border-radius: var(--r-sm);
+  font-size: var(--t-md); font-weight: 700;
+  background: var(--ok-soft); color: var(--ok);
+  border: 1px solid color-mix(in srgb, var(--ok) 26%, transparent);
+  box-shadow: none;
 }
-.nowrun-done:hover { background: var(--ok); color: #fff; }
+.nowrun-done:hover:not(:disabled) { background: var(--ok); color: var(--on-fill); border-color: transparent; }
 
 @media (max-width: 720px) {
-  .nowrun-line { padding: 12px; }
-  .nowrun-meta { flex-basis: 100%; justify-content: space-between; }
+  .nowrun-line { padding: var(--s3) var(--s4); gap: var(--s3); }
+  /* Quantity and duration read together, then the action gets the full width
+     — a 48px button worth hitting one-handed. */
+  .nowrun-meta { flex: 1; justify-content: flex-start; }
+  .nowrun-done { width: 100%; justify-content: center; }
+  .nowrun-main { flex-basis: 100%; }
 }
 
 /* ---------- v2 refinements ---------- */
 
 /* The note / back-order / rush bands are annotations on a row, not content in
    their own right. Unbounded they stretch the full width of a desk monitor and
-   read as separate blocks; capped, they stay attached to the line above them. */
+   read as separate blocks; capped, they stay attached to the line above them.
+   The inner span needs min-width:0 or a long assignee name refuses to wrap and
+   pushes straight out of the band — "Krystyna Wojciechowska" is a real name. */
 .line-usernote, .line-boband, .line-rushband { max-width: 68ch; }
+.line-usernote > span, .line-boband > span, .line-rushband > span, .line-bonote > span {
+  min-width: 0; overflow-wrap: anywhere;
+}
 
 /* Sub-tabs carry the machine you are looking at — on a centre page that is the
    single most important piece of state, so the selected one is unmistakable. */
@@ -1012,3 +1407,148 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
 }
 .badge-moved svg { flex-shrink: 0; opacity: .7; }
 .movebtn .muted { line-height: 1.3; }
+
+/* ---------- phone tap targets ----------
+
+   Last in the sheet on purpose. Everything above sets the size a control wants
+   at desk width; this sets the size a thumb needs, and it has to win. Nothing
+   on a phone gets a reduced target — the compact variants exist to save width
+   on a monitor, not to shrink what someone in gloves has to land on. */
+
+@media (max-width: 720px) {
+  button, .btn, button.sm, .pill, .subtabs button, .dgroup-pick, .dgroup-toggle,
+  .linkbtn, .iconbtn, .line-iconbtn, .bulk-btn, .bulk-x, .sug-chip,
+  input, select, textarea, .donetoggle, .line-pick, .su-recentrow {
+    min-height: var(--tap);
+  }
+  input[type="checkbox"], input[type="radio"] { min-height: 0; }
+  /* A label wrapping a checkbox is the target, so it gets the height too. */
+  label.row, label.chiplabel { min-height: var(--tap); }
+
+  button.sm, .iconbtn, .line-iconbtn, .bulk-x { min-width: var(--tap); }
+  .line-iconbtn, .iconbtn { width: var(--tap); height: var(--tap); }
+  .pill { padding-left: var(--s4); padding-right: var(--s4); }
+
+  .whopick {
+    min-width: 0; width: 104px; max-width: 104px;
+    padding: 6px var(--s2); font-size: var(--t-sm);
+  }
+
+  /* Machines and filters each keep to one line and scroll sideways, rather
+     than wrapping to two rows apiece. Wrapped, they pushed the first actual
+     job — the thing the page is for — most of a screen down. */
+  .subtabs, .filterpills {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .subtabs::-webkit-scrollbar, .filterpills::-webkit-scrollbar { display: none; }
+  .subtabs button, .pill { flex-shrink: 0; }
+  .centre-filters { gap: var(--s2); }
+  .centre-filters > .searchwrap { flex-basis: 100%; }
+  .centre-filters .spacer { display: none; }
+}
+
+/* ---------- keyboard focus ----------
+
+   Last in the sheet, and stated as `box-shadow` plus a fallback `outline`.
+   Every control here sets its own box-shadow for elevation, so a focus rule
+   earlier in the file — or at lower specificity — silently loses and leaves
+   keyboard users with nothing at all. Only :focus-visible, so a mouse press
+   never shows it. */
+
+:focus-visible,
+button:focus-visible,
+.btn:focus-visible,
+nav.tabs button:focus-visible,
+.pill:focus-visible,
+.subtabs button:focus-visible,
+.seg-btn:focus-visible,
+.iconbtn:focus-visible,
+.line-iconbtn:focus-visible,
+.bulk-btn:focus-visible,
+.bulk-x:focus-visible,
+.sug-chip:focus-visible,
+.linkbtn:focus-visible,
+.nowrun-done:focus-visible,
+.dgroup-toggle:focus-visible,
+.dgroup-pick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: var(--ring);
+}
+
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  box-shadow: var(--ring);
+}
+
+/* A row selected by keyboard should be as obvious as one selected by thumb. */
+.line-pick:focus-within { background: var(--accent-soft); box-shadow: var(--ring); }
+
+/* ---------- setup ---------- */
+
+/* A fresh install is a to-do list, not a settings screen. Four steps, in the
+   order they have to happen; once they are all done this collapses to one
+   line of confirmation rather than continuing to nag. */
+.setup-steps { border-color: color-mix(in srgb, var(--accent) 28%, var(--line)); }
+.setup-list { list-style: none; margin: 0; padding: 0; }
+.setup-step {
+  display: flex; align-items: flex-start; gap: var(--s3);
+  padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line-soft);
+}
+.setup-step:last-child { border-bottom: 0; }
+.setup-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: var(--r-pill); flex-shrink: 0;
+  font-size: var(--t-sm); font-weight: 800;
+  background: var(--panel-2); color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.setup-step.done .setup-num { background: var(--ok); color: var(--on-fill); border-color: transparent; }
+.setup-label { font-weight: 700; }
+.setup-step.done .setup-label { color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--ink-3); }
+
+.setup-done { border-color: color-mix(in srgb, var(--ok) 32%, var(--line)); }
+.setup-done .body { gap: var(--s3); }
+.setup-tick {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: var(--r-pill);
+  background: var(--ok); color: var(--on-fill); flex-shrink: 0;
+}
+
+/* Backup and reset, folded shut. One of these wipes the device; it should take
+   a deliberate click to even see it. */
+.setup-advanced > summary {
+  display: flex; align-items: center; gap: var(--s2); cursor: pointer;
+  padding: var(--s3) var(--s4); min-height: var(--ctl);
+  font-size: var(--t-xs); text-transform: uppercase; letter-spacing: .07em;
+  font-weight: 800; color: var(--ink-2);
+  list-style: none;
+}
+.setup-advanced > summary::-webkit-details-marker { display: none; }
+.setup-advanced > summary .muted { text-transform: none; letter-spacing: 0; margin-left: auto; font-weight: 500; }
+.setup-advanced > summary svg { transition: transform .18s cubic-bezier(.4,0,.2,1); color: var(--ink-3); }
+.setup-advanced[open] > summary { border-bottom: 1px solid var(--line-soft); }
+.setup-advanced[open] > summary svg { transform: rotate(90deg); }
+
+.dangerzone {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  margin-top: var(--s5); padding: var(--s4);
+  border: 1px solid color-mix(in srgb, var(--bad) 30%, var(--line));
+  border-radius: var(--r-sm); background: var(--bad-soft);
+}
+.dangerzone strong { color: var(--bad); }
+.dangerzone .muted { max-width: 52ch; }
+
+.import-stats {
+  border: 1px solid var(--line-soft); border-radius: var(--r-sm);
+  overflow: hidden; margin-bottom: var(--s4);
+}
+.import-sheets { border: 1px solid var(--line-soft); border-radius: var(--r-sm); }
+.import-sheets .row { gap: var(--s2); flex-wrap: wrap; }
+
+/* Banners carry real explanation now, so the text needs room to be read. */
+.banner { line-height: 1.5; align-items: flex-start; }
+.banner strong { font-weight: 700; }
+.banner .small { opacity: .88; }

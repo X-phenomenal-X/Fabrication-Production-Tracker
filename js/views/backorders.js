@@ -30,7 +30,7 @@ export function backOrderDialog(task, rerender) {
   const resolved = resolveBackOrder(task);
   const max = task.qty ?? null;
 
-  const flag = el('input', { type: 'checkbox', checked: resolved.on, style: { width: 'auto' } });
+  const flag = el('input', { type: 'checkbox', checked: resolved.on });
   const qty = el('input', {
     type: 'number', min: '0', inputmode: 'numeric',
     max: max == null ? undefined : String(max),
@@ -74,23 +74,35 @@ export function backOrderDialog(task, rerender) {
     el('label.row.bo-flagrow', {},
       flag,
       el('span', {},
-        el('strong', {}, 'Flag as back order'),
-        resolved.fromSheet
-          ? el('div.small.muted', {}, 'The workbook already reports this line as B/O. Unticking records that it is resolved.')
-          : null)),
+        el('strong', {}, 'Short of material'),
+        // The flag has three states and only two of them are obvious. Said in
+        // full here, because "unticking a box the workbook ticked" is the one
+        // that gets misread — it records a resolution, it does not erase one.
+        el('div.small.bo-tristate', {},
+          resolved.fromSheet
+            ? 'The workbook reports this line short. Leave it ticked while it '
+              + 'still is; untick it once the material has landed, and the '
+              + 'tracker will keep showing it as resolved even though the '
+              + 'sheet still says B/O.'
+            : 'The workbook does not report this line short. Ticking it flags a '
+              + 'shortage found on the floor, and it stays flagged through the '
+              + 'next import.'))),
 
     el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: '12px', marginTop: '14px' } },
       el('label.field', {},
-        el('span', {}, 'Pieces short', max != null ? el('em.of-total', {}, `of ${fmtNum(max)}`) : null),
+        el('span', {}, 'Pieces short', max != null ? el('em.of-total', {}, `of ${fmtNum(max)} on the line`) : null),
         qty),
       el('label.field', {},
         el('span', {}, 'Assigned to'),
         who, nameInput)),
 
+    // Two different units, and mixing them up changes what gets ordered — so
+    // they are shown side by side and labelled, never merged into one number.
     resolved.sheetShort ? el('div.bo-sheetnote', {},
-      icon('alert', { size: 12 }),
-      el('span', {}, el('strong', {}, 'Workbook says: '), resolved.sheetShort,
-        el('span.muted', {}, ' — the sheet counts bars, the field above counts pieces'))) : null,
+      icon('alert', { size: 14 }),
+      el('span', {},
+        el('strong', {}, 'The workbook counts bars, this form counts pieces.'),
+        el('div', {}, `Sheet says: ${resolved.sheetShort}`))) : null,
 
     el('label.field', { style: { marginTop: '12px' } }, el('span', {}, 'Back order note'), note),
 
@@ -149,9 +161,11 @@ export function renderBackOrders(rerender, go) {
 
   const head = el('div.centre-head', {},
     el('div.row.centre-title-row', {},
-      el('div', {},
-        el('h1.centre-title', {}, 'Back orders'),
-        el('div.small.muted', {}, 'Lines short of material, across every centre')),
+      el('div.centre-ident', {},
+        el('span.centre-rail', { 'aria-hidden': 'true' }),
+        el('div', {},
+          el('h1.centre-title', {}, 'Back orders'),
+          el('div.centre-sub', {}, 'Lines short of material, across every centre'))),
       el('span.spacer'),
       el('div.centre-stats', {},
         el('div.cstat' + (total ? '.bad' : ''), {}, el('b', {}, fmtNum(total)), el('i', {}, 'lines')),
@@ -177,16 +191,18 @@ export function renderBackOrders(rerender, go) {
 
   const sections = groups.map((g) => {
     const short = g.rows.reduce((a, r) => a + (r.bo.qty || 0), 0);
-    return el('section.dgroup', {},
-      el('div.dgroup-head', {},
-        el('span.bo-who' + (g.assignee ? '' : '.none'), {},
-          icon(g.assignee ? 'check' : 'alert', { size: 13 }),
-          g.assignee || 'Unassigned'),
+    // The person is the heading, not a label on one — this page is a set of
+    // chase lists, one per person, and an unowned list is the urgent one.
+    return el('section.dgroup.bo-group', {},
+      el('div.bo-grouphead' + (g.assignee ? '' : '.none'), {},
+        el('span.bo-avatar', { 'aria-hidden': 'true' },
+          g.assignee ? g.assignee.slice(0, 1).toUpperCase() : '?'),
+        el('span.bo-who', {}, g.assignee || 'Nobody is chasing these'),
         el('span.dgroup-count', {}, String(g.rows.length)),
         el('span.spacer'),
         short ? el('span.small.muted', {}, `${fmtNum(short)} pcs short`) : null),
 
-      el('div.dgroup-body', {}, ...g.rows.map(({ task, bo, machine }) => el('div.line.bo-line', {
+      el('div.dgroup-body', {}, ...g.rows.map(({ task, bo, machine }) => el('div.line.bo-line.is-bo', {
         style: { cursor: 'pointer' },
         onclick: () => backOrderDialog(task, rerender),
       },
@@ -198,15 +214,17 @@ export function renderBackOrders(rerender, go) {
           el('div.line-where', {},
             el('span', {}, task.project || '—'),
             task.floor ? el('span.muted', {}, ' · ' + task.floor) : null),
-          bo.note || bo.sheetShort
-            ? el('div.line-bonote', {}, icon('alert', { size: 12 }),
-                el('span', {}, bo.note || bo.sheetShort)) : null),
+          bo.note ? el('div.line-bonote', {}, icon('note', { size: 13 }),
+            el('span', {}, bo.note)) : null,
+          // Bars, kept visibly separate from the pieces count beside it.
+          bo.sheetShort ? el('div.line-bonote.from-sheet', {}, icon('alert', { size: 13 }),
+            el('span', {}, el('span.muted', {}, 'workbook: '), bo.sheetShort)) : null),
 
-        el('div.line-qty', {},
+        el('div.line-qty.bo-qty', {},
           bo.qty != null
             ? el('span.mono.bo-short', {}, fmtNum(bo.qty))
-            : el('span.small.muted', {}, '—'),
-          el('span.small.muted', {}, bo.qty != null ? 'short' : '')),
+            : el('span.mono.muted', {}, '—'),
+          el('span.small.muted', {}, bo.qty != null ? 'pcs short' : 'not counted')),
 
         el('div.line-date.hide-sm', {}, fmtDate(task.cuttingDate))))));
   });

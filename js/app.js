@@ -1,6 +1,7 @@
 /* Shell: tabs, the identity picker, and the render loop. */
 
-import { el, clear, chip } from './ui.js';
+import { el, clear, chip, icon } from './ui.js';
+import { allRush, allBackOrders, hasTasks } from './model.js';
 import {
   state, loadLocal, save, onChange, me, sharedFileName, cloudEnabled, cloudHost,
   initCloud, pullCloud, pullSharedFile,
@@ -14,15 +15,21 @@ import { SHIFTS, shiftAt } from './shifts.js';
 
 // One page per work centre, so an operator opens their own machine's queue
 // instead of scrolling past everyone else's.
+//
+// The nav is split in two because the pages are two different kinds of thing.
+// `centre` pages are where a shift is actually run — an operator lives on one
+// of them. `tool` pages are department-wide and visited: chase a shortage,
+// write the update, set the app up. Mixing them in one row of eight made the
+// four that matter no easier to find than Setup.
 const TABS = [
-  { key: 'rolling', label: 'Rolling', render: makeCentreView('Rolling') },
-  { key: 'fom', label: 'FOM', render: makeCentreView('FOM') },
-  { key: 'cnc', label: 'CNC & FMC', render: makeCentreView('CNC') },
-  { key: 'punch', label: 'Multi Punch', render: makeCentreView('Punch') },
-  { key: 'rush', label: 'Rush', render: renderRush },
-  { key: 'backorders', label: 'Back Orders', render: renderBackOrders },
-  { key: 'shift', label: 'Shift Update', render: renderShiftUpdate },
-  { key: 'setup', label: 'Setup', render: renderData },
+  { key: 'rolling', label: 'Rolling', kind: 'centre', render: makeCentreView('Rolling') },
+  { key: 'fom', label: 'FOM', kind: 'centre', render: makeCentreView('FOM') },
+  { key: 'cnc', label: 'CNC & FMC', kind: 'centre', render: makeCentreView('CNC') },
+  { key: 'punch', label: 'Multi Punch', kind: 'centre', render: makeCentreView('Punch') },
+  { key: 'rush', label: 'Rush', kind: 'tool', icon: 'bolt', render: renderRush },
+  { key: 'backorders', label: 'Back Orders', short: 'B/O', kind: 'tool', icon: 'alert', render: renderBackOrders },
+  { key: 'shift', label: 'Shift Update', short: 'Shift', kind: 'tool', icon: 'note', render: renderShiftUpdate },
+  { key: 'setup', label: 'Setup', kind: 'tool', icon: 'gear', render: renderData },
 ];
 
 let current = location.hash.slice(1) || 'rolling';
@@ -40,8 +47,10 @@ function go(key) {
 
 function whoAmI() {
   const people = state.people.length ? state.people : [];
-  const sel = el('select', {
-    style: { width: 'auto', minWidth: '120px' },
+  // Width is a layout decision and belongs in the stylesheet — as an inline
+  // style it beat the phone rules and squeezed the centre scroller to nothing.
+  const sel = el('select.whopick', {
+    'aria-label': 'Who are you?',
     onchange: (e) => {
       if (e.target.value === '__add') {
         const name = prompt('Your name');
@@ -65,28 +74,87 @@ function whoAmI() {
   return sel;
 }
 
+/* Counts that belong on the nav rather than only inside the page: an operator
+   should not have to open Rush to learn there is rush work. Cheap enough to
+   recompute per render — both walk the same in-memory task list the page does. */
+function toolBadge(key) {
+  if (!hasTasks()) return null;
+  if (key === 'rush') {
+    const n = allRush().length;
+    return n ? el('span.tab-badge.warn', {}, String(n)) : null;
+  }
+  if (key === 'backorders') {
+    // allBackOrders() returns one entry per assignee, not per line — the badge
+    // has to count the shortages, not the people chasing them.
+    const n = allBackOrders().reduce((a, g) => a + g.rows.length, 0);
+    return n ? el('span.tab-badge', {}, String(n)) : null;
+  }
+  return null;
+}
+
+function tabButton(t) {
+  const on = t.key === current;
+  // Two labels, one shown at a time by width: a phone's centre scroller has no
+  // room for "Back Orders" and "Shift Update" spelled out next to four machines.
+  return el('button' + (t.short ? '.has-short' : ''), {
+    'aria-current': String(on),
+    title: t.label,
+    // Both labels are in the DOM and CSS picks one by width, so the accessible
+    // name is stated outright — otherwise a screen reader reads the pair
+    // concatenated, as "Back OrdersB/O".
+    'aria-label': t.label,
+    onclick: () => go(t.key),
+  },
+    t.icon ? icon(t.icon, { size: 14 }) : null,
+    el('span.tab-label', {}, t.label),
+    t.short ? el('span.tab-short', { 'aria-hidden': 'true' }, t.short) : null,
+    toolBadge(t.key));
+}
+
 function header() {
   const shift = SHIFTS[shiftAt()];
   const shared = sharedFileName();
 
   return el('header.top', {},
-    el('div.brand', {}, 'Cutting',
-      el('small', {}, 'BV Glazing · production tracker')),
-    el('span.chip' + (shift.full ? '' : '.warn'), { title: 'Current shift' },
-      shift.label + (shift.full ? '' : ` · ${shift.crew} crew`)),
-    cloudEnabled()
-      ? chip('synced', 'ok', 'Syncing across devices via ' + cloudHost())
-      : shared
-        ? chip('shared file', 'ok', 'Connected to ' + shared)
-        : chip('this device only', 'mute',
-            'Not syncing — updates stay on this device. Set it up under Setup.'),
-    el('nav.tabs', {}, ...TABS.map((t) => el('button', {
-      'aria-current': String(t.key === current),
-      onclick: () => go(t.key),
-    }, t.label))),
-    el('div', { style: { marginLeft: '8px' } }, whoAmI())
+    el('div.hdr-id', {},
+      el('div.brand', {}, 'Cutting',
+        el('small', {}, 'BV Glazing · production tracker')),
+      el('span.chip' + (shift.full ? '' : '.warn'), { title: 'Current shift' },
+        shift.label + (shift.full ? '' : ` · ${shift.crew} crew`)),
+      cloudEnabled()
+        ? chip('synced', 'ok', 'Syncing across devices via ' + cloudHost())
+        : shared
+          ? chip('shared file', 'ok', 'Connected to ' + shared)
+          : chip('this device only', 'mute',
+              'Not syncing — updates stay on this device. Set it up under Setup.')),
+
+    el('nav.tabs', { 'aria-label': 'Pages' },
+      el('div.tabgroup.centres', { role: 'group', 'aria-label': 'Production centres' },
+        ...TABS.filter((t) => t.kind === 'centre').map(tabButton)),
+      el('span.tabsep', { 'aria-hidden': 'true' }),
+      el('div.tabgroup.tools', { role: 'group', 'aria-label': 'Department tools' },
+        ...TABS.filter((t) => t.kind === 'tool').map(tabButton))),
+
+    el('div.hdr-right', {}, whoAmI())
   );
 }
+
+/* Sticky sections inside a page need to know how tall the app header is, or
+   they slide underneath it and hide their own first line. Measured rather than
+   assumed, because the header wraps differently at every width. */
+function measureHeader() {
+  const h = root.querySelector('header.top');
+  if (!h) return;
+  const set = () => document.documentElement.style
+    .setProperty('--hdr-h', Math.round(h.getBoundingClientRect().height) + 'px');
+  set();
+  if (typeof ResizeObserver === 'function') {
+    hdrObserver?.disconnect();
+    hdrObserver = new ResizeObserver(set);
+    hdrObserver.observe(h);
+  }
+}
+let hdrObserver = null;
 
 function render() {
   const tab = TABS.find((t) => t.key === current) || TABS[0];
@@ -95,6 +163,7 @@ function render() {
   // moving focus — tearing the DOM down mid-event throws.
   const next = el('main', {}, tab.render(scheduleRender, go));
   root.replaceChildren(header(), next);
+  measureHeader();
 }
 
 function scheduleRender() {

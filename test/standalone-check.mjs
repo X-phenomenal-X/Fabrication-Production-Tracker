@@ -36,7 +36,10 @@ step('localStorage usable: ' + await page.evaluate(() => {
 }));
 step('File System Access available: ' + await page.evaluate(() => 'showOpenFilePicker' in window));
 
-const tabs = await page.$$eval('nav.tabs button', (ns) => ns.map((n) => n.textContent.trim()));
+// Tool tabs carry a long label, a short one for narrow widths, and an
+// outstanding-count badge, so the stated accessible name is what to read.
+const tabs = await page.$$eval('nav.tabs button', (ns) =>
+  ns.map((n) => (n.getAttribute('aria-label') || n.textContent).trim()));
 step('tabs: ' + tabs.join(', '));
 if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Rush,Back Orders,Shift Update,Setup') {
   throw new Error('unexpected nav: ' + tabs.join(','));

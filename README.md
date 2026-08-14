@@ -423,8 +423,11 @@ npm install                        # once — installs esbuild + playwright
 node test/machines-check.mjs       # parses both workbooks, the back-order flag, the shift update
 node test/app-check.mjs            # walks every page: status, rush, back orders, assignment, shift update
 node test/cloud-check.mjs          # two devices against a mock cloud — do they converge?
+node test/visual-qa.mjs            # every screen at five widths in both themes — layout, targets, contrast
 node build.mjs && node test/standalone-check.mjs   # same against the built file, opened via file://
 ```
+
+`npm test` runs the first four.
 
 `test/app-check.mjs` writes screenshots to `test/screens/`. It covers the
 status control, undo, bulk apply, notes, line editing, the history trail,
@@ -445,16 +448,73 @@ never seen a workbook and must receive all of it; both then edit different
 lines and must converge without losing either. It also asserts a wrong key
 produces a sentence an operator can act on rather than a stack trace.
 
+### Visual QA
+
+`test/visual-qa.mjs` is the one that keeps the interface honest. It loads
+`test/fixture.mjs` — a **sanitized** development fixture, not the real
+workbooks — and walks every page at 390, 768, 1024, 1280 and 1440 in both
+light and dark, capturing the phone and desktop widths to
+`test/screens/qa/`.
+
+The fixture is deterministic and built to be awkward on purpose: 780 lines
+across all ten machines, every state the interface has to render (running,
+overdue, rush with and without an owner, sheet-flagged and hand-flagged and
+hand-*cleared* back orders, edited, moved between machines, machine down,
+completed), and text long enough to break a layout — a project called
+"Bayfront Residences at Old Mill Crossing — Phase 3 Podium & Amenity Level",
+a floor spanning six levels, an assignee named Krystyna Wojciechowska.
+
+What it asserts, rather than eyeballs:
+
+- **No horizontal overflow** at any of the five widths.
+- **Tap targets** — nothing under 44px on a phone, 32px anywhere else. It
+  measures the *label* around a checkbox, since that is what gets tapped.
+- **Contrast** — it computes the real rendered ratio for every state-carrying
+  pair against its actual background and fails under WCAG AA.
+- **Status is never colour alone** — every badge, stat, segment and rail must
+  also carry words or an icon.
+- **Keyboard focus is visible** — it focuses a control and asserts the
+  box-shadow actually changed.
+- **The phone header stays under 96px**, and **no nav tab is cut off at
+  1280px or wider**.
+- **Long text wraps** rather than spilling out of its band.
+- **Every control has an accessible name.**
+- **The bulk bar clears the safe area** and the **dialog footer is never
+  below the fold** on a phone.
+- **Reduced motion** disables every sampled transition and animation.
+- **200% zoom**, emulated as a 640px layout, which is what a 1280px monitor
+  at 200% actually is.
+
+Three real defects came out of writing it: the page-in animation put a
+`transform` on `.centre`, which made it the containing block for the fixed
+bulk-action bar and threw it to the bottom of a 9,000px document for 180ms
+after *every* re-render; the focus ring was being silently overridden by every
+control that set its own `box-shadow`; and the Back Orders nav badge was
+counting assignees instead of shortages.
+
 ## Interface notes
 
 - Everything is keyboard- and pointer-accessible; the segmented control uses
   `aria-pressed`, groups use `aria-expanded`. **Keyboard focus draws a visible
   ring** on every interactive element via `:focus-visible`, so it never shows
   for pointer users.
-- **Contrast meets WCAG AA.** `--ink-3` carries most of the secondary text on
-  the page — stat labels, dates, counts — and used to sit at 2.9:1 on white,
-  which fails. It is now 4.8:1 light and 5.1:1 dark. On a shop floor under
-  glare that is the difference between readable and squinted at.
+- **Contrast meets WCAG AA**, measured rather than assumed — `test/visual-qa.mjs`
+  computes every state-carrying pair against its real background. `--ink-3`
+  carries most of the secondary text on the page and is set against the
+  *darkest* surface it lands on, not against white: 5.4 / 5.2 / 4.8 across
+  panel, panel-2 and the page background.
+- **Filled semantic colours flip their ink.** In light mode the five semantics
+  take white at 5.3:1 or better; in dark mode they are deliberately light and
+  white on them lands around 2.2:1. One token, `--on-fill`, flips to near-black
+  in dark, which is why the purple "Running now" header is legible in both.
+- **Sizes come off one ladder.** Type (`--t-xs` … `--t-2xl`), space (`--s1` …
+  `--s7`), radius and control heights are tokens, so a panel on Rush and a
+  panel on Setup are the same object. Body text is 15px: these screens are
+  wall-mounted or sat back from.
+- **Controls are sized for gloves.** `--ctl` 40px ordinarily, `--ctl-lg` 48px
+  for the actions taken all shift (the Done button on a running line), `--tap`
+  44px as the floor for anything on a phone. Checkboxes stay 22px but sit
+  inside a 44px label.
 - **Elevation is tokenised** (`--shadow-1/2/3` plus `--sheen`) because dark
   mode cannot reuse light-mode shadows: a black shadow on a near-black surface
   is invisible, which is why the dark theme used to read completely flat. Dark
@@ -468,10 +528,20 @@ produces a sentence an operator can act on rather than a stack trace.
   is most of the confirmation you get that a tap landed.
 - Light and dark both ship; the palette is defined once as tokens and only the
   values change under `prefers-color-scheme: dark`.
-- **On a phone** the header collapses to one row — the tagline is dropped and
-  the nav moves below with `order`, reclaiming about 100px of vertical space
-  before any content. The nav scrolls horizontally in a single row rather than
-  wrapping to three.
+- **Navigation is two groups, not eight pages.** The four production centres
+  read as a solid segmented control; the four department tools sit past a
+  divider, quieter, because they are visited rather than lived in. Rush and
+  Back Orders carry an outstanding count on the tab, so nobody has to open a
+  page to learn there is nothing on it.
+- **On a phone the header is two rows and 95px.** Row one is identity only —
+  brand, shift, sync — and carries no tap target, because a third 44px control
+  there is what put the old header at 121px. Row two is the centre scroller
+  with the name picker pinned beside it. At 1280px and below the tools fall
+  back to short labels (`B/O`, `Shift`) rather than letting Setup slide off
+  the end of the nav.
+- **The machine header clears the app header** rather than sliding under it:
+  `app.js` measures the header into `--hdr-h` on every render, and the sticky
+  centre header offsets by it.
 - **There is a print stylesheet.** Printing a queue or a shift update for the
   floor is a real thing people do with a page like this; it hides the nav,
   sticky headers, per-line tools and the action bar, and keeps rows from
