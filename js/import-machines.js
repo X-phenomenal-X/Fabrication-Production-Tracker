@@ -175,6 +175,11 @@ function parseMachineSheet(sheet, spec, report) {
       dayShift: txt(get(row.cells, 'dayShift')),
       shifts: num(get(row.cells, 'shifts')),
       pinHole: txt(get(row.cells, 'pinHole')),
+      // The MultiPunch & SAW sheet tracks the saw and the punch as separate
+      // operations on the same line. Read rather than discarded — the punch
+      // column is the one the department actually fills in.
+      saw: txt(get(row.cells, 'saw')),
+      punch: txt(get(row.cells, 'punch')),
       bo: boQty,
       boRaw,
       boStat,

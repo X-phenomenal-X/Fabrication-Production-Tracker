@@ -26,7 +26,16 @@ export const MACHINES = [
   { key: 'fmc1',       label: 'FMC 1',             group: 'CNC', ops: 1 },
   { key: 'fmc2',       label: 'FMC 2',             group: 'CNC', ops: 1 },
 
+  /* The sheet imports into Multi Punch, so that stays the centre's first
+     machine and what the tab opens on.
+
+     Heights come off rolling to the Elumatec saw, and the same heights then go
+     to the punch. The workbook's `MultiPunch & SAW` sheet has a SAW column but
+     it is empty — the saw is run off the floor's own knowledge, not off the
+     file — so its lines are put on it by hand, and the learned routing picks up
+     which components go there once it has seen a couple. */
   { key: 'multipunch', label: 'Multi Punch',       group: 'Punch', ops: 1, note: 'pcs not frames' },
+  { key: 'saw',        label: 'Elumatec Saw',      group: 'Punch', ops: 1, note: 'heights' },
 ];
 
 /* Standing rows on the shift update that are not machines but always get

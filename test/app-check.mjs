@@ -55,9 +55,11 @@ const step = (s) => console.log('  •', s);
    tab's aria-label rather than its text, because a tool tab's text now also
    carries a short label and an outstanding-count badge. */
 const gotoTab = async (name) => {
-  await page.click(`nav.tabs button[aria-label="${name}"]`);
+  // Setup is the gear beside the name picker, not a nav button, so both are
+  // matched on their stated accessible name anywhere in the header.
+  await page.click(`header.top [aria-label="${name}"]`);
   await page.waitForFunction(
-    (n) => document.querySelector('nav.tabs button[aria-current="true"]')?.getAttribute('aria-label') === n,
+    (n) => document.querySelector('header.top [aria-current="true"]')?.getAttribute('aria-label') === n,
     name);
   await page.waitForTimeout(120);
 };
@@ -71,7 +73,12 @@ step('app booted');
 const tabs = await page.$$eval('nav.tabs button', (ns) =>
   ns.map((n) => (n.getAttribute('aria-label') || n.textContent).trim()));
 step('tabs: ' + tabs.join(', '));
-if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Today,Rush,Back Orders,Shift Update,Setup') {
+// Setup is deliberately not one of them — it is the gear beside the name
+// picker, because configuration is not a peer of the pages people work on.
+const setupGear = await page.$$eval('.hdr-setup', (ns) => ns.map((n) => n.getAttribute('aria-label')));
+step('setup control: ' + JSON.stringify(setupGear));
+if (setupGear.length !== 1) throw new Error('Setup is not reachable from the header');
+if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Today,Staging,Rush,Back Orders,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -97,7 +104,7 @@ step('retired keys — in state: ' + (seeded.inState.join(',') || 'none') +
 if (seeded.inState.length || seeded.inStorage.length) throw new Error('old data is still present');
 
 // import both workbooks
-await page.click('nav.tabs button:has-text("Setup")');
+await page.click('.hdr-setup');
 await page.waitForSelector('.drop');
 for (const [label, file] of [['Rolling workbook', ROLLING], ['CNC workbook', CNC]]) {
   const ch = page.waitForEvent('filechooser');
@@ -114,7 +121,7 @@ await page.screenshot({ path: path.join(SHOT, 'setup.png'), fullPage: true });
 // walk every centre page
 for (const [tab, expectSubtabs, expectTitle] of [
   ['Rolling', 2, 'Rolling (Auto)'], ['FOM', 3, 'FOM 1'],
-  ['CNC & FMC', 4, 'Unassigned'], ['Multi Punch', 0, 'Multi Punch'],
+  ['CNC & FMC', 4, 'Unassigned'], ['Multi Punch', 2, 'Multi Punch'],
 ]) {
   await page.click(`nav.tabs button:has-text("${tab}")`);
   // Rendering is deferred to the next frame, so the previous page's title is
@@ -238,7 +245,7 @@ step('after reload: ' + JSON.stringify(afterReload));
 if (afterReload?.status !== stored.status) throw new Error('status did not survive reload');
 
 // survives re-import (the stable-key guarantee)
-await page.click('nav.tabs button:has-text("Setup")');
+await page.click('.hdr-setup');
 await page.waitForSelector('.drop');
 const ch2 = page.waitForEvent('filechooser');
 await page.click('.drop:has-text("Rolling workbook") button');
@@ -341,7 +348,7 @@ await (await page.$('dialog')).screenshot({ path: path.join(SHOT, 'edit-dialog.p
 await page.click('dialog header button');
 await page.waitForSelector('dialog', { state: 'detached' });
 
-await page.click('nav.tabs button:has-text("Setup")');
+await page.click('.hdr-setup');
 await page.waitForSelector('.drop');
 const ch3 = page.waitForEvent('filechooser');
 await page.click('.drop:has-text("Rolling workbook") button');
@@ -356,8 +363,9 @@ if (!editsAfter) throw new Error('edits lost on re-import');
 await page.click('nav.tabs button:has-text("Rolling")');
 await page.waitForFunction(() => document.querySelector('.centre-title'));
 
-// machine can be renamed
-await page.locator('.iconbtn').first().click();
+// machine can be renamed. Scoped to the centre header: the Setup gear is an
+// .iconbtn too, and it comes first in the document.
+await page.locator('.centre-head .iconbtn').first().click();
 await page.waitForSelector('dialog input');
 await page.fill('dialog input', 'Etas Line 1');
 await page.click('dialog footer button.primary');
@@ -422,7 +430,7 @@ if (await sheetFlagged.count()) {
 }
 
 // back order survives re-import
-await page.click('nav.tabs button:has-text("Setup")');
+await page.click('.hdr-setup');
 await page.waitForSelector('.drop');
 const ch4 = page.waitForEvent('filechooser');
 await page.click('.drop:has-text("Rolling workbook") button');
@@ -733,6 +741,61 @@ const suFallback = await page.evaluate(() =>
   document.querySelector('.su').classList.contains('written'));
 step('Multi Punch falls back to the workbook: ' + (!suFallback));
 if (suFallback) throw new Error('a machine with no written update claims to have one');
+
+/* ---------- staging ---------- */
+
+/* The step before the first machine, and the one the department judges itself
+   on. It is an overlay on the rolling lines, so a staged line is the same line
+   the roller then picks up — not a copy of it. */
+await gotoTab('Staging');
+await page.waitForSelector('.stage-line');
+const stageBefore = await page.$$eval('.dgroup-count', (ns) => ns.map((n) => n.textContent.trim()));
+const stageWo = await page.$eval('.stage-line .mono.strong', (n) => n.textContent.trim());
+step(`staging queue: ${stageBefore.join(' / ')} — first is ${stageWo}`);
+
+await page.selectOption('.stage-line .stage-pick select', { index: 1 });
+await page.waitForTimeout(300);
+const stagedRec = await page.evaluate(() => import('/js/store.js').then((m) => {
+  const [key, v] = Object.entries(m.state.staging)[0] || [];
+  return key ? { key, staged: v.staged, stageFor: v.stageFor, by: v.by } : null;
+}));
+step('staged: ' + JSON.stringify(stagedRec));
+if (!stagedRec?.staged || !stagedRec.stageFor) throw new Error('staging for a shift recorded nothing');
+if (!/\|(DAY|AFT|NIGHT)$/.test(stagedRec.stageFor)) {
+  throw new Error('stage-for should be a shift: ' + stagedRec.stageFor);
+}
+
+// It shows on the rolling queue, so the roller knows before starting.
+await gotoTab('Rolling');
+await page.fill('.centre-filters input[type="search"]', stageWo);
+await page.waitForTimeout(300);
+const rollerSees = await page.$$eval('.line', (ns) => ns.map((n) => !!n.querySelector('.badge-staged')));
+step('staged badge on the rolling queue: ' + JSON.stringify(rollerSees));
+if (!rollerSees.some(Boolean)) throw new Error('a staged line does not show as staged to the roller');
+await page.fill('.centre-filters input[type="search"]', '');
+
+// And it survives a re-import, like every other overlay.
+await gotoTab('Setup');
+{
+  const ch = page.waitForEvent('filechooser');
+  await page.click('.drop:has-text("Rolling workbook") button');
+  await (await ch).setFiles(ROLLING);
+  await page.waitForSelector('dialog .stat', { timeout: 120000 });
+  await page.click('dialog header button');
+  await page.waitForSelector('dialog', { state: 'detached' });
+}
+const stageAfter = await page.evaluate((k) => import('/js/store.js').then((m) =>
+  m.state.staging[k]?.staged ?? null), stagedRec.key);
+step('staged after re-importing Rolling: ' + stageAfter);
+if (stageAfter !== true) throw new Error('re-importing lost the staging record');
+
+/* ---------- the saw is its own station ---------- */
+
+await gotoTab('Multi Punch');
+const punchTabs = await page.$$eval('.subtabs button', (ns) =>
+  ns.map((n) => n.textContent.replace(/\d+$/, '').trim()));
+step('Punch centre machines: ' + punchTabs.join(', '));
+if (!punchTabs.some((t) => /Elumatec/i.test(t))) throw new Error('the saw is not a station');
 
 /* ---------- learned routing ---------- */
 

@@ -117,7 +117,9 @@ for (const theme of ['light', 'dark']) {
 
     for (const screen of SCREENS) {
       await page.goto(`${base}/#${screen.hash}`);
-      await page.waitForSelector('nav.tabs button[aria-current="true"]');
+      // Setup is reached by the gear beside the name picker rather than a nav
+      // button, so wait on the page having rendered instead.
+      await page.waitForSelector('main > *');
       await page.waitForTimeout(120);
 
       if (vp.shoot) {
@@ -225,7 +227,7 @@ for (const theme of ['light', 'dark']) {
   // panel is still in the DOM when goto resolves — wait for the nav to agree.
   await page.goto(`${base}/#punch`);
   await page.waitForFunction(() =>
-    document.querySelector('nav.tabs button[aria-current="true"]')?.getAttribute('aria-label') === 'Multi Punch');
+    document.querySelector('header.top [aria-current="true"]')?.getAttribute('aria-label') === 'Multi Punch');
   await page.waitForSelector('.su');
   const suPunch = await page.evaluate(() => {
     const n = document.querySelector('.su');

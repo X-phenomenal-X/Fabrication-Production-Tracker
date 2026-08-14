@@ -1734,11 +1734,54 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 
 @media (min-width: 721px) and (max-width: 1560px) {
+  /* Which shift it is also appears on Today and on the Shift Update page.
+     Whether your updates are reaching anyone does not, so the sync chip stays
+     and this one goes when the row needs the width. */
+  .shift-chip { display: none; }
   nav.tabs { gap: var(--s2); }
   nav.tabs button { padding: 6px 11px; }
   .whopick { min-width: 110px; max-width: 150px; }
   .has-short .tab-label { display: none; }
   .has-short .tab-short { display: inline; }
+}
+
+/* ---------- staging ---------- */
+
+.stage-line.is-staged { background: color-mix(in srgb, var(--ok-soft) 55%, transparent); }
+.stage-line.is-staged::before { background: var(--ok); }
+
+.stage-band {
+  display: flex; align-items: flex-start; gap: var(--s2); margin-top: var(--s2);
+  font-size: var(--t-sm); color: var(--ok);
+}
+.stage-band svg { flex-shrink: 0; margin-top: 2px; }
+.stage-band .muted { color: var(--ink-3); }
+
+.stage-actions { flex-shrink: 0; }
+.stage-pick { display: flex; align-items: center; gap: var(--s2); }
+.stage-pick select { width: auto; min-width: 150px; }
+
+.badge-staged {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+  background: var(--ok-soft); color: var(--ok);
+  padding: 2px 7px 2px 5px; border-radius: var(--r-xs);
+  border: 1px solid color-mix(in srgb, var(--ok) 20%, transparent);
+}
+.badge-staged svg { flex-shrink: 0; }
+
+@media (max-width: 720px) {
+  .stage-actions { flex-basis: 100%; }
+  .stage-pick { flex-wrap: wrap; }
+  .stage-pick select, .stage-pick button { flex: 1; min-width: 140px; }
+}
+
+/* Setup lives with the name picker rather than in the nav — configuration, not
+   a page anyone works on. Still shows which page you are on. */
+.hdr-setup { flex-shrink: 0; }
+.hdr-setup.on {
+  background: var(--accent-soft); color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 </style>
@@ -2209,6 +2252,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     // id -> task-shaped record, plus { manual, at, by }
     todos: {},
     // id -> { text, date, done, assignee, at, by, doneAt, doneBy }
+    staging: {},
+    // line key -> { staged, stageFor, note, at, by }
     deletions: {},
     // `${map}:${key}` -> { at, by } — see forget()
     people: [],
@@ -2242,7 +2287,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     "manualTasks",
     "todos",
     "shiftLogs",
-    "machineConfig"
+    "machineConfig",
+    "staging"
   ];
   function forget(map, key) {
     if (!DELETABLE.includes(map)) throw new Error(`forget(): ${map} is not a synced record map`);
@@ -2503,6 +2549,24 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     forget("todos", id);
     save();
   }
+  function setStaging(key, patch) {
+    const cur = state.staging[key] || {};
+    const next = { ...cur, ...patch, at: now(), by: me() };
+    if (cur.staged !== next.staged) {
+      logChange(key, "staging", null, cur.staged ? "staged" : null, next.staged ? "staged" : null);
+    }
+    if ((cur.stageFor || null) !== (next.stageFor || null)) {
+      logChange(key, "staging", "stage for", cur.stageFor || null, next.stageFor || null);
+    }
+    state.staging[key] = next;
+    save();
+  }
+  function clearStaging(key) {
+    if (!state.staging[key]) return;
+    logChange(key, "staging", null, "staged", null);
+    forget("staging", key);
+    save();
+  }
   function saveShiftLog(date2, shift, patch) {
     const key = `${date2}|${shift}`;
     const cur = state.shiftLogs[key] || { date: date2, shift, rows: {} };
@@ -2561,6 +2625,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       shiftLogs: state.shiftLogs,
       manualTasks: state.manualTasks,
       todos: state.todos,
+      staging: state.staging,
       deletions: state.deletions,
       people: state.people,
       settings: state.settings
@@ -2668,6 +2733,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     state.shiftLogs = mergeRecords(state.shiftLogs, remote.shiftLogs);
     state.manualTasks = mergeRecords(state.manualTasks, remote.manualTasks);
     state.todos = mergeRecords(state.todos, remote.todos);
+    state.staging = mergeRecords(state.staging, remote.staging);
     state.deletions = mergeRecords(state.deletions, remote.deletions);
     applyDeletions();
     state.people = Array.from(/* @__PURE__ */ new Set([...state.people || [], ...remote.people || []]));
@@ -3273,6 +3339,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         dayShift: txt(get(row.cells, "dayShift")),
         shifts: num(get(row.cells, "shifts")),
         pinHole: txt(get(row.cells, "pinHole")),
+        // The MultiPunch & SAW sheet tracks the saw and the punch as separate
+        // operations on the same line. Read rather than discarded — the punch
+        // column is the one the department actually fills in.
+        saw: txt(get(row.cells, "saw")),
+        punch: txt(get(row.cells, "punch")),
         bo: boQty,
         boRaw,
         boStat,
@@ -3501,7 +3572,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     },
     { key: "fmc1", label: "FMC 1", group: "CNC", ops: 1 },
     { key: "fmc2", label: "FMC 2", group: "CNC", ops: 1 },
-    { key: "multipunch", label: "Multi Punch", group: "Punch", ops: 1, note: "pcs not frames" }
+    /* The sheet imports into Multi Punch, so that stays the centre's first
+         machine and what the tab opens on.
+    
+         Heights come off rolling to the Elumatec saw, and the same heights then go
+         to the punch. The workbook's `MultiPunch & SAW` sheet has a SAW column but
+         it is empty — the saw is run off the floor's own knowledge, not off the
+         file — so its lines are put on it by hand, and the learned routing picks up
+         which components go there once it has seen a couple. */
+    { key: "multipunch", label: "Multi Punch", group: "Punch", ops: 1, note: "pcs not frames" },
+    { key: "saw", label: "Elumatec Saw", group: "Punch", ops: 1, note: "heights" }
   ];
   var STANDING_ROWS = [
     { key: "service", label: "Service Orders" },
@@ -3925,6 +4005,43 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       const die = task.die ? ` (${task.die})` : "";
       return `${what}${where}${die}-I.P`;
     });
+  }
+  function stagingFor(key) {
+    return state.staging?.[key] || null;
+  }
+  function isStaged(task) {
+    return !!stagingFor(taskStatusKey(task))?.staged;
+  }
+  function stagingQueue({ q = "", ref = today() } = {}) {
+    const term = q.trim().toLowerCase();
+    const rows = [];
+    for (const t of tasksInScope()) {
+      if (MACHINE_GROUP[t.machine] !== "Rolling") continue;
+      const task = resolveTask(t);
+      const status = effectiveTaskStatus(task);
+      if (status.key === "DONE") continue;
+      if (term) {
+        const hay = [task.wo, task.project, task.die, task.floor].join(" ").toLowerCase();
+        if (!hay.includes(term)) continue;
+      }
+      const key = taskStatusKey(task);
+      rows.push({
+        task,
+        key,
+        status,
+        machine: assignedMachine(task),
+        staging: stagingFor(key),
+        rush: resolveRush(task, ref)
+      });
+    }
+    rows.sort((a, b) => {
+      if (a.rush.on !== b.rush.on) return a.rush.on ? -1 : 1;
+      return (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1;
+    });
+    return {
+      todo: rows.filter((r) => !r.staging?.staged),
+      staged: rows.filter((r) => r.staging?.staged)
+    };
   }
 
   // js/views/centre.js
@@ -4706,7 +4823,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     return viewState.get(group);
   }
   var STATUS_ICON = { NOT_STARTED: "dot", IN_PROGRESS: "play", DONE: "check" };
-  function statusControl(row, vs, rerender) {
+  function statusControl(row, vs2, rerender) {
     const key = taskStatusKey(row.task);
     const cur = row.status.key;
     return el(
@@ -4783,14 +4900,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       }
     );
   }
-  function taskLine(row, vs, rerender, group) {
+  function taskLine(row, vs2, rerender, group) {
     const t = row.task;
     const key = taskStatusKey(t);
     const note = taskNoteFor(key);
     const bo = resolveBackOrder(t);
     const rush = row.rush || resolveRush(t);
     const sheetNote = t.comments || (bo.on ? null : t.boStat);
-    const selected = vs.selected.has(key);
+    const selected = vs2.selected.has(key);
     const canMove = canMoveIn(group);
     const suggestion = canMove ? suggestedMachine(t) : null;
     const node = el(
@@ -4804,8 +4921,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           checked: selected,
           "aria-label": `Select ${t.wo}`,
           onchange: (e) => {
-            if (e.target.checked) vs.selected.add(key);
-            else vs.selected.delete(key);
+            if (e.target.checked) vs2.selected.add(key);
+            else vs2.selected.delete(key);
             rerender();
           }
         })
@@ -4842,6 +4959,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           t.manual ? el("span.badge-manual", {
             title: `Added by hand by ${t.by} \xB7 ${fmtWhen(t.at)} \u2014 not in the workbook`
           }, icon("pencil", { size: 10 }), "added here") : null,
+          // Prepped and waiting. The roller wants to know this before starting,
+          // and the stager wants to see that it registered.
+          isStaged(t) ? el("span.badge-staged", {
+            title: "Staged and ready for rolling"
+          }, icon("check", { size: 10 }), "staged") : null,
           // What this component usually gets put on. Offered, never applied on
           // its own: routing a line to the wrong machine is a real cost, and the
           // person reading the row is the one who knows whether this time is
@@ -4943,7 +5065,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           onclick: () => t.manual ? manualJobDialog({ machine: t.machine, task: t, rerender }) : editLine(row, rerender)
         }, icon("pencil", { size: 15 }))
       ),
-      el("div.line-status", {}, statusControl(row, vs, rerender))
+      el("div.line-status", {}, statusControl(row, vs2, rerender))
     );
     return node;
   }
@@ -5128,14 +5250,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       ].filter(Boolean)
     });
   }
-  function dateGroup(group, vs, rerender, centre) {
-    const isOpen = vs.open[group.key] ?? group.open;
-    const expanded = vs.expanded[group.key];
+  function dateGroup(group, vs2, rerender, centre) {
+    const isOpen = vs2.open[group.key] ?? group.open;
+    const expanded = vs2.expanded[group.key];
     const cap = group.cap && !expanded ? group.cap : Infinity;
     const shown = group.rows.slice(0, cap);
     const hidden = group.rows.length - shown.length;
     const allKeys = group.rows.map((r) => taskStatusKey(r.task));
-    const allPicked = allKeys.length && allKeys.every((k) => vs.selected.has(k));
+    const allPicked = allKeys.length && allKeys.every((k) => vs2.selected.has(k));
     return el(
       "section.dgroup",
       {},
@@ -5147,7 +5269,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           {
             "aria-expanded": String(isOpen),
             onclick: () => {
-              vs.open[group.key] = !isOpen;
+              vs2.open[group.key] = !isOpen;
               rerender();
             }
           },
@@ -5158,8 +5280,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         el("span.spacer"),
         isOpen ? el("button.dgroup-pick", {
           onclick: () => {
-            if (allPicked) allKeys.forEach((k) => vs.selected.delete(k));
-            else allKeys.forEach((k) => vs.selected.add(k));
+            if (allPicked) allKeys.forEach((k) => vs2.selected.delete(k));
+            else allKeys.forEach((k) => vs2.selected.add(k));
             rerender();
           }
         }, allPicked ? "Clear" : "Select all") : null
@@ -5167,10 +5289,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       isOpen ? el(
         "div.dgroup-body",
         {},
-        ...shown.map((r) => taskLine(r, vs, rerender, centre)),
+        ...shown.map((r) => taskLine(r, vs2, rerender, centre)),
         hidden > 0 ? el("button.sm.showmore", {
           onclick: () => {
-            vs.expanded[group.key] = true;
+            vs2.expanded[group.key] = true;
             rerender();
           }
         }, `Show ${hidden} more`) : null
@@ -5229,7 +5351,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     );
   }
   var NOWRUN_CAP = 6;
-  function nowRunningPanel(machine, rerender, vs) {
+  function nowRunningPanel(machine, rerender, vs2) {
     const rows = runningNow(machine.key);
     if (!rows.length) {
       return el(
@@ -5248,7 +5370,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         )
       );
     }
-    const expanded = vs.nowExpanded[machine.key];
+    const expanded = vs2.nowExpanded[machine.key];
     const shown = expanded ? rows : rows.slice(0, NOWRUN_CAP);
     const hidden = rows.length - shown.length;
     return el(
@@ -5267,7 +5389,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         ...shown.map((r) => nowRunningLine(r, rerender)),
         hidden > 0 ? el("button.sm.showmore", {
           onclick: () => {
-            vs.nowExpanded[machine.key] = true;
+            vs2.nowExpanded[machine.key] = true;
             rerender();
           }
         }, `Show ${hidden} more`) : null
@@ -5386,13 +5508,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       }
     );
   }
-  function bulkBar(vs, rerender, group) {
-    const keys = Array.from(vs.selected);
+  function bulkBar(vs2, rerender, group) {
+    const keys = Array.from(vs2.selected);
     if (!keys.length) return null;
     const apply2 = (statusKey) => {
       const before = setTaskStatusMany(keys, statusKey);
       const n = keys.length;
-      vs.selected.clear();
+      vs2.selected.clear();
       toastAction(`${n} line${n === 1 ? "" : "s"} \u2192 ${TRACK_STATUS[statusKey].label}`, "Undo", () => {
         restoreTaskStatus(before);
         rerender();
@@ -5410,14 +5532,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       }, icon(STATUS_ICON[k], { size: 14 }), TRACK_STATUS[k].label)),
       canMove ? el("button.bulk-btn", {
         onclick: () => moveDialog(keys, group, () => {
-          vs.selected.clear();
+          vs2.selected.clear();
           rerender();
         })
       }, icon("arrow", { size: 14 }), "Move to") : null,
       el("button.bulk-x", {
         title: "Clear selection",
         onclick: () => {
-          vs.selected.clear();
+          vs2.selected.clear();
           rerender();
         }
       }, icon("x", { size: 15 }))
@@ -5447,26 +5569,26 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         );
       }
       const machines = (machinesByGroup().get(group) || []).map(machineConfig);
-      const vs = stateFor(group);
-      if (!vs.machine || !machines.some((m) => m.key === vs.machine)) {
-        vs.machine = machines[0]?.key || null;
+      const vs2 = stateFor(group);
+      if (!vs2.machine || !machines.some((m) => m.key === vs2.machine)) {
+        vs2.machine = machines[0]?.key || null;
       }
-      const machine = machines.find((m) => m.key === vs.machine);
+      const machine = machines.find((m) => m.key === vs2.machine);
       if (!machine) return el("div.panel", {}, el("div.empty", {}, "No machines in this centre."));
       const sum = machineSummary(machine.key);
       const groups = groupedQueue(machine.key, {
-        showDone: vs.showDone,
-        q: vs.q,
-        filter: vs.filter
+        showDone: vs2.showDone,
+        q: vs2.q,
+        filter: vs2.filter
       });
       const donePct = sum.total ? Math.round(sum.done / sum.total * 100) : 0;
       const tabs = machines.length > 1 ? el("div.subtabs", {}, ...machines.map((m) => el(
         "button",
         {
-          "aria-current": String(m.key === vs.machine),
+          "aria-current": String(m.key === vs2.machine),
           onclick: () => {
-            vs.machine = m.key;
-            vs.selected.clear();
+            vs2.machine = m.key;
+            vs2.selected.clear();
             rerender();
           }
         },
@@ -5548,18 +5670,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
             el("input", {
               type: "search",
               placeholder: "Search W/O, project, die, note\u2026",
-              value: vs.q,
+              value: vs2.q,
               oninput: (e) => {
-                vs.q = e.target.value;
+                vs2.q = e.target.value;
                 clearTimeout(head._t);
                 head._t = setTimeout(rerender, 150);
               }
             })
           ),
           el("div.filterpills", {}, ...FILTERS.map((f) => el("button.pill", {
-            "aria-current": String(vs.filter === f.key),
+            "aria-current": String(vs2.filter === f.key),
             onclick: () => {
-              vs.filter = f.key;
+              vs2.filter = f.key;
               rerender();
             }
           }, f.label))),
@@ -5569,9 +5691,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
             {},
             el("input", {
               type: "checkbox",
-              checked: vs.showDone,
+              checked: vs2.showDone,
               onchange: (e) => {
-                vs.showDone = e.target.checked;
+                vs2.showDone = e.target.checked;
                 rerender();
               }
             }),
@@ -5610,22 +5732,22 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           }
         }, icon("check", { size: 15 }), "Route them")
       ) : null;
-      const body = groups.length ? el("div", {}, ...groups.map((g) => dateGroup(g, vs, rerender, group))) : el("div.panel", {}, el(
+      const body = groups.length ? el("div", {}, ...groups.map((g) => dateGroup(g, vs2, rerender, group))) : el("div.panel", {}, el(
         "div.empty",
         {},
         el("div.empty-icon", {}, icon("check", { size: 28 })),
-        el("h3", {}, vs.q || vs.filter !== "ALL" ? "Nothing matches" : "All clear"),
-        el("div", {}, vs.q || vs.filter !== "ALL" ? "Try clearing the search or the filter." : "Nothing outstanding on this machine.")
+        el("h3", {}, vs2.q || vs2.filter !== "ALL" ? "Nothing matches" : "All clear"),
+        el("div", {}, vs2.q || vs2.filter !== "ALL" ? "Try clearing the search or the filter." : "Nothing outstanding on this machine.")
       ));
       return el(
         "div.centre",
         {},
         head,
         routeBanner,
-        nowRunningPanel(machine, rerender, vs),
+        nowRunningPanel(machine, rerender, vs2),
         shiftUpdatePanel(machine.key),
         body,
-        bulkBar(vs, rerender, group)
+        bulkBar(vs2, rerender, group)
       );
     };
   }
@@ -5961,6 +6083,241 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       pileList("Due today", b.dueToday, "warn"),
       pileList("Running now", b.running, "mute")
     );
+  }
+
+  // js/views/staging.js
+  init_ui();
+  var vs = { q: "", showStaged: true };
+  function machineLabel4(key) {
+    const m = MACHINE_BY_KEY[key];
+    return m ? machineConfig(m).label : key;
+  }
+  function stageForLabel(v) {
+    if (!v) return null;
+    const [date2, shift] = String(v).split("|");
+    return `${SHIFTS[shift]?.label || shift} \xB7 ${fmtDate(date2, { withDay: true })}`;
+  }
+  function upcomingShifts(n = 4) {
+    const out = [];
+    let date2 = today();
+    let i = SHIFT_ORDER.indexOf(shiftAt());
+    for (let k = 0; k < n; k++) {
+      i += 1;
+      if (i >= SHIFT_ORDER.length) {
+        i = 0;
+        date2 = addDays(date2, 1);
+      }
+      out.push({ value: `${date2}|${SHIFT_ORDER[i]}`, label: `${SHIFTS[SHIFT_ORDER[i]].label} ${fmtDate(date2)}` });
+    }
+    return out;
+  }
+  function stageRow(row, rerender) {
+    const { task, key, staging, machine, rush } = row;
+    const staged = !!staging?.staged;
+    return el(
+      "div.line.stage-line" + (staged ? ".is-staged" : "") + (rush.on ? ".rush" : ""),
+      {},
+      el(
+        "div.line-main",
+        {},
+        el(
+          "div.line-id",
+          {},
+          el("span.mono.strong", {}, task.wo),
+          task.die ? el("span.die", {}, task.die) : null,
+          chip(machineLabel4(machine), "mute"),
+          rush.on ? el(
+            "span.badge-rush" + (rush.late || rush.soon ? ".hot" : ""),
+            {},
+            icon("bolt", { size: 11 }),
+            "RUSH"
+          ) : null
+        ),
+        el(
+          "div.line-where",
+          {},
+          el("span", {}, task.project || "\u2014"),
+          task.floor ? el("span.muted", {}, " \xB7 " + task.floor) : null
+        ),
+        staged ? el(
+          "div.stage-band",
+          {},
+          icon("check", { size: 13 }),
+          el(
+            "span",
+            {},
+            staging.stageFor ? el("strong", {}, "For " + stageForLabel(staging.stageFor)) : el("strong", {}, "Staged"),
+            el("span.muted", {}, ` \u2014 ${staging.by}, ${fmtWhen(staging.at)}`)
+          )
+        ) : null
+      ),
+      el(
+        "div.line-qty",
+        {},
+        el("span.mono", {}, fmtNum(task.qty)),
+        el("span.small.muted", {}, "pcs")
+      ),
+      el("div.line-date.hide-sm", {}, fmtDate(task.cuttingDate)),
+      // Staging for a named shift is the useful record; staging with no shift
+      // named is still better than nothing, so it is one tap either way.
+      el(
+        "div.stage-actions",
+        {},
+        staged ? el("button", {
+          title: "Put it back on the list",
+          onclick: () => {
+            clearStaging(key);
+            toast("Back on the staging list");
+            rerender();
+          }
+        }, icon("undo", { size: 14 }), "Not staged") : el(
+          "div.stage-pick",
+          {},
+          el(
+            "select",
+            {
+              "aria-label": `Stage ${task.wo} for which shift`,
+              onchange: (e) => {
+                if (!e.target.value) return;
+                setStaging(key, { staged: true, stageFor: e.target.value });
+                toast(`${task.wo} staged for ${stageForLabel(e.target.value)}`);
+                rerender();
+              }
+            },
+            el("option", { value: "" }, "Stage for\u2026"),
+            ...upcomingShifts().map((s) => el("option", { value: s.value }, s.label))
+          ),
+          el("button.primary", {
+            title: "Staged, without saying which shift for",
+            onclick: () => {
+              setStaging(key, { staged: true, stageFor: null });
+              toast(`${task.wo} staged`);
+              rerender();
+            }
+          }, icon("check", { size: 14 }), "Staged")
+        )
+      )
+    );
+  }
+  function renderStaging(rerender, go2) {
+    if (!hasTasks()) {
+      return el(
+        "div.panel",
+        {},
+        el(
+          "div.empty",
+          {},
+          el("div.empty-icon", {}, icon("upload", { size: 28 })),
+          el("h3", {}, "No schedule loaded yet"),
+          el("p", {}, "Staging works off the Rolling schedule. Import it to get started."),
+          el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
+        )
+      );
+    }
+    const { todo, staged } = stagingQueue({ q: vs.q });
+    const ref = today();
+    const overdue = todo.filter((r) => r.task.cuttingDate && r.task.cuttingDate < ref).length;
+    const dueToday = todo.filter((r) => r.task.cuttingDate === ref).length;
+    const head = el(
+      "div.centre-head",
+      {},
+      el(
+        "div.row.centre-title-row",
+        {},
+        el(
+          "div.centre-ident",
+          {},
+          el("span.centre-rail", { "aria-hidden": "true" }),
+          el(
+            "div",
+            {},
+            el("h1.centre-title", {}, "Staging"),
+            el("div.centre-sub", {}, "Prepping for rolling \u2014 Auto and Manual")
+          )
+        ),
+        el("span.spacer"),
+        el(
+          "div.centre-stats",
+          {},
+          el(
+            "div.cstat" + (todo.length ? ".warn" : ""),
+            {},
+            el("b", {}, fmtNum(todo.length)),
+            el("i", {}, "to stage")
+          ),
+          el("div.cstat", {}, el("b", {}, fmtNum(staged.length)), el("i", {}, "staged")),
+          el(
+            "div.cstat" + (dueToday ? ".warn" : ""),
+            {},
+            el("b", {}, fmtNum(dueToday)),
+            el("i", {}, "due today")
+          ),
+          el(
+            "div.cstat" + (overdue ? ".bad" : ""),
+            {},
+            el("b", {}, fmtNum(overdue)),
+            el("i", {}, "overdue")
+          )
+        )
+      ),
+      el(
+        "div.centre-filters",
+        {},
+        el(
+          "div.searchwrap",
+          {},
+          icon("search", { size: 15, cls: "searchicon" }),
+          el("input", {
+            type: "search",
+            placeholder: "Search W/O, project, die\u2026",
+            value: vs.q,
+            oninput: (e) => {
+              vs.q = e.target.value;
+              clearTimeout(head._t);
+              head._t = setTimeout(rerender, 150);
+            }
+          })
+        ),
+        el("span.spacer"),
+        el(
+          "label.row.small.donetoggle",
+          {},
+          el("input", {
+            type: "checkbox",
+            checked: vs.showStaged,
+            onchange: (e) => {
+              vs.showStaged = e.target.checked;
+              rerender();
+            }
+          }),
+          `Show staged${staged.length ? ` (${fmtNum(staged.length)})` : ""}`
+        )
+      )
+    );
+    const section = (label, rows, tone) => rows.length ? el(
+      "section.dgroup",
+      {},
+      el(
+        "div.dgroup-head",
+        {},
+        el("span.dgroup-label." + tone, {}, label),
+        el("span.dgroup-count", {}, String(rows.length))
+      ),
+      el("div.dgroup-body", {}, ...rows.map((r) => stageRow(r, rerender)))
+    ) : null;
+    const body = todo.length || vs.showStaged && staged.length ? el(
+      "div",
+      {},
+      section("Needs staging", todo, "warn"),
+      vs.showStaged ? section("Staged and ready", staged, "mute") : null
+    ) : el("div.panel", {}, el(
+      "div.empty",
+      {},
+      el("div.empty-icon", {}, icon("check", { size: 28 })),
+      el("h3", {}, vs.q ? "Nothing matches" : "Everything is staged"),
+      el("div", {}, vs.q ? "Try clearing the search." : "Every open rolling line has been prepped.")
+    ));
+    return el("div.centre", {}, head, body);
   }
 
   // js/views/shiftupdate.js
@@ -7294,6 +7651,7 @@ create policy "tracker update" on tracker_state for update using (true) with che
     { key: "cnc", label: "CNC & FMC", short: "CNC", kind: "centre", render: makeCentreView("CNC") },
     { key: "punch", label: "Multi Punch", short: "Punch", kind: "centre", render: makeCentreView("Punch") },
     { key: "today", label: "Today", kind: "tool", icon: "list", render: renderToday },
+    { key: "staging", label: "Staging", short: "Stage", kind: "tool", icon: "square", render: renderStaging },
     { key: "rush", label: "Rush", kind: "tool", icon: "bolt", render: renderRush },
     { key: "backorders", label: "Back Orders", short: "B/O", kind: "tool", icon: "alert", render: renderBackOrders },
     { key: "shift", label: "Shift Update", short: "Shift", kind: "tool", icon: "note", render: renderShiftUpdate },
@@ -7389,7 +7747,7 @@ create policy "tracker update" on tracker_state for update using (true) with che
           el("small", {}, "BV Glazing \xB7 production tracker")
         ),
         el(
-          "span.chip" + (shift.full ? "" : ".warn"),
+          "span.chip.shift-chip" + (shift.full ? "" : ".warn"),
           { title: "Current shift" },
           shift.label + (shift.full ? "" : ` \xB7 ${shift.crew} crew`)
         ),
@@ -7418,10 +7776,23 @@ create policy "tracker update" on tracker_state for update using (true) with che
         el(
           "div.tabgroup.tools",
           { role: "group", "aria-label": "Department tools" },
-          ...TABS.filter((t) => t.kind === "tool").map(tabButton)
+          ...TABS.filter((t) => t.kind === "tool" && t.key !== "setup").map(tabButton)
         )
       ),
-      el("div.hdr-right", {}, whoAmI())
+      // Setup is configuration, not a page anyone works on, so it sits with the
+      // name picker as a gear rather than taking a tenth slot in a nav row that
+      // had already run out of width.
+      el(
+        "div.hdr-right",
+        {},
+        el("button.iconbtn.hdr-setup" + (current === "setup" ? ".on" : ""), {
+          "aria-label": "Setup",
+          "aria-current": String(current === "setup"),
+          title: "Setup",
+          onclick: () => go("setup")
+        }, icon("gear", { size: 18 })),
+        whoAmI()
+      )
     );
   }
   function measureHeader() {

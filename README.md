@@ -157,6 +157,40 @@ status silently loses the back-order half — 67 open lines in the sample data.
 It is parsed into its own flag and shown as a red **B/O** badge beside the
 status, and counted in the header.
 
+## Staging
+
+The step before the schedule's first machine, and the one the department judges
+itself on: staging is done well when the next shift walks in to a job that is
+already there. Nothing tracked it before — it lived in a hidden `Rolling
+Staging` sheet and in people's heads.
+
+It is an **overlay on the rolling lines**, not a queue of its own, so a line is
+the same line whether you are staging it or rolling it: same work order, same
+status, same notes and shortages. `state.staging[key]` holds
+`{ staged, stageFor, at, by }` against the same key everything else uses, so it
+survives re-import like every other overlay.
+
+**"Stage for" is a shift, not a date.** The whole point is that a named crew
+walks in to it, so the picker offers the next few shifts starting with the one
+*after* the current one — you stage for what is coming, not for the shift you
+are standing in. It is stored as `date|shift` so it sorts, and shown the way it
+is said on the floor. Staging without naming a shift is still one tap.
+
+A staged line carries a `staged` badge on the Rolling queue, so the roller
+knows before starting and the stager can see it registered.
+
+## The saw
+
+Heights come off rolling to the **Elumatec saw**, and the same heights then go
+to the punch. It is a station in the Multi Punch centre.
+
+The workbook's `MultiPunch & SAW` sheet has a `SAW` column, but it is **empty** —
+it is the `PUNCH` column the department actually fills in, on 30 of 64 lines.
+So the saw is run off the floor's own knowledge rather than off the file, and
+its lines are put on it by hand — which is exactly what the learned routing
+above then picks up. Both columns are now read into the task instead of being
+declared and discarded.
+
 ## Learned routing
 
 The CNC & FMC sheet says nothing about which machine runs a line, so all of it

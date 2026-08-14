@@ -1719,9 +1719,52 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 
 @media (min-width: 721px) and (max-width: 1560px) {
+  /* Which shift it is also appears on Today and on the Shift Update page.
+     Whether your updates are reaching anyone does not, so the sync chip stays
+     and this one goes when the row needs the width. */
+  .shift-chip { display: none; }
   nav.tabs { gap: var(--s2); }
   nav.tabs button { padding: 6px 11px; }
   .whopick { min-width: 110px; max-width: 150px; }
   .has-short .tab-label { display: none; }
   .has-short .tab-short { display: inline; }
+}
+
+/* ---------- staging ---------- */
+
+.stage-line.is-staged { background: color-mix(in srgb, var(--ok-soft) 55%, transparent); }
+.stage-line.is-staged::before { background: var(--ok); }
+
+.stage-band {
+  display: flex; align-items: flex-start; gap: var(--s2); margin-top: var(--s2);
+  font-size: var(--t-sm); color: var(--ok);
+}
+.stage-band svg { flex-shrink: 0; margin-top: 2px; }
+.stage-band .muted { color: var(--ink-3); }
+
+.stage-actions { flex-shrink: 0; }
+.stage-pick { display: flex; align-items: center; gap: var(--s2); }
+.stage-pick select { width: auto; min-width: 150px; }
+
+.badge-staged {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+  background: var(--ok-soft); color: var(--ok);
+  padding: 2px 7px 2px 5px; border-radius: var(--r-xs);
+  border: 1px solid color-mix(in srgb, var(--ok) 20%, transparent);
+}
+.badge-staged svg { flex-shrink: 0; }
+
+@media (max-width: 720px) {
+  .stage-actions { flex-basis: 100%; }
+  .stage-pick { flex-wrap: wrap; }
+  .stage-pick select, .stage-pick button { flex: 1; min-width: 140px; }
+}
+
+/* Setup lives with the name picker rather than in the nav — configuration, not
+   a page anyone works on. Still shows which page you are on. */
+.hdr-setup { flex-shrink: 0; }
+.hdr-setup.on {
+  background: var(--accent-soft); color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
 }

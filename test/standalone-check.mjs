@@ -41,12 +41,12 @@ step('File System Access available: ' + await page.evaluate(() => 'showOpenFileP
 const tabs = await page.$$eval('nav.tabs button', (ns) =>
   ns.map((n) => (n.getAttribute('aria-label') || n.textContent).trim()));
 step('tabs: ' + tabs.join(', '));
-if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Today,Rush,Back Orders,Shift Update,Setup') {
+if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Today,Staging,Rush,Back Orders,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
 // import Rolling + CNC through the real UI
-await page.click('nav.tabs button:has-text("Setup")');
+await page.click('.hdr-setup');
 await page.waitForSelector('.drop');
 for (const [label, file] of [['Rolling workbook', ROLLING], ['CNC workbook', CNC]]) {
   const ch = page.waitForEvent('filechooser');

@@ -143,7 +143,7 @@ const connect = (page) => page.evaluate(
 
 /* ---------- the PC imports and works ---------- */
 
-await pc.click('nav.tabs button:has-text("Setup")');
+await pc.click('.hdr-setup');
 await pc.waitForSelector('.drop');
 for (const [label, file] of [['Rolling workbook', ROLLING], ['CNC workbook', CNC]]) {
   const ch = pc.waitForEvent('filechooser');

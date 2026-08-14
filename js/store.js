@@ -49,6 +49,7 @@ export const state = {
      be relying on it. */
   manualTasks: {},  // id -> task-shaped record, plus { manual, at, by }
   todos: {},        // id -> { text, date, done, assignee, at, by, doneAt, doneBy }
+  staging: {},      // line key -> { staged, stageFor, note, at, by }
   deletions: {},    // `${map}:${key}` -> { at, by } — see forget()
   people: [],
   settings: { me: null },
@@ -93,7 +94,7 @@ export function me() {
    is right, because that is somebody re-flagging a rush after you cleared it. */
 const DELETABLE = [
   'taskStatus', 'taskNote', 'taskEdit', 'backOrder', 'rush', 'taskAssign',
-  'manualTasks', 'todos', 'shiftLogs', 'machineConfig',
+  'manualTasks', 'todos', 'shiftLogs', 'machineConfig', 'staging',
 ];
 
 function forget(map, key) {
@@ -447,6 +448,31 @@ export function deleteTodo(id) {
   save();
 }
 
+/* ---------- staging ---------- */
+
+/* Prepping material for rolling. It is judged on whether the next shift walks
+   in to a job that is ready, so what matters is not just "done" but "staged
+   for which shift" — that is how the department's own staging sheet reads. */
+export function setStaging(key, patch) {
+  const cur = state.staging[key] || {};
+  const next = { ...cur, ...patch, at: now(), by: me() };
+  if (cur.staged !== next.staged) {
+    logChange(key, 'staging', null, cur.staged ? 'staged' : null, next.staged ? 'staged' : null);
+  }
+  if ((cur.stageFor || null) !== (next.stageFor || null)) {
+    logChange(key, 'staging', 'stage for', cur.stageFor || null, next.stageFor || null);
+  }
+  state.staging[key] = next;
+  save();
+}
+
+export function clearStaging(key) {
+  if (!state.staging[key]) return;
+  logChange(key, 'staging', null, 'staged', null);
+  forget('staging', key);
+  save();
+}
+
 export function saveShiftLog(date, shift, patch) {
   const key = `${date}|${shift}`;
   const cur = state.shiftLogs[key] || { date, shift, rows: {} };
@@ -520,6 +546,7 @@ function snapshot() {
     shiftLogs: state.shiftLogs,
     manualTasks: state.manualTasks,
     todos: state.todos,
+    staging: state.staging,
     deletions: state.deletions,
     people: state.people,
     settings: state.settings,
@@ -650,6 +677,7 @@ function mergeSnapshot(remote) {
   state.shiftLogs = mergeRecords(state.shiftLogs, remote.shiftLogs);
   state.manualTasks = mergeRecords(state.manualTasks, remote.manualTasks);
   state.todos = mergeRecords(state.todos, remote.todos);
+  state.staging = mergeRecords(state.staging, remote.staging);
   // Merge the tombstones, then re-apply them: a record the other device
   // still holds must not walk back in after being deleted here.
   state.deletions = mergeRecords(state.deletions, remote.deletions);

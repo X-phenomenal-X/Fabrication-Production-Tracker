@@ -641,3 +641,55 @@ export function inProgressLines(machineKey) {
     return `${what}${where}${die}-I.P`;
   });
 }
+
+/* ---------- staging ---------- */
+
+/* Prepping material for rolling: the step before the schedule's first machine,
+   and the one the department judges by whether the next shift starts clean.
+   It is an overlay on the rolling lines rather than a queue of its own, so a
+   line is the same line whether you are staging it or rolling it. */
+
+export function stagingFor(key) {
+  return state.staging?.[key] || null;
+}
+
+export function isStaged(task) {
+  return !!stagingFor(taskStatusKey(task))?.staged;
+}
+
+/** Every rolling line that is not finished, split by whether it has been
+    staged. Ordered by cutting date, because that is the order it is needed in. */
+export function stagingQueue({ q = '', ref = today() } = {}) {
+  const term = q.trim().toLowerCase();
+  const rows = [];
+
+  for (const t of tasksInScope()) {
+    if (MACHINE_GROUP[t.machine] !== 'Rolling') continue;
+    const task = resolveTask(t);
+    const status = effectiveTaskStatus(task);
+    if (status.key === 'DONE') continue;
+
+    if (term) {
+      const hay = [task.wo, task.project, task.die, task.floor].join(' ').toLowerCase();
+      if (!hay.includes(term)) continue;
+    }
+
+    const key = taskStatusKey(task);
+    rows.push({
+      task, key, status,
+      machine: assignedMachine(task),
+      staging: stagingFor(key),
+      rush: resolveRush(task, ref),
+    });
+  }
+
+  rows.sort((a, b) => {
+    if (a.rush.on !== b.rush.on) return a.rush.on ? -1 : 1;
+    return (a.task.cuttingDate || '9999') < (b.task.cuttingDate || '9999') ? -1 : 1;
+  });
+
+  return {
+    todo: rows.filter((r) => !r.staging?.staged),
+    staged: rows.filter((r) => r.staging?.staged),
+  };
+}

@@ -20,7 +20,7 @@ import {
   groupedQueue, machineSummary, openCountFor, runningNow, taskStatusKey, hasTasks,
   shiftUpdateFor, taskNoteFor, machineConfig, resolveBackOrder, resolveRush,
   isAssigned, taskByKey, staleImports, shiftUpdateAge, manualIdFor,
-  suggestedMachine, suggestionsIn,
+  suggestedMachine, suggestionsIn, isStaged,
   TRACK_STATUS_ORDER, TRACK_STATUS,
 } from '../model.js';
 import { backOrderDialog } from './backorders.js';
@@ -159,6 +159,11 @@ function taskLine(row, vs, rerender, group) {
         t.manual ? el('span.badge-manual', {
           title: `Added by hand by ${t.by} · ${fmtWhen(t.at)} — not in the workbook`,
         }, icon('pencil', { size: 10 }), 'added here') : null,
+        // Prepped and waiting. The roller wants to know this before starting,
+        // and the stager wants to see that it registered.
+        isStaged(t) ? el('span.badge-staged', {
+          title: 'Staged and ready for rolling',
+        }, icon('check', { size: 10 }), 'staged') : null,
         // What this component usually gets put on. Offered, never applied on
         // its own: routing a line to the wrong machine is a real cost, and the
         // person reading the row is the one who knows whether this time is

@@ -9,6 +9,7 @@ import {
 import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
 import { renderToday } from './views/today.js';
+import { renderStaging } from './views/staging.js';
 import { renderShiftUpdate } from './views/shiftupdate.js';
 import { renderRush } from './views/rush.js';
 import { renderData, initSharedFile } from './views/data.js';
@@ -29,6 +30,7 @@ const TABS = [
   { key: 'cnc', label: 'CNC & FMC', short: 'CNC', kind: 'centre', render: makeCentreView('CNC') },
   { key: 'punch', label: 'Multi Punch', short: 'Punch', kind: 'centre', render: makeCentreView('Punch') },
   { key: 'today', label: 'Today', kind: 'tool', icon: 'list', render: renderToday },
+  { key: 'staging', label: 'Staging', short: 'Stage', kind: 'tool', icon: 'square', render: renderStaging },
   { key: 'rush', label: 'Rush', kind: 'tool', icon: 'bolt', render: renderRush },
   { key: 'backorders', label: 'Back Orders', short: 'B/O', kind: 'tool', icon: 'alert', render: renderBackOrders },
   { key: 'shift', label: 'Shift Update', short: 'Shift', kind: 'tool', icon: 'note', render: renderShiftUpdate },
@@ -128,7 +130,7 @@ function header() {
     el('div.hdr-id', {},
       el('div.brand', {}, 'Cutting',
         el('small', {}, 'BV Glazing · production tracker')),
-      el('span.chip' + (shift.full ? '' : '.warn'), { title: 'Current shift' },
+      el('span.chip.shift-chip' + (shift.full ? '' : '.warn'), { title: 'Current shift' },
         shift.label + (shift.full ? '' : ` · ${shift.crew} crew`)),
       // Offline outranks the sync state: "synced" next to a dead connection
       // is the one thing the header must never say. Updates still save
@@ -148,9 +150,19 @@ function header() {
         ...TABS.filter((t) => t.kind === 'centre').map(tabButton)),
       el('span.tabsep', { 'aria-hidden': 'true' }),
       el('div.tabgroup.tools', { role: 'group', 'aria-label': 'Department tools' },
-        ...TABS.filter((t) => t.kind === 'tool').map(tabButton))),
+        ...TABS.filter((t) => t.kind === 'tool' && t.key !== 'setup').map(tabButton))),
 
-    el('div.hdr-right', {}, whoAmI())
+    // Setup is configuration, not a page anyone works on, so it sits with the
+    // name picker as a gear rather than taking a tenth slot in a nav row that
+    // had already run out of width.
+    el('div.hdr-right', {},
+      el('button.iconbtn.hdr-setup' + (current === 'setup' ? '.on' : ''), {
+        'aria-label': 'Setup',
+        'aria-current': String(current === 'setup'),
+        title: 'Setup',
+        onclick: () => go('setup'),
+      }, icon('gear', { size: 18 })),
+      whoAmI())
   );
 }
 
