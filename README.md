@@ -425,6 +425,44 @@ holds only `tasks`, `machineMeta`, `taskStatus`, `taskNote`, `taskEdit`,
 see above. An old install's `shiftLogs` were written in a different shape and
 are dropped on load rather than half-rendered.)
 
+## Working with no signal
+
+The published site is two files — the built `Cutting-Tracker.html` served as
+`index.html`, plus the manifest — so `sw.js` is a much smaller problem than a
+service worker usually is. There is no asset graph to precache and no
+cache-busting to get right.
+
+It is **network-first for everything same-origin**, with the cache as the
+offline fallback, and that is the right way round for this site specifically:
+the whole app is one request, so "always fresh when online" costs a single
+round trip and removes the entire class of bug where somebody is looking at a
+stale build and cannot work out why their change is missing. The cache only
+answers when the network does not, after a 4-second timeout — short enough that
+a phone with one bar in the far bay opens the app rather than hanging.
+
+Two things it deliberately leaves alone: **anything cross-origin**, because
+that is Supabase and a cached answer there would mean the app quietly
+disagreeing with the cloud, and anything that is not a `GET`.
+
+When a new build is deployed the app offers a **Reload** rather than taking
+one. `clients.claim()` also fires `controllerchange` on a first visit, as
+control passes from nobody to the new worker — reloading there would bounce
+someone who has just arrived, so the reload is gated on the user having asked
+for it.
+
+Registration is skipped entirely on `file://`, where service workers do not
+exist, so the copy on the shared drive is unaffected.
+
+The header says **offline** when the connection is gone, and that outranks the
+sync chip — "synced" next to a dead connection is the one thing it must never
+say. Everything still saves locally and goes up when the signal returns.
+
+`test/offline-check.mjs` serves the site exactly as the Pages workflow
+assembles it, loads it once, cuts the network, and reloads: the app must boot
+with zero further requests to the server, keep its data, accept new entries,
+and say it is offline. It also checks a cross-origin request still reaches the
+network rather than the worker.
+
 ## Deleting, with sync on
 
 Per-record merging has one thing it cannot get right on its own. It reads
@@ -517,6 +555,7 @@ node test/app-check.mjs            # walks every page: status, rush, back orders
 node test/cloud-check.mjs          # two devices against a mock cloud — do they converge?
 node test/visual-qa.mjs            # every screen at five widths in both themes — layout, targets, contrast
 node build.mjs && node test/standalone-check.mjs   # same against the built file, opened via file://
+node build.mjs && node test/offline-check.mjs      # loads the site, cuts the network, reloads
 ```
 
 `npm test` runs the first four.

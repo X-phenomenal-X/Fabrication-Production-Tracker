@@ -13,6 +13,7 @@ import { renderShiftUpdate } from './views/shiftupdate.js';
 import { renderRush } from './views/rush.js';
 import { renderData, initSharedFile } from './views/data.js';
 import { SHIFTS, shiftAt } from './shifts.js';
+import { registerServiceWorker, watchConnection, isOnline } from './offline.js';
 
 // One page per work centre, so an operator opens their own machine's queue
 // instead of scrolling past everyone else's.
@@ -129,12 +130,18 @@ function header() {
         el('small', {}, 'BV Glazing · production tracker')),
       el('span.chip' + (shift.full ? '' : '.warn'), { title: 'Current shift' },
         shift.label + (shift.full ? '' : ` · ${shift.crew} crew`)),
-      cloudEnabled()
-        ? chip('synced', 'ok', 'Syncing across devices via ' + cloudHost())
-        : shared
-          ? chip('shared file', 'ok', 'Connected to ' + shared)
-          : chip('this device only', 'mute',
-              'Not syncing — updates stay on this device. Set it up under Setup.')),
+      // Offline outranks the sync state: "synced" next to a dead connection
+      // is the one thing the header must never say. Updates still save
+      // locally and go up when the signal comes back.
+      !isOnline()
+        ? chip('offline', 'warn',
+            'No connection. Everything still saves on this device and syncs when it comes back.')
+        : cloudEnabled()
+          ? chip('synced', 'ok', 'Syncing across devices via ' + cloudHost())
+          : shared
+            ? chip('shared file', 'ok', 'Connected to ' + shared)
+            : chip('this device only', 'mute',
+                'Not syncing — updates stay on this device. Set it up under Setup.')),
 
     el('nav.tabs', { 'aria-label': 'Pages' },
       el('div.tabgroup.centres', { role: 'group', 'aria-label': 'Production centres' },
@@ -188,6 +195,8 @@ window.addEventListener('hashchange', () => {
 loadLocal();
 onChange(scheduleRender);
 render();
+registerServiceWorker();
+watchConnection(scheduleRender);
 initSharedFile(render);
 initCloud();
 

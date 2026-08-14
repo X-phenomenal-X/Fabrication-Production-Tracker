@@ -55,6 +55,9 @@ jobs:
           mkdir -p _site
           cp Cutting-Tracker.html _site/index.html
           cp manifest.webmanifest _site/manifest.webmanifest
+          # The worker's cache name is stamped with the commit, so a deploy
+          # retires the previous cache instead of sitting alongside it.
+          sed "s/__BUILD__/${GITHUB_SHA::12}/" sw.js > _site/sw.js
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -7045,6 +7045,62 @@ create policy "tracker update" on tracker_state for update using (true) with che
     );
   }
 
+  // js/offline.js
+  init_ui();
+  var onlineListener = null;
+  function isOnline() {
+    return typeof navigator === "undefined" || navigator.onLine !== false;
+  }
+  function watchConnection(rerender) {
+    if (onlineListener) return;
+    onlineListener = () => rerender();
+    window.addEventListener("online", onlineListener);
+    window.addEventListener("offline", onlineListener);
+  }
+  var awaitingUpdate = false;
+  function offerUpdate(worker) {
+    const bar2 = el(
+      "div.toast.toast-action",
+      {},
+      el("span", {}, "A newer version of the tracker is ready"),
+      el("button", {
+        onclick: () => {
+          awaitingUpdate = true;
+          worker.postMessage("skip-waiting");
+          bar2.remove();
+        }
+      }, "Reload")
+    );
+    document.body.append(bar2);
+  }
+  function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return;
+    if (!location.protocol.startsWith("http")) return;
+    window.addEventListener("load", async () => {
+      try {
+        const reg = await navigator.serviceWorker.register("sw.js");
+        if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting);
+        reg.addEventListener("updatefound", () => {
+          const next = reg.installing;
+          if (!next) return;
+          next.addEventListener("statechange", () => {
+            if (next.state === "installed" && navigator.serviceWorker.controller) {
+              offerUpdate(next);
+            }
+          });
+        });
+      } catch (e) {
+        console.info("offline support unavailable:", e.message);
+      }
+    });
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!awaitingUpdate || reloading) return;
+      reloading = true;
+      location.reload();
+    });
+  }
+
   // js/app.js
   var TABS = [
     { key: "rolling", label: "Rolling", kind: "centre", render: makeCentreView("Rolling") },
@@ -7151,7 +7207,14 @@ create policy "tracker update" on tracker_state for update using (true) with che
           { title: "Current shift" },
           shift.label + (shift.full ? "" : ` \xB7 ${shift.crew} crew`)
         ),
-        cloudEnabled() ? chip("synced", "ok", "Syncing across devices via " + cloudHost()) : shared ? chip("shared file", "ok", "Connected to " + shared) : chip(
+        // Offline outranks the sync state: "synced" next to a dead connection
+        // is the one thing the header must never say. Updates still save
+        // locally and go up when the signal comes back.
+        !isOnline() ? chip(
+          "offline",
+          "warn",
+          "No connection. Everything still saves on this device and syncs when it comes back."
+        ) : cloudEnabled() ? chip("synced", "ok", "Syncing across devices via " + cloudHost()) : shared ? chip("shared file", "ok", "Connected to " + shared) : chip(
           "this device only",
           "mute",
           "Not syncing \u2014 updates stay on this device. Set it up under Setup."
@@ -7211,6 +7274,8 @@ create policy "tracker update" on tracker_state for update using (true) with che
   loadLocal();
   onChange(scheduleRender);
   render();
+  registerServiceWorker();
+  watchConnection(scheduleRender);
   initSharedFile(render);
   initCloud();
   document.addEventListener("visibilitychange", () => {
