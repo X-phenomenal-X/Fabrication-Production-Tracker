@@ -4,6 +4,10 @@
 
 import { state, EDITABLE_FIELDS } from './store.js';
 import { PARSER_VERSION } from './import-machines.js';
+import { MACHINES } from './machines.js';
+
+/* machineKey -> centre, for keeping a learned route inside its own centre. */
+const MACHINE_GROUP = Object.fromEntries(MACHINES.map((m) => [m.key, m.group]));
 
 export function today() {
   return new Date().toISOString().slice(0, 10);
@@ -532,4 +536,108 @@ export function todayBoard(ref = today()) {
 export function shiftWritten(date, shift) {
   const log = state.shiftLogs?.[`${date}|${shift}`];
   return !!(log && (Object.keys(log.rows || {}).length || (log.notes || '').trim()));
+}
+
+/* ---------- learned routing ---------- */
+
+/* The CNC & FMC sheet says nothing about which machine runs a line, so every
+   one of them is put on a machine by hand. The same components come back week
+   after week, and the floor already knows where each one goes — that knowledge
+   just lived in somebody's head and got re-applied 81 times per import.
+
+   So it is read back out of what people actually did. Every hand assignment is
+   a decision about a die; count them per die and the app can say "this one
+   usually goes on FMC 1, seven times out of eight" and offer to do it.
+
+   Derived, never stored. There is no learned-routes table to drift out of date
+   or to sync: it is a view over the assignments themselves, so correcting a
+   habit corrects the suggestion, and clearing an assignment un-teaches it. */
+
+function routeTable() {
+  const byDie = new Map();
+
+  for (const t of tasksInScope()) {
+    const key = taskStatusKey(t);
+    const assigned = state.taskAssign?.[key]?.machine;
+    if (!assigned) continue;                       // only decisions someone made
+    const die = (t.origin || t).die;
+    if (!die) continue;                            // nothing to recognise it by
+
+    if (!byDie.has(die)) byDie.set(die, new Map());
+    const counts = byDie.get(die);
+    counts.set(assigned, (counts.get(assigned) || 0) + 1);
+  }
+  return byDie;
+}
+
+let routeCache = null;
+let routeCacheAt = null;
+
+/** Invalidated by any change to assignments — cheap enough to rebuild, but a
+    queue of 80 lines would otherwise rebuild it 80 times per render. */
+function routes() {
+  const stamp = Object.keys(state.taskAssign || {}).length + ':' + (state.tasks?.length || 0);
+  if (routeCache && routeCacheAt === stamp) return routeCache;
+  routeCache = routeTable();
+  routeCacheAt = stamp;
+  return routeCache;
+}
+
+/** Where this line's component usually ends up, if it is recognised and the
+    line has not already been put somewhere. Returns null when there is nothing
+    worth suggesting — one sighting is a coincidence, not a habit. */
+export function suggestedMachine(task, { minSeen = 2 } = {}) {
+  if (isAssigned(task)) return null;
+  // A finished line has nowhere left to go, and offering to route it would put
+  // the badge on rows nobody is deciding about.
+  if (effectiveTaskStatus(task).key === 'DONE') return null;
+
+  const die = (task.origin || task).die;
+  if (!die) return null;
+
+  const counts = routes().get(die);
+  if (!counts) return null;
+
+  // Only machines in this line's own centre: a die seen on FOM 2 says nothing
+  // about which CNC should take it.
+  const group = MACHINE_GROUP[task.machine];
+  const options = [...counts.entries()]
+    .filter(([m]) => MACHINE_GROUP[m] === group && m !== task.machine)
+    .sort((a, b) => b[1] - a[1]);
+
+  if (!options.length) return null;
+  const [machine, seen] = options[0];
+  const total = options.reduce((a, [, n]) => a + n, 0);
+  if (seen < minSeen) return null;
+
+  return { machine, seen, total, die, sure: seen === total };
+}
+
+/** Every unassigned line in a centre that has a suggestion, so the whole queue
+    can be routed in one go rather than one line at a time. */
+export function suggestionsIn(group) {
+  const out = [];
+  for (const t of tasksInScope()) {
+    const task = resolveTask(t);
+    if (MACHINE_GROUP[task.machine] !== group) continue;
+    const s = suggestedMachine(task);
+    if (s) out.push({ task, ...s });
+  }
+  return out;
+}
+
+/* ---------- what is running, for the shift update ---------- */
+
+/** Lines the schedules say are in process on a machine right now, phrased the
+    way the shift update is written. Separate from workInShift(): that is what
+    moved during one shift's hours as recorded in the app, this is the standing
+    state of the machine however it got there — including lines the workbook
+    itself marks IP, which is most of them until everyone is using the app. */
+export function inProgressLines(machineKey) {
+  return runningNow(machineKey).map(({ task }) => {
+    const what = task.project || task.wo;
+    const where = task.floor ? ` ${task.floor}` : '';
+    const die = task.die ? ` (${task.die})` : '';
+    return `${what}${where}${die}-I.P`;
+  });
 }

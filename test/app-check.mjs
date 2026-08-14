@@ -734,6 +734,77 @@ const suFallback = await page.evaluate(() =>
 step('Multi Punch falls back to the workbook: ' + (!suFallback));
 if (suFallback) throw new Error('a machine with no written update claims to have one');
 
+/* ---------- learned routing ---------- */
+
+/* The CNC & FMC sheet says nothing about which machine runs a line. Put the
+   same component on FMC 1 twice by hand, and a third line carrying it must be
+   recognised — that is the knowledge that otherwise lives in somebody's head
+   and gets re-applied every import. */
+await gotoTab('CNC & FMC');
+await page.waitForSelector('.line');
+
+const learn = await page.evaluate(() => import('/js/model.js').then(async (mo) => {
+  const st = await import('/js/store.js');
+  // A die with at least three unassigned lines in the queue, so two can teach
+  // the app and one is left to be recognised.
+  const byDie = new Map();
+  for (const t of mo.tasksInScope()) {
+    if (t.machine !== 'cncfmc' || !t.die) continue;
+    if (st.state.taskAssign[mo.taskStatusKey(t)]) continue;
+    // Finished lines are deliberately never routed, so they cannot teach or be
+    // taught here either.
+    if (mo.effectiveTaskStatus(t).key === 'DONE') continue;
+    if (!byDie.has(t.die)) byDie.set(t.die, []);
+    byDie.get(t.die).push(mo.taskStatusKey(t));
+  }
+  const found = [...byDie.entries()].find(([, keys]) => keys.length >= 3);
+  if (!found) return { die: null };
+  const [die, keys] = found;
+  return { die, keys: keys.slice(0, 3), pool: keys.length };
+}));
+step(`teaching with die ${learn.die} (${learn.pool} lines in the queue)`);
+if (!learn.die) throw new Error('no repeated component in the CNC queue to learn from');
+
+// Nothing to suggest from a single sighting.
+await page.evaluate(([k, m]) => import('/js/store.js').then((s) =>
+  s.setTaskMachine(k, m, 'cncfmc')), [learn.keys[0], 'fmc1']);
+const afterOne = await page.evaluate((k) => import('/js/model.js').then((mo) =>
+  mo.suggestedMachine(mo.taskByKey(k)) ? 'suggested' : 'nothing yet'), learn.keys[2]);
+step('after one assignment: ' + afterOne);
+if (afterOne !== 'nothing yet') throw new Error('one sighting is a coincidence, not a habit');
+
+// Two makes it a habit.
+await page.evaluate(([k, m]) => import('/js/store.js').then((s) =>
+  s.setTaskMachine(k, m, 'cncfmc')), [learn.keys[1], 'fmc1']);
+const afterTwo = await page.evaluate((k) => import('/js/model.js').then((mo) => {
+  const s = mo.suggestedMachine(mo.taskByKey(k));
+  return s ? { machine: s.machine, seen: s.seen, total: s.total } : null;
+}), learn.keys[2]);
+step('after two: ' + JSON.stringify(afterTwo));
+if (!afterTwo || afterTwo.machine !== 'fmc1' || afterTwo.seen !== 2) {
+  throw new Error('the app did not learn where this component goes: ' + JSON.stringify(afterTwo));
+}
+
+// It shows on the row, and routes the queue in one action.
+await page.reload();
+await page.waitForSelector('header.top');
+await gotoTab('CNC & FMC');
+await page.waitForSelector('.routebar');
+const routeOffer = await page.$eval('.routebar strong', (n) => n.textContent.trim());
+step('route bar: ' + routeOffer);
+await page.click('.routebar button.primary');
+await page.waitForTimeout(400);
+const routed = await page.evaluate((k) => import('/js/store.js').then((s) =>
+  s.state.taskAssign[k]?.machine || null), learn.keys[2]);
+step('third line after routing the queue: ' + routed);
+if (routed !== 'fmc1') throw new Error('routing the queue did not move the recognised line');
+
+// A line already put somewhere is never second-guessed.
+const noSuggestForAssigned = await page.evaluate((k) => import('/js/model.js').then((mo) =>
+  mo.suggestedMachine(mo.taskByKey(k))), learn.keys[0]);
+if (noSuggestForAssigned) throw new Error('an assigned line should not be re-suggested');
+step('assigned lines are left alone');
+
 /* ---------- a job added by hand ---------- */
 
 // It must appear in the queue like any other line, take a status, and survive

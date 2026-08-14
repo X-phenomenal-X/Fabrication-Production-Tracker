@@ -1410,6 +1410,54 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
 .badge-moved svg { flex-shrink: 0; opacity: .7; }
 .movebtn .muted { line-height: 1.3; }
 
+/* ---------- learned routing ---------- */
+
+/* Where this component usually goes. A suggestion, so it reads as an offer
+   rather than a state the line is already in — dashed, and it is a button. */
+.badge-route {
+  display: inline-flex; align-items: center; gap: var(--s1);
+  /* It sits among badges but it is not one — one tap routes the line, so it
+     gets a real target rather than label height. */
+  min-height: 32px; padding: 4px 11px 4px 8px; border-radius: var(--r-sm);
+  font-size: var(--t-xs); font-weight: 700; letter-spacing: .02em;
+  background: none; color: var(--accent); box-shadow: none;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.badge-route:hover:not(:disabled) {
+  background: var(--accent-soft); border-style: solid; border-color: var(--accent);
+}
+.badge-route svg { flex-shrink: 0; opacity: .8; }
+
+/* Routing the whole queue at once. Sits above the machine's work because it is
+   about the queue rather than any one line in it. */
+.routebar {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  margin-top: var(--s4); padding: var(--s3) var(--s4);
+  background: var(--accent-soft); border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+}
+.routebar > svg { color: var(--accent); flex-shrink: 0; }
+.routebar strong { color: var(--ink); }
+/* The tinted panel is a lighter ground than a plain one, and --ink-3 landed at
+   4.48:1 on it in dark mode. The breakdown line is the useful half of this bar,
+   so it takes the stronger ink rather than being nearly-legible. */
+.routebar .muted { color: var(--ink-2); }
+
+.routehint {
+  display: flex; align-items: flex-start; gap: var(--s2);
+  margin: var(--s3) 0; padding: var(--s2) var(--s3);
+  font-size: var(--t-sm); color: var(--ink-2);
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+}
+.routehint svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
+
+/* The third suggestion source on a shift-update card: what is running now, as
+   against what moved this shift and what the workbook said. */
+.sugblock.running { border-color: color-mix(in srgb, var(--work) 30%, transparent); }
+.sugblock.running .sugblock-head { background: var(--work-soft); color: var(--work); }
+.sugblock.running .sugblock-count { background: var(--work); color: var(--on-fill); }
+
 /* ---------- today ---------- */
 
 /* The day's own list: things no schedule knows about. */
@@ -1506,7 +1554,7 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
 
 @media (max-width: 720px) {
   button, .btn, button.sm, .pill, .subtabs button, .dgroup-pick, .dgroup-toggle,
-  .linkbtn, .iconbtn, .line-iconbtn, .bulk-btn, .bulk-x, .sug-chip,
+  .linkbtn, .iconbtn, .line-iconbtn, .bulk-btn, .bulk-x, .sug-chip, .badge-route,
   input, select, textarea, .donetoggle, .line-pick, .su-recentrow {
     min-height: var(--tap);
   }
@@ -2359,6 +2407,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     if (!machine || machine === importedMachine) forget("taskAssign", key);
     else state.taskAssign[key] = { machine, at: now(), by: me() };
     logChange(key, "machine", null, cur, next);
+  }
+  function setTaskMachine(key, machine, importedMachine) {
+    assignOne(key, machine, importedMachine);
+    save();
   }
   function setTaskMachineMany(keys, machine, importedMachine) {
     const originOf = typeof importedMachine === "function" ? importedMachine : () => importedMachine;
@@ -3418,7 +3470,67 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     return { tasks, shiftUpdate, report };
   }
 
+  // js/machines.js
+  var MACHINES = [
+    { key: "roll-auto", label: "Rolling (Auto)", group: "Rolling", ops: 4, note: "Etas" },
+    { key: "roll-man", label: "Rolling (Manual)", group: "Rolling", ops: 2, note: "Iota" },
+    { key: "fom1", label: "FOM 1", group: "FOM", ops: 1, note: "8900 + Screen" },
+    { key: "fom2", label: "FOM 2", group: "FOM", ops: 1, note: "Widths" },
+    { key: "fom3", label: "FOM 3", group: "FOM", ops: 1, note: "Vent + Widths" },
+    /* CNC & FMC. The workbook's `CNC & FMC` sheet is one flat list with no
+       machine column — there is no per-machine CNC schedule anywhere in it — so
+       everything it imports lands in this shared queue and is put on a machine
+       by hand. `queue: true` marks it as the holding pen rather than a machine
+       anyone stands at, so it is skipped on the shift update and in targets. */
+    {
+      key: "cncfmc",
+      label: "Unassigned",
+      group: "CNC",
+      queue: true,
+      note: "straight off the CNC & FMC sheet"
+    },
+    /* One machine, two names: the shift-update sheet writes it as CNC-3 while
+       the floor calls it CNC 1. Both are mapped to this key in SU_MACHINE, so
+       its schedule and its shift-update entry land together. */
+    {
+      key: "cnc1",
+      label: "CNC 1",
+      group: "CNC",
+      ops: 1,
+      note: "CNC-3 on the shift update"
+    },
+    { key: "fmc1", label: "FMC 1", group: "CNC", ops: 1 },
+    { key: "fmc2", label: "FMC 2", group: "CNC", ops: 1 },
+    { key: "multipunch", label: "Multi Punch", group: "Punch", ops: 1, note: "pcs not frames" }
+  ];
+  var STANDING_ROWS = [
+    { key: "service", label: "Service Orders" },
+    { key: "k1285", label: "K1285 Pulls" },
+    { key: "backorder", label: "Back Order" }
+  ];
+  var MACHINE_BY_KEY = Object.fromEntries(
+    [...MACHINES, ...STANDING_ROWS].map((m) => [m.key, m])
+  );
+  function assignableIn(group) {
+    return MACHINES.filter((m) => m.group === group && !m.queue);
+  }
+  function hasQueue(group) {
+    return MACHINES.some((m) => m.group === group && m.queue);
+  }
+  function canMoveIn(group) {
+    return assignableIn(group).length > 1;
+  }
+  function machinesByGroup() {
+    const groups = /* @__PURE__ */ new Map();
+    for (const m of MACHINES) {
+      if (!groups.has(m.group)) groups.set(m.group, []);
+      groups.get(m.group).push(m);
+    }
+    return groups;
+  }
+
   // js/model.js
+  var MACHINE_GROUP = Object.fromEntries(MACHINES.map((m) => [m.key, m.group]));
   function today() {
     return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   }
@@ -3758,73 +3870,68 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     const log = state.shiftLogs?.[`${date2}|${shift}`];
     return !!(log && (Object.keys(log.rows || {}).length || (log.notes || "").trim()));
   }
+  function routeTable() {
+    const byDie = /* @__PURE__ */ new Map();
+    for (const t of tasksInScope()) {
+      const key = taskStatusKey(t);
+      const assigned = state.taskAssign?.[key]?.machine;
+      if (!assigned) continue;
+      const die = (t.origin || t).die;
+      if (!die) continue;
+      if (!byDie.has(die)) byDie.set(die, /* @__PURE__ */ new Map());
+      const counts = byDie.get(die);
+      counts.set(assigned, (counts.get(assigned) || 0) + 1);
+    }
+    return byDie;
+  }
+  var routeCache = null;
+  var routeCacheAt = null;
+  function routes() {
+    const stamp = Object.keys(state.taskAssign || {}).length + ":" + (state.tasks?.length || 0);
+    if (routeCache && routeCacheAt === stamp) return routeCache;
+    routeCache = routeTable();
+    routeCacheAt = stamp;
+    return routeCache;
+  }
+  function suggestedMachine(task, { minSeen = 2 } = {}) {
+    if (isAssigned(task)) return null;
+    if (effectiveTaskStatus(task).key === "DONE") return null;
+    const die = (task.origin || task).die;
+    if (!die) return null;
+    const counts = routes().get(die);
+    if (!counts) return null;
+    const group = MACHINE_GROUP[task.machine];
+    const options = [...counts.entries()].filter(([m]) => MACHINE_GROUP[m] === group && m !== task.machine).sort((a, b) => b[1] - a[1]);
+    if (!options.length) return null;
+    const [machine, seen] = options[0];
+    const total = options.reduce((a, [, n]) => a + n, 0);
+    if (seen < minSeen) return null;
+    return { machine, seen, total, die, sure: seen === total };
+  }
+  function suggestionsIn(group) {
+    const out = [];
+    for (const t of tasksInScope()) {
+      const task = resolveTask(t);
+      if (MACHINE_GROUP[task.machine] !== group) continue;
+      const s = suggestedMachine(task);
+      if (s) out.push({ task, ...s });
+    }
+    return out;
+  }
+  function inProgressLines(machineKey) {
+    return runningNow(machineKey).map(({ task }) => {
+      const what = task.project || task.wo;
+      const where = task.floor ? ` ${task.floor}` : "";
+      const die = task.die ? ` (${task.die})` : "";
+      return `${what}${where}${die}-I.P`;
+    });
+  }
 
   // js/views/centre.js
   init_ui();
 
   // js/views/backorders.js
   init_ui();
-
-  // js/machines.js
-  var MACHINES = [
-    { key: "roll-auto", label: "Rolling (Auto)", group: "Rolling", ops: 4, note: "Etas" },
-    { key: "roll-man", label: "Rolling (Manual)", group: "Rolling", ops: 2, note: "Iota" },
-    { key: "fom1", label: "FOM 1", group: "FOM", ops: 1, note: "8900 + Screen" },
-    { key: "fom2", label: "FOM 2", group: "FOM", ops: 1, note: "Widths" },
-    { key: "fom3", label: "FOM 3", group: "FOM", ops: 1, note: "Vent + Widths" },
-    /* CNC & FMC. The workbook's `CNC & FMC` sheet is one flat list with no
-       machine column — there is no per-machine CNC schedule anywhere in it — so
-       everything it imports lands in this shared queue and is put on a machine
-       by hand. `queue: true` marks it as the holding pen rather than a machine
-       anyone stands at, so it is skipped on the shift update and in targets. */
-    {
-      key: "cncfmc",
-      label: "Unassigned",
-      group: "CNC",
-      queue: true,
-      note: "straight off the CNC & FMC sheet"
-    },
-    /* One machine, two names: the shift-update sheet writes it as CNC-3 while
-       the floor calls it CNC 1. Both are mapped to this key in SU_MACHINE, so
-       its schedule and its shift-update entry land together. */
-    {
-      key: "cnc1",
-      label: "CNC 1",
-      group: "CNC",
-      ops: 1,
-      note: "CNC-3 on the shift update"
-    },
-    { key: "fmc1", label: "FMC 1", group: "CNC", ops: 1 },
-    { key: "fmc2", label: "FMC 2", group: "CNC", ops: 1 },
-    { key: "multipunch", label: "Multi Punch", group: "Punch", ops: 1, note: "pcs not frames" }
-  ];
-  var STANDING_ROWS = [
-    { key: "service", label: "Service Orders" },
-    { key: "k1285", label: "K1285 Pulls" },
-    { key: "backorder", label: "Back Order" }
-  ];
-  var MACHINE_BY_KEY = Object.fromEntries(
-    [...MACHINES, ...STANDING_ROWS].map((m) => [m.key, m])
-  );
-  function assignableIn(group) {
-    return MACHINES.filter((m) => m.group === group && !m.queue);
-  }
-  function hasQueue(group) {
-    return MACHINES.some((m) => m.group === group && m.queue);
-  }
-  function canMoveIn(group) {
-    return assignableIn(group).length > 1;
-  }
-  function machinesByGroup() {
-    const groups = /* @__PURE__ */ new Map();
-    for (const m of MACHINES) {
-      if (!groups.has(m.group)) groups.set(m.group, []);
-      groups.get(m.group).push(m);
-    }
-    return groups;
-  }
-
-  // js/views/backorders.js
   function machineLabel(key) {
     const m = MACHINE_BY_KEY[key];
     return m ? machineConfig(m).label : key;
@@ -4685,6 +4792,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     const sheetNote = t.comments || (bo.on ? null : t.boStat);
     const selected = vs.selected.has(key);
     const canMove = canMoveIn(group);
+    const suggestion = canMove ? suggestedMachine(t) : null;
     const node = el(
       "div.line" + (selected ? ".sel" : "") + (rush.on ? ".rush" : "") + (bo.on ? ".is-bo" : "") + (t.editedAt ? ".is-edited" : ""),
       {},
@@ -4734,6 +4842,24 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           t.manual ? el("span.badge-manual", {
             title: `Added by hand by ${t.by} \xB7 ${fmtWhen(t.at)} \u2014 not in the workbook`
           }, icon("pencil", { size: 10 }), "added here") : null,
+          // What this component usually gets put on. Offered, never applied on
+          // its own: routing a line to the wrong machine is a real cost, and the
+          // person reading the row is the one who knows whether this time is
+          // different.
+          suggestion ? el(
+            "button.badge-route",
+            {
+              title: `${suggestion.die} has been put on ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label} ${suggestion.seen} of ${suggestion.total} times. Click to put this one there.`,
+              onclick: (e) => {
+                e.stopPropagation();
+                setTaskMachine(key, suggestion.machine, t.machine);
+                toast(`${t.wo} \u2192 ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label}`);
+                rerender();
+              }
+            },
+            icon("arrow", { size: 10 }),
+            `usually ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label}`
+          ) : null,
           // Without this a job that someone moved just appears on a machine the
           // workbook never put it on, and the machine it left cannot tell where
           // it went.
@@ -4840,6 +4966,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       rerender();
     };
     const blurb = queue ? "The workbook does not say which machine these run on \u2014 that is decided here." : origins.size === 1 && imported ? `The workbook has ${single ? "this" : "these"} on ${label(imported)}. Moving ${single ? "it" : "them"} here overrides that until you put ${single ? "it" : "them"} back.` : "These came off more than one machine. Moving them overrides what the workbook says.";
+    const learned = single ? suggestedMachine(first) : null;
     const body = el(
       "div",
       {},
@@ -4848,6 +4975,19 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         { style: { marginTop: 0 } },
         blurb + " The line keeps its status, note, history, rush and back order, and the move survives re-importing the workbook."
       ),
+      learned ? el(
+        "div.routehint",
+        {},
+        icon("arrow", { size: 14 }),
+        el(
+          "span",
+          {},
+          el("strong", {}, learned.die),
+          " has been put on ",
+          el("strong", {}, label(learned.machine)),
+          ` ${learned.seen} of ${learned.total} time${learned.total === 1 ? "" : "s"} before.`
+        )
+      ) : null,
       el("div.movegrid", {}, ...targets.map((m) => el(
         "button.movebtn" + (m.key === cur ? ".on" : ""),
         {
@@ -5439,6 +5579,37 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           )
         )
       );
+      const suggestions2 = canMoveIn(group) ? suggestionsIn(group) : [];
+      const routeBanner = suggestions2.length ? el(
+        "div.routebar",
+        {},
+        icon("arrow", { size: 16 }),
+        el(
+          "div",
+          {},
+          el("strong", {}, `${fmtNum(suggestions2.length)} line${suggestions2.length === 1 ? "" : "s"} can be routed from what these components usually run on`),
+          el(
+            "div.small.muted",
+            {},
+            Object.entries(suggestions2.reduce((a, s) => {
+              const label = machineConfig(MACHINE_BY_KEY[s.machine]).label;
+              a[label] = (a[label] || 0) + 1;
+              return a;
+            }, {})).map(([label, n]) => `${n} \u2192 ${label}`).join(" \xB7 ")
+          )
+        ),
+        el("span.spacer"),
+        el("button.primary", {
+          onclick: () => {
+            const before = suggestions2.length;
+            for (const s of suggestions2) {
+              setTaskMachine(taskStatusKey(s.task), s.machine, s.task.machine);
+            }
+            toast(`Routed ${before} line${before === 1 ? "" : "s"}`);
+            rerender();
+          }
+        }, icon("check", { size: 15 }), "Route them")
+      ) : null;
       const body = groups.length ? el("div", {}, ...groups.map((g) => dateGroup(g, vs, rerender, group))) : el("div.panel", {}, el(
         "div.empty",
         {},
@@ -5450,6 +5621,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         "div.centre",
         {},
         head,
+        routeBanner,
         nowRunningPanel(machine, rerender, vs),
         shiftUpdatePanel(machine.key),
         body,
@@ -5877,6 +6049,7 @@ ${text}` : text;
       }))
     ) : null;
     const tracked = entry.tracked || [];
+    const running = entry.running || [];
     const sheet = entry.sheet;
     const age = sheet ? shiftUpdateAge(sheet.date) : null;
     const from = sheet ? `From the workbook${sheet.date ? ` \xB7 ${fmtDate(sheet.date)}${age && age.days ? ` (${age.label})` : ""}` : ""}` : "";
@@ -5892,6 +6065,18 @@ ${text}` : text;
       ),
       group("Add to work done", "done", tracked)
     ) : null;
+    const nowRunning = running.length ? el(
+      "div.sugblock.running",
+      {},
+      el(
+        "div.sugblock-head",
+        {},
+        icon("play", { size: 12 }),
+        el("span", {}, "In process now"),
+        el("span.sugblock-count", {}, String(running.length))
+      ),
+      group("Add to work done", "done", running)
+    ) : null;
     const fromSheet = sheet && ((sheet.done || []).length || (sheet.next || []).length || (sheet.notes || []).length) ? el(
       "div.sugblock.sheet",
       {},
@@ -5906,8 +6091,8 @@ ${text}` : text;
       group("Next in schedule", "next", sheet.next || []),
       group("Notes", "notes", sheet.notes || [])
     ) : null;
-    if (!live && !fromSheet) return null;
-    return el("div.sugs", {}, live, fromSheet);
+    if (!live && !nowRunning && !fromSheet) return null;
+    return el("div.sugs", {}, live, nowRunning, fromSheet);
   }
   function trackedLines(machineKey) {
     if (!machineKey) return [];
@@ -5923,6 +6108,7 @@ ${text}` : text;
     const row = rowFor(machine.key);
     const sheet = machine.standing ? null : shiftUpdateFor(machine.key);
     const tracked = machine.standing ? [] : trackedLines(machine.key);
+    const running = machine.standing ? [] : inProgressLines(machine.key);
     const filled = hasContent(row);
     const box = (field, label, placeholder, lines2) => el(
       "label.field",
@@ -5997,7 +6183,7 @@ ${add.join("\n")}` : add.join("\n");
         box("next", "Next in schedule", "1-\n2-\n3-", 3),
         box("notes", "Notes", "Breakdowns, material, anything the next shift needs", 2)
       ),
-      suggestions(row, { tracked, sheet }, rerender)
+      suggestions(row, { tracked, running, sheet }, rerender)
     );
   }
   function writeView(rerender) {

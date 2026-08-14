@@ -13,13 +13,14 @@ import {
 import {
   setTaskStatus, setTaskStatusMany, restoreTaskStatus, setTaskNote,
   setMachineConfig, resetMachineConfig, setTaskFields, clearTaskEdits, historyFor,
-  setTaskMachineMany,
+  setTaskMachineMany, setTaskMachine,
   EDITABLE_FIELDS, state,
 } from '../store.js';
 import {
   groupedQueue, machineSummary, openCountFor, runningNow, taskStatusKey, hasTasks,
   shiftUpdateFor, taskNoteFor, machineConfig, resolveBackOrder, resolveRush,
   isAssigned, taskByKey, staleImports, shiftUpdateAge, manualIdFor,
+  suggestedMachine, suggestionsIn,
   TRACK_STATUS_ORDER, TRACK_STATUS,
 } from '../model.js';
 import { backOrderDialog } from './backorders.js';
@@ -118,6 +119,7 @@ function taskLine(row, vs, rerender, group) {
   const sheetNote = t.comments || (bo.on ? null : t.boStat);
   const selected = vs.selected.has(key);
   const canMove = canMoveIn(group);
+  const suggestion = canMove ? suggestedMachine(t) : null;
 
   // The rail down the left edge is picked in CSS by priority; the row only has
   // to say which states apply.
@@ -157,6 +159,22 @@ function taskLine(row, vs, rerender, group) {
         t.manual ? el('span.badge-manual', {
           title: `Added by hand by ${t.by} · ${fmtWhen(t.at)} — not in the workbook`,
         }, icon('pencil', { size: 10 }), 'added here') : null,
+        // What this component usually gets put on. Offered, never applied on
+        // its own: routing a line to the wrong machine is a real cost, and the
+        // person reading the row is the one who knows whether this time is
+        // different.
+        suggestion ? el('button.badge-route', {
+          title: `${suggestion.die} has been put on `
+            + `${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label} `
+            + `${suggestion.seen} of ${suggestion.total} times. Click to put this one there.`,
+          onclick: (e) => {
+            e.stopPropagation();
+            setTaskMachine(key, suggestion.machine, t.machine);
+            toast(`${t.wo} → ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label}`);
+            rerender();
+          },
+        }, icon('arrow', { size: 10 }),
+          `usually ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label}`) : null,
         // Without this a job that someone moved just appears on a machine the
         // workbook never put it on, and the machine it left cannot tell where
         // it went.
@@ -270,10 +288,17 @@ function moveDialog(keys, group, rerender) {
         + `${single ? 'it' : 'them'} here overrides that until you put ${single ? 'it' : 'them'} back.`
       : 'These came off more than one machine. Moving them overrides what the workbook says.';
 
+  const learned = single ? suggestedMachine(first) : null;
+
   const body = el('div', {},
     el('p.small.muted', { style: { marginTop: 0 } },
       blurb + ' The line keeps its status, note, history, rush and back order, '
       + 'and the move survives re-importing the workbook.'),
+    learned ? el('div.routehint', {},
+      icon('arrow', { size: 14 }),
+      el('span', {}, el('strong', {}, learned.die), ' has been put on ',
+        el('strong', {}, label(learned.machine)),
+        ` ${learned.seen} of ${learned.total} time${learned.total === 1 ? '' : 's'} before.`)) : null,
     el('div.movegrid', {}, ...targets.map((m) => el('button.movebtn' + (m.key === cur ? '.on' : ''), {
       onclick: (e) => go(e.target.closest('dialog'), m.key),
     },
@@ -721,6 +746,34 @@ export function makeCentreView(group) {
           }),
           `Show done${sum.done ? ` (${fmtNum(sum.done)})` : ''}`)));
 
+    /* Routing 80 unassigned lines one at a time is the job this page was
+       making somebody do every import. Where the component is recognised, it
+       can be done in one action — still a deliberate one, and still reversible
+       line by line afterwards. */
+    const suggestions = canMoveIn(group) ? suggestionsIn(group) : [];
+    const routeBanner = suggestions.length ? el('div.routebar', {},
+      icon('arrow', { size: 16 }),
+      el('div', {},
+        el('strong', {}, `${fmtNum(suggestions.length)} line${suggestions.length === 1 ? '' : 's'} `
+          + 'can be routed from what these components usually run on'),
+        el('div.small.muted', {},
+          Object.entries(suggestions.reduce((a, s) => {
+            const label = machineConfig(MACHINE_BY_KEY[s.machine]).label;
+            a[label] = (a[label] || 0) + 1;
+            return a;
+          }, {})).map(([label, n]) => `${n} → ${label}`).join(' · '))),
+      el('span.spacer'),
+      el('button.primary', {
+        onclick: () => {
+          const before = suggestions.length;
+          for (const s of suggestions) {
+            setTaskMachine(taskStatusKey(s.task), s.machine, s.task.machine);
+          }
+          toast(`Routed ${before} line${before === 1 ? '' : 's'}`);
+          rerender();
+        },
+      }, icon('check', { size: 15 }), 'Route them')) : null;
+
     const body = groups.length
       ? el('div', {}, ...groups.map((g) => dateGroup(g, vs, rerender, group)))
       : el('div.panel', {}, el('div.empty', {},
@@ -732,6 +785,7 @@ export function makeCentreView(group) {
 
     return el('div.centre', {},
       head,
+      routeBanner,
       nowRunningPanel(machine, rerender, vs),
       shiftUpdatePanel(machine.key),
       body,

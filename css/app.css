@@ -1395,6 +1395,54 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
 .badge-moved svg { flex-shrink: 0; opacity: .7; }
 .movebtn .muted { line-height: 1.3; }
 
+/* ---------- learned routing ---------- */
+
+/* Where this component usually goes. A suggestion, so it reads as an offer
+   rather than a state the line is already in — dashed, and it is a button. */
+.badge-route {
+  display: inline-flex; align-items: center; gap: var(--s1);
+  /* It sits among badges but it is not one — one tap routes the line, so it
+     gets a real target rather than label height. */
+  min-height: 32px; padding: 4px 11px 4px 8px; border-radius: var(--r-sm);
+  font-size: var(--t-xs); font-weight: 700; letter-spacing: .02em;
+  background: none; color: var(--accent); box-shadow: none;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.badge-route:hover:not(:disabled) {
+  background: var(--accent-soft); border-style: solid; border-color: var(--accent);
+}
+.badge-route svg { flex-shrink: 0; opacity: .8; }
+
+/* Routing the whole queue at once. Sits above the machine's work because it is
+   about the queue rather than any one line in it. */
+.routebar {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  margin-top: var(--s4); padding: var(--s3) var(--s4);
+  background: var(--accent-soft); border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+}
+.routebar > svg { color: var(--accent); flex-shrink: 0; }
+.routebar strong { color: var(--ink); }
+/* The tinted panel is a lighter ground than a plain one, and --ink-3 landed at
+   4.48:1 on it in dark mode. The breakdown line is the useful half of this bar,
+   so it takes the stronger ink rather than being nearly-legible. */
+.routebar .muted { color: var(--ink-2); }
+
+.routehint {
+  display: flex; align-items: flex-start; gap: var(--s2);
+  margin: var(--s3) 0; padding: var(--s2) var(--s3);
+  font-size: var(--t-sm); color: var(--ink-2);
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+}
+.routehint svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
+
+/* The third suggestion source on a shift-update card: what is running now, as
+   against what moved this shift and what the workbook said. */
+.sugblock.running { border-color: color-mix(in srgb, var(--work) 30%, transparent); }
+.sugblock.running .sugblock-head { background: var(--work-soft); color: var(--work); }
+.sugblock.running .sugblock-count { background: var(--work); color: var(--on-fill); }
+
 /* ---------- today ---------- */
 
 /* The day's own list: things no schedule knows about. */
@@ -1491,7 +1539,7 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
 
 @media (max-width: 720px) {
   button, .btn, button.sm, .pill, .subtabs button, .dgroup-pick, .dgroup-toggle,
-  .linkbtn, .iconbtn, .line-iconbtn, .bulk-btn, .bulk-x, .sug-chip,
+  .linkbtn, .iconbtn, .line-iconbtn, .bulk-btn, .bulk-x, .sug-chip, .badge-route,
   input, select, textarea, .donetoggle, .line-pick, .su-recentrow {
     min-height: var(--tap);
   }

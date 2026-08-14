@@ -19,6 +19,7 @@ import {
 import { state, saveShiftLog, deleteShiftLog, me } from '../store.js';
 import {
   today, hasTasks, machineConfig, shiftUpdateFor, workInShift, shiftUpdateAge,
+  inProgressLines,
 } from '../model.js';
 import { machinesByGroup, STANDING_ROWS } from '../machines.js';
 import { SHIFTS, SHIFT_ORDER, shiftAt } from '../shifts.js';
@@ -142,6 +143,7 @@ function suggestions(row, entry, rerender) {
     : null);
 
   const tracked = entry.tracked || [];
+  const running = entry.running || [];
   const sheet = entry.sheet;
 
   // Date the workbook suggestions: they are a snapshot from whenever the file
@@ -166,6 +168,19 @@ function suggestions(row, entry, rerender) {
         group('Add to work done', 'done', tracked))
     : null;
 
+  /* What the schedules say is in process on this machine right now, whoever
+     set it and whenever. Distinct from the block above, which is only what
+     moved inside this shift's hours as recorded here — until everyone is using
+     the app that block is thin, while the workbook's own IP marks are not. */
+  const nowRunning = running.length
+    ? el('div.sugblock.running', {},
+        el('div.sugblock-head', {},
+          icon('play', { size: 12 }),
+          el('span', {}, 'In process now'),
+          el('span.sugblock-count', {}, String(running.length))),
+        group('Add to work done', 'done', running))
+    : null;
+
   const fromSheet = sheet && ((sheet.done || []).length || (sheet.next || []).length || (sheet.notes || []).length)
     ? el('div.sugblock.sheet', {},
         el('div.sugblock-head', {},
@@ -177,8 +192,8 @@ function suggestions(row, entry, rerender) {
         group('Notes', 'notes', sheet.notes || []))
     : null;
 
-  if (!live && !fromSheet) return null;
-  return el('div.sugs', {}, live, fromSheet);
+  if (!live && !nowRunning && !fromSheet) return null;
+  return el('div.sugs', {}, live, nowRunning, fromSheet);
 }
 
 /** The tracker's own record of what moved, phrased the way the sheet is. */
@@ -197,6 +212,7 @@ function card(machine, rerender) {
   const row = rowFor(machine.key);
   const sheet = machine.standing ? null : shiftUpdateFor(machine.key);
   const tracked = machine.standing ? [] : trackedLines(machine.key);
+  const running = machine.standing ? [] : inProgressLines(machine.key);
   const filled = hasContent(row);
 
   const box = (field, label, placeholder, lines) => el('label.field', {},
@@ -256,7 +272,7 @@ function card(machine, rerender) {
       box('next', 'Next in schedule', '1-\n2-\n3-', 3),
       box('notes', 'Notes', 'Breakdowns, material, anything the next shift needs', 2)),
 
-    suggestions(row, { tracked, sheet }, rerender));
+    suggestions(row, { tracked, running, sheet }, rerender));
 }
 
 function writeView(rerender) {

@@ -157,6 +157,49 @@ status silently loses the back-order half — 67 open lines in the sample data.
 It is parsed into its own flag and shown as a red **B/O** badge beside the
 status, and counted in the header.
 
+## Learned routing
+
+The CNC & FMC sheet says nothing about which machine runs a line, so all of it
+lands in the Unassigned queue and someone puts each one on CNC 1, FMC 1 or
+FMC 2 by hand. The same components come back week after week and the floor
+already knows where each goes — that knowledge just lived in someone's head and
+got re-applied eighty times per import.
+
+So it is read back out of what people actually did. Every hand assignment is a
+decision about a **die**; count them per die and the app can say *this one
+usually goes on FMC 1, seven times out of eight*, and offer to do it — on the
+line as a one-tap `usually FMC 1`, and for the whole queue as a single
+**Route them** action with a breakdown of what goes where.
+
+It is **derived, never stored**. There is no learned-routes table to drift or
+to sync: it is a view over the assignments themselves, so correcting a habit
+corrects the suggestion and clearing an assignment un-teaches it. It only ever
+suggests within a line's own centre — a die seen on FOM 2 says nothing about
+which CNC should take it — and never for a line that is already assigned or
+already finished.
+
+**One sighting is a coincidence, not a habit.** A suggestion needs at least two.
+And nothing is ever applied on its own: routing a line to the wrong machine has
+a real cost, and the person reading the row is the one who knows whether this
+time is different.
+
+`test/app-check.mjs` assigns a component twice, asserts the third line carrying
+it is recognised — and that one assignment is *not* enough — then routes the
+queue in one action and checks the recognised line moved.
+
+## What is running, in the shift update
+
+A machine's card offers three sources now, kept visibly apart because they are
+different claims:
+
+- **What this shift moved** — status changes recorded here inside the shift's
+  own hours. Fact, but only as complete as the app's use.
+- **In process now** — what the schedules say is running on that machine,
+  whoever set it and whenever. This includes the workbook's own `IP` marks,
+  which is most of them until everyone is on the app.
+- **From the workbook** — the `Shift Update 2` snapshot, dated, because it is
+  only as current as the last time the file was saved.
+
 ## Adding a job by hand
 
 The schedules are the source of truth, but the floor runs work that is not on
