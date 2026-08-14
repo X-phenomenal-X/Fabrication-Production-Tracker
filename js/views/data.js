@@ -3,11 +3,12 @@
 
 import { el, chip, fmtDate, fmtNum, fmtWhen, toast, modal, download, confirmDialog } from '../ui.js';
 import {
-  state, setImport, save, exportJson, importJson, resetAll, saveGuideDoc,
+  state, setImport, setMachineImport, save, exportJson, importJson, resetAll, saveGuideDoc,
   connectSharedFile, reconnectSharedFile, grantSharedFile, pullSharedFile,
   supportsSharedFile, sharedFileName, disconnectSharedFile, me,
 } from '../store.js';
 import { importWorkbook, diffRevisions } from '../import.js';
+import { importMachineWorkbook } from '../import-machines.js';
 import { SEED_DOCS } from './guide.js';
 
 let pendingHandle = null;
@@ -130,16 +131,79 @@ async function handleFile(file, rerender) {
   }
 }
 
+async function handleMachineFile(file, kind, rerender) {
+  toast(`Reading ${file.name}…`, 60000);
+  try {
+    const buf = await file.arrayBuffer();
+    const result = await importMachineWorkbook(buf, { kind, fileName: file.name });
+    const r = result.report;
+    setMachineImport(result);
+    toast(`Loaded ${result.tasks.length} tasks from ${file.name}`);
+    modal(`Imported ${file.name}`, el('div', {},
+      el('div.stats', { style: { border: '1px solid var(--line-soft)', borderRadius: '8px', overflow: 'hidden', marginBottom: '14px' } },
+        el('div.stat', {}, el('div.n', {}, fmtNum(r.count)), el('div.k', {}, 'Tasks')),
+        el('div.stat', {}, el('div.n', {}, String(r.sheets.length)), el('div.k', {}, 'Sheets'))),
+      el('ul.list', { style: { border: '1px solid var(--line-soft)', borderRadius: '8px' } },
+        ...r.sheets.map((sh) => el('li', {},
+          el('div.row.small', {},
+            el('strong', {}, sh.sheet),
+            el('span.muted', {}, MACHINE_LABEL[sh.machine] || sh.machine),
+            el('span.spacer'),
+            el('span.mono', {}, fmtNum(sh.rows) + ' rows'))))),
+      r.missing.length ? el('div.banner.warn', { style: { marginTop: '12px' } },
+        el('div', {}, 'Sheets not found: ' + r.missing.join(', '))) : null));
+    rerender();
+  } catch (e) {
+    modal('Import failed', el('div', {},
+      el('p', {}, e.message),
+      el('p.small.muted', {}, 'Nothing already loaded has been changed.')));
+  } finally {
+    document.querySelectorAll('.toast').forEach((t) => t.remove());
+  }
+}
+
+const MACHINE_LABEL = {
+  'roll-auto': 'Rolling (Auto)', 'roll-man': 'Rolling (Manual)',
+  fom1: 'FOM 1', fom2: 'FOM 2', fom3: 'FOM 3',
+  multipunch: 'Multi Punch', cnc1: 'CNC',
+};
+
+/** One drop zone, used for each of the three workbooks. */
+function dropZone({ title, hint, accept = '.xlsx', onFile }) {
+  const zone = el('div.drop', {},
+    el('div', { style: { fontSize: '14px', fontWeight: '600', marginBottom: '4px' } }, title),
+    el('div.small.muted', { style: { marginBottom: '10px' } }, hint),
+    el('button.primary.sm', {
+      onclick: () => {
+        const inp = el('input', { type: 'file', accept, style: { display: 'none' } });
+        inp.addEventListener('change', () => { if (inp.files[0]) onFile(inp.files[0]); });
+        document.body.append(inp); inp.click(); inp.remove();
+      },
+    }, 'Choose file'));
+
+  for (const ev of ['dragenter', 'dragover']) {
+    zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add('over'); });
+  }
+  for (const ev of ['dragleave', 'drop']) {
+    zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove('over'); });
+  }
+  zone.addEventListener('drop', (e) => {
+    const f = e.dataTransfer?.files?.[0];
+    if (f) onFile(f);
+  });
+  return zone;
+}
+
 /* ---------- view ---------- */
 
 export function renderData(rerender) {
   const meta = state.meta;
 
   const drop = el('div.drop', {},
-    el('div', { style: { fontSize: '15px', fontWeight: '600', marginBottom: '4px' } },
-      'Drop the Daily Schedule workbook here'),
-    el('div.small', {}, 'or'),
-    el('div', { style: { marginTop: '10px' } },
+    el('div', { style: { fontSize: '14px', fontWeight: '600', marginBottom: '4px' } },
+      'Daily Schedule'),
+    el('div.small.muted', { style: { marginBottom: '10px' } }, 'Used to verify the machine schedules'),
+    el('div', {},
       el('button.primary', {
         onclick: () => {
           const inp = el('input', { type: 'file', accept: '.xlsx', style: { display: 'none' } });
@@ -150,9 +214,7 @@ export function renderData(rerender) {
           inp.click();
           inp.remove();
         },
-      }, 'Choose file')),
-    el('div.small.muted', { style: { marginTop: '10px' } },
-      'Reads the Daily Sched, WIP, PREP Tracker and screens sch sheets. Nothing is uploaded anywhere.'));
+      }, 'Choose file')));
 
   for (const ev of ['dragenter', 'dragover']) {
     drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); });
@@ -165,11 +227,42 @@ export function renderData(rerender) {
     if (f) handleFile(f, rerender);
   });
 
-  const importPanel = el('div.panel', {},
-    el('header', {}, 'Schedule revision',
+  const mm = state.machineMeta || {};
+  const slot = (label, key, node) => el('div', {},
+    el('div.row', { style: { marginBottom: '6px' } },
+      el('strong.small', {}, label),
       el('span.spacer'),
-      meta.fileName ? el('span.small.muted', {}, `${meta.fileName} · loaded ${fmtWhen(meta.importedAt)}`) : null),
-    el('div.body', {}, drop));
+      mm[key]?.fileName
+        ? el('span.small.muted', {}, `${mm[key].fileName} · ${fmtNum(mm[key].count)} tasks · ${fmtWhen(mm[key].importedAt)}`)
+        : chip('not loaded', 'warn')),
+    node);
+
+  const importPanel = el('div.panel', {},
+    el('header', {}, 'Schedules'),
+    el('div.body', {},
+      el('div.banner.info', { style: { marginBottom: '14px' } },
+        el('div', {},
+          el('strong', {}, 'Rolling and CNC are the base. '),
+          'They carry the per-machine detail — die, quantity, status. The Daily Schedule is imported on top and used to check that dates still agree.')),
+      el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: '14px' } },
+        slot('1 · Rolling schedule', 'rolling', dropZone({
+          title: 'Rolling workbook',
+          hint: 'Auto, Manual and Complete sheets',
+          onFile: (f) => handleMachineFile(f, 'rolling', rerender),
+        })),
+        slot('2 · CNC schedule', 'cnc', dropZone({
+          title: 'CNC workbook',
+          hint: 'FOM 1-3, MultiPunch & SAW, CNC & FMC',
+          onFile: (f) => handleMachineFile(f, 'cnc', rerender),
+        })),
+        el('div', {},
+          el('div.row', { style: { marginBottom: '6px' } },
+            el('strong.small', {}, '3 · Daily Schedule'),
+            el('span.spacer'),
+            meta.fileName
+              ? el('span.small.muted', {}, `${meta.fileName} · ${fmtWhen(meta.importedAt)}`)
+              : chip('not loaded', 'warn')),
+          drop))));
 
   /* shared file */
   const connected = sharedFileName();

@@ -7,8 +7,10 @@ import path from 'path';
 import http from 'http';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const XLSX = process.argv[2] ||
-  '/root/.claude/uploads/042835a0-704b-5601-bc20-4ed82d27578f/6c674bbc-Daily_Schedule_Aug_10_Rev_B.xlsx';
+const DIR = '/root/.claude/uploads/042835a0-704b-5601-bc20-4ed82d27578f';
+const XLSX = process.argv[2] || `${DIR}/6c674bbc-Daily_Schedule_Aug_10_Rev_B.xlsx`;
+const ROLLING = `${DIR}/da7bb9f1-Rolling_Schedule_2026.xlsx`;
+const CNC = `${DIR}/bae855fd-CNC_Schedule_Rev_E.xlsx`;
 const SHOT = path.join(ROOT, 'test', 'screens');
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
@@ -57,11 +59,27 @@ await page.evaluate(() => {
 });
 step('identity set');
 
-// import the workbook
+// base schedules first: rolling, then CNC
 await page.click('nav.tabs button:has-text("Setup")');
 await page.waitForSelector('.drop');
+
+for (const [label, file] of [['Rolling workbook', ROLLING], ['CNC workbook', CNC]]) {
+  const ch = page.waitForEvent('filechooser');
+  await page.click(`.drop:has-text("${label}") button`);
+  await (await ch).setFiles(file);
+  await page.waitForSelector('dialog .stat', { timeout: 120000 });
+  const n = await page.$eval('dialog .stat .n', (x) => x.textContent);
+  step(`${label}: ${n} tasks`);
+  await page.click('dialog header button');
+  await page.waitForSelector('dialog', { state: 'detached' });
+}
+const taskCount = await page.evaluate(() => import('/js/store.js').then((m) => m.state.tasks.length));
+step('machine tasks loaded: ' + taskCount);
+await page.screenshot({ path: path.join(SHOT, '10-setup.png'), fullPage: true });
+
+// then the daily schedule, used for verification
 const chooser = page.waitForEvent('filechooser');
-await page.click('.drop button:has-text("Choose file")');
+await page.click('.drop:has-text("Daily Schedule") button');
 await (await chooser).setFiles(XLSX);
 await page.waitForSelector('dialog .stat', { timeout: 60000 });
 const importStats = await page.$$eval('dialog .stat', (ns) =>
@@ -144,6 +162,14 @@ const hinge = await page.evaluate(() => Promise.all([import('/js/model.js'), imp
              profiles: mm.profileRollup(o).map((r) => r.profile.label) };
   }));
 step('8560 hinge rule: ' + JSON.stringify(hinge));
+
+// verify machine schedules against the daily schedule
+await page.click('nav.tabs button:has-text("Verify")');
+await page.waitForSelector('main .stat');
+const vstats = await page.$$eval('main .stat', (ns) =>
+  ns.map((n) => n.querySelector('.k').textContent + '=' + n.querySelector('.n').textContent));
+step('verify: ' + vstats.join(' '));
+await page.screenshot({ path: path.join(SHOT, '11-verify.png'), fullPage: true });
 
 // materials
 await page.click('nav.tabs button:has-text("Materials")');

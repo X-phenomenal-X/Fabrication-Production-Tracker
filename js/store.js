@@ -23,6 +23,8 @@ export const state = {
   material: {},   // `${orderId}|${profileKey}` -> { status, note, at, by }
   history: [],    // every change, newest first — the traceability record
   manualOrders: {}, // id -> order added by hand, e.g. service orders
+  tasks: [],        // machine-schedule rows: the base for scheduling
+  machineMeta: {},  // kind -> { fileName, importedAt, count }
   shiftLogs: {},  // id -> log
   plan: {},       // `${date}|${shift}` -> { ids, at, by }
   guide: {},      // id -> doc
@@ -154,6 +156,22 @@ export function deleteManualOrder(id) {
   save();
 }
 
+/** Load a machine workbook. Tasks for that workbook's machines are replaced;
+    the other workbook's tasks are left alone, so Rolling and CNC can be
+    imported independently. */
+export function setMachineImport({ tasks, report }) {
+  const machines = new Set(tasks.map((t) => t.machine));
+  state.tasks = state.tasks
+    .filter((t) => t.source !== report.kind && !machines.has(t.machine))
+    .concat(tasks.map((t) => ({ ...t, source: report.kind })));
+  state.machineMeta = {
+    ...state.machineMeta,
+    [report.kind]: { fileName: report.fileName, importedAt: report.importedAt, count: tasks.length },
+  };
+  log('import', `${report.fileName} — ${tasks.length} machine tasks`);
+  save();
+}
+
 export function setImport({ orders, wip, prep, screens, report }) {
   state.orders = orders;
   state.wip = wip;
@@ -183,6 +201,8 @@ function snapshot() {
     material: state.material,
     history: state.history,
     manualOrders: state.manualOrders,
+    tasks: state.tasks,
+    machineMeta: state.machineMeta,
     shiftLogs: state.shiftLogs,
     plan: state.plan,
     guide: state.guide,
@@ -293,6 +313,17 @@ function mergeSnapshot(remote) {
   state.people = Array.from(new Set([...(state.people || []), ...(remote.people || [])]));
 
   // The order list comes from whichever revision was imported most recently.
+  // Machine tasks come from whichever side imported them most recently.
+  for (const kind of ['rolling', 'cnc']) {
+    const mine = state.machineMeta?.[kind]?.importedAt || '';
+    const theirs = remote.machineMeta?.[kind]?.importedAt || '';
+    if (theirs > mine && Array.isArray(remote.tasks)) {
+      state.tasks = state.tasks.filter((t) => t.source !== kind)
+        .concat(remote.tasks.filter((t) => t.source === kind));
+      state.machineMeta = { ...state.machineMeta, [kind]: remote.machineMeta[kind] };
+    }
+  }
+
   const mineAt = state.meta?.importedAt || '';
   const theirsAt = remote.meta?.importedAt || '';
   if (theirsAt > mineAt && Array.isArray(remote.orders) && remote.orders.length) {

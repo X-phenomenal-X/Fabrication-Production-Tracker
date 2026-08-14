@@ -5,6 +5,7 @@ import { state, loadLocal, save, onChange, me, sharedFileName } from './store.js
 import { renderDashboard } from './views/dashboard.js';
 import { renderBoard } from './views/board.js';
 import { renderMaterials } from './views/materials.js';
+import { renderVerify } from './views/verify.js';
 import { renderPlanner } from './views/planner.js';
 import { renderShift } from './views/shift.js';
 import { renderGuide } from './views/guide.js';
@@ -17,6 +18,7 @@ const TABS = [
   { key: 'materials', label: 'Materials', render: renderMaterials },
   { key: 'planner', label: 'Planner', render: renderPlanner },
   { key: 'shift', label: 'Shift Update', render: renderShift },
+  { key: 'verify', label: 'Verify', render: renderVerify },
   { key: 'guide', label: 'Guide', render: renderGuide },
   { key: 'setup', label: 'Setup', render: renderData },
 ];

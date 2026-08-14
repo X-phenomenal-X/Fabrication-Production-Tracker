@@ -40,6 +40,7 @@ Rebuild and re-copy `Cutting-Tracker.html` whenever the source changes.
 | **Materials** | Material status per profile type across the department |
 | **Planner** | Assign orders to a day and shift |
 | **Shift Update** | Laid out by machine, like the existing Shift Update sheet |
+| **Verify** | Checks the machine schedules against the Daily Schedule |
 | **Guide** | The department's written process — editable in place |
 | **Setup** | Load a revision, machine routing, shared file, backups |
 
@@ -71,7 +72,37 @@ showing a zero, so an unconfigured machine never looks like an idle one.
 Prep is tracked by status rather than piece count, because `BD Prep` is a status
 column — its card shows orders outstanding.
 
-## What it reads from the workbook
+## The three workbooks
+
+The **Rolling** and **CNC** workbooks are the base for scheduling — they carry
+the per-machine detail the Daily Schedule does not have: die, quantity, status
+and cutting date per machine. The **Daily Schedule** is imported on top and used
+to verify that the base still agrees with what the company expects.
+
+Import them in that order on the Setup tab.
+
+### 1 & 2 — Rolling and CNC (the base)
+
+| Workbook | Sheet | Work centre |
+|---|---|---|
+| Rolling | `Auto` | Rolling (Auto) |
+| Rolling | `Manual` | Rolling (Manual) |
+| Rolling | `Complete` | archive, read as done |
+| CNC | `FOM1` | FOM 1 |
+| CNC | `FOM2` | FOM 2 — also carries the pin-hole / 8560 vent flag |
+| CNC | `FOM3` | FOM 3 |
+| CNC | `MultiPunch & SAW` | Multi Punch |
+| CNC | `CNC & FMC` | CNC |
+
+Every one of these sheets shares the same shape — `WO# · PROJECT · FL · Product
+(die) · QTY · B/O · Cutting Date · Status` — so one parser with a per-sheet
+column map reads them all. A row is a **task**: this many pieces of this die, for
+this work order, on this machine.
+
+From the sample workbooks that is **3,917 tasks** across 7 work centres, 738 of
+them still open, covering 202 distinct dies.
+
+### 3 — Daily Schedule (the check)
 
 | Sheet | Used for |
 |---|---|
@@ -79,6 +110,20 @@ column — its card shows orders outstanding.
 | `WIP` | ERP remaining quantities, joined onto each order |
 | `PREP Tracker` | Job-level status and project manager |
 | `screens sch` | Screens |
+
+### Verification
+
+The **Verify** tab compares the two. It reports:
+
+- **Dates out of step** — a work order whose machine-sheet cutting or ship date
+  differs from the Daily Schedule by more than the tolerance (2 days by default,
+  adjustable). Only open work is checked, and results are grouped per work order
+  against the closest matching date, so multi-floor orders are not flagged
+  spuriously. On the sample data that is 42 work orders rather than the 1,888
+  raw per-task differences.
+- **Not on a machine** — work orders still open on the Daily Schedule that no
+  machine sheet covers. 225 in the sample data; some belong to other
+  departments, some are genuinely missed.
 
 The importer cleans up as it reads, and reports everything it did:
 
@@ -181,6 +226,12 @@ during development.
 - Machine list, operator counts and targets in `js/machines.js` are seeded from
   the Shift Assignment and TARGETS sheets (week of Aug 12). They are not yet
   editable in the UI.
-- The Rolling and CNC workbooks are not imported yet — only the Daily Schedule.
-  Setup/die data from `ROLLING SET UP CHART` is summarised in the guide by hand.
+- The Dashboard still derives machine load from the Daily Schedule's operation
+  columns rather than from the imported machine tasks. The tasks are loaded and
+  verified; wiring the Dashboard and Planner onto them is the next step.
+- The `Setup` column in the Rolling `Auto` sheet is empty in practice, so runs
+  are not yet grouped by setup number. Deriving it from the die via
+  `ROLLING SET UP CHART` would enable changeover batching.
+- `js/products.js` (job → vent system, for the 8560 hinge rule) is seeded from
+  the CNC workbook by hand rather than imported from its `Product` sheet.
 - Guide sections marked **TODO for the department** need a human to confirm.

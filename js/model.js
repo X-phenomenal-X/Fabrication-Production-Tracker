@@ -402,3 +402,47 @@ export function materialByProfile(ref = today()) {
   }
   return out;
 }
+
+/* ---------- machine tasks (the scheduling base) ---------- */
+
+export function hasTasks() {
+  return Array.isArray(state.tasks) && state.tasks.length > 0;
+}
+
+export function liveTasks() {
+  return (state.tasks || []).filter((t) => !t.archived && t.status !== 'DONE');
+}
+
+/** Live machine tasks grouped by work centre — the base view of what is queued. */
+export function tasksByMachine() {
+  const out = new Map();
+  for (const t of liveTasks()) {
+    if (!out.has(t.machine)) {
+      out.set(t.machine, { key: t.machine, tasks: [], pieces: 0, inProgress: 0, wos: new Set(), dies: new Set() });
+    }
+    const b = out.get(t.machine);
+    b.tasks.push(t);
+    b.pieces += t.qty || 0;
+    if (t.status === 'IP') b.inProgress++;
+    b.wos.add(t.wo);
+    if (t.die) b.dies.add(t.die);
+  }
+  for (const b of out.values()) {
+    b.tasks.sort((a, c) => ((a.cuttingDate || '9999') < (c.cuttingDate || '9999') ? -1 : 1));
+  }
+  return out;
+}
+
+/** Group a machine's tasks by die, so runs sharing a setup can be batched. */
+export function tasksByDie(machineKey) {
+  const groups = new Map();
+  for (const t of liveTasks()) {
+    if (machineKey && t.machine !== machineKey) continue;
+    const k = t.die || '(no die)';
+    if (!groups.has(k)) groups.set(k, { die: k, tasks: [], pieces: 0 });
+    const g = groups.get(k);
+    g.tasks.push(t);
+    g.pieces += t.qty || 0;
+  }
+  return Array.from(groups.values()).sort((a, b) => b.pieces - a.pieces);
+}
