@@ -213,13 +213,13 @@ js/xlsx.js           (246)  dependency-free XLSX reader
 js/import-machines.js(404)  workbook parsers + shift-update parser
 js/machines.js       (59)   machine registry (the 10 machines + standing rows)
 js/shifts.js         (17)   shift windows
-js/store.js          (729)  state, persistence, shared file, cloud orchestration
+js/store.js          (740)  state, persistence, shared file, cloud orchestration
 js/cloud.js          (177)  Supabase REST transport (dumb; no app knowledge)
-js/model.js          (374)  derived views: queues, grouping, resolve*, runningNow
-js/views/centre.js   (653)  THE work-centre page (all 4 centres are this file)
+js/model.js          (400)  derived views: queues, grouping, resolve*, runningNow
+js/views/centre.js   (696)  THE work-centre page (all 4 centres are this file)
 js/views/rush.js     (244)  rush dialog + Rush page
 js/views/backorders.js(215) back-order dialog + Back Orders page
-js/views/shiftupdate.js(445) Shift Update write/read page
+js/views/shiftupdate.js(477) Shift Update write/read page
 js/views/data.js     (384)  Setup: import, shared file, cloud, people, backup
 ```
 

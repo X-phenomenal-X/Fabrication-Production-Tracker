@@ -3,8 +3,10 @@
    Laid out the way the department's own sheet is: one block per machine with
    #Ops, work done / in progress, what is next, and notes. Grouped by centre so
    Rolling, FOM, CNC and Multi Punch are visually separate rather than one long
-   list, with the three standing rows (Service Orders, K1285, Back Order) at the
-   top exactly as they sit on the sheet.
+   list, with the department's standing rows at the top exactly as they sit on
+   the sheet. Back Order leads, since it is the one reported every shift;
+   Service Orders and K1285 Pulls fold behind a link and open themselves when
+   they already carry something.
 
    Two things make it quick to fill in. The machine's entry from the imported
    workbook can be pulled in whole or a line at a time, and any line whose
@@ -78,14 +80,25 @@ function hasContent(r) {
   return !!(r && (r.done || r.next || r.notes || r.ops));
 }
 
-/** Every reportable row on the page: the three standing rows first, then the
+/* The department's own printed sheet now carries only one standing row, Back
+   Order — Service Orders and K1285 Pulls were dropped from it. They still get
+   reported occasionally, so they stay available but folded away rather than
+   taking two of the three slots at the top of the page. */
+const PRIMARY_STANDING = new Set(['backorder']);
+
+let showExtraStanding = false;
+
+/** Every reportable row on the page: the standing rows first, then the
     machines of each tracked centre, minus anything hidden in Setup. */
 function sections() {
   const byGroup = machinesByGroup();
+  const standing = STANDING_ROWS
+    .map((r) => ({ ...r, standing: true, secondary: !PRIMARY_STANDING.has(r.key) }))
+    .sort((a, b) => a.secondary - b.secondary);
   const out = [{
     label: 'Department',
-    hint: 'Standing rows — reported every shift',
-    rows: STANDING_ROWS.map((r) => ({ ...r, standing: true })),
+    hint: 'Reported every shift',
+    rows: standing,
   }];
 
   for (const [group, label] of CENTRES) {
@@ -224,12 +237,23 @@ function writeView(rerender) {
   const total = all.reduce((a, s) => a + s.rows.length, 0);
   const done = all.reduce((a, s) => a + s.rows.filter((m) => hasContent(d.rows[m.key])).length, 0);
 
-  const blocks = all.map((s) => el('section.dgroup', {},
-    el('div.dgroup-head', {},
-      el('span.dgroup-label', {}, s.label),
-      el('span.dgroup-count', {}, `${s.rows.filter((m) => hasContent(d.rows[m.key])).length}/${s.rows.length}`),
-      s.hint ? el('span.small.muted', {}, s.hint) : null),
-    el('div.sugrid', {}, ...s.rows.map((m) => card(m, rerender)))));
+  const blocks = all.map((s) => {
+    // A secondary standing row still shows if somebody has already written in
+    // it — folding away something with content in it would hide their work.
+    const shown = s.rows.filter((m) => !m.secondary || showExtraStanding || hasContent(d.rows[m.key]));
+    const folded = s.rows.length - shown.length;
+
+    return el('section.dgroup', {},
+      el('div.dgroup-head', {},
+        el('span.dgroup-label', {}, s.label),
+        el('span.dgroup-count', {}, `${s.rows.filter((m) => hasContent(d.rows[m.key])).length}/${s.rows.length}`),
+        s.hint ? el('span.small.muted', {}, s.hint) : null,
+        folded ? el('span.spacer') : null,
+        folded ? el('button.linkbtn', {
+          onclick: () => { showExtraStanding = true; rerender(); },
+        }, `＋ ${s.rows.filter((m) => m.secondary).map((m) => m.label).join(' and ')}`) : null),
+      el('div.sugrid', {}, ...shown.map((m) => card(m, rerender))));
+  });
 
   return el('div', {},
     ...blocks,

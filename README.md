@@ -252,8 +252,11 @@ labels.
 Its own page, laid out the way the department's sheet already is: one block per
 machine with **#Ops, Work done / in progress, Next in schedule and Notes**,
 grouped by centre so Rolling, FOM, CNC and Multi Punch are visually separate
-rather than one long list. The three standing rows — **Service Orders, K1285
-Pulls, Back Order** — sit at the top exactly as they do on the sheet.
+rather than one long list. The department's standing rows sit at the top
+exactly as they do on the sheet, but only **Back Order** is open by default —
+it is the one filled in every shift. **Service Orders** and **K1285 Pulls**
+fold behind a `＋ Service Orders and K1285 Pulls` link, and open themselves
+whenever they already carry something, so nothing written is ever hidden.
 
 Pick the **date** and the **shift** (Day · Afternoon · Midnight), then **Write**
 or **Read**.

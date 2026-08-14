@@ -4413,12 +4413,15 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
   function hasContent(r) {
     return !!(r && (r.done || r.next || r.notes || r.ops));
   }
+  var PRIMARY_STANDING = /* @__PURE__ */ new Set(["backorder"]);
+  var showExtraStanding = false;
   function sections() {
     const byGroup = machinesByGroup();
+    const standing = STANDING_ROWS.map((r) => ({ ...r, standing: true, secondary: !PRIMARY_STANDING.has(r.key) })).sort((a, b) => a.secondary - b.secondary);
     const out = [{
       label: "Department",
-      hint: "Standing rows \u2014 reported every shift",
-      rows: STANDING_ROWS.map((r) => ({ ...r, standing: true }))
+      hint: "Reported every shift",
+      rows: standing
     }];
     for (const [group, label] of CENTRES) {
       const rows = (byGroup.get(group) || []).filter((m) => !m.queue).map(machineConfig).filter((m) => !m.hidden);
@@ -4550,18 +4553,29 @@ ${add.join("\n")}` : add.join("\n");
     const all = sections();
     const total = all.reduce((a, s) => a + s.rows.length, 0);
     const done = all.reduce((a, s) => a + s.rows.filter((m) => hasContent(d.rows[m.key])).length, 0);
-    const blocks = all.map((s) => el(
-      "section.dgroup",
-      {},
-      el(
-        "div.dgroup-head",
+    const blocks = all.map((s) => {
+      const shown = s.rows.filter((m) => !m.secondary || showExtraStanding || hasContent(d.rows[m.key]));
+      const folded = s.rows.length - shown.length;
+      return el(
+        "section.dgroup",
         {},
-        el("span.dgroup-label", {}, s.label),
-        el("span.dgroup-count", {}, `${s.rows.filter((m) => hasContent(d.rows[m.key])).length}/${s.rows.length}`),
-        s.hint ? el("span.small.muted", {}, s.hint) : null
-      ),
-      el("div.sugrid", {}, ...s.rows.map((m) => card(m, rerender)))
-    ));
+        el(
+          "div.dgroup-head",
+          {},
+          el("span.dgroup-label", {}, s.label),
+          el("span.dgroup-count", {}, `${s.rows.filter((m) => hasContent(d.rows[m.key])).length}/${s.rows.length}`),
+          s.hint ? el("span.small.muted", {}, s.hint) : null,
+          folded ? el("span.spacer") : null,
+          folded ? el("button.linkbtn", {
+            onclick: () => {
+              showExtraStanding = true;
+              rerender();
+            }
+          }, `\uFF0B ${s.rows.filter((m) => m.secondary).map((m) => m.label).join(" and ")}`) : null
+        ),
+        el("div.sugrid", {}, ...shown.map((m) => card(m, rerender)))
+      );
+    });
     return el(
       "div",
       {},
