@@ -4272,6 +4272,15 @@ ${add.join("\n")}` : add.join("\n");
   };
   var SU_SKIP = /* @__PURE__ */ new Set(["MACHINE", "DATE", "TOTAL", "SERVICEORDERS", "K1285PULLS", "BACKORDER"]);
   var SU_SHIFT_RANK = { DAY: 0, AFTERNOON: 1, AFT: 1, MIDNIGHT: 2, NIGHT: 2 };
+  var SU_SHEET_PRIORITY = {
+    "Shift Update 2": 3,
+    "Shift Update": 2,
+    "Shift Update (3)": 1,
+    "Shift Update Old": 0
+  };
+  function sheetPriority(name) {
+    return SU_SHEET_PRIORITY[name] ?? 2;
+  }
   function suKey(label) {
     return String(label || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   }
@@ -4330,38 +4339,47 @@ ${add.join("\n")}` : add.join("\n");
     }
     return { date: blockDate, shift, machines: out };
   }
-  function parseShiftUpdateSheet(sheet, unknown) {
+  function parseShiftUpdateSheet(name, sheet, unknown) {
     const blocks = [];
     for (const off of [0, 8]) {
       const starts = suBlockStarts(sheet.rows, off);
       starts.forEach((from, i) => {
         const to = i + 1 < starts.length ? starts[i + 1] : sheet.rows.length;
-        blocks.push(parseShiftUpdateBlock(sheet.rows, off, from, to, unknown));
+        const block = parseShiftUpdateBlock(sheet.rows, off, from, to, unknown);
+        for (const e of Object.values(block.machines)) e.sheet = name;
+        blocks.push(block);
       });
     }
     return blocks;
   }
   function parseShiftUpdate(sheets) {
-    const list = Object.values(sheets || {}).filter(Boolean);
-    if (!list.length) return null;
+    const entries = Object.entries(sheets || {}).filter(([, s]) => s);
+    if (!entries.length) return null;
     const unknown = /* @__PURE__ */ new Set();
-    const blocks = list.flatMap((s) => parseShiftUpdateSheet(s, unknown));
-    const said = (e) => e ? e.done.length + e.next.length + (e.ops ? 1 : 0) : -1;
+    const blocks = entries.flatMap(([name, s]) => parseShiftUpdateSheet(name, s, unknown));
+    const wordCount = (e) => e.done.length + e.next.length + e.notes.length;
+    const said = (e) => wordCount(e) + (e.ops ? 1 : 0);
+    const better = (e, cur) => {
+      const we = wordCount(e);
+      const wc = wordCount(cur);
+      if (we > 0 !== wc > 0) return we > wc;
+      const pe = sheetPriority(e.sheet);
+      const pc = sheetPriority(cur.sheet);
+      if (pe !== pc) return pe > pc;
+      const a = suWhen(e.date, e.shift);
+      const c = suWhen(cur.date, cur.shift);
+      if (a !== c) return a > c;
+      return said(e) > said(cur);
+    };
     const machines = {};
     for (const b of blocks) {
       for (const [k, e] of Object.entries(b.machines)) {
-        const cur = machines[k];
-        if (!cur) {
-          machines[k] = e;
-          continue;
-        }
-        const a = suWhen(e.date, e.shift);
-        const c = suWhen(cur.date, cur.shift);
-        if (a > c || a === c && said(e) > said(cur)) machines[k] = e;
+        if (!machines[k] || better(e, machines[k])) machines[k] = e;
       }
     }
-    const newest = Object.values(machines).map((e) => suWhen(e.date, e.shift)).filter(Boolean).sort().pop();
-    const latest = Object.values(machines).find((e) => suWhen(e.date, e.shift) === newest);
+    const values = Object.values(machines);
+    const latest = values.reduce((a, b) => a && !better(b, a) ? a : b, null);
+    for (const e of values) delete e.sheet;
     return {
       date: latest?.date || null,
       shift: latest?.shift || null,

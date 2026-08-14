@@ -244,15 +244,35 @@ A block is laid out as two side-by-side halves (columns 1–7 and 9–15), each
 with its own Date/Shift header. Blocks also **stack vertically**, and that
 turned out to matter: the sheet named exactly `Shift Update` is still the old
 layout listing CNC 1, CNC 2, CNC 3 and CNC SBZ140, while `Shift Update 2` holds
-the old Day sheet at the top and, from row 57 down, a newer one — the only
-place **FMC 1 and FMC 2 appear anywhere in either workbook**.
+an empty leftover Day template at the top and, from row 57 down, the real one —
+the only place **FMC 1 and FMC 2 appear anywhere in either workbook**.
 
-Reading one sheet whole would mean choosing between the newest shift and the
+Reading one sheet whole would mean choosing between the current data and the
 only block that knows the FMCs exist. So every `Shift Update*` sheet is read,
 every block within it is found by its own Date header, and entries are merged
-**per machine, newest shift winning**. Each entry keeps the date and shift of
-the block it came from, so FOM 1 shows its Afternoon entry while FMC 1 shows
-its Day one, and the panel says which.
+per machine by three rules, in order:
+
+1. **Whichever block actually describes work wins outright.** An entry with a
+   crew count but no done/next/notes is still empty for this purpose — a
+   headcount is not a report of what happened, and must never let a blank
+   template beat a filled-in row.
+2. **Between two blocks that both say something, the sheet wins**: `Shift
+   Update 2` outranks the base `Shift Update`, which outranks the near-
+   duplicate `(3)` and `Old` copies. This is the rule that actually matters —
+   date and shift labels are not a safe way to compare *different* sheets,
+   since nothing says the "Afternoon" block on an older sheet was written
+   after the "Day" block on a newer one. It very much was not: every tracked
+   machine's most current entry was sitting in `Shift Update 2`'s Day block,
+   and comparing by shift label alone was quietly pulling stale Afternoon
+   entries from the base sheet over it.
+3. **Within the same sheet**, date and shift *do* mean what they say — Day
+   before Afternoon before Midnight is a real ordering there, so it is still
+   used to pick between two blocks stacked in one sheet.
+
+Each entry keeps the date and shift of the block it actually came from, so
+FOM 1 can show its Day entry while `cnc1` — which `Shift Update 2` does not
+mention under that name — falls through to its Afternoon entry from the base
+sheet, and the panel says which for each.
 
 Machine names on the sheet that the app has no work centre for are collected
 and reported on import rather than dropped in silence — that is how the

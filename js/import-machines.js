@@ -220,6 +220,25 @@ const SU_SKIP = new Set(['MACHINE', 'DATE', 'TOTAL', 'SERVICEORDERS', 'K1285PULL
 
 const SU_SHIFT_RANK = { DAY: 0, AFTERNOON: 1, AFT: 1, MIDNIGHT: 2, NIGHT: 2 };
 
+/* The sheets are not equally trustworthy — the department's own naming says
+   which one supersedes which. `Shift Update 2` is the only sheet with FMC 1
+   and FMC 2 on it at all, which is how it gave itself away as the current
+   one; `(3)` and `Old` are near-identical leftovers the department does not
+   write to. This decides a conflict BETWEEN sheets. It must never be
+   confused with SU_SHIFT_RANK above, which only decides between multiple
+   blocks stacked inside the SAME sheet — Afternoon does not outrank Day just
+   because Afternoon usually comes later in a shift, when the Day block is
+   sitting on the sheet that is actually current and Afternoon is stale. */
+const SU_SHEET_PRIORITY = {
+  'Shift Update 2': 3,
+  'Shift Update': 2,
+  'Shift Update (3)': 1,
+  'Shift Update Old': 0,
+};
+function sheetPriority(name) {
+  return SU_SHEET_PRIORITY[name] ?? 2; // an unrecognised future sheet is trusted like the base one
+}
+
 function suKey(label) {
   return String(label || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
@@ -289,14 +308,18 @@ function parseShiftUpdateBlock(rows, off, from, to, unknown) {
 }
 
 /** Every block on one sheet: both column halves, every vertically stacked
-    block within each half. */
-function parseShiftUpdateSheet(sheet, unknown) {
+    block within each half. Each entry is tagged with the sheet it came from —
+    needed to arbitrate between sheets below, and stripped again before this
+    becomes stored state. */
+function parseShiftUpdateSheet(name, sheet, unknown) {
   const blocks = [];
   for (const off of [0, 8]) {
     const starts = suBlockStarts(sheet.rows, off);
     starts.forEach((from, i) => {
       const to = i + 1 < starts.length ? starts[i + 1] : sheet.rows.length;
-      blocks.push(parseShiftUpdateBlock(sheet.rows, off, from, to, unknown));
+      const block = parseShiftUpdateBlock(sheet.rows, off, from, to, unknown);
+      for (const e of Object.values(block.machines)) e.sheet = name;
+      blocks.push(block);
     });
   }
   return blocks;
@@ -306,30 +329,51 @@ function parseShiftUpdateSheet(sheet, unknown) {
     Each entry keeps the date and shift of the block it came from, since they
     no longer all come from the same one. */
 export function parseShiftUpdate(sheets) {
-  const list = Object.values(sheets || {}).filter(Boolean);
-  if (!list.length) return null;
+  const entries = Object.entries(sheets || {}).filter(([, s]) => s);
+  if (!entries.length) return null;
 
   const unknown = new Set();
-  const blocks = list.flatMap((s) => parseShiftUpdateSheet(s, unknown));
+  const blocks = entries.flatMap(([name, s]) => parseShiftUpdateSheet(name, s, unknown));
 
-  // Newest shift wins per machine; between blocks of the same shift, the one
-  // that actually says something does. A stale template must never blank out a
-  // filled-in entry.
-  const said = (e) => (e ? e.done.length + e.next.length + (e.ops ? 1 : 0) : -1);
+  // Actual described work — done, next and notes. A row can have its #Ops
+  // headcount filled in with nothing else on it, which is still an empty
+  // block for this purpose: a crew number is not a report of what happened.
+  const wordCount = (e) => e.done.length + e.next.length + e.notes.length;
+  // Overall richness, #Ops included — only used as the final numeric
+  // tiebreaker below, once two entries are already known to both say
+  // something or both say nothing.
+  const said = (e) => wordCount(e) + (e.ops ? 1 : 0);
+  // An entry that describes no actual work must never beat one that does,
+  // whatever the sheet or shift label claims — every sheet, including Shift
+  // Update 2 itself, carries some machines twice: once in a block someone
+  // actually filled in, once in an untouched template row elsewhere. Content
+  // is checked before anything else so a blank leftover can never win.
+  // Only once both sides are equally (un)described does which sheet the
+  // entry came from decide it, then date+shift within that sheet, then
+  // whichever says more overall as the last resort.
+  const better = (e, cur) => {
+    const we = wordCount(e);
+    const wc = wordCount(cur);
+    if ((we > 0) !== (wc > 0)) return we > wc;
+    const pe = sheetPriority(e.sheet);
+    const pc = sheetPriority(cur.sheet);
+    if (pe !== pc) return pe > pc;
+    const a = suWhen(e.date, e.shift);
+    const c = suWhen(cur.date, cur.shift);
+    if (a !== c) return a > c;
+    return said(e) > said(cur);
+  };
+
   const machines = {};
   for (const b of blocks) {
     for (const [k, e] of Object.entries(b.machines)) {
-      const cur = machines[k];
-      if (!cur) { machines[k] = e; continue; }
-      const a = suWhen(e.date, e.shift);
-      const c = suWhen(cur.date, cur.shift);
-      if (a > c || (a === c && said(e) > said(cur))) machines[k] = e;
+      if (!machines[k] || better(e, machines[k])) machines[k] = e;
     }
   }
 
-  const newest = Object.values(machines)
-    .map((e) => suWhen(e.date, e.shift)).filter(Boolean).sort().pop();
-  const latest = Object.values(machines).find((e) => suWhen(e.date, e.shift) === newest);
+  const values = Object.values(machines);
+  const latest = values.reduce((a, b) => (a && !better(b, a) ? a : b), null);
+  for (const e of values) delete e.sheet;
 
   return {
     date: latest?.date || null,
