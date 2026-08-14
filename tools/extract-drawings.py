@@ -12,7 +12,13 @@ so the drawing area is cropped out and the rest dropped. That plus 1-bit
 encoding takes a page from ~280KB of PDF to about 3KB of WebP, which is what
 makes it possible to carry 900-odd of them inside a single offline file.
 
-Usage: tools/extract-drawings.py <dir-of-pdfs> <out.js>
+Where a series' drawing sheets cannot be got hold of, the listing's own
+Assembly Diagram thumbnails stand in — smaller and without the callouts, but a
+real picture of the profile. Those are produced by extract-listing-thumbs.py
+and merged here; the sheet always wins, and which one was used is recorded so
+the app can say.
+
+Usage: tools/extract-drawings.py <dir-of-pdfs> <out.js> [thumbs.json]
 """
 
 import base64
@@ -89,8 +95,10 @@ def main():
         print(__doc__)
         return 1
     src, out_path = sys.argv[1], sys.argv[2]
+    thumbs_path = sys.argv[3] if len(sys.argv) > 3 else None
 
     drawings = {}
+    source = {}
     for name in sorted(os.listdir(src)):
         if not name.endswith('.pdf'):
             continue
@@ -112,8 +120,20 @@ def main():
                 data = encode(png)
             if data:
                 drawings[sa] = data
+                source[sa] = 'sheet'
                 added += 1
         print(f'{name:44} {added:4} drawings', file=sys.stderr)
+
+    if thumbs_path and os.path.exists(thumbs_path):
+        import json
+        filled = 0
+        for sa, data in json.load(open(thumbs_path)).items():
+            if sa in drawings:
+                continue
+            drawings[sa] = data
+            source[sa] = 'listing'
+            filled += 1
+        print(f'{"listing thumbnails":44} {filled:4} gaps filled', file=sys.stderr)
 
     total = sum(len(v) for v in drawings.values())
     print(f'\n{len(drawings)} drawings, {total * 3 // 4 // 1024} KB of image data', file=sys.stderr)
@@ -132,6 +152,13 @@ def main():
         f.write('export const DRAWINGS = {\n')
         for sa in sorted(drawings):
             f.write(f'  {sa!r}: \'{drawings[sa]}\',\n'.replace("'", '"', 2))
+        f.write('};\n\n')
+        f.write('/* Which kind of picture each one is: the full dimensioned sheet, or the\n'
+                '   listing\'s smaller Assembly Diagram standing in for a sheet not in hand. */\n')
+        f.write('export const DRAWING_SOURCE = {\n')
+        for sa in sorted(source):
+            if source[sa] != 'sheet':
+                f.write(f'  "{sa}": "{source[sa]}",\n')
         f.write('};\n')
     return 0
 

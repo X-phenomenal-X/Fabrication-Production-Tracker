@@ -1856,3 +1856,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   background: var(--panel); border: 1px dashed var(--line); border-radius: var(--r-sm);
 }
 .diedrawing-none svg { color: var(--ink-3); flex-shrink: 0; }
+
+/* Which kind of picture this is. The listing's diagram shows the profile but
+   none of the callouts, and someone hunting for a component label needs to
+   know that rather than assume the drawing is wrong. */
+.diedrawing-cap {
+  display: flex; align-items: flex-start; gap: var(--s2);
+  margin-top: var(--s2); padding-top: var(--s2);
+  border-top: 1px solid var(--line-soft);
+  font-size: var(--t-xs); color: var(--ink-3);
+}
+.diedrawing-cap svg { flex-shrink: 0; margin-top: 1px; }

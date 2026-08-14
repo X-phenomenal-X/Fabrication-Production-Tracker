@@ -778,13 +778,18 @@ if (dieCheck.missing) throw new Error('an unknown die should resolve to nothing'
 // absence — the book is a set of PDFs and not all of them are in hand.
 const drawCheck = await page.evaluate(() => import('/js/dies.js').then((d) => ({
   count: d.drawingCount(),
-  hasOne: !!d.drawingFor('SA83-001'),
-  isImage: (d.drawingFor('SA83-001') || '').startsWith('data:image/webp;base64,'),
+  isImage: (d.drawingFor('SA83-001')?.src || '').startsWith('data:image/webp;base64,'),
+  // A drawing sheet and a listing thumbnail are both pictures, but only one is
+  // dimensioned with callouts, so the lookup has to be able to tell them apart.
+  sheetSource: d.drawingFor('SA83-001')?.source,
+  listingSource: d.drawingFor('SA80-106')?.source,
   missingIsNull: d.drawingFor('SA99-999'),
 })));
-step('drawings: ' + JSON.stringify(drawCheck));
+step('drawings: ' + JSON.stringify({ ...drawCheck, isImage: drawCheck.isImage }));
 if (drawCheck.count < 400) throw new Error('the drawings did not load');
-if (!drawCheck.hasOne || !drawCheck.isImage) throw new Error('a known drawing did not resolve to an image');
+if (!drawCheck.isImage) throw new Error('a known drawing did not resolve to an image');
+if (drawCheck.sheetSource !== 'sheet') throw new Error('a drawing sheet should say it is a sheet');
+if (drawCheck.listingSource !== 'listing') throw new Error('a listing thumbnail should say where it came from');
 if (drawCheck.missingIsNull !== null) throw new Error('an unknown drawing should be null, not a broken image');
 
 // And it opens from a die on a line.

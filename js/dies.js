@@ -15,7 +15,7 @@
    extrusion — and either can be asked for, so both are tried. */
 
 import { SUBASSEMBLIES } from './subassemblies.js';
-import { DRAWINGS, DRAWING_PREFIX } from './drawings.js';
+import { DRAWINGS, DRAWING_PREFIX, DRAWING_SOURCE } from './drawings.js';
 
 const PARTS = ['exterior', 'upperTB', 'lowerTB', 'interior'];
 
@@ -123,8 +123,14 @@ export function componentsOf(assembly) {
     the book is a set of PDFs and some are simply not in hand — so every caller
     has to cope with null rather than assume. */
 export function drawingFor(sa) {
-  const body = DRAWINGS[sa] || DRAWINGS[String(sa || '').replace(/[A-Z]+$/, '')];
-  return body ? DRAWING_PREFIX + body : null;
+  const key = DRAWINGS[sa] ? sa : String(sa || '').replace(/[A-Z]+$/, '');
+  const body = DRAWINGS[key];
+  if (!body) return null;
+  // Two kinds of picture, and the difference matters: the full sheet is
+  // dimensioned with every component called out, the listing's diagram is the
+  // profile only. Saying which avoids someone looking for a callout that was
+  // never on that drawing.
+  return { src: DRAWING_PREFIX + body, source: DRAWING_SOURCE[key] || 'sheet' };
 }
 
 export function drawingCount() {

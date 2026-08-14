@@ -49,18 +49,24 @@ function detail(result, open) {
       // out where it sits. The listing tells you 80-113 is the exterior; this
       // tells you which piece that is on the rack.
       (() => {
-        const src = drawingFor(assembly.sa);
-        if (!src) {
+        const dwg = drawingFor(assembly.sa);
+        if (!dwg) {
           return el('div.diedrawing-none', {},
             icon('alert', { size: 14 }),
-            el('span', {}, 'No section drawing for this series yet.'));
+            el('span', {}, 'No drawing for this one yet.'));
         }
         return el('div.diedrawing', {},
           el('img', {
-            src,
-            alt: `Section drawing of ${assembly.sa}`,
+            src: dwg.src,
+            alt: `Section through ${assembly.sa}`,
             loading: 'lazy',
-          }));
+          }),
+          dwg.source === 'listing'
+            ? el('div.diedrawing-cap', {},
+                icon('note', { size: 12 }),
+                el('span', {}, 'Assembly diagram from the listing — profile only, '
+                  + 'no dimensions or callouts.'))
+            : null);
       })(),
       assembly.note ? el('div.banner.warn', { style: { marginTop: '10px' } },
         el('div', {}, assembly.note)) : null,

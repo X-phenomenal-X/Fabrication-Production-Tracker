@@ -199,7 +199,7 @@ through the assembled profile with every component called out where it sits.
 The listing tells you `80-113` is the exterior; the drawing tells you which
 piece that is on the rack.
 
-`js/drawings.js` carries **620 of them, 1.9 MB**, keyed by sub-assembly. Each
+`js/drawings.js` carries **883 pictures, 2.3 MB**, keyed by sub-assembly. Each
 page is cropped to the drawing itself — the revision table, the components
 table and the title block are dropped, since the first two repeat what the app
 already knows and the third is letterhead — then rendered 1-bit at 720px and
@@ -208,16 +208,30 @@ which is what makes carrying hundreds of them inside a single offline file
 possible at all. They keep a white ground in dark mode: inverted line art no
 longer matches the paper drawing next to the machine.
 
-**Coverage is partial and the app says so.** Seventeen of the eighteen drawing
-sets are in; only the 8000 base series is outstanding. Against the current
-schedules that is 100 of the 164 dies in use, and every remaining gap is 8000
-series. `drawingFor()` returns null rather than a broken image and the lookup
-shows "No section drawing for this series yet", so the missing ones degrade
-quietly. Dropping that PDF in and re-running the extractor fills them:
+**Where a drawing sheet is not in hand, the listing's own thumbnail stands
+in.** Every Listing has an *Assembly Diagram* column with a small profile per
+row — no dimensions and no callouts, but a real picture of the shape, and a
+real picture beats none. `tools/extract-listing-thumbs.py` pulls those out,
+and `extract-drawings.py` merges them into the gaps. The sheet always wins
+where both exist, `DRAWING_SOURCE` records which kind each one is, and the
+lookup captions the thumbnails so nobody hunts for a callout that was never
+drawn on them.
+
+That is **620 sheets and 263 thumbnails**. Against the current schedules, 164
+of the dies in use are sub-assemblies the book carries, and 163 of those now
+have a picture — 100 full sheets, 63 thumbnails, one gap (`S89.083HT`).
+`drawingFor()` still returns null rather than a broken image, so the last one
+degrades quietly.
 
 ```
-tools/extract-drawings.py <dir-of-drawing-pdfs> js/drawings.js
+tools/extract-listing-thumbs.py <dir-of-listing-pdfs> thumbs.json
+tools/extract-drawings.py <dir-of-drawing-pdfs> js/drawings.js thumbs.json
 ```
+
+The thumbnails are cut by row position rather than by an assumed row height:
+`pdftotext -bbox` gives the y of each assembly number in its own column, and
+the band around it is half the gap to its neighbours, so a part-full page
+crops as cleanly as a full one.
 
 ### Regenerating it
 
