@@ -230,6 +230,35 @@ if (afterReimport?.status !== stored.status) throw new Error('status lost on re-
 // bulk select + apply — the re-import check left us on Setup
 await page.click('nav.tabs button:has-text("Rolling")');
 await page.waitForFunction(() => document.querySelector('.centre-title')?.textContent.trim() === 'Rolling (Auto)');
+
+// "running now" panel — the target line is still In Progress at this point
+await page.waitForSelector('.nowrun');
+const nowRunShown = await page.$$eval('.nowrun-line', (ns) => ns.map((n) => n.querySelector('.mono.strong')?.textContent.trim()));
+const nowRunCount = await page.$eval('.nowrun-count', (n) => n.textContent.trim());
+step(`running now on Rolling (Auto): ${nowRunCount} total, ${nowRunShown.length} shown, e.g. ${nowRunShown.slice(0, 4).join(', ')}…`);
+if (Number(nowRunCount) <= nowRunShown.length) throw new Error('expected the running-now panel to cap and offer Show more on a busy machine');
+await page.screenshot({ path: path.join(SHOT, 'now-running.png') });
+
+// Show more reveals every running line, including the target if it was
+// capped out of the initial handful
+await page.click('.nowrun .showmore');
+await page.waitForTimeout(200);
+const nowRunAll = await page.$$eval('.nowrun-line', (ns) => ns.map((n) => n.querySelector('.mono.strong')?.textContent.trim()));
+if (!nowRunAll.includes(target.wo)) throw new Error('In-progress line missing from the running-now panel even expanded');
+if (nowRunAll.length !== Number(nowRunCount)) throw new Error('Show more did not reveal every running line');
+
+// its quick Done button works the same as the line's own status control
+await page.locator('.nowrun-line').filter({ hasText: target.wo })
+  .filter({ hasText: target.die || '—' }).first().locator('.nowrun-done').click();
+await page.waitForTimeout(250);
+const doneNow = await page.evaluate((k) => import('/js/store.js').then((m) => m.state.taskStatus[k]?.status), key);
+step('quick Done from running-now panel: ' + doneNow);
+if (doneNow !== 'DONE') throw new Error('running-now Done button did not update the line');
+// undo it so the rest of the suite finds the line where it expects it
+const nowRunUndo = page.locator('.toast-action button');
+if (await nowRunUndo.count()) await nowRunUndo.click();
+await page.waitForTimeout(250);
+
 await page.$$eval('.dgroup-pick', (ns) => ns[0]?.click());
 await page.waitForTimeout(250);
 const bulkCount = await page.locator('.bulk-count').textContent().catch(() => null);

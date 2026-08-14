@@ -17,7 +17,7 @@ import {
   EDITABLE_FIELDS, state,
 } from '../store.js';
 import {
-  groupedQueue, machineSummary, openCountFor, taskStatusKey, hasTasks,
+  groupedQueue, machineSummary, openCountFor, runningNow, taskStatusKey, hasTasks,
   shiftUpdateFor, taskNoteFor, machineConfig, resolveBackOrder, resolveRush,
   isAssigned, taskByKey,
   TRACK_STATUS_ORDER, TRACK_STATUS,
@@ -33,7 +33,7 @@ function stateFor(group) {
   if (!viewState.has(group)) {
     viewState.set(group, {
       machine: null, q: '', showDone: false, filter: 'ALL',
-      open: {}, expanded: {}, selected: new Set(),
+      open: {}, expanded: {}, selected: new Set(), nowExpanded: {},
     });
   }
   return viewState.get(group);
@@ -359,6 +359,77 @@ function dateGroup(group, vs, rerender, centre) {
       }, `Show ${hidden} more`) : null) : null);
 }
 
+/* ---------- running now ---------- */
+
+/* What is this machine actually doing right now — the first thing anyone
+   switching to a machine's tab wants to know, so it sits at the very top of
+   the page rather than wherever it happens to fall in the date-grouped
+   queue below. */
+function nowRunningLine(row, rerender) {
+  const t = row.task;
+  const key = taskStatusKey(t);
+  const since = row.status.at ? fmtWhen(row.status.at) : null;
+
+  return el('div.nowrun-line', {},
+    el('div.nowrun-main', {},
+      el('div.line-id', {},
+        el('span.mono.strong', {}, t.wo),
+        t.die ? el('span.die', {}, t.die) : null,
+        row.rush.on ? chip('rush', 'warn') : null),
+      el('div.line-where', {},
+        el('span', {}, t.project || '—'),
+        t.floor ? el('span.muted', {}, ' · ' + t.floor) : null)),
+    el('div.nowrun-meta', {},
+      el('span.mono', {}, fmtNum(t.qty)),
+      el('span.small.muted', {}, 'pcs'),
+      since ? el('span.small.muted.nowrun-since', {}, `since ${since}`) : null),
+    el('button.nowrun-done', {
+      title: 'Mark this line done',
+      onclick: (e) => {
+        const before = [{ key, prev: state.taskStatus[key]?.status ?? null }];
+        setTaskStatus(key, 'DONE');
+        flash(e.target.closest('.nowrun-line'));
+        toastAction(`${t.wo} → Done`, 'Undo', () => {
+          restoreTaskStatus(before);
+          rerender();
+        });
+        rerender();
+      },
+    }, icon('check', { size: 13 }), 'Done'));
+}
+
+/* A machine's whole open book can sit "In Progress" for days on the busier
+   centres — Rolling (Auto) alone runs 60+ at once — so this caps to a
+   glanceable handful (already rush-first, soonest-date-first) with a Show
+   more, the same pattern the date groups below use for the same reason. */
+const NOWRUN_CAP = 6;
+
+function nowRunningPanel(machine, rerender, vs) {
+  const rows = runningNow(machine.key);
+
+  if (!rows.length) {
+    return el('div.nowrun', {},
+      el('div.nowrun-empty', {},
+        icon('dot', { size: 12 }),
+        el('span', {}, 'Nothing running on ' + machine.label + ' right now')));
+  }
+
+  const expanded = vs.nowExpanded[machine.key];
+  const shown = expanded ? rows : rows.slice(0, NOWRUN_CAP);
+  const hidden = rows.length - shown.length;
+
+  return el('div.nowrun.active', {},
+    el('div.nowrun-head', {},
+      icon('play', { size: 12 }),
+      el('span', {}, `Running now on ${machine.label}`),
+      el('span.nowrun-count', {}, String(rows.length))),
+    el('div.nowrun-body', {},
+      ...shown.map((r) => nowRunningLine(r, rerender)),
+      hidden > 0 ? el('button.sm.showmore', {
+        onclick: () => { vs.nowExpanded[machine.key] = true; rerender(); },
+      }, `Show ${hidden} more`) : null));
+}
+
 /* ---------- shift update ---------- */
 
 function shiftUpdatePanel(machineKey) {
@@ -574,6 +645,7 @@ export function makeCentreView(group) {
 
     return el('div.centre', {},
       head,
+      nowRunningPanel(machine, rerender, vs),
       shiftUpdatePanel(machine.key),
       body,
       bulkBar(vs, rerender, group));

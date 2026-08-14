@@ -66,6 +66,23 @@ order, and survives re-importing the workbook. `test/app-check.mjs` asserts the
 key still starts with `cncfmc|` after a move, because the alternative silently
 orphans everything attached to that line.
 
+## Running now
+
+Switching to a machine's tab — any of them, Rolling through Multi Punch —
+opens with a **Running now** panel above everything else: every line currently
+**In Progress** on that specific machine, each with a one-tap **Done**. That is
+the first question anyone switching to a machine's page actually has ("what is
+this thing doing"), so it does not wait to be found by scrolling the
+date-grouped queue below.
+
+Busier machines run dozens of lines In Progress at once — Rolling (Auto) sits
+around 60 — so the panel caps to a glanceable handful (rush lines first, then
+soonest cutting date, same order as the queue) with a **Show N more**. A line
+started through the app shows **since HH:MM**; one that arrived already
+marked In Progress on the sheet shows no time, since the app never saw it
+start. Nothing running shows a plain, quiet line rather than an empty panel
+that looks like something broke.
+
 ## A line
 
 One row per **work order + die + machine**, matching how the sheets already

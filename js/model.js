@@ -118,6 +118,14 @@ export function openCountFor(machineKey) {
   return tasksForMachine(machineKey).filter((r) => r.status.key !== 'DONE').length;
 }
 
+/** Lines actually running on a machine right now — the answer to "what is
+    this machine doing", meant to sit at the top of the page rather than be
+    found by scrolling the queue. Same order as the queue itself: rush first,
+    then soonest cutting date. */
+export function runningNow(machineKey) {
+  return tasksForMachine(machineKey).filter((r) => r.status.key === 'IN_PROGRESS');
+}
+
 /* ---------- date grouping ---------- */
 
 /* Order matters: this is the order the groups render in, urgent first.

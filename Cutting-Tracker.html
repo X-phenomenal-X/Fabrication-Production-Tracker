@@ -782,6 +782,56 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 .cloud-steps li { margin: 2px 0; }
 .cloud-steps .linkbtn { padding: 0 3px; font-size: inherit; }
 
+/* ---------- running now ---------- */
+
+/* The first thing anyone switching to a machine's tab wants to know: what is
+   it actually doing right now. Sits above everything else on the page rather
+   than wherever it happens to land in the date-grouped queue below. */
+.nowrun {
+  margin-top: 16px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--panel); overflow: hidden;
+}
+.nowrun.active { box-shadow: inset 3px 0 0 var(--work); }
+
+.nowrun-empty {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 14px; background: var(--panel-2); color: var(--ink-3); font-size: 13px;
+}
+
+.nowrun-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; background: var(--work-soft); color: var(--work);
+  font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+}
+.nowrun-count {
+  margin-left: auto; background: var(--work); color: #fff;
+  border-radius: 999px; padding: 1px 9px; font-size: 11px; font-weight: 800;
+}
+
+.nowrun-line {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 12px 14px; border-bottom: 1px solid var(--line-soft);
+}
+.nowrun-line:last-child { border-bottom: 0; }
+.nowrun-main { flex: 1; min-width: 160px; }
+.nowrun-meta {
+  display: flex; align-items: baseline; gap: 6px; flex-shrink: 0;
+  font-size: 13px;
+}
+.nowrun-since { white-space: nowrap; margin-left: 4px; }
+.nowrun-done {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 13px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
+  background: var(--ok-soft); color: var(--ok); border: 1px solid transparent;
+}
+.nowrun-done:hover { background: var(--ok); color: #fff; }
+
+@media (max-width: 720px) {
+  .nowrun-line { padding: 12px; }
+  .nowrun-meta { flex-basis: 100%; justify-content: space-between; }
+}
+
 </style>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#9986;</text></svg>">
 </head>
@@ -1820,6 +1870,9 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   function openCountFor(machineKey) {
     return tasksForMachine(machineKey).filter((r) => r.status.key !== "DONE").length;
   }
+  function runningNow(machineKey) {
+    return tasksForMachine(machineKey).filter((r) => r.status.key === "IN_PROGRESS");
+  }
   var DATE_GROUPS = [
     { key: "OVERDUE", label: "Overdue", tone: "bad", open: true, cap: 25 },
     { key: "TODAY", label: "Today", tone: "warn", open: true, cap: 25 },
@@ -2648,7 +2701,8 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         filter: "ALL",
         open: {},
         expanded: {},
-        selected: /* @__PURE__ */ new Set()
+        selected: /* @__PURE__ */ new Set(),
+        nowExpanded: {}
       });
     }
     return viewState.get(group);
@@ -3061,6 +3115,93 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       ) : null
     );
   }
+  function nowRunningLine(row, rerender) {
+    const t = row.task;
+    const key = taskStatusKey(t);
+    const since = row.status.at ? fmtWhen(row.status.at) : null;
+    return el(
+      "div.nowrun-line",
+      {},
+      el(
+        "div.nowrun-main",
+        {},
+        el(
+          "div.line-id",
+          {},
+          el("span.mono.strong", {}, t.wo),
+          t.die ? el("span.die", {}, t.die) : null,
+          row.rush.on ? chip("rush", "warn") : null
+        ),
+        el(
+          "div.line-where",
+          {},
+          el("span", {}, t.project || "\u2014"),
+          t.floor ? el("span.muted", {}, " \xB7 " + t.floor) : null
+        )
+      ),
+      el(
+        "div.nowrun-meta",
+        {},
+        el("span.mono", {}, fmtNum(t.qty)),
+        el("span.small.muted", {}, "pcs"),
+        since ? el("span.small.muted.nowrun-since", {}, `since ${since}`) : null
+      ),
+      el("button.nowrun-done", {
+        title: "Mark this line done",
+        onclick: (e) => {
+          const before = [{ key, prev: state.taskStatus[key]?.status ?? null }];
+          setTaskStatus(key, "DONE");
+          flash(e.target.closest(".nowrun-line"));
+          toastAction(`${t.wo} \u2192 Done`, "Undo", () => {
+            restoreTaskStatus(before);
+            rerender();
+          });
+          rerender();
+        }
+      }, icon("check", { size: 13 }), "Done")
+    );
+  }
+  var NOWRUN_CAP = 6;
+  function nowRunningPanel(machine, rerender, vs) {
+    const rows = runningNow(machine.key);
+    if (!rows.length) {
+      return el(
+        "div.nowrun",
+        {},
+        el(
+          "div.nowrun-empty",
+          {},
+          icon("dot", { size: 12 }),
+          el("span", {}, "Nothing running on " + machine.label + " right now")
+        )
+      );
+    }
+    const expanded = vs.nowExpanded[machine.key];
+    const shown = expanded ? rows : rows.slice(0, NOWRUN_CAP);
+    const hidden = rows.length - shown.length;
+    return el(
+      "div.nowrun.active",
+      {},
+      el(
+        "div.nowrun-head",
+        {},
+        icon("play", { size: 12 }),
+        el("span", {}, `Running now on ${machine.label}`),
+        el("span.nowrun-count", {}, String(rows.length))
+      ),
+      el(
+        "div.nowrun-body",
+        {},
+        ...shown.map((r) => nowRunningLine(r, rerender)),
+        hidden > 0 ? el("button.sm.showmore", {
+          onclick: () => {
+            vs.nowExpanded[machine.key] = true;
+            rerender();
+          }
+        }, `Show ${hidden} more`) : null
+      )
+    );
+  }
   function shiftUpdatePanel(machineKey) {
     const su = shiftUpdateFor(machineKey);
     if (!su) return null;
@@ -3341,6 +3482,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         "div.centre",
         {},
         head,
+        nowRunningPanel(machine, rerender, vs),
         shiftUpdatePanel(machine.key),
         body,
         bulkBar(vs, rerender, group)
