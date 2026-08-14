@@ -17,8 +17,10 @@ import {
 } from '../store.js';
 import {
   groupedQueue, machineSummary, openCountFor, taskStatusKey, hasTasks,
-  shiftUpdateFor, taskNoteFor, machineConfig, TRACK_STATUS_ORDER, TRACK_STATUS,
+  shiftUpdateFor, taskNoteFor, machineConfig, resolveBackOrder,
+  TRACK_STATUS_ORDER, TRACK_STATUS,
 } from '../model.js';
+import { backOrderDialog } from './backorders.js';
 import { machinesByGroup } from '../machines.js';
 
 /* Per-centre view state, kept while the app is open. */
@@ -104,7 +106,9 @@ function taskLine(row, vs, rerender) {
   const t = row.task;
   const key = taskStatusKey(t);
   const note = taskNoteFor(key);
-  const sheetNote = t.comments || t.boStat;
+  const bo = resolveBackOrder(t);
+  // boStat already surfaces inside the back-order band when flagged.
+  const sheetNote = t.comments || (bo.on ? null : t.boStat);
   const selected = vs.selected.has(key);
 
   const node = el('div.line' + (selected ? '.sel' : ''), {},
@@ -121,8 +125,10 @@ function taskLine(row, vs, rerender) {
       el('div.line-id', {},
         el('span.mono.strong', {}, t.wo),
         t.die ? el('span.die' + (t.edited?.die ? '.edited' : ''), {}, t.die) : null,
-        t.backOrder ? el('span.badge-bo', { title: 'Back order — short of material' },
-          icon('alert', { size: 11 }), 'B/O') : null,
+        bo.on ? el('span.badge-bo', {
+          title: bo.qty != null ? `${bo.qty} pieces short` : 'Back order — short of material',
+        }, icon('alert', { size: 11 }),
+          bo.qty != null ? `B/O ${fmtNum(bo.qty)}` : 'B/O') : null,
         t.editedAt ? el('span.badge-edited', {
           title: `Edited by ${t.editedBy} · ${fmtWhen(t.editedAt)}`,
         }, 'edited') : null),
@@ -130,6 +136,14 @@ function taskLine(row, vs, rerender) {
         el('span', {}, t.project || '—'),
         t.floor ? el('span.muted', {}, ' · ' + t.floor) : null),
       sheetNote ? el('div.small.muted.line-note', {}, sheetNote) : null,
+      bo.on && (bo.assignee || bo.note || bo.qty != null || bo.sheetShort) ? el('div.line-boband', {},
+        icon('alert', { size: 12 }),
+        el('span', {},
+          bo.qty != null ? el('strong', {}, `${fmtNum(bo.qty)} short`) : null,
+          bo.assignee ? el('span', {}, `${bo.qty != null ? ' · ' : ''}${bo.assignee}`) : null,
+          (bo.note || bo.sheetShort)
+            ? el('span.muted', {}, `${bo.qty != null || bo.assignee ? ' — ' : ''}${bo.note || bo.sheetShort}`)
+            : null)) : null,
       note ? el('div.line-usernote', {},
         icon('note', { size: 12 }),
         el('span', {}, note.text),
@@ -146,6 +160,10 @@ function taskLine(row, vs, rerender) {
         title: note ? 'Edit note' : 'Add a note',
         onclick: () => noteEditor(row, rerender),
       }, icon('note', { size: 15 })),
+      el('button.line-iconbtn' + (bo.on ? '.bo' : ''), {
+        title: bo.on ? 'Edit back order' : 'Flag as back order',
+        onclick: () => backOrderDialog(t, rerender),
+      }, icon('alert', { size: 15 })),
       el('button.line-iconbtn', {
         title: 'Edit this line and see its history',
         onclick: () => editLine(row, rerender),

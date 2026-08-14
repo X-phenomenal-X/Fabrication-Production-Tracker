@@ -551,3 +551,48 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 }
 .hist-change { color: var(--ink); }
 .hist-who { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+
+/* ---------- back orders ---------- */
+
+.line-boband {
+  display: flex; align-items: flex-start; gap: 5px; margin-top: 5px;
+  font-size: 12.5px; color: var(--bad);
+  background: var(--bad-soft); border-radius: 6px; padding: 4px 8px;
+}
+.line-boband svg { flex-shrink: 0; margin-top: 2px; }
+.line-boband .muted { color: color-mix(in srgb, var(--bad) 65%, var(--ink-3)); }
+
+.line-iconbtn.bo { color: var(--bad); }
+
+.bo-dialoghead {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line-soft);
+}
+.bo-flagrow {
+  gap: 10px; align-items: flex-start; padding: 11px 13px;
+  background: var(--bad-soft); border-radius: 8px; cursor: pointer;
+}
+.bo-flagrow input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--bad); }
+.of-total { font-style: normal; color: var(--ink-3); font-weight: 500; margin-left: 5px; }
+
+.bo-who {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 800; letter-spacing: .03em;
+  color: var(--ink); text-transform: none;
+}
+.bo-who.none { color: var(--warn); }
+
+.bo-line .line-main { flex: 1; }
+.bo-short { color: var(--bad); font-weight: 700; }
+.line-bonote {
+  display: flex; align-items: flex-start; gap: 5px; margin-top: 4px;
+  font-size: 12.5px; color: var(--ink-2);
+}
+.line-bonote svg { flex-shrink: 0; margin-top: 2px; color: var(--bad); }
+.bo-sheetnote {
+  display: flex; align-items: flex-start; gap: 6px; margin-top: 12px;
+  font-size: 12.5px; color: var(--ink-2);
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: 7px; padding: 8px 10px;
+}
+.bo-sheetnote svg { flex-shrink: 0; margin-top: 2px; color: var(--warn); }

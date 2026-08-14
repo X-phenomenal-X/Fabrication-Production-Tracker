@@ -559,6 +559,51 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 .hist-change { color: var(--ink); }
 .hist-who { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
 
+/* ---------- back orders ---------- */
+
+.line-boband {
+  display: flex; align-items: flex-start; gap: 5px; margin-top: 5px;
+  font-size: 12.5px; color: var(--bad);
+  background: var(--bad-soft); border-radius: 6px; padding: 4px 8px;
+}
+.line-boband svg { flex-shrink: 0; margin-top: 2px; }
+.line-boband .muted { color: color-mix(in srgb, var(--bad) 65%, var(--ink-3)); }
+
+.line-iconbtn.bo { color: var(--bad); }
+
+.bo-dialoghead {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line-soft);
+}
+.bo-flagrow {
+  gap: 10px; align-items: flex-start; padding: 11px 13px;
+  background: var(--bad-soft); border-radius: 8px; cursor: pointer;
+}
+.bo-flagrow input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--bad); }
+.of-total { font-style: normal; color: var(--ink-3); font-weight: 500; margin-left: 5px; }
+
+.bo-who {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 800; letter-spacing: .03em;
+  color: var(--ink); text-transform: none;
+}
+.bo-who.none { color: var(--warn); }
+
+.bo-line .line-main { flex: 1; }
+.bo-short { color: var(--bad); font-weight: 700; }
+.line-bonote {
+  display: flex; align-items: flex-start; gap: 5px; margin-top: 4px;
+  font-size: 12.5px; color: var(--ink-2);
+}
+.line-bonote svg { flex-shrink: 0; margin-top: 2px; color: var(--bad); }
+.bo-sheetnote {
+  display: flex; align-items: flex-start; gap: 6px; margin-top: 12px;
+  font-size: 12.5px; color: var(--ink-2);
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: 7px; padding: 8px 10px;
+}
+.bo-sheetnote svg { flex-shrink: 0; margin-top: 2px; color: var(--warn); }
+
 </style>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#9986;</text></svg>">
 </head>
@@ -583,7 +628,9 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   // js/store.js
   var store_exports = {};
   __export(store_exports, {
+    BACKORDER_FIELDS: () => BACKORDER_FIELDS,
     EDITABLE_FIELDS: () => EDITABLE_FIELDS,
+    clearBackOrder: () => clearBackOrder,
     clearTaskEdits: () => clearTaskEdits,
     connectSharedFile: () => connectSharedFile,
     disconnectSharedFile: () => disconnectSharedFile,
@@ -601,6 +648,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     resetAll: () => resetAll,
     restoreTaskStatus: () => restoreTaskStatus,
     save: () => save,
+    setBackOrder: () => setBackOrder,
     setMachineConfig: () => setMachineConfig,
     setMachineImport: () => setMachineImport,
     setTaskFields: () => setTaskFields,
@@ -697,6 +745,32 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     else delete state.taskEdit[key];
     save();
   }
+  function setBackOrder(key, patch) {
+    const cur = state.backOrder[key] || {};
+    const next = { ...cur };
+    for (const f of BACKORDER_FIELDS) {
+      if (!(f in patch)) continue;
+      let v = patch[f];
+      if (f === "assignee" || f === "note") v = String(v ?? "").trim() || null;
+      if (f === "qty") v = v === "" || v == null ? null : Number(v);
+      if ((cur[f] ?? null) === (v ?? null)) continue;
+      next[f] = v;
+      logChange(key, "backorder", f, cur[f] ?? null, v);
+    }
+    const empty = next.flagged == null && next.qty == null && !next.assignee && !next.note;
+    if (empty) delete state.backOrder[key];
+    else state.backOrder[key] = { ...next, at: now(), by: me() };
+    save();
+  }
+  function clearBackOrder(key) {
+    const cur = state.backOrder[key];
+    if (!cur) return;
+    for (const f of BACKORDER_FIELDS) {
+      if (cur[f] != null && cur[f] !== "") logChange(key, "backorder", f, cur[f], null);
+    }
+    delete state.backOrder[key];
+    save();
+  }
   function clearTaskEdits(key, sheet = {}) {
     const cur = state.taskEdit[key]?.fields || {};
     for (const [f, v] of Object.entries(cur)) logChange(key, "field", f, v, sheet[f] ?? null);
@@ -731,6 +805,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       shiftUpdate: state.shiftUpdate,
       taskNote: state.taskNote,
       taskEdit: state.taskEdit,
+      backOrder: state.backOrder,
       taskHistory: state.taskHistory,
       machineConfig: state.machineConfig,
       people: state.people,
@@ -815,6 +890,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     state.taskStatus = mergeRecords(state.taskStatus, remote.taskStatus);
     state.taskNote = mergeRecords(state.taskNote, remote.taskNote);
     state.taskEdit = mergeRecords(state.taskEdit, remote.taskEdit);
+    state.backOrder = mergeRecords(state.backOrder, remote.backOrder);
     const seen = new Set(state.taskHistory.map((h) => h.id));
     for (const h of remote.taskHistory || []) if (!seen.has(h.id)) state.taskHistory.push(h);
     state.taskHistory.sort((a, b) => a.at < b.at ? 1 : -1);
@@ -919,7 +995,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   function resetAll() {
     localStorage.removeItem(LS_KEY);
   }
-  var LS_KEY, IDB_NAME, IDB_STORE, RETIRED_KEYS, state, saveTimer, listeners, HISTORY_CAP, EDITABLE_FIELDS, fileHandle;
+  var LS_KEY, IDB_NAME, IDB_STORE, RETIRED_KEYS, state, saveTimer, listeners, HISTORY_CAP, EDITABLE_FIELDS, BACKORDER_FIELDS, fileHandle;
   var init_store = __esm({
     "js/store.js"() {
       LS_KEY = "bv.cutting.v1";
@@ -954,6 +1030,8 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         // `${machine}|${wo}|${die}` -> { text, at, by }
         taskEdit: {},
         // same key -> { fields: {...}, at, by } — corrections to the sheet
+        backOrder: {},
+        // same key -> { flagged, qty, assignee, note, at, by }
         taskHistory: [],
         // every change to a line, newest first
         machineConfig: {},
@@ -971,6 +1049,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         { key: "qty", label: "Qty", type: "number" },
         { key: "cuttingDate", label: "Cutting date", type: "date" }
       ];
+      BACKORDER_FIELDS = ["flagged", "qty", "assignee", "note"];
       fileHandle = null;
     }
   });
@@ -1228,7 +1307,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     const term = q.trim().toLowerCase();
     const rows = tasksForMachine(machineKey).filter((r) => showDone || r.status.key !== "DONE").filter((r) => {
       if (filter === "ALL") return true;
-      if (filter === "BO") return !!r.task.backOrder;
+      if (filter === "BO") return resolveBackOrder(r.task).on;
       return r.status.key === filter;
     }).filter((r) => {
       if (!term) return true;
@@ -1248,9 +1327,55 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       open: open.length,
       inProgress: open.filter((r) => r.status.key === "IN_PROGRESS").length,
       overdue: open.filter((r) => dateGroupOf(r.task, ref) === "OVERDUE").length,
-      backOrder: open.filter((r) => r.task.backOrder).length,
+      backOrder: open.filter((r) => resolveBackOrder(r.task).on).length,
       done: all.length - open.length
     };
+  }
+  function backOrderFor(key) {
+    return state.backOrder?.[key] || null;
+  }
+  function resolveBackOrder(task) {
+    const rec = backOrderFor(taskStatusKey(task)) || {};
+    const fromSheet = !!task.backOrder;
+    const on = rec.flagged == null ? fromSheet : !!rec.flagged;
+    return {
+      on,
+      fromSheet,
+      // Only a recorded count is trustworthy as "pieces short": the sheet's B/O
+      // column counts BARS, and on FOM2/FOM3 writes them as text ("3 BARS").
+      // That is kept separately as context rather than shown as a piece count.
+      qty: rec.qty ?? null,
+      sheetShort: task.boRaw || task.boStat || null,
+      assignee: rec.assignee || null,
+      note: rec.note || null,
+      recorded: !!rec.at,
+      at: rec.at || null,
+      by: rec.by || null
+    };
+  }
+  function allBackOrders() {
+    const rows = [];
+    for (const t of tasksInScope()) {
+      const task = resolveTask(t);
+      const bo = resolveBackOrder(task);
+      if (!bo.on) continue;
+      if (effectiveTaskStatus(task).key === "DONE") continue;
+      rows.push({ task, bo, machine: task.machine });
+    }
+    const groups = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      const who = r.bo.assignee || "";
+      if (!groups.has(who)) groups.set(who, []);
+      groups.get(who).push(r);
+    }
+    for (const list of groups.values()) {
+      list.sort((a, b) => (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1);
+    }
+    return Array.from(groups.entries()).map(([assignee, list]) => ({ assignee, rows: list })).sort((a, b) => {
+      if (!a.assignee) return 1;
+      if (!b.assignee) return -1;
+      return a.assignee.localeCompare(b.assignee);
+    });
   }
   function taskNoteFor(key) {
     return state.taskNote?.[key] || null;
@@ -1273,6 +1398,9 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     if (!entry) return null;
     return { ...entry, date: su.date, shift: su.shift };
   }
+
+  // js/views/backorders.js
+  init_store();
 
   // js/machines.js
   var MACHINES = [
@@ -1306,6 +1434,280 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       groups.get(m.group).push(m);
     }
     return groups;
+  }
+
+  // js/views/backorders.js
+  var TYPE_A_NAME = "__type__";
+  function backOrderDialog(task, rerender) {
+    const key = taskStatusKey(task);
+    const cur = backOrderFor(key) || {};
+    const resolved = resolveBackOrder(task);
+    const max = task.qty ?? null;
+    const flag = el("input", { type: "checkbox", checked: resolved.on, style: { width: "auto" } });
+    const qty = el("input", {
+      type: "number",
+      min: "0",
+      inputmode: "numeric",
+      max: max == null ? void 0 : String(max),
+      value: cur.qty ?? "",
+      placeholder: "0"
+    });
+    const people = state.people || [];
+    const known = cur.assignee && !people.includes(cur.assignee) ? [cur.assignee] : [];
+    const nameInput = el("input", {
+      value: cur.assignee || "",
+      placeholder: "Name",
+      style: { display: "none", marginTop: "8px" }
+    });
+    const who = el(
+      "select",
+      {
+        onchange: (e) => {
+          const typing = e.target.value === TYPE_A_NAME;
+          nameInput.style.display = typing ? "" : "none";
+          if (typing) nameInput.focus();
+        }
+      },
+      el("option", { value: "", selected: !cur.assignee }, "Unassigned"),
+      ...[...people, ...known].map((p) => el("option", {
+        value: p,
+        selected: cur.assignee === p
+      }, p)),
+      el("option", { value: TYPE_A_NAME }, "\u2014 type a name \u2014")
+    );
+    const note = el("textarea", {
+      value: cur.note || "",
+      placeholder: "What is short, who was chased, expected date\u2026",
+      style: { minHeight: "90px" }
+    });
+    const body = el(
+      "div",
+      {},
+      el(
+        "div.bo-dialoghead",
+        {},
+        el("span.mono.strong", {}, `W/O ${task.wo}`),
+        task.die ? el("span.die", {}, task.die) : null,
+        el(
+          "span.small.muted",
+          {},
+          `${task.project || ""}${task.floor ? " \xB7 " + task.floor : ""}`.trim()
+        )
+      ),
+      el(
+        "label.row.bo-flagrow",
+        {},
+        flag,
+        el(
+          "span",
+          {},
+          el("strong", {}, "Flag as back order"),
+          resolved.fromSheet ? el("div.small.muted", {}, "The workbook already reports this line as B/O. Unticking records that it is resolved.") : null
+        )
+      ),
+      el(
+        "div.grid",
+        { style: { gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: "12px", marginTop: "14px" } },
+        el(
+          "label.field",
+          {},
+          el("span", {}, "Pieces short", max != null ? el("em.of-total", {}, `of ${fmtNum(max)}`) : null),
+          qty
+        ),
+        el(
+          "label.field",
+          {},
+          el("span", {}, "Assigned to"),
+          who,
+          nameInput
+        )
+      ),
+      resolved.sheetShort ? el(
+        "div.bo-sheetnote",
+        {},
+        icon("alert", { size: 12 }),
+        el(
+          "span",
+          {},
+          el("strong", {}, "Workbook says: "),
+          resolved.sheetShort,
+          el("span.muted", {}, " \u2014 the sheet counts bars, the field above counts pieces")
+        )
+      ) : null,
+      el("label.field", { style: { marginTop: "12px" } }, el("span", {}, "Back order note"), note),
+      cur.at ? el(
+        "div.small.muted",
+        { style: { marginTop: "10px" } },
+        `Last updated by ${cur.by} \xB7 ${fmtWhen(cur.at)}`
+      ) : null
+    );
+    modal(`Back order \u2014 ${task.wo}`, body, {
+      actions: [
+        cur.at ? {
+          label: "Clear",
+          class: "danger",
+          onClick: (dlg) => {
+            clearBackOrder(key);
+            dlg.close();
+            toast("Back order cleared");
+            rerender();
+          }
+        } : null,
+        {
+          label: "Save",
+          class: "primary",
+          onClick: (dlg) => {
+            const assignee = who.value === TYPE_A_NAME ? nameInput.value : who.value;
+            let pieces = qty.value === "" ? null : Number(qty.value);
+            if (pieces != null && max != null) pieces = Math.min(pieces, max);
+            setBackOrder(key, {
+              // Record the flag explicitly, so unticking a sheet-reported
+              // shortage is stored as "resolved" rather than read as "unset".
+              flagged: flag.checked,
+              qty: pieces,
+              assignee,
+              note: note.value
+            });
+            dlg.close();
+            toast("Back order saved");
+            rerender();
+          }
+        }
+      ].filter(Boolean)
+    });
+  }
+  var mineOnly = false;
+  function renderBackOrders(rerender, go2) {
+    if (!hasTasks()) {
+      return el(
+        "div.panel",
+        {},
+        el(
+          "div.empty",
+          {},
+          el("div.empty-icon", {}, icon("upload", { size: 28 })),
+          el("h3", {}, "No schedule loaded yet"),
+          el("p", {}, "Import the Rolling and CNC workbooks to get started."),
+          el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
+        )
+      );
+    }
+    let groups = allBackOrders();
+    if (mineOnly) groups = groups.filter((g) => g.assignee === me());
+    const total = groups.reduce((a, g) => a + g.rows.length, 0);
+    const pieces = groups.reduce((a, g) => a + g.rows.reduce((b, r) => b + (r.bo.qty || 0), 0), 0);
+    const unassigned = allBackOrders().find((g) => !g.assignee)?.rows.length || 0;
+    const head = el(
+      "div.centre-head",
+      {},
+      el(
+        "div.row.centre-title-row",
+        {},
+        el(
+          "div",
+          {},
+          el("h1.centre-title", {}, "Back orders"),
+          el("div.small.muted", {}, "Lines short of material, across every centre")
+        ),
+        el("span.spacer"),
+        el(
+          "div.centre-stats",
+          {},
+          el("div.cstat" + (total ? ".bad" : ""), {}, el("b", {}, fmtNum(total)), el("i", {}, "lines")),
+          el("div.cstat", {}, el("b", {}, fmtNum(pieces)), el("i", {}, "pcs short")),
+          el("div.cstat" + (unassigned ? ".warn" : ""), {}, el("b", {}, fmtNum(unassigned)), el("i", {}, "unassigned"))
+        )
+      ),
+      el(
+        "div.centre-filters",
+        {},
+        el(
+          "label.row.small.donetoggle",
+          {},
+          el("input", {
+            type: "checkbox",
+            checked: mineOnly,
+            onchange: (e) => {
+              mineOnly = e.target.checked;
+              rerender();
+            }
+          }),
+          `Only mine (${me()})`
+        )
+      )
+    );
+    if (!groups.length) {
+      return el(
+        "div.centre",
+        {},
+        head,
+        el("div.panel", {}, el(
+          "div.empty",
+          {},
+          el("div.empty-icon", {}, icon("check", { size: 28 })),
+          el("h3", {}, mineOnly ? "Nothing assigned to you" : "No back orders"),
+          el("div", {}, mineOnly ? "Nothing is waiting on you right now." : "Nothing is flagged short of material.")
+        ))
+      );
+    }
+    const sections = groups.map((g) => {
+      const short = g.rows.reduce((a, r) => a + (r.bo.qty || 0), 0);
+      return el(
+        "section.dgroup",
+        {},
+        el(
+          "div.dgroup-head",
+          {},
+          el(
+            "span.bo-who" + (g.assignee ? "" : ".none"),
+            {},
+            icon(g.assignee ? "check" : "alert", { size: 13 }),
+            g.assignee || "Unassigned"
+          ),
+          el("span.dgroup-count", {}, String(g.rows.length)),
+          el("span.spacer"),
+          short ? el("span.small.muted", {}, `${fmtNum(short)} pcs short`) : null
+        ),
+        el("div.dgroup-body", {}, ...g.rows.map(({ task, bo }) => el(
+          "div.line.bo-line",
+          {
+            style: { cursor: "pointer" },
+            onclick: () => backOrderDialog(task, rerender)
+          },
+          el(
+            "div.line-main",
+            {},
+            el(
+              "div.line-id",
+              {},
+              el("span.mono.strong", {}, task.wo),
+              task.die ? el("span.die", {}, task.die) : null,
+              chip(MACHINE_BY_KEY[task.machine]?.label || task.machine, "mute")
+            ),
+            el(
+              "div.line-where",
+              {},
+              el("span", {}, task.project || "\u2014"),
+              task.floor ? el("span.muted", {}, " \xB7 " + task.floor) : null
+            ),
+            bo.note || bo.sheetShort ? el(
+              "div.line-bonote",
+              {},
+              icon("alert", { size: 12 }),
+              el("span", {}, bo.note || bo.sheetShort)
+            ) : null
+          ),
+          el(
+            "div.line-qty",
+            {},
+            bo.qty != null ? el("span.mono.bo-short", {}, fmtNum(bo.qty)) : el("span.small.muted", {}, "\u2014"),
+            el("span.small.muted", {}, bo.qty != null ? "short" : "")
+          ),
+          el("div.line-date.hide-sm", {}, fmtDate(task.cuttingDate))
+        )))
+      );
+    });
+    return el("div.centre", {}, head, ...sections);
   }
 
   // js/views/centre.js
@@ -1406,7 +1808,8 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     const t = row.task;
     const key = taskStatusKey(t);
     const note = taskNoteFor(key);
-    const sheetNote = t.comments || t.boStat;
+    const bo = resolveBackOrder(t);
+    const sheetNote = t.comments || (bo.on ? null : t.boStat);
     const selected = vs.selected.has(key);
     const node = el(
       "div.line" + (selected ? ".sel" : ""),
@@ -1433,11 +1836,13 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
           {},
           el("span.mono.strong", {}, t.wo),
           t.die ? el("span.die" + (t.edited?.die ? ".edited" : ""), {}, t.die) : null,
-          t.backOrder ? el(
+          bo.on ? el(
             "span.badge-bo",
-            { title: "Back order \u2014 short of material" },
+            {
+              title: bo.qty != null ? `${bo.qty} pieces short` : "Back order \u2014 short of material"
+            },
             icon("alert", { size: 11 }),
-            "B/O"
+            bo.qty != null ? `B/O ${fmtNum(bo.qty)}` : "B/O"
           ) : null,
           t.editedAt ? el("span.badge-edited", {
             title: `Edited by ${t.editedBy} \xB7 ${fmtWhen(t.editedAt)}`
@@ -1450,6 +1855,18 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
           t.floor ? el("span.muted", {}, " \xB7 " + t.floor) : null
         ),
         sheetNote ? el("div.small.muted.line-note", {}, sheetNote) : null,
+        bo.on && (bo.assignee || bo.note || bo.qty != null || bo.sheetShort) ? el(
+          "div.line-boband",
+          {},
+          icon("alert", { size: 12 }),
+          el(
+            "span",
+            {},
+            bo.qty != null ? el("strong", {}, `${fmtNum(bo.qty)} short`) : null,
+            bo.assignee ? el("span", {}, `${bo.qty != null ? " \xB7 " : ""}${bo.assignee}`) : null,
+            bo.note || bo.sheetShort ? el("span.muted", {}, `${bo.qty != null || bo.assignee ? " \u2014 " : ""}${bo.note || bo.sheetShort}`) : null
+          )
+        ) : null,
         note ? el(
           "div.line-usernote",
           {},
@@ -1472,6 +1889,10 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
           title: note ? "Edit note" : "Add a note",
           onclick: () => noteEditor(row, rerender)
         }, icon("note", { size: 15 })),
+        el("button.line-iconbtn" + (bo.on ? ".bo" : ""), {
+          title: bo.on ? "Edit back order" : "Flag as back order",
+          onclick: () => backOrderDialog(t, rerender)
+        }, icon("alert", { size: 15 })),
         el("button.line-iconbtn", {
           title: "Edit this line and see its history",
           onclick: () => editLine(row, rerender)
@@ -2307,6 +2728,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       const statusRaw = get(row.cells, "status");
       const status = spec.complete ? "DONE" : normTaskStatus(statusRaw);
       const boQty = num(get(row.cells, "bo")) ?? num(get(row.cells, "boInt"));
+      const boRaw = txt(get(row.cells, "bo")) || txt(get(row.cells, "boInt"));
       const boStat = txt(get(row.cells, "boStat"));
       out.push({
         id: `${spec.machine}:${String(wo).trim()}:${txt(get(row.cells, "die")) || "x"}:${row.r}`,
@@ -2329,8 +2751,9 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         shifts: num(get(row.cells, "shifts")),
         pinHole: txt(get(row.cells, "pinHole")),
         bo: boQty,
+        boRaw,
         boStat,
-        backOrder: spec.complete ? false : readsBackOrder(statusRaw, boStat, boQty),
+        backOrder: spec.complete ? false : readsBackOrder(statusRaw, boStat || boRaw, boQty),
         archived: !!spec.complete
       });
     }
@@ -2824,6 +3247,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     { key: "fom", label: "FOM", render: makeCentreView("FOM") },
     { key: "cnc", label: "CNC", render: makeCentreView("CNC") },
     { key: "punch", label: "Multi Punch", render: makeCentreView("Punch") },
+    { key: "backorders", label: "Back Orders", render: renderBackOrders },
     { key: "setup", label: "Setup", render: renderData }
   ];
   var current = location.hash.slice(1) || "rolling";

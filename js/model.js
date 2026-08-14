@@ -131,7 +131,7 @@ export function groupedQueue(machineKey, { showDone = false, q = '', filter = 'A
     .filter((r) => showDone || r.status.key !== 'DONE')
     .filter((r) => {
       if (filter === 'ALL') return true;
-      if (filter === 'BO') return !!r.task.backOrder;
+      if (filter === 'BO') return resolveBackOrder(r.task).on;
       return r.status.key === filter;
     })
     .filter((r) => {
@@ -159,9 +159,69 @@ export function machineSummary(machineKey, ref = today()) {
     open: open.length,
     inProgress: open.filter((r) => r.status.key === 'IN_PROGRESS').length,
     overdue: open.filter((r) => dateGroupOf(r.task, ref) === 'OVERDUE').length,
-    backOrder: open.filter((r) => r.task.backOrder).length,
+    backOrder: open.filter((r) => resolveBackOrder(r.task).on).length,
     done: all.length - open.length,
   };
+}
+
+/* ---------- back orders ---------- */
+
+export function backOrderFor(key) {
+  return state.backOrder?.[key] || null;
+}
+
+/** A line's shortage, combining what someone recorded with what the workbook
+    says. The recorded `flagged` is tri-state, so an explicit false clears a
+    shortage the sheet still reports. */
+export function resolveBackOrder(task) {
+  const rec = backOrderFor(taskStatusKey(task)) || {};
+  const fromSheet = !!task.backOrder;
+  const on = rec.flagged == null ? fromSheet : !!rec.flagged;
+  return {
+    on,
+    fromSheet,
+    // Only a recorded count is trustworthy as "pieces short": the sheet's B/O
+    // column counts BARS, and on FOM2/FOM3 writes them as text ("3 BARS").
+    // That is kept separately as context rather than shown as a piece count.
+    qty: rec.qty ?? null,
+    sheetShort: task.boRaw || task.boStat || null,
+    assignee: rec.assignee || null,
+    note: rec.note || null,
+    recorded: !!rec.at,
+    at: rec.at || null,
+    by: rec.by || null,
+  };
+}
+
+/** Every flagged line across all machines, grouped by who is chasing it.
+    Unassigned sorts last — it is the pile that needs an owner. */
+export function allBackOrders() {
+  const rows = [];
+  for (const t of tasksInScope()) {
+    const task = resolveTask(t);
+    const bo = resolveBackOrder(task);
+    if (!bo.on) continue;
+    if (effectiveTaskStatus(task).key === 'DONE') continue;
+    rows.push({ task, bo, machine: task.machine });
+  }
+
+  const groups = new Map();
+  for (const r of rows) {
+    const who = r.bo.assignee || '';
+    if (!groups.has(who)) groups.set(who, []);
+    groups.get(who).push(r);
+  }
+  for (const list of groups.values()) {
+    list.sort((a, b) => ((a.task.cuttingDate || '9999') < (b.task.cuttingDate || '9999') ? -1 : 1));
+  }
+
+  return Array.from(groups.entries())
+    .map(([assignee, list]) => ({ assignee, rows: list }))
+    .sort((a, b) => {
+      if (!a.assignee) return 1;
+      if (!b.assignee) return -1;
+      return a.assignee.localeCompare(b.assignee);
+    });
 }
 
 /* ---------- notes & machine config ---------- */

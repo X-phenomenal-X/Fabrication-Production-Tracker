@@ -136,6 +136,10 @@ function parseMachineSheet(sheet, spec, report) {
     const statusRaw = get(row.cells, 'status');
     const status = spec.complete ? 'DONE' : normTaskStatus(statusRaw);
     const boQty = num(get(row.cells, 'bo')) ?? num(get(row.cells, 'boInt'));
+    // The B/O column counts BARS, not pieces, and on FOM2/FOM3 it is written
+    // as text ("3 BARS"). Keep the raw cell so that shortage is still readable
+    // even though it will not parse as a number.
+    const boRaw = txt(get(row.cells, 'bo')) || txt(get(row.cells, 'boInt'));
     const boStat = txt(get(row.cells, 'boStat'));
 
     out.push({
@@ -159,8 +163,9 @@ function parseMachineSheet(sheet, spec, report) {
       shifts: num(get(row.cells, 'shifts')),
       pinHole: txt(get(row.cells, 'pinHole')),
       bo: boQty,
+      boRaw,
       boStat,
-      backOrder: spec.complete ? false : readsBackOrder(statusRaw, boStat, boQty),
+      backOrder: spec.complete ? false : readsBackOrder(statusRaw, boStat || boRaw, boQty),
       archived: !!spec.complete,
     });
   }

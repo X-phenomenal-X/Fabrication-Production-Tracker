@@ -50,7 +50,7 @@ step('app booted');
 
 const tabs = await page.$$eval('nav.tabs button', (ns) => ns.map((n) => n.textContent.trim()));
 step('tabs: ' + tabs.join(', '));
-if (tabs.join(',') !== 'Rolling,FOM,CNC,Multi Punch,Setup') {
+if (tabs.join(',') !== 'Rolling,FOM,CNC,Multi Punch,Back Orders,Setup') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -282,6 +282,76 @@ await page.fill('dialog input', 'Etas Line 1');
 await page.click('dialog footer button.primary');
 await page.waitForFunction(() => document.querySelector('.centre-title')?.textContent.trim() === 'Etas Line 1');
 step('machine renamed to: ' + await page.$eval('.centre-title', (n) => n.textContent.trim()));
+
+// back order: flag a line, set pieces, assign it, note it
+await page.click('nav.tabs button:has-text("Rolling")');
+await page.waitForFunction(() => document.querySelector('.centre-title'));
+const boLine = page.locator('.line').first();
+const boWo = (await boLine.locator('.line-id .mono').textContent()).trim();
+await boLine.locator('.line-iconbtn[title="Flag as back order"], .line-iconbtn[title="Edit back order"]').click();
+await page.waitForSelector('dialog .bo-flagrow');
+const flagBox = page.locator('dialog .bo-flagrow input');
+if (!(await flagBox.isChecked())) await flagBox.check();
+await page.locator('dialog .field').filter({ hasText: 'Pieces short' }).locator('input').fill('12');
+await page.selectOption('dialog select', 'Abhay');
+await page.fill('dialog textarea', 'Mill ETA 8/24 — chasing.');
+await page.click('dialog footer button.primary');
+await page.waitForTimeout(300);
+
+const boRec = await page.evaluate(() => import('/js/store.js').then((m) => {
+  const e = Object.entries(m.state.backOrder)[0];
+  return e ? { key: e[0], ...e[1] } : null;
+}));
+step('back order stored: ' + JSON.stringify(boRec));
+if (!boRec || boRec.qty !== 12 || boRec.assignee !== 'Abhay') throw new Error('back order not stored correctly');
+
+const boHist = await page.evaluate(() => import('/js/store.js').then((m) =>
+  m.state.taskHistory.filter((h) => h.kind === 'backorder').length));
+step('back order history entries: ' + boHist);
+if (!boHist) throw new Error('back order changes were not recorded in history');
+
+const badge = (await page.locator('.line').filter({ hasText: boWo }).first()
+  .locator('.badge-bo').first().textContent()).trim();
+step('line badge: ' + badge);
+if (!badge.includes('12')) throw new Error('badge does not show the piece count');
+await (await page.$('.line')).screenshot({ path: path.join(SHOT, 'bo-line.png') });
+
+// the Back Orders page lists it under the right person
+await page.click('nav.tabs button:has-text("Back Orders")');
+await page.waitForSelector('.bo-who');
+const owners = await page.$$eval('.bo-who', (ns) => ns.map((n) => n.textContent.trim()));
+const boStats = await page.$$eval('.cstat', (ns) =>
+  ns.map((n) => n.querySelector('i').textContent + '=' + n.querySelector('b').textContent));
+step('back orders page — owners: ' + owners.join(', ') + ' | ' + boStats.join(' '));
+if (!owners.includes('Abhay')) throw new Error('assignee group missing from Back Orders page');
+await page.screenshot({ path: path.join(SHOT, 'backorders.png'), fullPage: true });
+
+// tri-state: clearing a sheet-reported shortage drops it from the count
+const beforeClear = await page.$$eval('.bo-line', (n) => n.length);
+const sheetFlagged = page.locator('.bo-line').filter({ hasNotText: 'Abhay' }).first();
+if (await sheetFlagged.count()) {
+  await sheetFlagged.click();
+  await page.waitForSelector('dialog .bo-flagrow');
+  await page.locator('dialog .bo-flagrow input').uncheck();
+  await page.click('dialog footer button.primary');
+  await page.waitForTimeout(300);
+  const afterClear = await page.$$eval('.bo-line', (n) => n.length);
+  step(`tri-state clear: ${beforeClear} -> ${afterClear} lines`);
+  if (afterClear >= beforeClear) throw new Error('unflagging a sheet-reported shortage did not remove it');
+}
+
+// back order survives re-import
+await page.click('nav.tabs button:has-text("Setup")');
+await page.waitForSelector('.drop');
+const ch4 = page.waitForEvent('filechooser');
+await page.click('.drop:has-text("Rolling workbook") button');
+await (await ch4).setFiles(ROLLING);
+await page.waitForSelector('dialog .stat', { timeout: 120000 });
+await page.click('dialog header button');
+await page.waitForSelector('dialog', { state: 'detached' });
+const boAfter = await page.evaluate((k) => import('/js/store.js').then((m) => m.state.backOrder[k]), boRec.key);
+step('back order after re-import: ' + JSON.stringify(boAfter));
+if (!boAfter || boAfter.qty !== 12) throw new Error('back order lost on re-import');
 
 // phone
 await page.click('nav.tabs button:has-text("Rolling")');

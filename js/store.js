@@ -29,6 +29,7 @@ export const state = {
   shiftUpdate: null, // latest Shift Update sheet: { date, shift, machines }
   taskNote: {},     // `${machine}|${wo}|${die}` -> { text, at, by }
   taskEdit: {},     // same key -> { fields: {...}, at, by } — corrections to the sheet
+  backOrder: {},    // same key -> { flagged, qty, assignee, note, at, by }
   taskHistory: [],  // every change to a line, newest first
   machineConfig: {}, // machineKey -> { label, note, ops, hidden }
   people: [],
@@ -166,6 +167,47 @@ export function setTaskFields(key, patch, sheet = {}) {
   save();
 }
 
+/* Fields of a back-order record. `flagged` is deliberately tri-state:
+   undefined follows whatever the workbook says, true flags a line the sheet
+   does not, false clears one the sheet does. Without that third state there is
+   no way to record that a shortage the workbook still reports has actually
+   been resolved. */
+export const BACKORDER_FIELDS = ['flagged', 'qty', 'assignee', 'note'];
+
+/** Flag, assign, count and annotate a shortage on a line. */
+export function setBackOrder(key, patch) {
+  const cur = state.backOrder[key] || {};
+  const next = { ...cur };
+
+  for (const f of BACKORDER_FIELDS) {
+    if (!(f in patch)) continue;
+    let v = patch[f];
+    if (f === 'assignee' || f === 'note') v = String(v ?? '').trim() || null;
+    if (f === 'qty') v = v === '' || v == null ? null : Number(v);
+    if ((cur[f] ?? null) === (v ?? null)) continue;
+    next[f] = v;
+    logChange(key, 'backorder', f, cur[f] ?? null, v);
+  }
+
+  // A record with nothing meaningful left in it is not worth keeping.
+  const empty = next.flagged == null && next.qty == null
+    && !next.assignee && !next.note;
+  if (empty) delete state.backOrder[key];
+  else state.backOrder[key] = { ...next, at: now(), by: me() };
+  save();
+}
+
+/** Remove the whole record, so the line falls back to what the sheet says. */
+export function clearBackOrder(key) {
+  const cur = state.backOrder[key];
+  if (!cur) return;
+  for (const f of BACKORDER_FIELDS) {
+    if (cur[f] != null && cur[f] !== '') logChange(key, 'backorder', f, cur[f], null);
+  }
+  delete state.backOrder[key];
+  save();
+}
+
 /** Drop every correction on a line and go back to what the workbook says. */
 export function clearTaskEdits(key, sheet = {}) {
   const cur = state.taskEdit[key]?.fields || {};
@@ -212,6 +254,7 @@ function snapshot() {
     shiftUpdate: state.shiftUpdate,
     taskNote: state.taskNote,
     taskEdit: state.taskEdit,
+    backOrder: state.backOrder,
     taskHistory: state.taskHistory,
     machineConfig: state.machineConfig,
     people: state.people,
@@ -313,6 +356,7 @@ function mergeSnapshot(remote) {
   state.taskStatus = mergeRecords(state.taskStatus, remote.taskStatus);
   state.taskNote = mergeRecords(state.taskNote, remote.taskNote);
   state.taskEdit = mergeRecords(state.taskEdit, remote.taskEdit);
+  state.backOrder = mergeRecords(state.backOrder, remote.backOrder);
 
   // History is append-only: merge by id and keep it newest-first.
   const seen = new Set(state.taskHistory.map((h) => h.id));
