@@ -153,8 +153,9 @@ export function download(filename, text, type = 'application/json') {
 
 /* ---------- icons ---------- */
 
-/* Inline SVG so nothing is fetched — the app has to run from a network share
-   with no internet. 24x24 grid, stroke-based, sized by CSS. */
+/* A vendored, Lucide-compatible subset keeps the icon language consistent
+   without making the offline build fetch a font, sprite or runtime package.
+   Every mark uses the same 24px grid, weight and optical proportions. */
 const ICON_PATHS = {
   check: 'M20 6 9 17l-5-5',
   play: 'M6 4l14 8-14 8z',
@@ -175,6 +176,13 @@ const ICON_PATHS = {
   plus: 'M12 5v14M5 12h14',
   list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
   square: 'M4 4h16v16H4z',
+  rollers: 'M5 8h14a3 3 0 0 1 0 6H5a3 3 0 0 1 0-6zM5 8V5h14v3M5 16v3h14v-3',
+  factory: 'M3 21V9l6 4V9l6 4V5h6v16zM7 21v-4h3v4M15 17h2M15 13h2',
+  cpu: 'M9 3v2M15 3v2M9 19v2M15 19v2M3 9h2M3 15h2M19 9h2M19 15h2M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM9 9h6v6H9z',
+  punch: 'M12 2v4M12 18v4M2 12h4M18 12h4M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+  calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2zM8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01',
+  staging: 'M3 6h18M5 6l1-3h12l1 3M5 6v14h14V6M9 10h6',
+  clipboard: 'M9 5h6M9 3h6a2 2 0 0 1 2 2v1h2a2 2 0 0 1 2 2v13H3V8a2 2 0 0 1 2-2h2V5a2 2 0 0 1 2-2zM8 12h8M8 16h8',
 };
 
 export function icon(name, { size = 16, cls = '' } = {}) {
@@ -188,7 +196,7 @@ export function icon(name, { size = 16, cls = '' } = {}) {
   svg.setAttribute('stroke-linecap', 'round');
   svg.setAttribute('stroke-linejoin', 'round');
   svg.setAttribute('aria-hidden', 'true');
-  if (cls) svg.setAttribute('class', cls);
+  svg.setAttribute('class', ['ui-icon', cls].filter(Boolean).join(' '));
   const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   p.setAttribute('d', ICON_PATHS[name] || ICON_PATHS.dot);
   if (name === 'play') { p.setAttribute('fill', 'currentColor'); p.setAttribute('stroke', 'none'); }
@@ -214,6 +222,7 @@ export function toastAction(msg, actionLabel, onAction, ms = 6000) {
     the constraint so later content changes are not clipped. */
 export function animateHeight(node, expand) {
   if (typeof node.animate !== 'function') return;
+  if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const h = node.scrollHeight;
   const from = expand ? 0 : h;
   const to = expand ? h : 0;
@@ -228,6 +237,7 @@ export function animateHeight(node, expand) {
 /** Brief highlight so a change is visible where it happened. */
 export function flash(node) {
   if (!node || typeof node.animate !== 'function') return;
+  if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   node.animate(
     [{ backgroundColor: 'var(--accent-soft)' }, { backgroundColor: 'transparent' }],
     { duration: 700, easing: 'ease-out' });

@@ -11,8 +11,8 @@ import { chromium } from 'playwright';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import { ROOT, chromiumOptions } from './env.mjs';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
 const BUILT = path.join(ROOT, 'Cutting-Tracker.html');
 if (!fs.existsSync(BUILT)) throw new Error('Run `node build.mjs` first.');
 
@@ -36,15 +36,14 @@ const server = http.createServer((req, res) => {
   res.end(hit[0]);
 });
 await new Promise((r) => server.listen(0, r));
-const base = `http://127.0.0.1:${server.address().port}`;
+const port = server.address().port;
+const base = `http://127.0.0.1:${port}`;
 
 const errors = [];
 const step = (s) => console.log('  •', s);
 const fail = (m) => { errors.push(m); console.log('  ✗', m); };
 
-const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-});
+const browser = await chromium.launch(chromiumOptions());
 const ctx = await browser.newContext();
 const page = await ctx.newPage();
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
@@ -82,9 +81,14 @@ await page.evaluate(() => {
 /* ---------- pull the plug ---------- */
 
 await ctx.setOffline(true);
+// Chromium may exempt loopback traffic from network emulation. Stop the
+// origin too, so the worker has to take its real cached-fallback path.
+await new Promise((r) => server.close(r));
 const before = requests;
 await page.reload();
 await page.waitForSelector('header.top', { timeout: 15000 });
+await page.waitForFunction(() => [...document.querySelectorAll('.hdr-id .chip')]
+  .some((n) => n.textContent.trim() === 'offline'));
 step(`reloaded with the network down (server saw ${requests - before} more requests)`);
 
 const booted = await page.evaluate(() => ({
@@ -116,8 +120,11 @@ if (!wrote.includes('Written while offline')) fail('could not record anything wh
 /* ---------- and back again ---------- */
 
 await ctx.setOffline(false);
+await new Promise((r) => server.listen(port, r));
 await page.reload();
 await page.waitForSelector('header.top');
+await page.waitForFunction(() => ![...document.querySelectorAll('.hdr-id .chip')]
+  .some((n) => n.textContent.trim() === 'offline'));
 const backChip = await page.$$eval('.hdr-id .chip', (ns) => ns.map((n) => n.textContent.trim()));
 step('back online: ' + backChip.join(', '));
 if (backChip.includes('offline')) fail('still claims to be offline after the network returned');

@@ -53,6 +53,7 @@ function upcomingShifts(n = 4) {
 function stageRow(row, rerender) {
   const { task, key, staging, machine, rush } = row;
   const staged = !!staging?.staged;
+  const [nextShift] = upcomingShifts(1);
 
   return el('div.line.stage-line' + (staged ? '.is-staged' : '') + (rush.on ? '.rush' : ''), {},
     el('div.line-main', {},
@@ -91,6 +92,16 @@ function stageRow(row, rerender) {
             onclick: () => { clearStaging(key); toast('Back on the staging list'); rerender(); },
           }, icon('undo', { size: 14 }), 'Not staged')
         : el('div.stage-pick', {},
+            // Most staging is for the very next crew. Make that the large,
+            // glove-friendly action and keep the picker for the exceptions.
+            el('button.primary', {
+              title: `Stage for ${nextShift.label}`,
+              onclick: () => {
+                setStaging(key, { staged: true, stageFor: nextShift.value });
+                toast(`${task.wo} staged for ${stageForLabel(nextShift.value)}`);
+                rerender();
+              },
+            }, icon('check', { size: 14 }), `Stage · ${SHIFTS[nextShift.value.split('|')[1]].label}`),
             el('select', {
               'aria-label': `Stage ${task.wo} for which shift`,
               onchange: (e) => {
@@ -100,16 +111,8 @@ function stageRow(row, rerender) {
                 rerender();
               },
             },
-              el('option', { value: '' }, 'Stage for…'),
-              ...upcomingShifts().map((s) => el('option', { value: s.value }, s.label))),
-            el('button.primary', {
-              title: 'Staged, without saying which shift for',
-              onclick: () => {
-                setStaging(key, { staged: true, stageFor: null });
-                toast(`${task.wo} staged`);
-                rerender();
-              },
-            }, icon('check', { size: 14 }), 'Staged'))));
+              el('option', { value: '' }, 'Other shift…'),
+              ...upcomingShifts().slice(1).map((s) => el('option', { value: s.value }, s.label))))));
 }
 
 export function renderStaging(rerender, go) {

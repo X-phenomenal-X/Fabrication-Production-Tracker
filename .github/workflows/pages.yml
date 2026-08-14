@@ -35,12 +35,17 @@ jobs:
         with:
           node-version: 20
 
-      # package-lock.json is gitignored, so `npm ci` has nothing to work from.
-      # --ignore-scripts stops Playwright downloading browsers it does not need
-      # to run esbuild.
-      - run: npm install --no-audit --no-fund --ignore-scripts
+      # Runtime stays dependency-free. These pinned development tools exist
+      # only to build and verify the self-contained file reproducibly.
+      - run: npm ci --no-audit --no-fund --ignore-scripts
 
-      - run: node build.mjs
+      - name: Install the test browser
+        run: npx playwright install --with-deps chromium
+
+      # The same command developers run locally. The generated sanitized XLSX
+      # fixtures keep customer names and work orders out of this public repo.
+      - name: Verify importer, sync, UI, offline and standalone operation
+        run: npm test
 
       - name: Warn if the committed build is stale
         run: |

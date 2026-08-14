@@ -7,11 +7,11 @@ import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
 import http from 'http';
+import { ROOT, workbookPaths, chromiumOptions } from './env.mjs';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
-const DIR = '/root/.claude/uploads/042835a0-704b-5601-bc20-4ed82d27578f';
-const ROLLING = `${DIR}/da7bb9f1-Rolling_Schedule_2026.xlsx`;
-const CNC = `${DIR}/bae855fd-CNC_Schedule_Rev_E.xlsx`;
+const books = workbookPaths();
+const ROLLING = books.rolling;
+const CNC = books.cnc;
 const SHOT = path.join(ROOT, 'test', 'screens');
 
 const RETIRED = ['orders', 'wip', 'prep', 'screens', 'progress', 'material', 'history',
@@ -33,9 +33,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 
 fs.mkdirSync(SHOT, { recursive: true });
 
-const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-});
+const browser = await chromium.launch(chromiumOptions());
 const page = await browser.newPage({ viewport: { width: 1440, height: 950 } });
 
 const errors = [];
@@ -148,8 +146,8 @@ const su = await page.evaluate(() => import('/js/store.js').then((m) => {
 step('shift update: ' + JSON.stringify(su));
 if (!su || !su.machines.length) throw new Error('Shift Update sheet was not parsed');
 // FMC 1 and FMC 2 only exist in the newer block stacked below the old one in
-// `Shift Update 2` — proof the stacked-block parse works, not just the sheet
-// named exactly "Shift Update".
+// `Shift Update` — proof the stacked-block parse works, not just the sheet
+// being found by its exact name.
 for (const k of ['roll-auto', 'fom1', 'cnc1', 'fmc1', 'fmc2', 'multipunch']) {
   if (!su.machines.includes(k)) throw new Error(`shift update missing ${k}`);
 }
@@ -168,8 +166,8 @@ step('shift-update content per machine: ' + Object.entries(suContent)
   .map(([k, v]) => `${k}(${v.label})=${v.said}`).join(' '));
 if (suEmpty.length) throw new Error('machines with an empty shift-update entry: ' + suEmpty.join(', '));
 
-// It must come from the tab the department can actually see in Excel — the
-// other three shift-update sheets in that workbook are hidden, i.e. archived.
+// It must come from the exact live tab the department uses in Excel — the
+// other similarly named shift-update sheets are archived and never fallbacks.
 const suSrc = await page.evaluate(() => import('/js/store.js').then(
   (m) => m.state.machineMeta?.cnc && m.state.shiftUpdate));
 if (!suSrc) throw new Error('no shift update parsed');
@@ -213,10 +211,16 @@ await page.waitForTimeout(250);
 
 const line = page.locator('.line').filter({ hasText: target.wo })
   .filter({ hasText: target.die || '—' }).first();
-const activeTitle = () => line.locator('.seg-btn[aria-pressed="true"]').getAttribute('title');
+// The desktop command layout keeps the queue dense and puts the large status
+// control in the selected-line inspector. Open the stable target line first;
+// phone widths still carry the same control on each row.
+await line.locator('.line-open').click();
+await page.waitForSelector('.line-inspector');
+const inspector = page.locator('.line-inspector');
+const activeTitle = () => inspector.locator('.seg-btn[aria-pressed="true"]').getAttribute('title');
 const before = await activeTitle();
 // Explicit three-way control: pick the state directly rather than cycling.
-await line.locator('.seg-btn[title="In Progress"]').click();
+await inspector.locator('.seg-btn[title="In Progress"]').click();
 await page.waitForTimeout(250);
 const after = await activeTitle();
 step(`status set: "${before}" -> "${after}"`);
@@ -228,7 +232,7 @@ if (await undo.count()) {
   await undo.click();
   await page.waitForTimeout(250);
   step('undo restored: "' + (await activeTitle()) + '"');
-  await line.locator('.seg-btn[title="In Progress"]').click();
+  await inspector.locator('.seg-btn[title="In Progress"]').click();
   await page.waitForTimeout(250);
 }
 
@@ -305,7 +309,7 @@ await page.waitForTimeout(300);
 step('bulk undone');
 
 // a note can be added to a line
-await page.locator('.line-iconbtn[title="Add a note"]').first().click();
+await inspector.getByRole('button', { name: /^(Note|Edit note)$/ }).click();
 await page.waitForSelector('dialog textarea');
 await page.fill('dialog textarea', 'Waiting on 3 bars from the mill.');
 await page.click('dialog footer button.primary');
@@ -318,7 +322,8 @@ if (!noteCount) throw new Error('note was not saved');
 // a line can be edited, and the edit is recorded with who and when
 const editLine = page.locator('.line').first();
 const woEdited = (await editLine.locator('.line-id .mono').textContent()).trim();
-await editLine.locator('.line-iconbtn[title="Edit this line and see its history"]').click();
+await editLine.locator('.line-open').click();
+await inspector.getByRole('button', { name: 'Edit', exact: true }).click();
 await page.waitForSelector('dialog .editfield input');
 await (await page.$('dialog')).screenshot({ path: path.join(SHOT, 'edit-dialog-before.png') });
 const qtyInput = page.locator('dialog .editfield').filter({ hasText: 'Qty' }).locator('input');
@@ -340,7 +345,7 @@ step('edited badge on line: ' + (editedBadge ? 'yes' : 'no'));
 if (!editedBadge) throw new Error('edited badge not shown');
 
 // reopen to capture the history trail
-await page.locator('.line').first().locator('.line-iconbtn[title="Edit this line and see its history"]').click();
+await inspector.getByRole('button', { name: 'History', exact: true }).click();
 await page.waitForSelector('dialog .hist');
 const histRows = await page.$$eval('dialog .hist li', (n) => n.length);
 step('history entries shown on the line: ' + histRows);
@@ -377,7 +382,8 @@ await page.click('nav.tabs button:has-text("Rolling")');
 await page.waitForFunction(() => document.querySelector('.centre-title'));
 const boLine = page.locator('.line').first();
 const boWo = (await boLine.locator('.line-id .mono').textContent()).trim();
-await boLine.locator('.line-iconbtn[title="Flag as back order"], .line-iconbtn[title="Edit back order"]').click();
+await boLine.locator('.line-open').click();
+await inspector.getByRole('button', { name: 'Back order', exact: true }).click();
 await page.waitForSelector('dialog .bo-flagrow');
 const flagBox = page.locator('dialog .bo-flagrow input');
 if (!(await flagBox.isChecked())) await flagBox.check();
@@ -448,8 +454,9 @@ await page.$$eval('.dgroup-head[aria-expanded="false"]', (ns) => ns.forEach((n) 
 await page.waitForTimeout(200);
 
 const rushWo = await page.$eval('.line .mono.strong', (n) => n.textContent.trim());
-await page.locator('.line').filter({ hasText: rushWo }).first()
-  .locator('.line-iconbtn[title="Mark as rush"]').click();
+const rushLine = page.locator('.line').filter({ hasText: rushWo }).first();
+await rushLine.locator('.line-open').click();
+await inspector.getByRole('button', { name: 'Rush', exact: true }).click();
 await page.waitForSelector('dialog .rush-flagrow');
 await page.locator('dialog .rush-flagrow input').check();
 // The needed-by date is the whole point: a shipping gate that beats the sheet.
@@ -503,8 +510,9 @@ if (!cncTabs.some((t) => t.startsWith('FMC 1')) || !cncTabs.some((t) => t.starts
 const queuedBefore = await page.evaluate(() =>
   import('/js/model.js').then((m) => m.openCountFor('cncfmc')));
 const moveWo = await page.$eval('.line .mono.strong', (n) => n.textContent.trim());
-await page.locator('.line').filter({ hasText: moveWo }).first()
-  .locator('.line-iconbtn[title="Put this line on a machine"]').click();
+const queueLine = page.locator('.line').filter({ hasText: moveWo }).first();
+await queueLine.locator('.line-open').click();
+await inspector.getByRole('button', { name: 'Assign', exact: true }).click();
 await page.waitForSelector('dialog .movebtn');
 await page.locator('dialog .movebtn', { hasText: 'FMC 2' }).first().click();
 await page.waitForTimeout(300);
@@ -535,8 +543,9 @@ const fomBefore = await page.evaluate(() => import('/js/model.js').then((m) => (
   fom1: m.openCountFor('fom1'), fom2: m.openCountFor('fom2'),
 })));
 const fomWo = await page.$eval('.line .mono.strong', (n) => n.textContent.trim());
-await page.locator('.line').filter({ hasText: fomWo }).first()
-  .locator('.line-iconbtn[title="Move this line to another machine"]').click();
+const fomLine = page.locator('.line').filter({ hasText: fomWo }).first();
+await fomLine.locator('.line-open').click();
+await inspector.getByRole('button', { name: 'Move', exact: true }).click();
 await page.waitForSelector('dialog .movebtn');
 const moveOpts = await page.$$eval('dialog .movebtn strong', (ns) => ns.map((n) => n.textContent.trim()));
 step('FOM move targets: ' + moveOpts.join(', '));
@@ -571,8 +580,9 @@ if (!movedBadge.includes('FOM 1')) throw new Error('moved line does not say wher
 await page.screenshot({ path: path.join(SHOT, 'moved-line.png') });
 
 // and it goes back where the sheet has it
-await page.locator('.line').filter({ hasText: fomWo }).first()
-  .locator('.line-iconbtn[title="Move this line to another machine"]').click();
+const movedFomLine = page.locator('.line').filter({ hasText: fomWo }).first();
+await movedFomLine.locator('.line-open').click();
+await inspector.getByRole('button', { name: 'Move', exact: true }).click();
 await page.waitForSelector('dialog .movebtn');
 await page.click('dialog .body button.ghost');   // header has a ghost 'Close' too
 await page.waitForTimeout(300);
@@ -615,7 +625,7 @@ step('shift-update panel flags itself stale: ' + (suStaleChip ? 'yes' : 'no'));
 if (!suStaleChip) throw new Error('shift-update panel did not flag stale data');
 
 await page.evaluate(() => import('/js/store.js').then((m) => {
-  m.state.machineMeta.cnc.parser = 3;
+  m.state.machineMeta.cnc.parser = 4;
   m.save();
 }));
 
@@ -988,7 +998,8 @@ if (!manualRow.length || manualRow[0].wo !== '90210') throw new Error('the added
 if (!manualRow[0].badge) throw new Error('the added job is not marked as added by hand');
 
 // give it a status, then re-import the workbook it belongs to
-await page.click('.line .seg-btn:nth-child(2)');
+await page.click('.line .line-open');
+await inspector.locator('.seg-btn[title="In Progress"]').click();
 await page.waitForTimeout(200);
 await gotoTab('Setup');
 {
@@ -1037,6 +1048,28 @@ const board = await page.$$eval('.att', (ns) => ns.map((n) =>
 step('today board: ' + board.join(' '));
 if (board.length !== 5) throw new Error('the today board lost a card');
 await page.screenshot({ path: path.join(SHOT, 'today.png'), fullPage: true });
+
+// Browser storage failures must be impossible to miss. A console warning is
+// not enough on the floor: the operator needs a persistent recovery action.
+await page.evaluate(async () => {
+  window.__realStorageSetItem = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (key, value) {
+    if (key === 'bv.cutting.v1') throw new DOMException('Test quota exceeded', 'QuotaExceededError');
+    return window.__realStorageSetItem.call(this, key, value);
+  };
+  (await import('/js/store.js')).save();
+});
+await page.waitForSelector('.storage-alert');
+const storageAlarm = (await page.locator('.storage-alert').textContent()).replace(/\s+/g, ' ').trim();
+step('storage failure alarm: ' + storageAlarm.slice(0, 100) + '…');
+if (!/Do not close this page|exported a backup/.test(storageAlarm)) {
+  throw new Error('storage failure did not give the operator a recovery action');
+}
+await page.evaluate(async () => {
+  Storage.prototype.setItem = window.__realStorageSetItem;
+  (await import('/js/store.js')).save();
+});
+await page.waitForSelector('.storage-alert', { state: 'detached' });
 
 // phone
 await page.click('nav.tabs button:has-text("Rolling")');

@@ -228,19 +228,18 @@ export function makeFixture({ today = '2026-08-14', volume = 'heavy' } = {}) {
     machineMeta: {
       rolling: {
         fileName: 'Rolling_Schedule_2026.xlsx', importedAt: iso(base - 3 * 3600000),
-        count: tasks.filter((t) => t.machine.startsWith('roll')).length, parser: 3,
+        count: tasks.filter((t) => t.machine.startsWith('roll')).length, parser: 4,
       },
       cnc: {
         fileName: 'CNC_Schedule_Rev_E.xlsx', importedAt: iso(base - 3 * 3600000),
-        count: tasks.filter((t) => !t.machine.startsWith('roll')).length, parser: 3,
+        count: tasks.filter((t) => !t.machine.startsWith('roll')).length, parser: 4,
       },
     },
     taskStatus,
     shiftUpdate: {
       date: day(0),
       shift: 'DAY',
-      sheet: 'Shift Update 2',
-      fromVisibleTab: true,
+      sheet: 'Shift Update',
       importedAt: iso(base - 3 * 3600000),
       machines: {
         'roll-auto': suRow(
@@ -344,7 +343,7 @@ export function makeFixture({ today = '2026-08-14', volume = 'heavy' } = {}) {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (typeof process !== 'undefined' && import.meta.url === `file://${process.argv[1]}`) {
   const f = makeFixture();
   process.stdout.write(JSON.stringify(f));
 }

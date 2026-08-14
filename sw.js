@@ -31,6 +31,17 @@ const CACHE = `cutting-${VERSION}`;
    hanging on a request that was never going to arrive. */
 const NETWORK_TIMEOUT = 4000;
 
+/* `navigator.onLine` only knows whether the device has a network interface.
+   Shop Wi-Fi can be connected while the internet is unreachable, so remember
+   whether the worker actually reached the server and tell every open tracker. */
+let networkAvailable = true;
+
+async function reportNetwork(online) {
+  networkAvailable = online;
+  const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (const client of windows) client.postMessage({ type: 'bv-network', online });
+}
+
 self.addEventListener('install', (e) => {
   // Warm the cache with the app itself, so the very first time the signal
   // drops there is already something to serve.
@@ -59,6 +70,9 @@ self.addEventListener('activate', (e) => {
    takes over without waiting for every tab to close. */
 self.addEventListener('message', (e) => {
   if (e.data === 'skip-waiting') self.skipWaiting();
+  if (e.data === 'connection-status') {
+    e.source?.postMessage({ type: 'bv-network', online: networkAvailable });
+  }
 });
 
 function timeout(ms) {
@@ -69,11 +83,13 @@ async function networkFirst(request) {
   const cache = await caches.open(CACHE);
   try {
     const res = await Promise.race([fetch(request), timeout(NETWORK_TIMEOUT)]);
+    reportNetwork(true);
     // Opaque and error responses are not worth keeping; a 404 cached as the
     // app would be worse than no cache at all.
     if (res && res.ok && res.type === 'basic') cache.put(request, res.clone());
     return res;
   } catch {
+    reportNetwork(false);
     const hit = await cache.match(request);
     if (hit) return hit;
     // A navigation to any route falls back to the app shell — the app is a

@@ -7,6 +7,7 @@ import {
   connectSharedFile, reconnectSharedFile, grantSharedFile, pullSharedFile,
   supportsSharedFile, sharedFileName, disconnectSharedFile, me,
   connectCloud, disconnectCloud, pullCloud, cloudStatus, cloudConfig,
+  storageStatus,
 } from '../store.js';
 import { importMachineWorkbook } from '../import-machines.js';
 import { staleImports } from '../model.js';
@@ -290,6 +291,8 @@ function firstRun(rerender) {
 
 export function renderData(rerender) {
   const mm = state.machineMeta || {};
+  const sharing = cloudStatus().on || !!sharedFileName();
+  const storage = storageStatus();
   const slot = (label, key, node) => el('div', {},
     el('div.row', { style: { marginBottom: '6px' } },
       el('strong.small', {}, label),
@@ -387,7 +390,7 @@ export function renderData(rerender) {
       el('div.banner.warn', { style: { marginTop: '12px' } },
         el('div', {},
           el('strong', {}, 'Two people updating the same line at once: '),
-          'the app merges line by line and the most recent update wins for that one line. ' +
+          'the app merges line by line and the later saved revision wins for that one line. ' +
           'Separate lines never overwrite each other.')));
   }
 
@@ -408,7 +411,10 @@ export function renderData(rerender) {
         el('button', {
           onclick: () => {
             download(`cutting-tracker-${new Date().toISOString().slice(0, 10)}.json`, exportJson());
+            state.settings.lastBackupAt = new Date().toISOString();
+            save();
             toast('Exported');
+            rerender();
           },
         }, 'Export everything'),
         el('button', {
@@ -475,7 +481,41 @@ export function renderData(rerender) {
             }, '×'))))
         : el('div.small.muted', {}, 'No names yet. Add the people on your crew so updates are attributed.')));
 
-  return el('div', {},
+  const health = [
+    {
+      label: 'Schedules', ok: !!mm.rolling && !!mm.cnc, icon: 'list',
+      value: mm.rolling && mm.cnc
+        ? `${fmtNum((state.tasks || []).length)} lines loaded`
+        : 'Both workbooks are required',
+    },
+    {
+      label: 'Sharing', ok: sharing, icon: 'cloud',
+      value: cloudStatus().on ? 'Cloud sync connected'
+        : sharedFileName() ? 'Shared file connected' : 'This device only',
+    },
+    {
+      label: 'Device storage', ok: storage.ok, icon: storage.ok ? 'check' : 'alert',
+      value: storage.ok ? 'Saving normally' : storage.error,
+    },
+    {
+      label: 'Crew identity', ok: (state.people || []).length > 0, icon: 'dot',
+      value: state.people.length ? `${state.people.length} people · ${me()}` : 'Add the crew',
+    },
+    {
+      label: 'Latest backup', ok: !!state.settings.lastBackupAt, icon: 'clock',
+      value: state.settings.lastBackupAt ? fmtWhen(state.settings.lastBackupAt) : 'No backup recorded',
+    },
+  ];
+
+  return el('div.setup-page', {},
+    el('div.setup-heading', {},
+      el('h1', {}, 'Setup'),
+      el('p', {}, 'Data readiness, sharing, people and recovery for this device.')),
+    el('div.setup-health', {}, ...health.map((h) => el('div.setup-health-card' + (h.ok ? '.ok' : '.warn'), {},
+      el('span.setup-health-icon', {}, icon(h.icon, { size: 16 })),
+      el('div', {},
+        el('span.setup-health-label', {}, h.label),
+        el('strong', {}, h.value))))),
     firstRun(rerender),
     el('div', { style: { marginTop: '16px' } }, importPanel),
     el('div.grid.two', { style: { marginTop: '16px' } },

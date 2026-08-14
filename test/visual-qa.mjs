@@ -18,6 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { makeFixture } from './fixture.mjs';
+import { chromiumOptions } from './env.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SHOT = path.join(ROOT, 'test', 'screens', 'qa');
@@ -44,9 +45,7 @@ const errors = [];
 const note = (m) => console.log('  • ' + m);
 const fail = (m) => { errors.push(m); console.log('  ✗ ' + m); };
 
-const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-});
+const browser = await chromium.launch(chromiumOptions());
 
 /* The three principal layouts, plus the edges of the middle one. `shoot` marks
    the two that get captured for review; the rest are measured only, so the run
@@ -322,6 +321,13 @@ for (const theme of ['light', 'dark']) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${base}/#fom`);
   await page.waitForSelector('.line');
+  // A desktop-selected line becomes a phone drawer when the same tab is
+  // resized in place. Close it before testing the queue underneath.
+  const phoneInspectorClose = page.locator('.line-inspector [aria-label="Close line details"]');
+  if (await phoneInspectorClose.count()) {
+    await phoneInspectorClose.click();
+    await page.waitForSelector('.line-inspector', { state: 'detached' });
+  }
   await page.click('.line .line-pick');
   await page.waitForSelector('.bulkbar');
   // The bar slides in over 180ms; measured mid-flight it reads 5px low.
@@ -374,8 +380,12 @@ for (const theme of ['light', 'dark']) {
    pairs rather than trusting the tokens. */
 const CONTRAST = `(() => {
   const lum = (c) => {
+    const modern = c.startsWith('color(srgb');
     const [r, g, b] = c.match(/[\\d.]+/g).slice(0, 3).map(Number).map((v) => {
-      const s = v / 255;
+      // Chromium serializes color-mix() results as color(srgb 0..1) but plain
+      // tokens as rgb(0..255). Treating both as 255-based made high-contrast
+      // dark text on a pale mixed surface look like a 1.2:1 failure.
+      const s = modern ? v : v / 255;
       return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
     });
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;

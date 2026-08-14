@@ -21,7 +21,7 @@ import {
   shiftUpdateFor, taskNoteFor, machineConfig, resolveBackOrder, resolveRush,
   isAssigned, taskByKey, staleImports, shiftUpdateAge, manualIdFor,
   suggestedMachine, suggestionsIn, isStaged,
-  TRACK_STATUS_ORDER, TRACK_STATUS,
+  assignedMachine, effectiveTaskStatus, TRACK_STATUS_ORDER, TRACK_STATUS,
 } from '../model.js';
 import { backOrderDialog } from './backorders.js';
 import { manualJobDialog } from './manual.js';
@@ -39,7 +39,8 @@ function stateFor(group) {
   if (!viewState.has(group)) {
     viewState.set(group, {
       machine: null, q: '', showDone: false, filter: 'ALL',
-      open: {}, expanded: {}, selected: new Set(), nowExpanded: {},
+      open: {}, expanded: {}, selected: new Set(), nowExpanded: {}, active: undefined,
+      motion: null, motionTimer: null,
     });
   }
   return viewState.get(group);
@@ -59,12 +60,16 @@ function statusControl(row, vs, rerender) {
   return el('div.seg', { role: 'group', 'aria-label': 'Status' },
     ...TRACK_STATUS_ORDER.map((k) => {
       const s = TRACK_STATUS[k];
-      return el('button.seg-btn' + (k === cur ? '.on ' + s.tone : ''), {
+      const confirming = vs.motion?.type === 'status'
+        && vs.motion.key === key && vs.motion.status === k;
+      return el('button.seg-btn' + (k === cur ? '.on ' + s.tone : '')
+        + (confirming ? '.status-confirm' : ''), {
         title: s.label,
         'aria-pressed': String(k === cur),
         onclick: (e) => {
           if (k === cur) return;
           const before = [{ key, prev: state.taskStatus[key]?.status ?? null }];
+          markMotion(vs, { type: 'status', key, status: k });
           setTaskStatus(key, k);
           flash(e.target.closest('.line'));
           toastAction(`${row.task.wo} → ${s.label}`, 'Undo', () => {
@@ -120,6 +125,9 @@ function taskLine(row, vs, rerender, group) {
   // boStat already surfaces inside the back-order band when flagged.
   const sheetNote = t.comments || (bo.on ? null : t.boStat);
   const selected = vs.selected.has(key);
+  const active = vs.active === key;
+  const opening = vs.motion?.type === 'select' && vs.motion.key === key;
+  const statusChanged = vs.motion?.type === 'status' && vs.motion.key === key;
   const canMove = canMoveIn(group);
   const suggestion = canMove ? suggestedMachine(t) : null;
 
@@ -127,9 +135,19 @@ function taskLine(row, vs, rerender, group) {
   // to say which states apply.
   const node = el('div.line'
     + (selected ? '.sel' : '')
+    + (active ? '.active' : '')
+    + (opening ? '.line-opening' : '')
+    + (statusChanged ? '.status-changed' : '')
     + (rush.on ? '.rush' : '')
     + (bo.on ? '.is-bo' : '')
-    + (t.editedAt ? '.is-edited' : ''), {},
+    + (t.editedAt ? '.is-edited' : ''), {
+      onclick: (e) => {
+        if (e.target.closest('button, input, label, select, textarea, a')) return;
+        vs.active = key;
+        markMotion(vs, { type: 'select', key });
+        rerender();
+      },
+    },
     el('label.line-pick', {},
       el('input', {
         type: 'checkbox', checked: selected, 'aria-label': `Select ${t.wo}`,
@@ -230,6 +248,16 @@ function taskLine(row, vs, rerender, group) {
       el('span.small.muted', {}, 'pcs')),
 
     el('div.line-date.hide-sm', {}, fmtDate(t.cuttingDate)),
+
+    el('button.line-open', {
+      'aria-label': `Open details for ${t.wo}`,
+      title: 'Open line details',
+      onclick: () => {
+        vs.active = key;
+        markMotion(vs, { type: 'select', key });
+        rerender();
+      },
+    }, icon('chevron', { size: 15 })),
 
     el('div.line-tools', {},
       canMove ? el('button.line-iconbtn' + (isAssigned(t) ? '.moved' : ''), {
@@ -367,6 +395,126 @@ function historyList(key) {
       el('span.hist-who', {}, `${h.by} · ${fmtWhen(h.at)}`)))));
 }
 
+/* A render rebuilds the current view, so motion markers must expire instead
+   of replaying when a cloud update or later filter change redraws the page. */
+function markMotion(vs, motion) {
+  const token = `${Date.now()}-${Math.random()}`;
+  vs.motion = { ...motion, token };
+  clearTimeout(vs.motionTimer);
+  vs.motionTimer = setTimeout(() => {
+    if (vs.motion?.token === token) vs.motion = null;
+  }, 360);
+}
+
+function historyDialog(task) {
+  const key = taskStatusKey(task);
+  modal(`History — W/O ${task.wo}${task.die ? ' · ' + task.die : ''}`,
+    el('div', {},
+      el('p.small.muted', { style: { marginTop: 0 } },
+        `${task.project || 'No project'}${task.floor ? ' · ' + task.floor : ''}`),
+      historyList(key)),
+    { wide: true });
+}
+
+/* Option 2's right rail is a working inspector, not a duplicate detail card.
+   It keeps the selected line, its exceptions and the three status choices in
+   one stable place while the queue continues to scroll independently. */
+function lineInspector(row, vs, rerender, group) {
+  if (!row) return null;
+  const t = row.task;
+  const key = taskStatusKey(t);
+  const note = taskNoteFor(key);
+  const bo = resolveBackOrder(t);
+  const rush = row.rush || resolveRush(t);
+  const canMove = canMoveIn(group);
+  const updates = [row.status?.at, note?.at, bo.at, rush.at, t.editedAt].filter(Boolean).sort();
+  const last = updates.at(-1);
+  const opening = vs.motion?.type === 'select' && vs.motion.key === key;
+
+  const detail = (label, value, cls = '') => value != null && value !== ''
+    ? el('div.inspector-detail' + (cls ? '.' + cls : ''), {},
+        el('dt', {}, label), el('dd', {}, value))
+    : null;
+
+  const action = (label, iconName, onclick, cls = '') => el('button.inspector-action' + (cls ? '.' + cls : ''), {
+    onclick,
+  }, icon(iconName, { size: 16 }), el('span', {}, label));
+
+  const closeInspector = (e) => {
+    const finish = () => { vs.active = null; rerender(); };
+    const panel = e.currentTarget.closest('.line-inspector');
+    if (!panel?.animate || (typeof matchMedia === 'function'
+        && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+      finish();
+      return;
+    }
+    panel.animate(
+      [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(12px)' }],
+      { duration: 140, easing: 'cubic-bezier(.4,0,1,1)' },
+    ).finished.then(finish, finish);
+  };
+
+  return el('aside.line-inspector' + (opening ? '.opening' : ''), {
+    'aria-label': `Selected line ${t.wo}`,
+  },
+    el('div.inspector-head', {},
+      el('div', {},
+        el('span.inspector-eyebrow', {}, 'Selected line'),
+        el('h2', {}, `W/O ${t.wo}`)),
+      el('button.iconbtn', {
+        'aria-label': 'Close line details',
+        title: 'Close line details',
+        onclick: closeInspector,
+      }, icon('x', { size: 17 }))),
+
+    el('div.inspector-status', {}, statusControl(row, vs, rerender)),
+
+    el('dl.inspector-details', {},
+      detail('Project', t.project || '—'),
+      detail('Floor / area', t.floor || '—'),
+      detail('Die', t.die
+        ? el('button.die.dielink', { onclick: () => dieDialog(t.die) }, t.die)
+        : '—'),
+      detail('Quantity', `${fmtNum(t.qty)} pcs`),
+      detail('Needed', fmtDate(t.cuttingDate), t.cuttingDate && t.cuttingDate < new Date().toISOString().slice(0, 10) ? 'bad' : ''),
+      detail('Machine', machineConfig(MACHINE_BY_KEY[assignedMachine(t)]
+        || { key: assignedMachine(t), label: assignedMachine(t) }).label),
+      rush.on ? detail('Priority', rush.needBy ? `Rush · ${fmtDate(rush.needBy)}` : 'Rush', 'warn') : null,
+      bo.on ? detail('Material', bo.qty != null ? `${fmtNum(bo.qty)} pcs short` : 'Back order', 'bad') : null,
+      last ? detail('Last update', `${fmtWhen(last)}${row.status?.by ? ` · ${row.status.by}` : ''}`) : null),
+
+    rush.on || bo.on || note
+      ? el('section.inspector-context', {},
+          el('h3', {}, 'Related context'),
+          rush.on ? el('div.inspector-context-row.warn', {},
+            icon('bolt', { size: 14 }),
+            el('div', {}, el('strong', {}, rush.assignee || 'Rush'),
+              rush.reason ? el('span', {}, rush.reason) : null)) : null,
+          bo.on ? el('div.inspector-context-row.bad', {},
+            icon('alert', { size: 14 }),
+            el('div', {}, el('strong', {}, bo.assignee || 'Back order'),
+              el('span', {}, bo.note || bo.sheetShort || 'Short of material'))) : null,
+          note ? el('div.inspector-context-row', {},
+            icon('note', { size: 14 }),
+            el('div', {}, el('strong', {}, `${note.by} · ${fmtWhen(note.at)}`),
+              el('span', {}, note.text))) : null)
+      : el('section.inspector-context.empty-context', {},
+          el('h3', {}, 'Related context'),
+          el('p', {}, 'No rush, shortage or note on this line.')),
+
+    el('div.inspector-actions', {},
+      action(t.manual ? 'Edit job' : 'Edit', 'pencil', () => (t.manual
+        ? manualJobDialog({ machine: t.machine, task: t, rerender })
+        : editLine(row, rerender))),
+      action(note ? 'Edit note' : 'Note', 'note', () => noteEditor(row, rerender), note ? 'on' : ''),
+      canMove ? action(hasQueue(group) ? 'Assign' : 'Move', 'arrow', () => moveDialog([key], group, rerender)) : null,
+      action('Route', 'list', () => routeDialog(t)),
+      action('Rush', 'bolt', () => rushDialog(t, rerender), rush.on ? 'warn' : ''),
+      action('Back order', 'alert', () => backOrderDialog(t, rerender), bo.on ? 'bad' : ''),
+      action('History', 'clock', () => historyDialog(t))),
+  );
+}
+
 function editLine(row, rerender) {
   const t = row.task;
   const key = taskStatusKey(t);
@@ -439,7 +587,11 @@ function dateGroup(group, vs, rerender, centre) {
     el('div.dgroup-head', {},
       el('button.dgroup-toggle', {
         'aria-expanded': String(isOpen),
-        onclick: () => { vs.open[group.key] = !isOpen; rerender(); },
+        onclick: () => {
+          vs.open[group.key] = !isOpen;
+          if (!isOpen) markMotion(vs, { type: 'group', key: group.key });
+          rerender();
+        },
       },
         el('span.dgroup-caret' + (isOpen ? '.open' : ''), {}, icon('chevron', { size: 13 })),
         el('span.dgroup-label.' + group.tone, {}, group.label),
@@ -453,7 +605,8 @@ function dateGroup(group, vs, rerender, centre) {
         },
       }, allPicked ? 'Clear' : 'Select all') : null),
 
-    isOpen ? el('div.dgroup-body', {},
+    isOpen ? el('div.dgroup-body'
+      + (vs.motion?.type === 'group' && vs.motion.key === group.key ? '.revealing' : ''), {},
       ...shown.map((r) => taskLine(r, vs, rerender, centre)),
       hidden > 0 ? el('button.sm.showmore', {
         onclick: () => { vs.expanded[group.key] = true; rerender(); },
@@ -504,7 +657,7 @@ function nowRunningLine(row, rerender) {
    centres — Rolling (Auto) alone runs 60+ at once — so this caps to a
    glanceable handful (already rush-first, soonest-date-first) with a Show
    more, the same pattern the date groups below use for the same reason. */
-const NOWRUN_CAP = 6;
+const NOWRUN_CAP = 1;
 
 function nowRunningPanel(machine, rerender, vs) {
   const rows = runningNow(machine.key);
@@ -700,14 +853,42 @@ export function makeCentreView(group) {
     const tabs = machines.length > 1
       ? el('div.subtabs', {}, ...machines.map((m) => el('button', {
           'aria-current': String(m.key === vs.machine),
-          onclick: () => { vs.machine = m.key; vs.selected.clear(); rerender(); },
+          onclick: () => {
+            vs.machine = m.key; vs.selected.clear(); vs.active = undefined;
+            markMotion(vs, { type: 'machine', key: m.key });
+            rerender();
+          },
         },
           m.label,
           el('span.subtab-count', {}, String(openCountFor(m.key))))))
       : null;
 
-    const stat = (n, label, tone) => el('div.cstat' + (tone && n ? '.' + tone : ''), {},
-      el('b', {}, fmtNum(n)), el('i', {}, label));
+    const stat = (n, label, tone, iconName) => el('div.cstat' + (tone && n ? '.' + tone : ''), {},
+      el('span.cstat-icon', { 'aria-hidden': 'true' }, icon(iconName, { size: 18 })),
+      el('span.cstat-copy', {}, el('b', {}, fmtNum(n)), el('i', {}, label)));
+
+    const filters = el('div.centre-filters', {},
+      el('div.searchwrap', {},
+        icon('search', { size: 15, cls: 'searchicon' }),
+        el('input', {
+          type: 'search', placeholder: 'Search W/O, project, die, note…', value: vs.q,
+          oninput: (e) => {
+            vs.q = e.target.value;
+            clearTimeout(filters._t);
+            filters._t = setTimeout(rerender, 150);
+          },
+        })),
+      el('div.filterpills', {}, ...FILTERS.map((f) => el('button.pill', {
+        'aria-current': String(vs.filter === f.key),
+        onclick: () => { vs.filter = f.key; rerender(); },
+      }, f.label))),
+      el('span.spacer'),
+      el('label.row.small.donetoggle', {},
+        el('input', {
+          type: 'checkbox', checked: vs.showDone,
+          onchange: (e) => { vs.showDone = e.target.checked; rerender(); },
+        }),
+        `Show done${sum.done ? ` (${fmtNum(sum.done)})` : ''}`));
 
     const head = el('div.centre-head', {},
       el('div.row.centre-title-row', {},
@@ -729,47 +910,17 @@ export function makeCentreView(group) {
             el('div.centre-sub', {},
               machine.note || '',
               machine.ops != null ? `${machine.note ? ' · ' : ''}${machine.ops} operator${machine.ops === 1 ? '' : 's'}` : ''))),
-        el('span.spacer'),
-        // Read in the order the questions get asked on the floor: what is
-        // running, what is left, what is late, what jumps the queue, what is
-        // short of material.
-        el('div.centre-stats', {},
-          stat(sum.inProgress, 'running', 'work'),
-          stat(sum.open, 'open'),
-          stat(sum.overdue, 'overdue', 'bad'),
-          stat(sum.rush, 'rush', 'warn'),
-          stat(sum.backOrder, 'B/O', 'bad'))),
-
-      // How much of this machine's book is finished — the one number that
-      // says whether the queue is shrinking.
-      el('div.progress', { title: `${sum.done} of ${sum.total} lines done` },
-        el('i', { style: { width: donePct + '%' } })),
-      el('div.progress-cap', {}, `${donePct}% of ${fmtNum(sum.total)} lines done`),
+        el('span.spacer')),
 
       tabs,
-
-      el('div.centre-filters', {},
-        el('div.searchwrap', {},
-          icon('search', { size: 15, cls: 'searchicon' }),
-          el('input', {
-            type: 'search', placeholder: 'Search W/O, project, die, note…', value: vs.q,
-            oninput: (e) => {
-              vs.q = e.target.value;
-              clearTimeout(head._t);
-              head._t = setTimeout(rerender, 150);
-            },
-          })),
-        el('div.filterpills', {}, ...FILTERS.map((f) => el('button.pill', {
-          'aria-current': String(vs.filter === f.key),
-          onclick: () => { vs.filter = f.key; rerender(); },
-        }, f.label))),
-        el('span.spacer'),
-        el('label.row.small.donetoggle', {},
-          el('input', {
-            type: 'checkbox', checked: vs.showDone,
-            onchange: (e) => { vs.showDone = e.target.checked; rerender(); },
-          }),
-          `Show done${sum.done ? ` (${fmtNum(sum.done)})` : ''}`)));
+      // Keep the machine choice ahead of its numbers. The operator first says
+      // which machine they are looking at, then reads its four answers.
+      el('div.centre-stats', {},
+        stat(sum.inProgress, 'running', 'work', 'play'),
+        stat(sum.open, 'open', '', 'list'),
+        stat(sum.overdue, 'overdue', 'bad', 'clock'),
+        stat(sum.rush + sum.backOrder, 'B/O & rush', 'bad', 'alert')),
+      el('div.progress-cap', {}, `${donePct}% complete · ${fmtNum(sum.done)} of ${fmtNum(sum.total)} lines done`));
 
     /* Routing 80 unassigned lines one at a time is the job this page was
        making somebody do every import. Where the component is recognised, it
@@ -808,12 +959,28 @@ export function makeCentreView(group) {
             ? 'Try clearing the search or the filter.'
             : 'Nothing outstanding on this machine.')));
 
+    const firstRow = groups.flatMap((g) => g.rows)[0] || null;
+    if (vs.active === undefined && firstRow
+        && typeof matchMedia === 'function' && matchMedia('(min-width: 1180px)').matches) {
+      vs.active = taskStatusKey(firstRow.task);
+    }
+    const activeTask = vs.active ? taskByKey(vs.active) : null;
+    const activeRow = activeTask ? {
+      task: activeTask,
+      status: effectiveTaskStatus(activeTask),
+      rush: resolveRush(activeTask),
+    } : null;
+
     return el('div.centre', {},
-      head,
-      routeBanner,
-      nowRunningPanel(machine, rerender, vs),
-      shiftUpdatePanel(machine.key),
-      body,
-      bulkBar(vs, rerender, group));
+      el('div.centre-workspace' + (activeRow ? '.with-inspector' : ''), {},
+        el('div.centre-primary' + (vs.motion?.type === 'machine' ? '.machine-switch' : ''), {},
+          head,
+          routeBanner,
+          nowRunningPanel(machine, rerender, vs),
+          filters,
+          body,
+          shiftUpdatePanel(machine.key),
+          bulkBar(vs, rerender, group)),
+        lineInspector(activeRow, vs, rerender, group)));
   };
 }

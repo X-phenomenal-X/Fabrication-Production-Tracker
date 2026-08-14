@@ -103,29 +103,29 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0d1319;
-    --panel: #161e27;
-    --panel-2: #1b242e;
-    --line: #2c3846;
-    --line-soft: #222c37;
-    --ink: #e8eff6;
-    --ink-2: #a3b5c7;
-    --ink-3: #7d90a3;          /* 5.1:1 on --panel; the old value was 4.2:1 */
+    --bg: #07111d;
+    --panel: #101d2b;
+    --panel-2: #182a3d;
+    --line: #2a435d;
+    --line-soft: #20364b;
+    --ink: #f1f7fc;
+    --ink-2: #b6c8d9;
+    --ink-3: #8da6bd;
 
-    --accent: #5b9dff;
-    --accent-soft: #16294180;
-    --ok: #4fd093;
-    --ok-soft: #10331f80;
-    --warn: #e5a94f;
-    --warn-soft: #35270f80;
-    --bad: #ff8069;
-    --bad-soft: #3d1b1480;
-    --work: #b393f5;
-    --work-soft: #261b4080;
+    --accent: #65adff;
+    --accent-soft: #173b61;
+    --ok: #55dfa3;
+    --ok-soft: #133d2d;
+    --warn: #f4bb55;
+    --warn-soft: #49351a;
+    --bad: #ff8174;
+    --bad-soft: #4a2527;
+    --work: #c19aff;
+    --work-soft: #352752;
 
     /* 7.5:1 or better on every filled semantic in this theme; white was 2.5:1. */
-    --on-fill: #0d1319;
-    --on-fill-soft: rgba(13,19,25,.22);
+    --on-fill: #07111d;
+    --on-fill-soft: rgba(7,17,29,.22);
 
     --shadow-1: 0 1px 2px rgba(0,0,0,.4);
     --shadow-2: 0 2px 6px rgba(0,0,0,.45), 0 8px 20px rgba(0,0,0,.32);
@@ -276,6 +276,11 @@ nav.tabs button:hover:not([aria-current="true"]) { background: var(--panel); col
   background: var(--bad); color: var(--on-fill); line-height: 18px;
 }
 .tab-badge.warn { background: var(--warn); }
+.tab-badge.centre-count {
+  color: var(--accent); background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  line-height: 16px;
+}
 .tabsep { width: 1px; align-self: stretch; margin: 4px 0; background: var(--line); flex-shrink: 0; }
 
 .hdr-right { display: flex; align-items: center; gap: var(--s2); flex-shrink: 0; }
@@ -319,7 +324,10 @@ button, .btn {
 button:hover:not(:disabled) { border-color: var(--ink-3); box-shadow: var(--shadow-2); }
 /* A press that visibly gives is worth more here than anywhere else: with
    gloves on, the tap feedback is most of the confirmation you get. */
-button:active:not(:disabled) { transform: translateY(1px); box-shadow: var(--shadow-1); }
+button:active:not(:disabled) { transform: translateY(1px) scale(.985); box-shadow: var(--shadow-1); }
+@media (hover: hover) and (pointer: fine) {
+  button:hover:not(:disabled) { transform: translateY(-1px); }
+}
 /* Disabled has to read as "not now", not as "low contrast text". Opacity alone
    took the label under 3:1; a flat recessed surface says it without that. */
 button:disabled {
@@ -429,6 +437,7 @@ td.num, th.num { text-align: right; font-family: var(--mono); font-size: 12.5px;
 .banner.bad { background: var(--bad-soft); color: var(--bad); }
 .banner.ok { background: var(--ok-soft); color: var(--ok); }
 .banner.info { background: var(--accent-soft); color: var(--accent); }
+.storage-alert { margin-bottom: var(--s4); border: 2px solid currentColor; }
 
 dialog {
   border: 1px solid var(--line); border-radius: var(--r-lg); padding: 0;
@@ -525,12 +534,15 @@ dialog footer button { min-height: var(--ctl-lg); }
 
 /* ---------- work-centre page ---------- */
 
-.centre { padding-bottom: 90px; animation: pagein .18s ease-out; }
-/* Opacity only, deliberately. A transform on this element makes it the
-   containing block for its `position: fixed` descendants while the animation
-   runs, which threw the bulk-action bar to the bottom of a 9,000px document
-   for 180ms after every single re-render — and every selection re-renders. */
-@keyframes pagein { from { opacity: 0; } to { opacity: 1; } }
+.centre { padding-bottom: 90px; }
+/* Only route changes receive an entrance. Animating `.centre` on every render
+   replayed motion after each status or cloud update; the shell now marks the
+   main element only when the page itself changes. */
+main.page-enter { animation: page-enter .18s cubic-bezier(.2,.8,.2,1); }
+@keyframes page-enter {
+  from { opacity: .55; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
 
 /* Clears the app header rather than sliding under it. --hdr-h is measured on
    every render in app.js, so this stays right through wrapping and zoom. */
@@ -567,11 +579,13 @@ dialog footer button { min-height: var(--ctl-lg); }
 .iconbtn {
   display: inline-flex; align-items: center; justify-content: center;
   width: var(--ctl); height: var(--ctl); padding: 0; border-radius: var(--r-sm);
-  background: none; border: 1px solid transparent; color: var(--ink-3); cursor: pointer;
-  box-shadow: none; min-height: 0;
+  background: var(--panel-2); border: 1px solid var(--line-soft); color: var(--ink-2); cursor: pointer;
+  box-shadow: var(--sheen); min-height: 0;
   transition: color .12s, background .12s, border-color .12s;
 }
 .iconbtn:hover { color: var(--ink); background: var(--panel-2); border-color: var(--line); }
+
+.ui-icon { display: block; flex: 0 0 auto; }
 
 /* One operational strip, read left to right in the order the questions get
    asked: what is running, what is left, what is late, what jumps the queue,
@@ -581,9 +595,20 @@ dialog footer button { min-height: var(--ctl-lg); }
   border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
   box-shadow: var(--shadow-1), var(--sheen);
 }
+.centre-head > .centre-stats { margin-top: var(--s3); }
 .cstat {
+  --stat-tone: var(--accent);
   background: var(--panel); padding: var(--s2) var(--s5); text-align: center; min-width: 78px;
 }
+.cstat.work { --stat-tone: var(--work); }
+.cstat.warn { --stat-tone: var(--warn); }
+.cstat.bad { --stat-tone: var(--bad); }
+.cstat-icon {
+  display: none; align-items: center; justify-content: center;
+  color: var(--stat-tone); background: color-mix(in srgb, var(--stat-tone) 14%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--stat-tone) 32%, var(--line));
+}
+.cstat-copy { min-width: 0; }
 /* These five numbers are the whole reason to look at the top of the page, so
    they are sized to be read from a step back rather than leaned into. */
 .cstat b { display: block; font-size: var(--t-xl); font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
@@ -707,6 +732,14 @@ dialog footer button { min-height: var(--ctl-lg); }
   background: var(--panel); overflow: hidden;
   box-shadow: var(--shadow-1), var(--sheen);
 }
+.dgroup-body.revealing {
+  transform-origin: top center;
+  animation: group-reveal .18s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes group-reveal {
+  from { opacity: 0; transform: translateY(-5px) scaleY(.985); }
+  to { opacity: 1; transform: none; }
+}
 
 /* a scheduled line */
 
@@ -720,10 +753,21 @@ dialog footer button { min-height: var(--ctl-lg); }
   display: flex; align-items: center; gap: var(--s3);
   padding: var(--s3) var(--s4) var(--s3) var(--s5);
   border-bottom: 1px solid var(--line-soft);
-  transition: background .12s, box-shadow .12s;
+  transition: background .14s, box-shadow .14s, transform .14s;
 }
 .line:last-of-type { border-bottom: 0; }
 .line:hover { background: var(--panel-2); }
+@media (hover: hover) and (pointer: fine) {
+  .line:hover { transform: translateX(2px); }
+}
+.line.line-opening { animation: line-opening .2s cubic-bezier(.2,.8,.2,1); }
+.line.status-changed { animation: line-confirm .28s ease-out; }
+@keyframes line-opening {
+  50% { transform: translateX(3px); }
+}
+@keyframes line-confirm {
+  45% { box-shadow: inset 0 0 0 2px var(--accent); }
+}
 .line::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
   background: transparent;
@@ -800,8 +844,8 @@ dialog footer button { min-height: var(--ctl-lg); }
 .line-iconbtn {
   display: inline-flex; align-items: center; justify-content: center;
   width: var(--ctl); height: var(--ctl); padding: 0; border-radius: var(--r-sm);
-  background: none; border: 1px solid transparent; color: var(--ink-3); cursor: pointer;
-  box-shadow: none; min-height: 0;
+  background: var(--panel-2); border: 1px solid var(--line-soft); color: var(--ink-2); cursor: pointer;
+  box-shadow: var(--sheen); min-height: 0;
   transition: color .12s, background .12s, border-color .12s;
 }
 .line-iconbtn:hover { color: var(--ink); background: var(--panel); border-color: var(--line); }
@@ -832,6 +876,10 @@ dialog footer button { min-height: var(--ctl-lg); }
 .seg-btn.on.mute { color: var(--ink-2); }
 .seg-btn.on.work { color: var(--work); background: var(--work-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--work) 30%, transparent); }
 .seg-btn.on.ok   { color: var(--ok);   background: var(--ok-soft);   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ok) 30%, transparent); }
+.seg-btn.status-confirm .ui-icon { animation: status-confirm .24s cubic-bezier(.2,.9,.25,1.35); }
+@keyframes status-confirm {
+  50% { transform: scale(1.32); }
+}
 
 .showmore { margin: 10px 14px 12px; }
 
@@ -1587,6 +1635,14 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
    cleared is half of what the list is for — but stops competing for attention. */
 .todo.done .todo-text { color: var(--ink-3); text-decoration: line-through; }
 .todo.done { background: var(--panel-2); }
+.todo.just-added { animation: todo-added .2s cubic-bezier(.2,.8,.2,1); }
+.todo.just-done { animation: todo-done .26s ease-out; }
+@keyframes todo-added {
+  from { opacity: 0; transform: translateY(-6px); }
+}
+@keyframes todo-done {
+  45% { background: var(--ok-soft); transform: translateX(3px); }
+}
 /* Carried over from a previous day. Amber, because it has been open a while. */
 .todo.carried:not(.done) { box-shadow: inset 3px 0 0 var(--warn); }
 
@@ -1596,21 +1652,31 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
   gap: var(--s3);
 }
 .att {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  --att-tone: var(--accent);
+  display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: var(--s3);
   padding: var(--s3) var(--s4); min-height: 84px; text-align: left;
   border-radius: var(--r-sm); background: var(--panel-2);
   border: 1px solid var(--line); justify-content: center;
 }
+.att-icon {
+  width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm); color: var(--att-tone);
+  background: color-mix(in srgb, var(--att-tone) 14%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--att-tone) 32%, var(--line));
+  transition: transform .16s cubic-bezier(.2,.8,.2,1), border-color .16s;
+}
+.att-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
 .att:hover { border-color: var(--accent); background: var(--accent-soft); }
+.att:hover .att-icon { transform: scale(1.08); border-color: var(--att-tone); }
 .att-n { font-size: var(--t-xl); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
 .att-k {
   font-size: 10.5px; font-weight: 800; text-transform: uppercase;
   letter-spacing: .07em; color: var(--ink-3);
 }
 .att-hint { font-size: var(--t-xs); color: var(--ink-3); font-weight: 500; }
-.att.bad  { background: var(--bad-soft);  border-color: color-mix(in srgb, var(--bad) 26%, transparent); }
-.att.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 26%, transparent); }
-.att.work { background: var(--work-soft); border-color: color-mix(in srgb, var(--work) 26%, transparent); }
+.att.bad  { --att-tone: var(--bad); background: var(--bad-soft);  border-color: color-mix(in srgb, var(--bad) 38%, var(--line)); }
+.att.warn { --att-tone: var(--warn); background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 38%, var(--line)); }
+.att.work { --att-tone: var(--work); background: var(--work-soft); border-color: color-mix(in srgb, var(--work) 38%, var(--line)); }
 .att.bad .att-n  { color: var(--bad); }
 .att.warn .att-n { color: var(--warn); }
 .att.work .att-n { color: var(--work); }
@@ -1977,6 +2043,395 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 .diedrawing-cap svg { flex-shrink: 0; margin-top: 1px; }
 
+/* ===========================================================================
+   Command-split visual system
+
+   The selected design keeps navigation, the working queue and the selected
+   line in three stable columns. It is deliberately a desktop enhancement:
+   below the rail breakpoint the proven two-row shop-floor header returns and
+   the inspector becomes a focused slide-over rather than stealing queue width.
+   ========================================================================== */
+
+:root {
+  --sidebar-w: 216px;
+  --inspector-w: 312px;
+  --command-gap: 18px;
+}
+
+.nav-eyebrow { display: none; }
+.hdr-tools { display: flex; align-items: center; gap: var(--s2); }
+nav.tabs button { --nav-tone: var(--accent); }
+.tab-rolling, .tab-shift { --nav-tone: var(--work); }
+.tab-fom, .tab-staging { --nav-tone: var(--ok); }
+.tab-punch, .tab-today, .tab-rush { --nav-tone: var(--warn); }
+.tab-backorders { --nav-tone: var(--bad); }
+.nav-icon {
+  width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 28px; border-radius: var(--r-sm);
+  color: var(--nav-tone); background: color-mix(in srgb, var(--nav-tone) 12%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--nav-tone) 24%, var(--line));
+  transition: color .14s, background .14s, border-color .14s, transform .14s;
+}
+nav.tabs button[aria-current="true"] .nav-icon {
+  color: var(--on-fill); background: var(--nav-tone); border-color: var(--nav-tone);
+}
+.line-open {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--ctl); height: var(--ctl); min-height: 0; padding: 0;
+  flex-shrink: 0; border: 1px solid transparent; background: none;
+  color: var(--ink-3); box-shadow: none; border-radius: var(--r-sm);
+}
+.line-open:hover { color: var(--accent); background: var(--accent-soft); }
+
+.centre-workspace { min-width: 0; }
+.centre-primary { min-width: 0; }
+.centre-primary.machine-switch { animation: machine-switch .18s cubic-bezier(.2,.8,.2,1); }
+@keyframes machine-switch {
+  from { opacity: .62; transform: translateX(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.line-inspector {
+  background: color-mix(in srgb, var(--panel) 96%, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line));
+  border-radius: var(--radius); box-shadow: var(--shadow-3), var(--sheen);
+  min-width: 0; overflow: hidden;
+}
+.line-inspector.opening { animation: inspector-in .18s cubic-bezier(.2,.8,.2,1); }
+@keyframes inspector-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: none; }
+}
+.inspector-head {
+  display: flex; align-items: flex-start; gap: var(--s3);
+  padding: var(--s4); border-bottom: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel-2) 84%, var(--accent));
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+.inspector-head h2 {
+  margin: 2px 0 0; font-size: var(--t-xl); line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+.inspector-head .iconbtn { margin-left: auto; }
+.inspector-eyebrow,
+.inspector-context h3 {
+  display: block; margin: 0; color: var(--ink-3);
+  font-size: 10.5px; line-height: 1.3; font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.inspector-status { padding: var(--s4); border-bottom: 1px solid var(--line-soft); }
+.inspector-status .seg { width: 100%; }
+.inspector-status .seg-btn { flex: 1; min-height: var(--tap); min-width: 0; padding: var(--s2); }
+.inspector-status .seg-label { display: inline; }
+
+.inspector-details {
+  display: grid; grid-template-columns: minmax(88px, .75fr) minmax(0, 1.25fr);
+  gap: var(--s3) var(--s4); margin: 0; padding: var(--s4);
+  border-bottom: 1px solid var(--line-soft);
+}
+.inspector-detail { display: contents; }
+.inspector-detail dt { color: var(--ink-3); font-size: var(--t-sm); }
+.inspector-detail dd {
+  min-width: 0; margin: 0; color: var(--ink); font-size: var(--t-sm);
+  font-weight: 700; overflow-wrap: anywhere;
+}
+.inspector-detail.bad dd { color: var(--bad); }
+.inspector-detail.warn dd { color: var(--warn); }
+.inspector-detail .dielink { min-height: 26px; padding: 1px var(--s2); }
+
+.inspector-context { padding: var(--s4); border-bottom: 1px solid var(--line-soft); }
+.inspector-context h3 { margin-bottom: var(--s3); }
+.inspector-context-row {
+  display: flex; align-items: flex-start; gap: var(--s2);
+  padding: var(--s2) 0; color: var(--ink-2); font-size: var(--t-sm);
+}
+.inspector-context-row + .inspector-context-row { border-top: 1px solid var(--line-soft); }
+.inspector-context-row svg { flex-shrink: 0; margin-top: 3px; }
+.inspector-context-row div { display: grid; gap: 2px; min-width: 0; }
+.inspector-context-row strong { color: var(--ink); }
+.inspector-context-row.warn svg { color: var(--warn); }
+.inspector-context-row.bad svg { color: var(--bad); }
+.empty-context p { margin: 0; color: var(--ink-3); font-size: var(--t-sm); }
+
+.inspector-actions {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px; padding: 1px; background: var(--line-soft);
+}
+.inspector-action {
+  display: flex; align-items: center; justify-content: flex-start; gap: var(--s2);
+  min-width: 0; min-height: var(--tap); padding: var(--s2) var(--s3);
+  border: 0; border-radius: 0; background: var(--panel); color: var(--ink-2);
+  box-shadow: none; font-size: var(--t-sm); font-weight: 700;
+}
+.inspector-action .ui-icon {
+  width: 28px; height: 28px; padding: 6px; border-radius: var(--r-sm);
+  color: var(--accent); background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
+}
+.inspector-action:hover { background: var(--panel-2); color: var(--ink); }
+.inspector-action:hover .ui-icon { border-color: var(--accent); transform: translateY(-1px); }
+.inspector-action.on, .inspector-action.warn { color: var(--warn); }
+.inspector-action.bad { color: var(--bad); }
+.inspector-action.on .ui-icon, .inspector-action.warn .ui-icon {
+  color: var(--warn); background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 32%, var(--line));
+}
+.inspector-action.bad .ui-icon {
+  color: var(--bad); background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 32%, var(--line));
+}
+
+/* The command layout stays compact, but its surfaces now separate by depth and
+   edge colour so the whole app does not collapse into one dark slab. */
+.panel, .dgroup-body, .nowrun, .su, .sucard {
+  border-radius: 8px; box-shadow: var(--shadow-1), var(--sheen);
+}
+.panel > h2, .panel > header { background: color-mix(in srgb, var(--panel-2) 72%, transparent); }
+.sucard, .todo-row { transition: border-color .14s, background .14s; }
+.att { transition: border-color .14s, background .14s, transform .14s, box-shadow .14s; }
+@media (hover: hover) and (pointer: fine) {
+  button.att:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+}
+
+@media (min-width: 1101px) {
+  .app { display: block; min-height: 100vh; }
+
+  header.top {
+    position: fixed; inset: 0 auto 0 0; z-index: 50;
+    width: var(--sidebar-w); height: 100vh;
+    display: flex; flex-direction: column; align-items: stretch; flex-wrap: nowrap;
+    gap: var(--s3); padding: var(--s4) var(--s3);
+    background: color-mix(in srgb, var(--panel) 93%, var(--accent));
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    border: 0; border-right: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+    box-shadow: 8px 0 28px rgba(0,0,0,.12), var(--sheen);
+  }
+  .hdr-id { display: contents; }
+  .brand {
+    order: 0; min-height: 48px; align-items: center; padding: 0 var(--s2) var(--s3);
+    border-bottom: 1px solid var(--line-soft); font-size: var(--t-lg);
+    text-transform: uppercase; letter-spacing: .025em;
+  }
+  .brand::before {
+    width: 5px; height: 24px; border-radius: 3px; margin-right: var(--s1);
+    background: var(--accent);
+  }
+  .brand small { display: none; }
+
+  nav.tabs {
+    order: 1; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+    display: flex; flex-direction: column; align-items: stretch; gap: var(--s4);
+    padding: var(--s2) 0; mask-image: none !important; -webkit-mask-image: none !important;
+  }
+  .tabgroup { display: flex; flex-direction: column; align-items: stretch; gap: 3px; }
+  .tabgroup.centres {
+    padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
+  }
+  .nav-eyebrow {
+    display: block; padding: var(--s2) var(--s2) var(--s1);
+    color: var(--ink-3); font-size: 10px; font-weight: 800;
+    letter-spacing: .08em; text-transform: uppercase;
+  }
+  nav.tabs button {
+    width: 100%; min-height: var(--tap); justify-content: flex-start;
+    padding: var(--s2) var(--s3); border-radius: var(--r-sm);
+    color: var(--ink-2); font-size: var(--t-sm); border: 1px solid transparent;
+  }
+  nav.tabs button:hover:not([aria-current="true"]) {
+    background: var(--panel-2); border-color: var(--line-soft); color: var(--ink);
+  }
+  nav.tabs button:hover:not([aria-current="true"]) .nav-icon {
+    border-color: var(--nav-tone); transform: translateY(-1px);
+  }
+  .tabgroup.centres button[aria-current="true"],
+  .tabgroup.tools button[aria-current="true"] {
+    background: color-mix(in srgb, var(--nav-tone, var(--accent)) 13%, var(--panel-2));
+    color: var(--ink); border-color: color-mix(in srgb, var(--nav-tone, var(--accent)) 28%, var(--line));
+    box-shadow: inset 3px 0 0 var(--nav-tone, var(--accent)), var(--shadow-1); font-weight: 800;
+  }
+  nav.tabs button[aria-current="true"] .nav-icon {
+    color: var(--on-fill); background: var(--nav-tone); border-color: var(--nav-tone);
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--nav-tone) 28%, transparent);
+  }
+  .tab-badge { margin-left: auto; }
+  .tabsep { width: auto; height: 1px; margin: 0 var(--s2); }
+
+  .hdr-right {
+    order: 2; display: flex; flex-direction: column; align-items: stretch; gap: var(--s2);
+    padding-top: var(--s3); border-top: 1px solid var(--line-soft);
+  }
+  .whopick { order: 0; width: 100%; min-width: 0; max-width: none; }
+  .hdr-tools { order: 1; }
+  .hdr-tools .iconbtn {
+    flex: 1; width: auto; border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+    background: var(--accent-soft); color: var(--accent); box-shadow: var(--shadow-1), var(--sheen);
+  }
+  .shift-chip, .sync-chip {
+    display: inline-flex;
+    width: 100%; justify-content: flex-start; min-height: 34px;
+    padding: var(--s2) var(--s3); border-radius: var(--r-sm);
+    white-space: normal;
+  }
+  .shift-chip { order: 3; }
+  .sync-chip { order: 4; }
+
+  main {
+    width: calc(100% - var(--sidebar-w)); max-width: none; min-height: 100vh;
+    margin: 0 0 0 var(--sidebar-w); padding: var(--s5);
+  }
+  .storage-alert { max-width: 1180px; }
+
+  .centre { padding-bottom: var(--s7); }
+  .centre-workspace {
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--command-gap);
+    align-items: start;
+  }
+  .centre-workspace.with-inspector {
+    grid-template-columns: minmax(620px, 1fr) minmax(280px, var(--inspector-w));
+  }
+  .centre-primary { grid-column: 1; }
+  .line-inspector {
+    grid-column: 2; grid-row: 1; position: sticky; top: var(--s5);
+    max-height: calc(100vh - (var(--s5) * 2)); overflow-y: auto;
+  }
+
+  .centre-head {
+    position: relative; top: auto; z-index: 1; margin: 0 0 var(--s3); padding: 0 0 var(--s3);
+    background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  .centre-title-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); }
+  .centre-title-row > .spacer { display: none; }
+  .centre-title { font-size: 28px; }
+  .centre-stats {
+    width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--s3); background: none; border: 0; border-radius: 0; overflow: visible;
+    box-shadow: none;
+  }
+  .cstat {
+    min-width: 0; padding: var(--s3) var(--s4); text-align: left;
+    display: flex; align-items: center; gap: var(--s3);
+    border: 1px solid color-mix(in srgb, var(--stat-tone) 25%, var(--line));
+    border-radius: 8px; background: color-mix(in srgb, var(--stat-tone) 4%, var(--panel));
+    box-shadow: inset 0 3px 0 color-mix(in srgb, var(--stat-tone) 78%, transparent), var(--shadow-1), var(--sheen);
+  }
+  .cstat.bad, .cstat.warn, .cstat.work { background: color-mix(in srgb, var(--stat-tone) 5%, var(--panel)); }
+  .cstat-icon {
+    display: inline-flex; width: 38px; height: 38px; flex: 0 0 38px;
+    border-radius: 9px;
+  }
+  .cstat b { font-size: 24px; }
+  .cstat i { margin-top: 3px; color: var(--ink-3); }
+  .progress-cap { margin-top: var(--s2); }
+
+  .subtabs { margin-top: var(--s4); }
+  .subtabs button {
+    min-height: var(--ctl); padding: var(--s2) var(--s4); border-radius: var(--r-sm);
+    box-shadow: none;
+  }
+  .centre-filters {
+    margin: var(--s3) 0 var(--s4); padding: var(--s2);
+    flex-wrap: nowrap; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); box-shadow: var(--shadow-1), var(--sheen);
+  }
+  .searchwrap { flex: 1; min-width: 180px; }
+  .searchwrap input { width: 100%; border-color: transparent; background: var(--panel-2); }
+  .filterpills { flex-wrap: nowrap; }
+  .pill { border-radius: var(--r-sm); }
+
+  .nowrun { margin: var(--s3) 0 0; }
+  .nowrun.active {
+    display: grid; grid-template-columns: auto minmax(0, 1fr);
+    border-color: color-mix(in srgb, var(--work) 32%, var(--line));
+    background: color-mix(in srgb, var(--work) 4%, var(--panel));
+    box-shadow: inset 3px 0 0 var(--work), var(--shadow-1), var(--sheen);
+  }
+  .nowrun-head {
+    align-content: center; border: 0; border-right: 1px solid var(--line-soft);
+    padding: var(--s3) var(--s4); white-space: nowrap;
+    background: var(--panel-2); color: var(--ink);
+  }
+  .nowrun-count { background: var(--work-soft); color: var(--work); }
+  .nowrun-body { min-width: 0; padding: 0; }
+  .nowrun-line { min-height: 58px; padding: var(--s2) var(--s3); }
+  .nowrun-main .line-where { margin-top: 0; }
+  .nowrun .showmore { align-self: center; margin: var(--s2); }
+
+  .dgroup { margin-top: var(--s4); }
+  .dgroup-body { margin-top: var(--s2); }
+  .line { min-height: 62px; padding: var(--s2) var(--s3) var(--s2) var(--s4); cursor: default; }
+  .line.active {
+    background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+    box-shadow: inset 0 0 0 1px var(--accent), 0 3px 12px color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+  .line.active::before { background: var(--accent); }
+  .line-pick { width: 34px; height: var(--tap); margin-left: calc(var(--s2) * -1); }
+  .line-where { margin-top: 1px; font-size: var(--t-sm); }
+  .line-id .mono { font-size: var(--t-md); }
+  .line-qty .mono { font-size: var(--t-md); }
+  .centre-workspace.with-inspector .line-tools,
+  .centre-workspace.with-inspector .line-status { display: none; }
+  .centre-workspace.with-inspector .line-main { min-width: 220px; }
+
+  .bulkbar { left: calc(var(--sidebar-w) + (100vw - var(--sidebar-w)) / 2); }
+
+  /* Setup uses the same command surface instead of a loose stack of cards. */
+  .setup-page { max-width: 1180px; }
+  .setup-heading { margin-bottom: var(--s4); }
+  .setup-heading h1 { margin: 0; font-size: 28px; letter-spacing: -0.03em; }
+  .setup-heading p { margin: var(--s1) 0 0; color: var(--ink-3); }
+  .setup-page .grid.two { grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr); }
+
+  .sugrid { grid-template-columns: repeat(2, minmax(340px, 1fr)); }
+}
+
+@media (max-width: 1100px) {
+  .line-inspector {
+    position: fixed; z-index: 75; inset: var(--hdr-h) 0 0 auto;
+    width: min(380px, 100%); border-radius: 0; border-top: 0; border-bottom: 0;
+    overflow-y: auto; box-shadow: var(--shadow-3);
+  }
+  .line.active { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+}
+
+@media (max-width: 720px) {
+  .hdr-tools { gap: var(--s1); }
+  .hdr-tools .hdr-dies, .hdr-tools .hdr-setup { display: none; }
+  .line-open { min-width: var(--tap); width: var(--tap); height: var(--tap); }
+  .line-inspector { width: 100%; }
+  .inspector-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .inspector-action { min-height: var(--tap); }
+}
+
+@media print {
+  header.top { display: none !important; }
+  main { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+  .line-inspector, .line-open { display: none !important; }
+  .centre-workspace, .centre-workspace.with-inspector { display: block !important; }
+}
+
+.setup-heading { margin-bottom: var(--s4); }
+.setup-heading h1 { margin: 0; font-size: 28px; letter-spacing: -0.03em; }
+.setup-heading p { margin: var(--s1) 0 0; color: var(--ink-3); }
+.setup-health {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--s3); margin-bottom: var(--s4);
+}
+.setup-health-card {
+  display: flex; align-items: flex-start; gap: var(--s3); min-width: 0;
+  padding: var(--s3); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; box-shadow: var(--sheen);
+}
+.setup-health-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; flex-shrink: 0; border-radius: var(--r-sm);
+  color: var(--warn); background: var(--warn-soft);
+}
+.setup-health-card.ok .setup-health-icon { color: var(--ok); background: var(--ok-soft); }
+.setup-health-card > div { min-width: 0; display: grid; gap: 2px; }
+.setup-health-label {
+  color: var(--ink-3); font-size: 10.5px; font-weight: 800;
+  letter-spacing: .06em; text-transform: uppercase;
+}
+.setup-health-card strong { font-size: var(--t-sm); overflow-wrap: anywhere; }
+
 </style>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#9986;</text></svg>">
 </head>
@@ -2194,7 +2649,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     svg.setAttribute("stroke-linecap", "round");
     svg.setAttribute("stroke-linejoin", "round");
     svg.setAttribute("aria-hidden", "true");
-    if (cls) svg.setAttribute("class", cls);
+    svg.setAttribute("class", ["ui-icon", cls].filter(Boolean).join(" "));
     const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
     p.setAttribute("d", ICON_PATHS[name] || ICON_PATHS.dot);
     if (name === "play") {
@@ -2224,6 +2679,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
   function animateHeight(node, expand) {
     if (typeof node.animate !== "function") return;
+    if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const h = node.scrollHeight;
     const from = expand ? 0 : h;
     const to = expand ? h : 0;
@@ -2242,6 +2698,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
   function flash(node) {
     if (!node || typeof node.animate !== "function") return;
+    if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     node.animate(
       [{ backgroundColor: "var(--accent-soft)" }, { backgroundColor: "transparent" }],
       { duration: 700, easing: "ease-out" }
@@ -2271,7 +2728,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         cloud: "M17.5 19a4.5 4.5 0 0 0 .3-9A6.5 6.5 0 0 0 5.3 11 4 4 0 0 0 6 19z",
         plus: "M12 5v14M5 12h14",
         list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
-        square: "M4 4h16v16H4z"
+        square: "M4 4h16v16H4z",
+        rollers: "M5 8h14a3 3 0 0 1 0 6H5a3 3 0 0 1 0-6zM5 8V5h14v3M5 16v3h14v-3",
+        factory: "M3 21V9l6 4V9l6 4V5h6v16zM7 21v-4h3v4M15 17h2M15 13h2",
+        cpu: "M9 3v2M15 3v2M9 19v2M15 19v2M3 9h2M3 15h2M19 9h2M19 15h2M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM9 9h6v6H9z",
+        punch: "M12 2v4M12 18v4M2 12h4M18 12h4M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z",
+        calendar: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2zM8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01",
+        staging: "M3 6h18M5 6l1-3h12l1 3M5 6v14h14V6M9 10h6",
+        clipboard: "M9 5h6M9 3h6a2 2 0 0 1 2 2v1h2a2 2 0 0 1 2 2v13H3V8a2 2 0 0 1 2-2h2V5a2 2 0 0 1 2-2zM8 12h8M8 16h8"
       };
     }
   });
@@ -2394,6 +2858,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 
   // js/store.js
   var LS_KEY = "bv.cutting.v1";
+  var LS_DEVICE = "bv.cutting.device.v1";
   var IDB_NAME = "bv-cutting";
   var IDB_STORE = "handles";
   var RETIRED_KEYS = [
@@ -2454,6 +2919,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   };
   var saveTimer = null;
   var listeners = /* @__PURE__ */ new Set();
+  var localSaveProblem = null;
   function onChange(fn) {
     listeners.add(fn);
     return () => listeners.delete(fn);
@@ -2461,14 +2927,53 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   function emit() {
     for (const fn of listeners) fn();
   }
+  var lastNow = 0;
   function now() {
-    return (/* @__PURE__ */ new Date()).toISOString();
+    lastNow = Math.max(Date.now(), lastNow + 1);
+    return new Date(lastNow).toISOString();
   }
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
   function me() {
     return state.settings.me || "Unassigned";
+  }
+  function newDeviceId() {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+    return `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+  function readDeviceClock() {
+    try {
+      const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(LS_DEVICE);
+      const saved = raw ? JSON.parse(raw) : null;
+      if (saved?.id) return { id: String(saved.id), counter: Number(saved.counter) || 0 };
+    } catch {
+    }
+    return { id: newDeviceId(), counter: 0 };
+  }
+  var deviceClock = readDeviceClock();
+  function persistDeviceClock() {
+    if (typeof localStorage === "undefined") return;
+    try {
+      localStorage.setItem(LS_DEVICE, JSON.stringify(deviceClock));
+    } catch {
+    }
+  }
+  function parseRevision(rev) {
+    const m = /^(\d+)@(.+)$/.exec(String(rev || ""));
+    return m ? { counter: Number(m[1]), device: m[2] } : null;
+  }
+  function observeRevision(rev) {
+    const parsed = parseRevision(rev);
+    if (parsed) deviceClock.counter = Math.max(deviceClock.counter, parsed.counter);
+  }
+  function nextRevision() {
+    deviceClock.counter++;
+    persistDeviceClock();
+    return `${deviceClock.counter}@${deviceClock.id}`;
+  }
+  function changed(fields, { at = now(), by = me() } = {}) {
+    return { ...fields, at, by, rev: nextRevision() };
   }
   var DELETABLE = [
     "taskStatus",
@@ -2486,7 +2991,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   function forget(map, key) {
     if (!DELETABLE.includes(map)) throw new Error(`forget(): ${map} is not a synced record map`);
     delete state[map][key];
-    state.deletions = { ...state.deletions, [`${map}:${key}`]: { at: now(), by: me() } };
+    state.deletions = { ...state.deletions, [`${map}:${key}`]: changed({}) };
   }
   function applyDeletions() {
     for (const [k, tomb] of Object.entries(state.deletions || {})) {
@@ -2495,18 +3000,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       const key = k.slice(i + 1);
       const rec = state[map]?.[key];
       if (!rec) continue;
-      if (rec.at && tomb.at && rec.at > tomb.at) continue;
+      if (recordWins(rec, tomb)) continue;
       delete state[map][key];
     }
-  }
-  var TOMBSTONE_DAYS = 90;
-  function pruneDeletions() {
-    const cutoff = new Date(Date.now() - TOMBSTONE_DAYS * 864e5).toISOString();
-    const out = {};
-    for (const [k, v] of Object.entries(state.deletions || {})) {
-      if ((v.at || "") > cutoff) out[k] = v;
-    }
-    state.deletions = out;
   }
   var HISTORY_CAP = 4e3;
   function logChange(key, kind, field, from, to) {
@@ -2527,7 +3023,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
   function setTaskStatus(key, status) {
     const prev = state.taskStatus[key]?.status ?? null;
-    state.taskStatus[key] = { status, at: now(), by: me() };
+    state.taskStatus[key] = changed({ status });
     if (prev !== status) logChange(key, "status", null, prev, status);
     save();
   }
@@ -2535,7 +3031,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     const before = keys.map((k) => ({ key: k, prev: state.taskStatus[k]?.status ?? null }));
     const at = now();
     const by = me();
-    for (const k of keys) state.taskStatus[k] = { status, at, by };
+    for (const k of keys) state.taskStatus[k] = changed({ status }, { at, by });
     for (const { key, prev } of before) {
       if (prev !== status) logChange(key, "status", null, prev, status);
     }
@@ -2548,7 +3044,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     for (const { key, prev } of before) {
       const cur = state.taskStatus[key]?.status ?? null;
       if (prev == null) forget("taskStatus", key);
-      else state.taskStatus[key] = { status: prev, at, by };
+      else state.taskStatus[key] = changed({ status: prev }, { at, by });
       if (cur !== prev) logChange(key, "undo", null, cur, prev);
     }
     save();
@@ -2557,7 +3053,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     const t = String(text || "").trim();
     const prev = state.taskNote[key]?.text ?? null;
     if (!t) forget("taskNote", key);
-    else state.taskNote[key] = { text: t, at: now(), by: me() };
+    else state.taskNote[key] = changed({ text: t });
     if (prev !== (t || null)) logChange(key, "note", null, prev, t || null);
     save();
   }
@@ -2581,7 +3077,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       else fields[f] = next;
       logChange(key, "field", f, shown, next);
     }
-    if (Object.keys(fields).length) state.taskEdit[key] = { fields, at: now(), by: me() };
+    if (Object.keys(fields).length) state.taskEdit[key] = changed({ fields });
     else forget("taskEdit", key);
     save();
   }
@@ -2600,7 +3096,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     }
     const empty = next.flagged == null && next.qty == null && !next.assignee && !next.note;
     if (empty) forget("backOrder", key);
-    else state.backOrder[key] = { ...next, at: now(), by: me() };
+    else state.backOrder[key] = changed(next);
     save();
   }
   function clearBackOrder(key) {
@@ -2627,7 +3123,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       logChange(key, "rush", f, cur[f] ?? null, v);
     }
     if (!next.on) forget("rush", key);
-    else state.rush[key] = { ...next, at: now(), by: me() };
+    else state.rush[key] = changed(next);
     save();
   }
   function clearRush(key) {
@@ -2644,7 +3140,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     const next = machine || importedMachine || null;
     if (cur === next) return;
     if (!machine || machine === importedMachine) forget("taskAssign", key);
-    else state.taskAssign[key] = { machine, at: now(), by: me() };
+    else state.taskAssign[key] = changed({ machine });
     logChange(key, "machine", null, cur, next);
   }
   function setTaskMachine(key, machine, importedMachine) {
@@ -2664,7 +3160,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
   function addManualTask(fields) {
     const id = uid();
-    const task = {
+    const task = changed({
       id: `manual:${id}`,
       manual: true,
       machine: fields.machine,
@@ -2689,10 +3185,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       boRaw: null,
       boStat: null,
       backOrder: false,
-      archived: false,
-      at: now(),
-      by: me()
-    };
+      archived: false
+    });
     state.manualTasks = { ...state.manualTasks, [id]: task };
     logChange(`${task.machine}|${task.wo}|${task.die || ""}`, "manual", null, null, "added");
     save();
@@ -2701,7 +3195,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   function updateManualTask(id, patch) {
     const cur = state.manualTasks?.[id];
     if (!cur) return;
-    const next = { ...cur, ...patch, at: now(), by: me() };
+    const next = changed({ ...cur, ...patch });
     state.manualTasks = { ...state.manualTasks, [id]: next };
     save();
   }
@@ -2718,7 +3212,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     const id = uid();
     state.todos = {
       ...state.todos,
-      [id]: { id, text: body, date: date2, assignee, done: false, at: now(), by: me() }
+      [id]: changed({ id, text: body, date: date2, assignee, done: false })
     };
     save();
     return id;
@@ -2726,7 +3220,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   function setTodo(id, patch) {
     const cur = state.todos?.[id];
     if (!cur) return;
-    const next = { ...cur, ...patch, at: now() };
+    const next = changed({ ...cur, ...patch });
     if (patch.done === true && !cur.done) {
       next.doneAt = now();
       next.doneBy = me();
@@ -2744,7 +3238,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
   function setStaging(key, patch) {
     const cur = state.staging[key] || {};
-    const next = { ...cur, ...patch, at: now(), by: me() };
+    const next = changed({ ...cur, ...patch });
     if (cur.staged !== next.staged) {
       logChange(key, "staging", null, cur.staged ? "staged" : null, next.staged ? "staged" : null);
     }
@@ -2763,7 +3257,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   function saveShiftLog(date2, shift, patch) {
     const key = `${date2}|${shift}`;
     const cur = state.shiftLogs[key] || { date: date2, shift, rows: {} };
-    state.shiftLogs[key] = { ...cur, ...patch, date: date2, shift, at: now(), by: me() };
+    state.shiftLogs[key] = changed({ ...cur, ...patch, date: date2, shift });
     save();
     return key;
   }
@@ -2778,7 +3272,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
   function setMachineConfig(key, patch) {
     const cur = state.machineConfig[key] || {};
-    const next = { ...cur, ...patch, at: now(), by: me() };
+    const next = changed({ ...cur, ...patch });
     for (const k of ["label", "note"]) {
       if (next[k] != null && !String(next[k]).trim()) delete next[k];
     }
@@ -2790,12 +3284,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     state.tasks = state.tasks.filter((t) => t.source !== report.kind && !machines.has(t.machine)).concat(tasks.map((t) => ({ ...t, source: report.kind })));
     state.machineMeta = {
       ...state.machineMeta,
-      [report.kind]: {
+      [report.kind]: changed({
         fileName: report.fileName,
         importedAt: report.importedAt,
         count: tasks.length,
         parser: report.parser ?? 1
-      }
+      })
     };
     if (shiftUpdate) state.shiftUpdate = { ...shiftUpdate, importedAt: report.importedAt };
     save();
@@ -2831,6 +3325,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       if (data[k] !== void 0) state[k] = data[k];
     }
     state.shiftLogs = onlyShiftLogs(state.shiftLogs);
+    observeSnapshot(state);
   }
   function onlyShiftLogs(logs) {
     const out = {};
@@ -2841,12 +3336,27 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     }
     return out;
   }
-  function save() {
+  function storageStatus() {
+    return localSaveProblem ? { ok: false, ...localSaveProblem } : { ok: true, error: null, at: null };
+  }
+  function persistLocal(data = snapshot()) {
+    if (typeof localStorage === "undefined") return false;
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+      localSaveProblem = null;
+      return true;
     } catch (e) {
       console.warn("localStorage full or blocked", e);
+      localSaveProblem = {
+        error: "This device could not save its local copy.",
+        detail: e?.message || "Browser storage is full or blocked.",
+        at: now()
+      };
+      return false;
     }
+  }
+  function save() {
+    persistLocal();
     emit();
     if (fileHandle) queueFileSave();
     queueCloudPush();
@@ -2857,12 +3367,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       if (!raw) return;
       const data = JSON.parse(raw);
       apply(data);
-      pruneDeletions();
       if (RETIRED_KEYS.some((k) => data[k] !== void 0)) {
-        localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+        persistLocal();
       }
     } catch (e) {
       console.warn("could not read local data", e);
+      localSaveProblem = {
+        error: "This device could not read its saved copy.",
+        detail: e?.message || "Browser storage is unavailable or damaged.",
+        at: now()
+      };
     }
   }
   var fileHandle = null;
@@ -2902,11 +3416,43 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       return null;
     }
   }
+  function stableValue(value) {
+    if (Array.isArray(value)) return `[${value.map(stableValue).join(",")}]`;
+    if (value && typeof value === "object") {
+      return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stableValue(value[k])}`).join(",")}}`;
+    }
+    return JSON.stringify(value);
+  }
+  function recordWins(candidate, current2) {
+    if (!current2) return !!candidate;
+    if (!candidate) return false;
+    observeRevision(candidate.rev);
+    observeRevision(current2.rev);
+    const a = parseRevision(candidate.rev);
+    const b = parseRevision(current2.rev);
+    if (a && b) {
+      if (a.counter !== b.counter) return a.counter > b.counter;
+      if (a.device !== b.device) return a.device > b.device;
+    } else if (a || b) {
+      return !!a;
+    }
+    const atA = candidate.at || "";
+    const atB = current2.at || "";
+    if (atA !== atB) return atA > atB;
+    return stableValue(candidate) > stableValue(current2);
+  }
+  function observeSnapshot(snap) {
+    for (const map of [...DELETABLE, "deletions"]) {
+      for (const rec of Object.values(snap?.[map] || {})) observeRevision(rec?.rev);
+    }
+    for (const rec of Object.values(snap?.machineMeta || {})) observeRevision(rec?.rev);
+    persistDeviceClock();
+  }
   function mergeRecords(mine = {}, theirs = {}) {
     const out = { ...mine };
     for (const [k, v] of Object.entries(theirs)) {
       const a = out[k];
-      if (!a || !a.at || v.at && v.at > a.at) out[k] = v;
+      if (recordWins(v, a)) out[k] = v;
     }
     return out;
   }
@@ -2931,9 +3477,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     applyDeletions();
     state.people = Array.from(/* @__PURE__ */ new Set([...state.people || [], ...remote.people || []]));
     for (const kind of ["rolling", "cnc"]) {
-      const mine = state.machineMeta?.[kind]?.importedAt || "";
-      const theirs = remote.machineMeta?.[kind]?.importedAt || "";
-      if (theirs > mine && Array.isArray(remote.tasks)) {
+      const mine = state.machineMeta?.[kind];
+      const theirs = remote.machineMeta?.[kind];
+      if (recordWins(theirs, mine) && Array.isArray(remote.tasks)) {
         state.tasks = state.tasks.filter((t) => t.source !== kind).concat(remote.tasks.filter((t) => t.source === kind));
         state.machineMeta = { ...state.machineMeta, [kind]: remote.machineMeta[kind] };
         if (kind === "cnc" && remote.shiftUpdate) state.shiftUpdate = remote.shiftUpdate;
@@ -2987,7 +3533,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     try {
       const remote = await readHandle(fileHandle);
       mergeSnapshot(remote);
-      localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+      persistLocal();
       emit();
       return true;
     } catch (e) {
@@ -3031,7 +3577,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       const remote = await cloudPull(parts);
       if (remote?.work) mergeSnapshot(remote.work);
       if (remote?.base) mergeSnapshot(remote.base);
-      localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+      persistLocal();
       setCloudState({ at: now(), error: null });
       return true;
     } catch (e) {
@@ -3051,7 +3597,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       const docs = { work: cloudDoc("work") };
       if (withBase) docs.base = cloudDoc("base");
       await cloudPush(docs);
-      localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+      persistLocal();
       setCloudState({ at: now(), error: null, pushing: false });
     } catch (e) {
       setCloudState({ error: e.message, pushing: false });
@@ -3319,7 +3865,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
 
   // js/import-machines.js
-  var PARSER_VERSION = 3;
+  var PARSER_VERSION = 5;
   var PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
   function txt(v) {
     if (v == null || typeof v === "object") return null;
@@ -3338,8 +3884,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     if (v.getTime() < PHANTOM_BEFORE) return null;
     return v.toISOString().slice(0, 10);
   }
-  function isWo(v) {
-    return v != null && /^\d{3,7}$/.test(String(v).trim());
+  var WO_HEADING = /^(?:W\/?O\s*#?|WORK\s*ORDER\s*#?|PROJECT|MACHINE|DATE|SHIFT|TOTALS?|SERVICE\s*ORDERS?|BACK\s*ORDERS?)$/i;
+  function isWorkOrder(v) {
+    const s = txt(v);
+    return !!s && s.length <= 64 && /[A-Z0-9]/i.test(s) && !WO_HEADING.test(s);
   }
   function normTaskStatus(raw) {
     const s = txt(raw);
@@ -3505,7 +4053,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     for (const row of sheet.rows) {
       if (row.empty) continue;
       const wo = get(row.cells, "wo");
-      if (!isWo(wo)) continue;
+      if (!isWorkOrder(wo)) continue;
       const qty = num(get(row.cells, "qty"));
       const statusRaw = get(row.cells, "status");
       const status = spec.complete ? "DONE" : normTaskStatus(statusRaw);
@@ -3547,25 +4095,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     report.sheets.push({ sheet: spec.sheet, machine: spec.machine, rows: out.length });
     return out;
   }
-  var SU_SHEET_RE = /^shift update/i;
-  function pickShiftUpdate(wb) {
-    const named = Object.entries(wb.sheets).filter(([n]) => SU_SHEET_RE.test(n));
-    if (!named.length) return [null, null];
-    const visible = named.filter(([n]) => !wb.hiddenSheets?.has(n));
-    const pool = visible.length ? visible : named;
-    let best = [null, null];
-    let bestScore = -1;
-    for (const [name, sheet] of pool) {
-      const parsed = parseShiftUpdate(sheet);
-      const score = Object.values(parsed?.machines || {}).reduce((a, e) => a + e.done.length + e.next.length + e.notes.length, 0);
-      if (score > bestScore) {
-        bestScore = score;
-        best = [name, parsed];
-      }
-    }
-    if (best[1]) best[1].fromVisibleTab = visible.length > 0;
-    return best;
-  }
+  var SHIFT_UPDATE_SHEET = "Shift Update";
   var SU_MACHINE = {
     "ROLLINGETASAUTO": "roll-auto",
     "ROLLINGIOTAMANUAL": "roll-man",
@@ -3696,7 +4226,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     };
     const wanted = specs.map((s) => s.sheet);
     const wb = await readXlsx(arrayBuffer, {
-      only: (n) => wanted.includes(n) || kind === "cnc" && SU_SHEET_RE.test(n)
+      only: (n) => wanted.includes(n) || kind === "cnc" && n === SHIFT_UPDATE_SHEET
     });
     let tasks = [];
     for (const spec of specs) {
@@ -3709,16 +4239,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     }
     let shiftUpdate = null;
     if (kind === "cnc") {
-      const [suName, suParsed] = pickShiftUpdate(wb);
-      shiftUpdate = suParsed;
-      if (!shiftUpdate) report.missing.push("Shift Update");
+      shiftUpdate = parseShiftUpdate(wb.sheets[SHIFT_UPDATE_SHEET]);
+      if (!shiftUpdate) report.missing.push(SHIFT_UPDATE_SHEET);
       else report.shiftUpdate = {
         date: shiftUpdate.date,
         shift: shiftUpdate.shift,
-        sheet: suName,
-        // Worth reporting: if this ever says false, the department has hidden
-        // every shift-update tab and the app is reading an archived one.
-        fromVisibleTab: !!shiftUpdate.fromVisibleTab,
+        sheet: SHIFT_UPDATE_SHEET,
         machines: Object.keys(shiftUpdate.machines).length,
         // Machine names on the sheet the app has no work centre for. Worth
         // showing: it is how the department finds out the app is behind the floor.
@@ -6784,7 +7310,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         open: {},
         expanded: {},
         selected: /* @__PURE__ */ new Set(),
-        nowExpanded: {}
+        nowExpanded: {},
+        active: void 0,
+        motion: null,
+        motionTimer: null
       });
     }
     return viewState.get(group);
@@ -6798,12 +7327,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       { role: "group", "aria-label": "Status" },
       ...TRACK_STATUS_ORDER.map((k) => {
         const s = TRACK_STATUS[k];
-        return el("button.seg-btn" + (k === cur ? ".on " + s.tone : ""), {
+        const confirming = vs2.motion?.type === "status" && vs2.motion.key === key && vs2.motion.status === k;
+        return el("button.seg-btn" + (k === cur ? ".on " + s.tone : "") + (confirming ? ".status-confirm" : ""), {
           title: s.label,
           "aria-pressed": String(k === cur),
           onclick: (e) => {
             if (k === cur) return;
             const before = [{ key, prev: state.taskStatus[key]?.status ?? null }];
+            markMotion(vs2, { type: "status", key, status: k });
             setTaskStatus(key, k);
             flash(e.target.closest(".line"));
             toastAction(`${row.task.wo} \u2192 ${s.label}`, "Undo", () => {
@@ -6875,11 +7406,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     const rush = row.rush || resolveRush(t);
     const sheetNote = t.comments || (bo.on ? null : t.boStat);
     const selected = vs2.selected.has(key);
+    const active = vs2.active === key;
+    const opening = vs2.motion?.type === "select" && vs2.motion.key === key;
+    const statusChanged = vs2.motion?.type === "status" && vs2.motion.key === key;
     const canMove = canMoveIn(group);
     const suggestion = canMove ? suggestedMachine(t) : null;
     const node = el(
-      "div.line" + (selected ? ".sel" : "") + (rush.on ? ".rush" : "") + (bo.on ? ".is-bo" : "") + (t.editedAt ? ".is-edited" : ""),
-      {},
+      "div.line" + (selected ? ".sel" : "") + (active ? ".active" : "") + (opening ? ".line-opening" : "") + (statusChanged ? ".status-changed" : "") + (rush.on ? ".rush" : "") + (bo.on ? ".is-bo" : "") + (t.editedAt ? ".is-edited" : ""),
+      {
+        onclick: (e) => {
+          if (e.target.closest("button, input, label, select, textarea, a")) return;
+          vs2.active = key;
+          markMotion(vs2, { type: "select", key });
+          rerender();
+        }
+      },
       el(
         "label.line-pick",
         {},
@@ -7017,6 +7558,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         el("span.small.muted", {}, "pcs")
       ),
       el("div.line-date.hide-sm", {}, fmtDate(t.cuttingDate)),
+      el("button.line-open", {
+        "aria-label": `Open details for ${t.wo}`,
+        title: "Open line details",
+        onclick: () => {
+          vs2.active = key;
+          markMotion(vs2, { type: "select", key });
+          rerender();
+        }
+      }, icon("chevron", { size: 15 })),
       el(
         "div.line-tools",
         {},
@@ -7151,6 +7701,156 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       )
     )));
   }
+  function markMotion(vs2, motion) {
+    const token = `${Date.now()}-${Math.random()}`;
+    vs2.motion = { ...motion, token };
+    clearTimeout(vs2.motionTimer);
+    vs2.motionTimer = setTimeout(() => {
+      if (vs2.motion?.token === token) vs2.motion = null;
+    }, 360);
+  }
+  function historyDialog(task) {
+    const key = taskStatusKey(task);
+    modal(
+      `History \u2014 W/O ${task.wo}${task.die ? " \xB7 " + task.die : ""}`,
+      el(
+        "div",
+        {},
+        el(
+          "p.small.muted",
+          { style: { marginTop: 0 } },
+          `${task.project || "No project"}${task.floor ? " \xB7 " + task.floor : ""}`
+        ),
+        historyList(key)
+      ),
+      { wide: true }
+    );
+  }
+  function lineInspector(row, vs2, rerender, group) {
+    if (!row) return null;
+    const t = row.task;
+    const key = taskStatusKey(t);
+    const note = taskNoteFor(key);
+    const bo = resolveBackOrder(t);
+    const rush = row.rush || resolveRush(t);
+    const canMove = canMoveIn(group);
+    const updates = [row.status?.at, note?.at, bo.at, rush.at, t.editedAt].filter(Boolean).sort();
+    const last = updates.at(-1);
+    const opening = vs2.motion?.type === "select" && vs2.motion.key === key;
+    const detail2 = (label, value, cls = "") => value != null && value !== "" ? el(
+      "div.inspector-detail" + (cls ? "." + cls : ""),
+      {},
+      el("dt", {}, label),
+      el("dd", {}, value)
+    ) : null;
+    const action = (label, iconName, onclick, cls = "") => el("button.inspector-action" + (cls ? "." + cls : ""), {
+      onclick
+    }, icon(iconName, { size: 16 }), el("span", {}, label));
+    const closeInspector = (e) => {
+      const finish = () => {
+        vs2.active = null;
+        rerender();
+      };
+      const panel = e.currentTarget.closest(".line-inspector");
+      if (!panel?.animate || typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        finish();
+        return;
+      }
+      panel.animate(
+        [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(12px)" }],
+        { duration: 140, easing: "cubic-bezier(.4,0,1,1)" }
+      ).finished.then(finish, finish);
+    };
+    return el(
+      "aside.line-inspector" + (opening ? ".opening" : ""),
+      {
+        "aria-label": `Selected line ${t.wo}`
+      },
+      el(
+        "div.inspector-head",
+        {},
+        el(
+          "div",
+          {},
+          el("span.inspector-eyebrow", {}, "Selected line"),
+          el("h2", {}, `W/O ${t.wo}`)
+        ),
+        el("button.iconbtn", {
+          "aria-label": "Close line details",
+          title: "Close line details",
+          onclick: closeInspector
+        }, icon("x", { size: 17 }))
+      ),
+      el("div.inspector-status", {}, statusControl(row, vs2, rerender)),
+      el(
+        "dl.inspector-details",
+        {},
+        detail2("Project", t.project || "\u2014"),
+        detail2("Floor / area", t.floor || "\u2014"),
+        detail2("Die", t.die ? el("button.die.dielink", { onclick: () => dieDialog(t.die) }, t.die) : "\u2014"),
+        detail2("Quantity", `${fmtNum(t.qty)} pcs`),
+        detail2("Needed", fmtDate(t.cuttingDate), t.cuttingDate && t.cuttingDate < (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) ? "bad" : ""),
+        detail2("Machine", machineConfig(MACHINE_BY_KEY[assignedMachine(t)] || { key: assignedMachine(t), label: assignedMachine(t) }).label),
+        rush.on ? detail2("Priority", rush.needBy ? `Rush \xB7 ${fmtDate(rush.needBy)}` : "Rush", "warn") : null,
+        bo.on ? detail2("Material", bo.qty != null ? `${fmtNum(bo.qty)} pcs short` : "Back order", "bad") : null,
+        last ? detail2("Last update", `${fmtWhen(last)}${row.status?.by ? ` \xB7 ${row.status.by}` : ""}`) : null
+      ),
+      rush.on || bo.on || note ? el(
+        "section.inspector-context",
+        {},
+        el("h3", {}, "Related context"),
+        rush.on ? el(
+          "div.inspector-context-row.warn",
+          {},
+          icon("bolt", { size: 14 }),
+          el(
+            "div",
+            {},
+            el("strong", {}, rush.assignee || "Rush"),
+            rush.reason ? el("span", {}, rush.reason) : null
+          )
+        ) : null,
+        bo.on ? el(
+          "div.inspector-context-row.bad",
+          {},
+          icon("alert", { size: 14 }),
+          el(
+            "div",
+            {},
+            el("strong", {}, bo.assignee || "Back order"),
+            el("span", {}, bo.note || bo.sheetShort || "Short of material")
+          )
+        ) : null,
+        note ? el(
+          "div.inspector-context-row",
+          {},
+          icon("note", { size: 14 }),
+          el(
+            "div",
+            {},
+            el("strong", {}, `${note.by} \xB7 ${fmtWhen(note.at)}`),
+            el("span", {}, note.text)
+          )
+        ) : null
+      ) : el(
+        "section.inspector-context.empty-context",
+        {},
+        el("h3", {}, "Related context"),
+        el("p", {}, "No rush, shortage or note on this line.")
+      ),
+      el(
+        "div.inspector-actions",
+        {},
+        action(t.manual ? "Edit job" : "Edit", "pencil", () => t.manual ? manualJobDialog({ machine: t.machine, task: t, rerender }) : editLine(row, rerender)),
+        action(note ? "Edit note" : "Note", "note", () => noteEditor(row, rerender), note ? "on" : ""),
+        canMove ? action(hasQueue(group) ? "Assign" : "Move", "arrow", () => moveDialog([key], group, rerender)) : null,
+        action("Route", "list", () => routeDialog(t)),
+        action("Rush", "bolt", () => rushDialog(t, rerender), rush.on ? "warn" : ""),
+        action("Back order", "alert", () => backOrderDialog(t, rerender), bo.on ? "bad" : ""),
+        action("History", "clock", () => historyDialog(t))
+      )
+    );
+  }
   function editLine(row, rerender) {
     const t = row.task;
     const key = taskStatusKey(t);
@@ -7253,6 +7953,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
             "aria-expanded": String(isOpen),
             onclick: () => {
               vs2.open[group.key] = !isOpen;
+              if (!isOpen) markMotion(vs2, { type: "group", key: group.key });
               rerender();
             }
           },
@@ -7270,7 +7971,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         }, allPicked ? "Clear" : "Select all") : null
       ),
       isOpen ? el(
-        "div.dgroup-body",
+        "div.dgroup-body" + (vs2.motion?.type === "group" && vs2.motion.key === group.key ? ".revealing" : ""),
         {},
         ...shown.map((r) => taskLine(r, vs2, rerender, centre)),
         hidden > 0 ? el("button.sm.showmore", {
@@ -7333,7 +8034,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       }, icon("check", { size: 13 }), "Done")
     );
   }
-  var NOWRUN_CAP = 6;
+  var NOWRUN_CAP = 1;
   function nowRunningPanel(machine, rerender, vs2) {
     const rows = runningNow(machine.key);
     if (!rows.length) {
@@ -7572,17 +8273,59 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           onclick: () => {
             vs2.machine = m.key;
             vs2.selected.clear();
+            vs2.active = void 0;
+            markMotion(vs2, { type: "machine", key: m.key });
             rerender();
           }
         },
         m.label,
         el("span.subtab-count", {}, String(openCountFor(m.key)))
       ))) : null;
-      const stat = (n, label, tone) => el(
+      const stat = (n, label, tone, iconName) => el(
         "div.cstat" + (tone && n ? "." + tone : ""),
         {},
-        el("b", {}, fmtNum(n)),
-        el("i", {}, label)
+        el("span.cstat-icon", { "aria-hidden": "true" }, icon(iconName, { size: 18 })),
+        el("span.cstat-copy", {}, el("b", {}, fmtNum(n)), el("i", {}, label))
+      );
+      const filters = el(
+        "div.centre-filters",
+        {},
+        el(
+          "div.searchwrap",
+          {},
+          icon("search", { size: 15, cls: "searchicon" }),
+          el("input", {
+            type: "search",
+            placeholder: "Search W/O, project, die, note\u2026",
+            value: vs2.q,
+            oninput: (e) => {
+              vs2.q = e.target.value;
+              clearTimeout(filters._t);
+              filters._t = setTimeout(rerender, 150);
+            }
+          })
+        ),
+        el("div.filterpills", {}, ...FILTERS.map((f) => el("button.pill", {
+          "aria-current": String(vs2.filter === f.key),
+          onclick: () => {
+            vs2.filter = f.key;
+            rerender();
+          }
+        }, f.label))),
+        el("span.spacer"),
+        el(
+          "label.row.small.donetoggle",
+          {},
+          el("input", {
+            type: "checkbox",
+            checked: vs2.showDone,
+            onchange: (e) => {
+              vs2.showDone = e.target.checked;
+              rerender();
+            }
+          }),
+          `Show done${sum.done ? ` (${fmtNum(sum.done)})` : ""}`
+        )
       );
       const head = el(
         "div.centre-head",
@@ -7620,69 +8363,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
               )
             )
           ),
-          el("span.spacer"),
-          // Read in the order the questions get asked on the floor: what is
-          // running, what is left, what is late, what jumps the queue, what is
-          // short of material.
-          el(
-            "div.centre-stats",
-            {},
-            stat(sum.inProgress, "running", "work"),
-            stat(sum.open, "open"),
-            stat(sum.overdue, "overdue", "bad"),
-            stat(sum.rush, "rush", "warn"),
-            stat(sum.backOrder, "B/O", "bad")
-          )
+          el("span.spacer")
         ),
-        // How much of this machine's book is finished — the one number that
-        // says whether the queue is shrinking.
-        el(
-          "div.progress",
-          { title: `${sum.done} of ${sum.total} lines done` },
-          el("i", { style: { width: donePct + "%" } })
-        ),
-        el("div.progress-cap", {}, `${donePct}% of ${fmtNum(sum.total)} lines done`),
         tabs,
+        // Keep the machine choice ahead of its numbers. The operator first says
+        // which machine they are looking at, then reads its four answers.
         el(
-          "div.centre-filters",
+          "div.centre-stats",
           {},
-          el(
-            "div.searchwrap",
-            {},
-            icon("search", { size: 15, cls: "searchicon" }),
-            el("input", {
-              type: "search",
-              placeholder: "Search W/O, project, die, note\u2026",
-              value: vs2.q,
-              oninput: (e) => {
-                vs2.q = e.target.value;
-                clearTimeout(head._t);
-                head._t = setTimeout(rerender, 150);
-              }
-            })
-          ),
-          el("div.filterpills", {}, ...FILTERS.map((f) => el("button.pill", {
-            "aria-current": String(vs2.filter === f.key),
-            onclick: () => {
-              vs2.filter = f.key;
-              rerender();
-            }
-          }, f.label))),
-          el("span.spacer"),
-          el(
-            "label.row.small.donetoggle",
-            {},
-            el("input", {
-              type: "checkbox",
-              checked: vs2.showDone,
-              onchange: (e) => {
-                vs2.showDone = e.target.checked;
-                rerender();
-              }
-            }),
-            `Show done${sum.done ? ` (${fmtNum(sum.done)})` : ""}`
-          )
-        )
+          stat(sum.inProgress, "running", "work", "play"),
+          stat(sum.open, "open", "", "list"),
+          stat(sum.overdue, "overdue", "bad", "clock"),
+          stat(sum.rush + sum.backOrder, "B/O & rush", "bad", "alert")
+        ),
+        el("div.progress-cap", {}, `${donePct}% complete \xB7 ${fmtNum(sum.done)} of ${fmtNum(sum.total)} lines done`)
       );
       const suggestions2 = canMoveIn(group) ? suggestionsIn(group) : [];
       const routeBanner = suggestions2.length ? el(
@@ -7722,15 +8416,35 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         el("h3", {}, vs2.q || vs2.filter !== "ALL" ? "Nothing matches" : "All clear"),
         el("div", {}, vs2.q || vs2.filter !== "ALL" ? "Try clearing the search or the filter." : "Nothing outstanding on this machine.")
       ));
+      const firstRow = groups.flatMap((g) => g.rows)[0] || null;
+      if (vs2.active === void 0 && firstRow && typeof matchMedia === "function" && matchMedia("(min-width: 1180px)").matches) {
+        vs2.active = taskStatusKey(firstRow.task);
+      }
+      const activeTask = vs2.active ? taskByKey(vs2.active) : null;
+      const activeRow = activeTask ? {
+        task: activeTask,
+        status: effectiveTaskStatus(activeTask),
+        rush: resolveRush(activeTask)
+      } : null;
       return el(
         "div.centre",
         {},
-        head,
-        routeBanner,
-        nowRunningPanel(machine, rerender, vs2),
-        shiftUpdatePanel(machine.key),
-        body,
-        bulkBar(vs2, rerender, group)
+        el(
+          "div.centre-workspace" + (activeRow ? ".with-inspector" : ""),
+          {},
+          el(
+            "div.centre-primary" + (vs2.motion?.type === "machine" ? ".machine-switch" : ""),
+            {},
+            head,
+            routeBanner,
+            nowRunningPanel(machine, rerender, vs2),
+            filters,
+            body,
+            shiftUpdatePanel(machine.key),
+            bulkBar(vs2, rerender, group)
+          ),
+          lineInspector(activeRow, vs2, rerender, group)
+        )
       );
     };
   }
@@ -7759,8 +8473,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
   function todoRow(item, ref, rerender) {
     const carried = item.date < ref;
+    const age = (iso) => iso ? Date.now() - new Date(iso).getTime() : Infinity;
+    const justDone = item.done && age(item.doneAt) < 800;
+    const justAdded = !item.done && age(item.at) < 800;
     return el(
-      "li.todo" + (item.done ? ".done" : "") + (carried ? ".carried" : ""),
+      "li.todo" + (item.done ? ".done" : "") + (carried ? ".carried" : "") + (justDone ? ".just-done" : "") + (justAdded ? ".just-added" : ""),
       {},
       el(
         "label.todo-check",
@@ -7866,7 +8583,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       )
     );
   }
-  function attentionCard({ label, rows, tone, hint, go: go2, tab }) {
+  function attentionCard({ label, rows, tone, hint, go: go2, tab, iconName }) {
     const n = rows.length;
     return el(
       "button.att" + (n && tone ? "." + tone : ""),
@@ -7874,9 +8591,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         onclick: () => go2(tab),
         title: `Open ${label}`
       },
-      el("span.att-n", {}, fmtNum(n)),
-      el("span.att-k", {}, label),
-      el("span.att-hint", {}, n ? hint : "nothing outstanding")
+      el("span.att-icon", { "aria-hidden": "true" }, icon(iconName, { size: 17 })),
+      el(
+        "span.att-copy",
+        {},
+        el("span.att-n", {}, fmtNum(n)),
+        el("span.att-k", {}, label),
+        el("span.att-hint", {}, n ? hint : "nothing outstanding")
+      )
     );
   }
   function pileList(title, rows, tone, cap = 5) {
@@ -8008,7 +8730,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
               tone: "work",
               hint: "on the machines",
               go: go2,
-              tab: "rolling"
+              tab: "rolling",
+              iconName: "play"
             }),
             attentionCard({
               label: "overdue",
@@ -8016,7 +8739,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
               tone: "bad",
               hint: "past their cutting date",
               go: go2,
-              tab: "rolling"
+              tab: "rolling",
+              iconName: "clock"
             }),
             attentionCard({
               label: "due today",
@@ -8024,7 +8748,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
               tone: "warn",
               hint: "cutting date is today",
               go: go2,
-              tab: "rolling"
+              tab: "rolling",
+              iconName: "calendar"
             }),
             attentionCard({
               label: "rush",
@@ -8032,7 +8757,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
               tone: "warn",
               hint: "needed today or already past",
               go: go2,
-              tab: "rush"
+              tab: "rush",
+              iconName: "bolt"
             }),
             attentionCard({
               label: "back orders",
@@ -8040,7 +8766,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
               tone: "bad",
               hint: "short of material",
               go: go2,
-              tab: "backorders"
+              tab: "backorders",
+              iconName: "alert"
             })
           ),
           // The one job on the day's list with a deadline attached to the shift
@@ -8097,6 +8824,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   function stageRow(row, rerender) {
     const { task, key, staging, machine, rush } = row;
     const staged = !!staging?.staged;
+    const [nextShift] = upcomingShifts(1);
     return el(
       "div.line.stage-line" + (staged ? ".is-staged" : "") + (rush.on ? ".rush" : ""),
       {},
@@ -8159,6 +8887,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         }, icon("undo", { size: 14 }), "Not staged") : el(
           "div.stage-pick",
           {},
+          // Most staging is for the very next crew. Make that the large,
+          // glove-friendly action and keep the picker for the exceptions.
+          el("button.primary", {
+            title: `Stage for ${nextShift.label}`,
+            onclick: () => {
+              setStaging(key, { staged: true, stageFor: nextShift.value });
+              toast(`${task.wo} staged for ${stageForLabel(nextShift.value)}`);
+              rerender();
+            }
+          }, icon("check", { size: 14 }), `Stage \xB7 ${SHIFTS[nextShift.value.split("|")[1]].label}`),
           el(
             "select",
             {
@@ -8170,17 +8908,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
                 rerender();
               }
             },
-            el("option", { value: "" }, "Stage for\u2026"),
-            ...upcomingShifts().map((s) => el("option", { value: s.value }, s.label))
-          ),
-          el("button.primary", {
-            title: "Staged, without saying which shift for",
-            onclick: () => {
-              setStaging(key, { staged: true, stageFor: null });
-              toast(`${task.wo} staged`);
-              rerender();
-            }
-          }, icon("check", { size: 14 }), "Staged")
+            el("option", { value: "" }, "Other shift\u2026"),
+            ...upcomingShifts().slice(1).map((s) => el("option", { value: s.value }, s.label))
+          )
         )
       )
     );
@@ -8325,7 +9055,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     ["next", "Next in schedule"],
     ["notes", "Notes"]
   ];
-  var view = { date: today(), shift: shiftAt(), mode: "write" };
+  var view = { date: today(), shift: shiftAt(), mode: "write", onlyIncomplete: false };
   var draft = null;
   var draftKey = null;
   function logKey(date2, shift) {
@@ -8542,7 +9272,11 @@ ${add.join("\n")}` : add.join("\n");
     const total = all.reduce((a, s) => a + s.rows.length, 0);
     const done = all.reduce((a, s) => a + s.rows.filter((m) => hasContent(d.rows[m.key])).length, 0);
     const blocks = all.map((s) => {
-      const shown = s.rows.filter((m) => !m.secondary || showExtraStanding || hasContent(d.rows[m.key]));
+      const shown = s.rows.filter((m) => {
+        const filled = hasContent(d.rows[m.key]);
+        if (view.onlyIncomplete && filled) return false;
+        return !m.secondary || showExtraStanding || filled;
+      });
       const folded = s.rows.length - shown.length;
       return el(
         "section.dgroup",
@@ -8832,6 +9566,19 @@ ${add.join("\n")}` : add.join("\n");
         ),
         saved ? chip("saved", "ok") : chip("not written yet", "warn"),
         SHIFTS[view.shift].full ? null : chip(`${SHIFTS[view.shift].crew}-person crew`, "mute"),
+        view.mode === "write" ? el(
+          "label.row.small.donetoggle",
+          {},
+          el("input", {
+            type: "checkbox",
+            checked: view.onlyIncomplete,
+            onchange: (e) => {
+              view.onlyIncomplete = e.target.checked;
+              rerender();
+            }
+          }),
+          "Only incomplete"
+        ) : null,
         el("span.spacer"),
         posted.length ? el("span.small.muted", {}, `${posted.length} update${posted.length === 1 ? "" : "s"} on file`) : null
       ),
@@ -9284,6 +10031,8 @@ create policy "tracker update" on tracker_state for update using (true) with che
   }
   function renderData(rerender) {
     const mm = state.machineMeta || {};
+    const sharing = cloudStatus().on || !!sharedFileName();
+    const storage = storageStatus();
     const slot = (label, key, node) => el(
       "div",
       {},
@@ -9443,7 +10192,7 @@ create policy "tracker update" on tracker_state for update using (true) with che
             "div",
             {},
             el("strong", {}, "Two people updating the same line at once: "),
-            "the app merges line by line and the most recent update wins for that one line. Separate lines never overwrite each other."
+            "the app merges line by line and the later saved revision wins for that one line. Separate lines never overwrite each other."
           )
         )
       );
@@ -9469,7 +10218,10 @@ create policy "tracker update" on tracker_state for update using (true) with che
           el("button", {
             onclick: () => {
               download(`cutting-tracker-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`, exportJson());
+              state.settings.lastBackupAt = (/* @__PURE__ */ new Date()).toISOString();
+              save();
               toast("Exported");
+              rerender();
             }
           }, "Export everything"),
           el("button", {
@@ -9565,9 +10317,58 @@ create policy "tracker update" on tracker_state for update using (true) with che
         ))) : el("div.small.muted", {}, "No names yet. Add the people on your crew so updates are attributed.")
       )
     );
+    const health = [
+      {
+        label: "Schedules",
+        ok: !!mm.rolling && !!mm.cnc,
+        icon: "list",
+        value: mm.rolling && mm.cnc ? `${fmtNum((state.tasks || []).length)} lines loaded` : "Both workbooks are required"
+      },
+      {
+        label: "Sharing",
+        ok: sharing,
+        icon: "cloud",
+        value: cloudStatus().on ? "Cloud sync connected" : sharedFileName() ? "Shared file connected" : "This device only"
+      },
+      {
+        label: "Device storage",
+        ok: storage.ok,
+        icon: storage.ok ? "check" : "alert",
+        value: storage.ok ? "Saving normally" : storage.error
+      },
+      {
+        label: "Crew identity",
+        ok: (state.people || []).length > 0,
+        icon: "dot",
+        value: state.people.length ? `${state.people.length} people \xB7 ${me()}` : "Add the crew"
+      },
+      {
+        label: "Latest backup",
+        ok: !!state.settings.lastBackupAt,
+        icon: "clock",
+        value: state.settings.lastBackupAt ? fmtWhen(state.settings.lastBackupAt) : "No backup recorded"
+      }
+    ];
     return el(
-      "div",
+      "div.setup-page",
       {},
+      el(
+        "div.setup-heading",
+        {},
+        el("h1", {}, "Setup"),
+        el("p", {}, "Data readiness, sharing, people and recovery for this device.")
+      ),
+      el("div.setup-health", {}, ...health.map((h) => el(
+        "div.setup-health-card" + (h.ok ? ".ok" : ".warn"),
+        {},
+        el("span.setup-health-icon", {}, icon(h.icon, { size: 16 })),
+        el(
+          "div",
+          {},
+          el("span.setup-health-label", {}, h.label),
+          el("strong", {}, h.value)
+        )
+      ))),
       firstRun(rerender),
       el("div", { style: { marginTop: "16px" } }, importPanel),
       el(
@@ -9582,15 +10383,31 @@ create policy "tracker update" on tracker_state for update using (true) with che
 
   // js/offline.js
   init_ui();
-  var onlineListener = null;
+  var connectionWatcher = null;
+  var workerOnline = true;
   function isOnline() {
-    return typeof navigator === "undefined" || navigator.onLine !== false;
+    return (typeof navigator === "undefined" || navigator.onLine !== false) && workerOnline;
   }
   function watchConnection(rerender) {
-    if (onlineListener) return;
-    onlineListener = () => rerender();
-    window.addEventListener("online", onlineListener);
-    window.addEventListener("offline", onlineListener);
+    if (connectionWatcher) return;
+    connectionWatcher = () => rerender();
+    window.addEventListener("offline", connectionWatcher);
+    window.addEventListener("online", () => {
+      rerender();
+      fetch(`./?connection-check=${Date.now()}`, { cache: "no-store" }).catch(() => {
+      });
+    });
+    if ("serviceWorker" in navigator) {
+      const receive = (e) => {
+        if (e.data?.type !== "bv-network") return;
+        workerOnline = e.data.online !== false;
+        rerender();
+      };
+      const ask = () => navigator.serviceWorker.controller?.postMessage("connection-status");
+      navigator.serviceWorker.addEventListener("message", receive);
+      navigator.serviceWorker.addEventListener("controllerchange", ask);
+      ask();
+    }
   }
   var awaitingUpdate = false;
   function offerUpdate(worker) {
@@ -9638,22 +10455,24 @@ create policy "tracker update" on tracker_state for update using (true) with che
 
   // js/app.js
   var TABS = [
-    { key: "rolling", label: "Rolling", kind: "centre", render: makeCentreView("Rolling") },
-    { key: "fom", label: "FOM", kind: "centre", render: makeCentreView("FOM") },
-    { key: "cnc", label: "CNC & FMC", short: "CNC", kind: "centre", render: makeCentreView("CNC") },
-    { key: "punch", label: "Multi Punch", short: "Punch", kind: "centre", render: makeCentreView("Punch") },
-    { key: "today", label: "Today", kind: "tool", icon: "list", render: renderToday },
-    { key: "staging", label: "Staging", short: "Stage", kind: "tool", icon: "square", render: renderStaging },
+    { key: "rolling", label: "Rolling", kind: "centre", icon: "rollers", render: makeCentreView("Rolling") },
+    { key: "fom", label: "FOM", kind: "centre", icon: "factory", render: makeCentreView("FOM") },
+    { key: "cnc", label: "CNC & FMC", short: "CNC", kind: "centre", icon: "cpu", render: makeCentreView("CNC") },
+    { key: "punch", label: "Multi Punch", short: "Punch", kind: "centre", icon: "punch", render: makeCentreView("Punch") },
+    { key: "today", label: "Today", kind: "tool", icon: "calendar", render: renderToday },
+    { key: "staging", label: "Staging", short: "Stage", kind: "tool", icon: "staging", render: renderStaging },
     { key: "rush", label: "Rush", kind: "tool", icon: "bolt", render: renderRush },
     { key: "backorders", label: "Back Orders", short: "B/O", kind: "tool", icon: "alert", render: renderBackOrders },
-    { key: "shift", label: "Shift Update", short: "Shift", kind: "tool", icon: "note", render: renderShiftUpdate },
+    { key: "shift", label: "Shift Update", short: "Shift", kind: "tool", icon: "clipboard", render: renderShiftUpdate },
     { key: "setup", label: "Setup", kind: "tool", icon: "gear", render: renderData }
   ];
   var current = location.hash.slice(1) || "rolling";
   if (!TABS.some((t) => t.key === current)) current = "rolling";
   var root = document.getElementById("app");
   var scheduled = false;
+  var pageMotion = true;
   function go(key) {
+    if (key !== current) pageMotion = true;
     current = key;
     location.hash = key;
     scheduleRender();
@@ -9688,7 +10507,13 @@ create policy "tracker update" on tracker_state for update using (true) with che
     );
     return sel;
   }
-  function toolBadge(key) {
+  var TAB_GROUP = { rolling: "Rolling", fom: "FOM", cnc: "CNC", punch: "Punch" };
+  function tabBadge(tab) {
+    const { key } = tab;
+    if (tab.kind === "centre" && hasTasks()) {
+      const n = (machinesByGroup().get(TAB_GROUP[key]) || []).reduce((total, machine) => total + openCountFor(machine.key), 0);
+      return n ? el("span.tab-badge.centre-count", {}, String(n)) : null;
+    }
     if (key === "today") {
       const n = openTodos().open.length;
       return n ? el("span.tab-badge.warn", {}, String(n)) : null;
@@ -9707,7 +10532,7 @@ create policy "tracker update" on tracker_state for update using (true) with che
   function tabButton(t) {
     const on = t.key === current;
     return el(
-      "button" + (t.short ? ".has-short" : ""),
+      "button.tab-" + t.key + (t.short ? ".has-short" : ""),
       {
         "aria-current": String(on),
         title: t.label,
@@ -9717,15 +10542,25 @@ create policy "tracker update" on tracker_state for update using (true) with che
         "aria-label": t.label,
         onclick: () => go(t.key)
       },
-      t.icon ? icon(t.icon, { size: 14 }) : null,
+      t.icon ? el("span.nav-icon", { "aria-hidden": "true" }, icon(t.icon, { size: 17 })) : null,
       el("span.tab-label", {}, t.label),
       t.short ? el("span.tab-short", { "aria-hidden": "true" }, t.short) : null,
-      toolBadge(t.key)
+      tabBadge(t)
     );
   }
   function header() {
     const shift = SHIFTS[shiftAt()];
     const shared = sharedFileName();
+    const sync = !isOnline() ? chip(
+      "offline",
+      "warn",
+      "No connection. Everything still saves on this device and syncs when it comes back."
+    ) : cloudEnabled() ? chip("synced", "ok", "Syncing across devices via " + cloudHost()) : shared ? chip("shared file", "ok", "Connected to " + shared) : chip(
+      "this device only",
+      "mute",
+      "Not syncing \u2014 updates stay on this device. Set it up under Setup."
+    );
+    sync.classList.add("sync-chip");
     return el(
       "header.top",
       {},
@@ -9746,15 +10581,7 @@ create policy "tracker update" on tracker_state for update using (true) with che
         // Offline outranks the sync state: "synced" next to a dead connection
         // is the one thing the header must never say. Updates still save
         // locally and go up when the signal comes back.
-        !isOnline() ? chip(
-          "offline",
-          "warn",
-          "No connection. Everything still saves on this device and syncs when it comes back."
-        ) : cloudEnabled() ? chip("synced", "ok", "Syncing across devices via " + cloudHost()) : shared ? chip("shared file", "ok", "Connected to " + shared) : chip(
-          "this device only",
-          "mute",
-          "Not syncing \u2014 updates stay on this device. Set it up under Setup."
-        )
+        sync
       ),
       el(
         "nav.tabs",
@@ -9762,12 +10589,14 @@ create policy "tracker update" on tracker_state for update using (true) with che
         el(
           "div.tabgroup.centres",
           { role: "group", "aria-label": "Production centres" },
+          el("span.nav-eyebrow", { "aria-hidden": "true" }, "Production centres"),
           ...TABS.filter((t) => t.kind === "centre").map(tabButton)
         ),
         el("span.tabsep", { "aria-hidden": "true" }),
         el(
           "div.tabgroup.tools",
           { role: "group", "aria-label": "Department tools" },
+          el("span.nav-eyebrow", { "aria-hidden": "true" }, "Department tools"),
           ...TABS.filter((t) => t.kind === "tool" && t.key !== "setup").map(tabButton)
         )
       ),
@@ -9777,20 +10606,24 @@ create policy "tracker update" on tracker_state for update using (true) with che
       el(
         "div.hdr-right",
         {},
-        // The section book, one tap from anywhere. Staging and rolling both ask
-        // "what goes into this" all shift.
-        el("button.iconbtn.hdr-dies", {
-          "aria-label": "Die lookup",
-          title: "Look up a die in the section book",
-          onclick: () => dieDialog("")
-        }, icon("search", { size: 18 })),
-        el("button.iconbtn.hdr-setup" + (current === "setup" ? ".on" : ""), {
-          "aria-label": "Setup",
-          "aria-current": String(current === "setup"),
-          title: "Setup",
-          onclick: () => go("setup")
-        }, icon("gear", { size: 18 })),
-        whoAmI()
+        whoAmI(),
+        el(
+          "div.hdr-tools",
+          {},
+          // The section book, one tap from anywhere. Staging and rolling both ask
+          // "what goes into this" all shift.
+          el("button.iconbtn.hdr-dies", {
+            "aria-label": "Die lookup",
+            title: "Look up a die in the section book",
+            onclick: () => dieDialog("")
+          }, icon("search", { size: 18 })),
+          el("button.iconbtn.hdr-setup" + (current === "setup" ? ".on" : ""), {
+            "aria-label": "Setup",
+            "aria-current": String(current === "setup"),
+            title: "Setup",
+            onclick: () => go("setup")
+          }, icon("gear", { size: 18 }))
+        )
       )
     );
   }
@@ -9824,7 +10657,10 @@ create policy "tracker update" on tracker_state for update using (true) with che
   function measureHeader() {
     const h = root.querySelector("header.top");
     if (!h) return;
-    const set = () => document.documentElement.style.setProperty("--hdr-h", Math.round(h.getBoundingClientRect().height) + "px");
+    const set = () => document.documentElement.style.setProperty(
+      "--hdr-h",
+      typeof matchMedia === "function" && matchMedia("(min-width: 1101px)").matches ? "0px" : Math.round(h.getBoundingClientRect().height) + "px"
+    );
     set();
     if (typeof ResizeObserver === "function") {
       hdrObserver?.disconnect();
@@ -9835,8 +10671,29 @@ create policy "tracker update" on tracker_state for update using (true) with che
   var hdrObserver = null;
   function render() {
     const tab = TABS.find((t) => t.key === current) || TABS[0];
-    const next = el("main", {}, tab.render(scheduleRender, go));
+    const storage = storageStatus();
+    const next = el(
+      "main" + (pageMotion ? ".page-enter" : ""),
+      {},
+      !storage.ok ? el(
+        "div.banner.bad.storage-alert",
+        { role: "alert" },
+        el(
+          "div",
+          {},
+          el("strong", {}, storage.error + " "),
+          "Do not close this page until the problem is fixed or you have exported a backup.",
+          el(
+            "div.small",
+            { style: { marginTop: "4px" } },
+            `${storage.detail} Open Setup \u2192 Backup, transfer and reset to export the current copy.`
+          )
+        )
+      ) : null,
+      tab.render(scheduleRender, go)
+    );
     root.replaceChildren(header(), next);
+    pageMotion = false;
     measureHeader();
     settleNav();
   }
@@ -9856,6 +10713,7 @@ create policy "tracker update" on tracker_state for update using (true) with che
     const k = location.hash.slice(1);
     if (TABS.some((t) => t.key === k) && k !== current) {
       current = k;
+      pageMotion = true;
       scheduleRender();
     }
   });

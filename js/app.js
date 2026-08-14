@@ -1,10 +1,11 @@
 /* Shell: tabs, the identity picker, and the render loop. */
 
 import { el, clear, chip, icon } from './ui.js';
-import { allRush, allBackOrders, hasTasks, openTodos } from './model.js';
+import { allRush, allBackOrders, hasTasks, openTodos, openCountFor } from './model.js';
+import { machinesByGroup } from './machines.js';
 import {
   state, loadLocal, save, onChange, me, sharedFileName, cloudEnabled, cloudHost,
-  initCloud, pullCloud, pullSharedFile,
+  initCloud, pullCloud, pullSharedFile, storageStatus,
 } from './store.js';
 import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
@@ -26,15 +27,15 @@ import { registerServiceWorker, watchConnection, isOnline } from './offline.js';
 // write the update, set the app up. Mixing them in one row of eight made the
 // four that matter no easier to find than Setup.
 const TABS = [
-  { key: 'rolling', label: 'Rolling', kind: 'centre', render: makeCentreView('Rolling') },
-  { key: 'fom', label: 'FOM', kind: 'centre', render: makeCentreView('FOM') },
-  { key: 'cnc', label: 'CNC & FMC', short: 'CNC', kind: 'centre', render: makeCentreView('CNC') },
-  { key: 'punch', label: 'Multi Punch', short: 'Punch', kind: 'centre', render: makeCentreView('Punch') },
-  { key: 'today', label: 'Today', kind: 'tool', icon: 'list', render: renderToday },
-  { key: 'staging', label: 'Staging', short: 'Stage', kind: 'tool', icon: 'square', render: renderStaging },
+  { key: 'rolling', label: 'Rolling', kind: 'centre', icon: 'rollers', render: makeCentreView('Rolling') },
+  { key: 'fom', label: 'FOM', kind: 'centre', icon: 'factory', render: makeCentreView('FOM') },
+  { key: 'cnc', label: 'CNC & FMC', short: 'CNC', kind: 'centre', icon: 'cpu', render: makeCentreView('CNC') },
+  { key: 'punch', label: 'Multi Punch', short: 'Punch', kind: 'centre', icon: 'punch', render: makeCentreView('Punch') },
+  { key: 'today', label: 'Today', kind: 'tool', icon: 'calendar', render: renderToday },
+  { key: 'staging', label: 'Staging', short: 'Stage', kind: 'tool', icon: 'staging', render: renderStaging },
   { key: 'rush', label: 'Rush', kind: 'tool', icon: 'bolt', render: renderRush },
   { key: 'backorders', label: 'Back Orders', short: 'B/O', kind: 'tool', icon: 'alert', render: renderBackOrders },
-  { key: 'shift', label: 'Shift Update', short: 'Shift', kind: 'tool', icon: 'note', render: renderShiftUpdate },
+  { key: 'shift', label: 'Shift Update', short: 'Shift', kind: 'tool', icon: 'clipboard', render: renderShiftUpdate },
   { key: 'setup', label: 'Setup', kind: 'tool', icon: 'gear', render: renderData },
 ];
 
@@ -43,8 +44,10 @@ if (!TABS.some((t) => t.key === current)) current = 'rolling';
 
 const root = document.getElementById('app');
 let scheduled = false;
+let pageMotion = true;
 
 function go(key) {
+  if (key !== current) pageMotion = true;
   current = key;
   location.hash = key;
   scheduleRender();
@@ -83,7 +86,15 @@ function whoAmI() {
 /* Counts that belong on the nav rather than only inside the page: an operator
    should not have to open Rush to learn there is rush work. Cheap enough to
    recompute per render — both walk the same in-memory task list the page does. */
-function toolBadge(key) {
+const TAB_GROUP = { rolling: 'Rolling', fom: 'FOM', cnc: 'CNC', punch: 'Punch' };
+
+function tabBadge(tab) {
+  const { key } = tab;
+  if (tab.kind === 'centre' && hasTasks()) {
+    const n = (machinesByGroup().get(TAB_GROUP[key]) || [])
+      .reduce((total, machine) => total + openCountFor(machine.key), 0);
+    return n ? el('span.tab-badge.centre-count', {}, String(n)) : null;
+  }
   // The day's list works with no schedule loaded, so its count is not gated
   // on an import the way the schedule-derived ones are.
   if (key === 'today') {
@@ -108,7 +119,7 @@ function tabButton(t) {
   const on = t.key === current;
   // Two labels, one shown at a time by width: a phone's centre scroller has no
   // room for "Back Orders" and "Shift Update" spelled out next to four machines.
-  return el('button' + (t.short ? '.has-short' : ''), {
+  return el('button.tab-' + t.key + (t.short ? '.has-short' : ''), {
     'aria-current': String(on),
     title: t.label,
     // Both labels are in the DOM and CSS picks one by width, so the accessible
@@ -117,15 +128,25 @@ function tabButton(t) {
     'aria-label': t.label,
     onclick: () => go(t.key),
   },
-    t.icon ? icon(t.icon, { size: 14 }) : null,
+    t.icon ? el('span.nav-icon', { 'aria-hidden': 'true' }, icon(t.icon, { size: 17 })) : null,
     el('span.tab-label', {}, t.label),
     t.short ? el('span.tab-short', { 'aria-hidden': 'true' }, t.short) : null,
-    toolBadge(t.key));
+    tabBadge(t));
 }
 
 function header() {
   const shift = SHIFTS[shiftAt()];
   const shared = sharedFileName();
+  const sync = !isOnline()
+    ? chip('offline', 'warn',
+        'No connection. Everything still saves on this device and syncs when it comes back.')
+    : cloudEnabled()
+      ? chip('synced', 'ok', 'Syncing across devices via ' + cloudHost())
+      : shared
+        ? chip('shared file', 'ok', 'Connected to ' + shared)
+        : chip('this device only', 'mute',
+            'Not syncing — updates stay on this device. Set it up under Setup.');
+  sync.classList.add('sync-chip');
 
   return el('header.top', {},
     el('div.hdr-id', {},
@@ -136,41 +157,36 @@ function header() {
       // Offline outranks the sync state: "synced" next to a dead connection
       // is the one thing the header must never say. Updates still save
       // locally and go up when the signal comes back.
-      !isOnline()
-        ? chip('offline', 'warn',
-            'No connection. Everything still saves on this device and syncs when it comes back.')
-        : cloudEnabled()
-          ? chip('synced', 'ok', 'Syncing across devices via ' + cloudHost())
-          : shared
-            ? chip('shared file', 'ok', 'Connected to ' + shared)
-            : chip('this device only', 'mute',
-                'Not syncing — updates stay on this device. Set it up under Setup.')),
+      sync),
 
     el('nav.tabs', { 'aria-label': 'Pages' },
       el('div.tabgroup.centres', { role: 'group', 'aria-label': 'Production centres' },
+        el('span.nav-eyebrow', { 'aria-hidden': 'true' }, 'Production centres'),
         ...TABS.filter((t) => t.kind === 'centre').map(tabButton)),
       el('span.tabsep', { 'aria-hidden': 'true' }),
       el('div.tabgroup.tools', { role: 'group', 'aria-label': 'Department tools' },
+        el('span.nav-eyebrow', { 'aria-hidden': 'true' }, 'Department tools'),
         ...TABS.filter((t) => t.kind === 'tool' && t.key !== 'setup').map(tabButton))),
 
     // Setup is configuration, not a page anyone works on, so it sits with the
     // name picker as a gear rather than taking a tenth slot in a nav row that
     // had already run out of width.
     el('div.hdr-right', {},
-      // The section book, one tap from anywhere. Staging and rolling both ask
-      // "what goes into this" all shift.
-      el('button.iconbtn.hdr-dies', {
-        'aria-label': 'Die lookup',
-        title: 'Look up a die in the section book',
-        onclick: () => dieDialog(''),
-      }, icon('search', { size: 18 })),
-      el('button.iconbtn.hdr-setup' + (current === 'setup' ? '.on' : ''), {
-        'aria-label': 'Setup',
-        'aria-current': String(current === 'setup'),
-        title: 'Setup',
-        onclick: () => go('setup'),
-      }, icon('gear', { size: 18 })),
-      whoAmI())
+      whoAmI(),
+      el('div.hdr-tools', {},
+        // The section book, one tap from anywhere. Staging and rolling both ask
+        // "what goes into this" all shift.
+        el('button.iconbtn.hdr-dies', {
+          'aria-label': 'Die lookup',
+          title: 'Look up a die in the section book',
+          onclick: () => dieDialog(''),
+        }, icon('search', { size: 18 })),
+        el('button.iconbtn.hdr-setup' + (current === 'setup' ? '.on' : ''), {
+          'aria-label': 'Setup',
+          'aria-current': String(current === 'setup'),
+          title: 'Setup',
+          onclick: () => go('setup'),
+        }, icon('gear', { size: 18 }))))
   );
 }
 
@@ -228,8 +244,10 @@ function settleNav() {
 function measureHeader() {
   const h = root.querySelector('header.top');
   if (!h) return;
-  const set = () => document.documentElement.style
-    .setProperty('--hdr-h', Math.round(h.getBoundingClientRect().height) + 'px');
+  const set = () => document.documentElement.style.setProperty('--hdr-h',
+    typeof matchMedia === 'function' && matchMedia('(min-width: 1101px)').matches
+      ? '0px'
+      : Math.round(h.getBoundingClientRect().height) + 'px');
   set();
   if (typeof ResizeObserver === 'function') {
     hdrObserver?.disconnect();
@@ -241,11 +259,20 @@ let hdrObserver = null;
 
 function render() {
   const tab = TABS.find((t) => t.key === current) || TABS[0];
+  const storage = storageStatus();
   // Views are handed scheduleRender, never render, so a redraw requested from
   // inside a click or change handler lands after the browser has finished
   // moving focus — tearing the DOM down mid-event throws.
-  const next = el('main', {}, tab.render(scheduleRender, go));
+  const next = el('main' + (pageMotion ? '.page-enter' : ''), {},
+    !storage.ok ? el('div.banner.bad.storage-alert', { role: 'alert' },
+      el('div', {},
+        el('strong', {}, storage.error + ' '),
+        'Do not close this page until the problem is fixed or you have exported a backup.',
+        el('div.small', { style: { marginTop: '4px' } },
+          `${storage.detail} Open Setup → Backup, transfer and reset to export the current copy.`))) : null,
+    tab.render(scheduleRender, go));
   root.replaceChildren(header(), next);
+  pageMotion = false;
   measureHeader();
   settleNav();
 }
@@ -265,7 +292,11 @@ window.addEventListener('resize', () => {
 
 window.addEventListener('hashchange', () => {
   const k = location.hash.slice(1);
-  if (TABS.some((t) => t.key === k) && k !== current) { current = k; scheduleRender(); }
+  if (TABS.some((t) => t.key === k) && k !== current) {
+    current = k;
+    pageMotion = true;
+    scheduleRender();
+  }
 });
 
 loadLocal();

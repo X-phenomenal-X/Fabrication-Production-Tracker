@@ -39,7 +39,7 @@ const FIELDS = [
   ['notes', 'Notes'],
 ];
 
-const view = { date: today(), shift: shiftAt(), mode: 'write' };
+const view = { date: today(), shift: shiftAt(), mode: 'write', onlyIncomplete: false };
 
 /* Edits live here until saved, so typing in one box never triggers a re-render
    that would steal focus from it. Changing date or shift drops the draft. */
@@ -285,7 +285,11 @@ function writeView(rerender) {
   const blocks = all.map((s) => {
     // A secondary standing row still shows if somebody has already written in
     // it — folding away something with content in it would hide their work.
-    const shown = s.rows.filter((m) => !m.secondary || showExtraStanding || hasContent(d.rows[m.key]));
+    const shown = s.rows.filter((m) => {
+      const filled = hasContent(d.rows[m.key]);
+      if (view.onlyIncomplete && filled) return false;
+      return !m.secondary || showExtraStanding || filled;
+    });
     const folded = s.rows.length - shown.length;
 
     return el('section.dgroup', {},
@@ -508,6 +512,12 @@ export function renderShiftUpdate(rerender, go) {
           }, icon(ic, { size: 15 }), el('span', {}, label)))),
       saved ? chip('saved', 'ok') : chip('not written yet', 'warn'),
       SHIFTS[view.shift].full ? null : chip(`${SHIFTS[view.shift].crew}-person crew`, 'mute'),
+      view.mode === 'write' ? el('label.row.small.donetoggle', {},
+        el('input', {
+          type: 'checkbox', checked: view.onlyIncomplete,
+          onchange: (e) => { view.onlyIncomplete = e.target.checked; rerender(); },
+        }),
+        'Only incomplete') : null,
       el('span.spacer'),
       posted.length
         ? el('span.small.muted', {}, `${posted.length} update${posted.length === 1 ? '' : 's'} on file`)

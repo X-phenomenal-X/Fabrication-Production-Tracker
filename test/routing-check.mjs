@@ -9,21 +9,19 @@
 import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
+import { ROOT, workbookPaths, chromiumOptions } from './env.mjs';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
-const DIR = '/root/.claude/uploads/042835a0-704b-5601-bc20-4ed82d27578f';
+const books = workbookPaths();
 const FILES = {
-  rolling: `${DIR}/da7bb9f1-Rolling_Schedule_2026.xlsx`,
-  cnc: `${DIR}/bae855fd-CNC_Schedule_Rev_E.xlsx`,
+  rolling: books.rolling,
+  cnc: books.cnc,
 };
 
 const errors = [];
 const step = (s) => console.log('  •', s);
 const fail = (s) => { errors.push(s); console.log('  ✗', s); };
 
-const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-});
+const browser = await chromium.launch(chromiumOptions());
 const page = await browser.newPage();
 page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
 
@@ -174,26 +172,35 @@ const real = await page.evaluate(async (b64) => {
 step(`${real.total} real lines: ${Object.entries(real.tracks).map(([k, v]) => `${k} ${v}`).join(', ')}`
   + `, ${real.noRoute} outside the SOP`);
 
-/* 474 lines carry one of the five dies; two of them sit on FOM 1, which this
-   SOP does not cover at all, so 472 get a widths-saw route. */
-if (real.sawBound !== 472) {
-  fail(`expected 472 lines through the widths saw (the five dies), got ${real.sawBound}`);
+if (books.synthetic) {
+  // Public CI cannot carry customer schedules. The branch-by-branch assertions
+  // above remain authoritative; this pass proves the importer and router work
+  // together over every sanitized machine sheet without pinning customer-data
+  // counts that only make sense in the private workbook check.
+  if (!real.total || !Object.keys(real.tracks).length) fail('sanitized schedules produced no routed work');
+  else step('sanitized workbook integration checked (real count pins require BV_*_WORKBOOK)');
 } else {
-  step('472 lines route through the widths saw — the five dies, less the two on FOM 1');
+  /* 474 lines carry one of the five dies; two of them sit on FOM 1, which this
+     SOP does not cover at all, so 472 get a widths-saw route. */
+  if (real.sawBound !== 472) {
+    fail(`expected 472 lines through the widths saw (the five dies), got ${real.sawBound}`);
+  } else {
+    step('472 lines route through the widths saw — the five dies, less the two on FOM 1');
+  }
+
+  /* Outside the SOP: the CNC & FMC sheet, FOM 1, and the non-vent work on
+     manual rolling. Pinned so that widening the SOP's reach — which would mean
+     routing work it does not describe — has to be a deliberate change. */
+  if (real.noRoute !== 696) fail(`expected 696 lines outside the SOP, got ${real.noRoute}`);
+  else step(`${real.noRoute} lines outside the SOP: the CNC sheet, FOM 1, and door/flashing work`);
+
+  /* Lines the schedule puts somewhere the SOP does not route them. All 300 are
+     one of the five saw dies scheduled on FOM 2. Worth an assertion because it
+     is a real disagreement between the workbook and the standard, and it should
+     not change quietly. */
+  if (real.offRoute !== 300) fail(`expected 300 lines off their SOP route, got ${real.offRoute}`);
+  else step('300 lines sit off their SOP route — the five saw dies, scheduled on FOM 2');
 }
-
-/* Outside the SOP: the CNC & FMC sheet, FOM 1, and the non-vent work on
-   manual rolling. Pinned so that widening the SOP's reach — which would mean
-   routing work it does not describe — has to be a deliberate change. */
-if (real.noRoute !== 696) fail(`expected 696 lines outside the SOP, got ${real.noRoute}`);
-else step(`${real.noRoute} lines outside the SOP: the CNC sheet, FOM 1, and door/flashing work`);
-
-/* Lines the schedule puts somewhere the SOP does not route them. All 300 are
-   one of the five saw dies scheduled on FOM 2. Worth an assertion because it
-   is a real disagreement between the workbook and the standard, and it should
-   not change quietly. */
-if (real.offRoute !== 300) fail(`expected 300 lines off their SOP route, got ${real.offRoute}`);
-else step('300 lines sit off their SOP route — the five saw dies, scheduled on FOM 2');
 
 await browser.close();
 console.log('\n' + (errors.length ? `ERRORS:\n - ${errors.join('\n - ')}` : 'ERRORS: none'));

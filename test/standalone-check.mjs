@@ -5,18 +5,16 @@
 import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
+import { ROOT, workbookPaths, chromiumOptions } from './env.mjs';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
 const FILE = path.join(ROOT, 'Cutting-Tracker.html');
-const DIR = '/root/.claude/uploads/042835a0-704b-5601-bc20-4ed82d27578f';
-const ROLLING = `${DIR}/da7bb9f1-Rolling_Schedule_2026.xlsx`;
-const CNC = `${DIR}/bae855fd-CNC_Schedule_Rev_E.xlsx`;
+const books = workbookPaths();
+const ROLLING = books.rolling;
+const CNC = books.cnc;
 
 if (!fs.existsSync(FILE)) throw new Error('Run `node build.mjs` first.');
 
-const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-});
+const browser = await chromium.launch(chromiumOptions());
 const page = await browser.newPage({ viewport: { width: 1440, height: 950 } });
 
 const errors = [];
@@ -81,9 +79,11 @@ step(`target line: W/O ${wo} die ${die || '(none)'}`);
 // text, so re-resolving it would silently grab a different, unclicked row.
 const stableRow = page.locator('.line').filter({ hasText: wo })
   .filter({ hasText: die || '—' }).first();
-await stableRow.locator('.seg-btn[title="In Progress"]').click();
+await stableRow.locator('.line-open').click();
+const inspector = page.locator('.line-inspector');
+await inspector.locator('.seg-btn[title="In Progress"]').click();
 await page.waitForTimeout(300);
-const afterClick = await stableRow.locator('.seg-btn[aria-pressed="true"]').getAttribute('title');
+const afterClick = await inspector.locator('.seg-btn[aria-pressed="true"]').getAttribute('title');
 if (afterClick !== 'In Progress') throw new Error(`expected "In Progress", got "${afterClick}"`);
 
 const key = `roll-auto|${wo}|${die}`;

@@ -5,9 +5,9 @@
    - a shared JSON file on the network drive (File System Access API): optional,
      and what makes the department see each other's updates.
 
-   Sync is a per-record merge, not whole-file last-write-wins. Every record
-   carries an `at` timestamp and the newer one wins, so two people updating
-   different lines at the same time both keep their work. */
+   Sync is a per-record merge, not whole-file last-write-wins. New records
+   carry a logical revision and device ID, so merge order does not depend on
+   computer clocks and two people updating different lines keep their work. */
 
 import {
   setCloudConfig, cloudEnabled, cloudHost,
@@ -17,6 +17,7 @@ import {
 export { cloudEnabled, cloudHost, cloudConfig } from './cloud.js';
 
 const LS_KEY = 'bv.cutting.v1';
+const LS_DEVICE = 'bv.cutting.device.v1';
 const IDB_NAME = 'bv-cutting';
 const IDB_STORE = 'handles';
 
@@ -57,6 +58,7 @@ export const state = {
 
 let saveTimer = null;
 const listeners = new Set();
+let localSaveProblem = null;
 
 export function onChange(fn) {
   listeners.add(fn);
@@ -67,8 +69,14 @@ function emit() {
   for (const fn of listeners) fn();
 }
 
+let lastNow = 0;
+
 export function now() {
-  return new Date().toISOString();
+  // A clock adjustment on one device must not make its next edit older than
+  // its previous one. Cross-device ordering uses logical revisions below;
+  // this monotonic wall time remains useful for display and legacy snapshots.
+  lastNow = Math.max(Date.now(), lastNow + 1);
+  return new Date(lastNow).toISOString();
 }
 
 export function uid() {
@@ -77,6 +85,55 @@ export function uid() {
 
 export function me() {
   return state.settings.me || 'Unassigned';
+}
+
+/* ---------- ordering edits across devices ---------- */
+
+/* Wall clocks are not an ordering system: a phone five minutes fast could
+   overwrite a genuinely later PC edit forever. Every new synced record now
+   carries a Lamport revision — a counter observed from all merged records,
+   plus a stable device id for deterministic concurrent-edit ties. `at` stays
+   human-readable; `rev` decides which record wins. */
+function newDeviceId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function readDeviceClock() {
+  try {
+    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(LS_DEVICE);
+    const saved = raw ? JSON.parse(raw) : null;
+    if (saved?.id) return { id: String(saved.id), counter: Number(saved.counter) || 0 };
+  } catch { /* a save warning is raised when the state itself is persisted */ }
+  return { id: newDeviceId(), counter: 0 };
+}
+
+const deviceClock = readDeviceClock();
+
+function persistDeviceClock() {
+  if (typeof localStorage === 'undefined') return;
+  try { localStorage.setItem(LS_DEVICE, JSON.stringify(deviceClock)); }
+  catch { /* save() reports the storage failure in the interface */ }
+}
+
+function parseRevision(rev) {
+  const m = /^(\d+)@(.+)$/.exec(String(rev || ''));
+  return m ? { counter: Number(m[1]), device: m[2] } : null;
+}
+
+function observeRevision(rev) {
+  const parsed = parseRevision(rev);
+  if (parsed) deviceClock.counter = Math.max(deviceClock.counter, parsed.counter);
+}
+
+function nextRevision() {
+  deviceClock.counter++;
+  persistDeviceClock();
+  return `${deviceClock.counter}@${deviceClock.id}`;
+}
+
+function changed(fields, { at = now(), by = me() } = {}) {
+  return { ...fields, at, by, rev: nextRevision() };
 }
 
 /* ---------- removing a record ---------- */
@@ -100,7 +157,7 @@ const DELETABLE = [
 function forget(map, key) {
   if (!DELETABLE.includes(map)) throw new Error(`forget(): ${map} is not a synced record map`);
   delete state[map][key];
-  state.deletions = { ...state.deletions, [`${map}:${key}`]: { at: now(), by: me() } };
+  state.deletions = { ...state.deletions, [`${map}:${key}`]: changed({}) };
 }
 
 /** Re-apply every recorded deletion to the merged state. */
@@ -111,24 +168,16 @@ function applyDeletions() {
     const key = k.slice(i + 1);
     const rec = state[map]?.[key];
     if (!rec) continue;
-    if (rec.at && tomb.at && rec.at > tomb.at) continue;   // re-created since
+    if (recordWins(rec, tomb)) continue;   // re-created since
     delete state[map][key];
   }
 }
 
-/* Tombstones are not kept forever. Ninety days is far longer than a device
-   here goes without opening the app, and it stops the synced document growing
-   by one entry for every note ever cleared. */
-const TOMBSTONE_DAYS = 90;
-
-function pruneDeletions() {
-  const cutoff = new Date(Date.now() - TOMBSTONE_DAYS * 86400000).toISOString();
-  const out = {};
-  for (const [k, v] of Object.entries(state.deletions || {})) {
-    if ((v.at || '') > cutoff) out[k] = v;
-  }
-  state.deletions = out;
-}
+/* Tombstones are deliberately retained. Expiring one after an arbitrary
+   number of days lets a tablet that was in a drawer longer than that bring a
+   deleted rush, note or manual job back on its next sync. Safe compaction
+   would require acknowledgement from every device; this app has no device
+   registry, so keeping the small deletion record is the honest choice. */
 
 /* ---------- history ---------- */
 
@@ -158,7 +207,7 @@ export function historyFor(key) {
     or CNC workbook is reloaded. */
 export function setTaskStatus(key, status) {
   const prev = state.taskStatus[key]?.status ?? null;
-  state.taskStatus[key] = { status, at: now(), by: me() };
+  state.taskStatus[key] = changed({ status });
   if (prev !== status) logChange(key, 'status', null, prev, status);
   save();
 }
@@ -169,7 +218,7 @@ export function setTaskStatusMany(keys, status) {
   const before = keys.map((k) => ({ key: k, prev: state.taskStatus[k]?.status ?? null }));
   const at = now();
   const by = me();
-  for (const k of keys) state.taskStatus[k] = { status, at, by };
+  for (const k of keys) state.taskStatus[k] = changed({ status }, { at, by });
   for (const { key, prev } of before) {
     if (prev !== status) logChange(key, 'status', null, prev, status);
   }
@@ -184,7 +233,7 @@ export function restoreTaskStatus(before) {
   for (const { key, prev } of before) {
     const cur = state.taskStatus[key]?.status ?? null;
     if (prev == null) forget('taskStatus', key);
-    else state.taskStatus[key] = { status: prev, at, by };
+    else state.taskStatus[key] = changed({ status: prev }, { at, by });
     if (cur !== prev) logChange(key, 'undo', null, cur, prev);
   }
   save();
@@ -196,7 +245,7 @@ export function setTaskNote(key, text) {
   const t = String(text || '').trim();
   const prev = state.taskNote[key]?.text ?? null;
   if (!t) forget('taskNote', key);
-  else state.taskNote[key] = { text: t, at: now(), by: me() };
+  else state.taskNote[key] = changed({ text: t });
   if (prev !== (t || null)) logChange(key, 'note', null, prev, t || null);
   save();
 }
@@ -232,7 +281,7 @@ export function setTaskFields(key, patch, sheet = {}) {
     logChange(key, 'field', f, shown, next);
   }
 
-  if (Object.keys(fields).length) state.taskEdit[key] = { fields, at: now(), by: me() };
+  if (Object.keys(fields).length) state.taskEdit[key] = changed({ fields });
   else forget('taskEdit', key);
   save();
 }
@@ -263,7 +312,7 @@ export function setBackOrder(key, patch) {
   const empty = next.flagged == null && next.qty == null
     && !next.assignee && !next.note;
   if (empty) forget('backOrder', key);
-  else state.backOrder[key] = { ...next, at: now(), by: me() };
+  else state.backOrder[key] = changed(next);
   save();
 }
 
@@ -301,7 +350,7 @@ export function setRush(key, patch) {
   }
 
   if (!next.on) forget('rush', key);
-  else state.rush[key] = { ...next, at: now(), by: me() };
+  else state.rush[key] = changed(next);
   save();
 }
 
@@ -324,7 +373,7 @@ function assignOne(key, machine, importedMachine) {
   const next = machine || importedMachine || null;
   if (cur === next) return;
   if (!machine || machine === importedMachine) forget('taskAssign', key);
-  else state.taskAssign[key] = { machine, at: now(), by: me() };
+  else state.taskAssign[key] = changed({ machine });
   logChange(key, 'machine', null, cur, next);
 }
 
@@ -365,7 +414,7 @@ export const MANUAL_FIELDS = ['wo', 'project', 'floor', 'die', 'qty', 'cuttingDa
     special casing anywhere downstream. */
 export function addManualTask(fields) {
   const id = uid();
-  const task = {
+  const task = changed({
     id: `manual:${id}`,
     manual: true,
     machine: fields.machine,
@@ -391,9 +440,7 @@ export function addManualTask(fields) {
     boStat: null,
     backOrder: false,
     archived: false,
-    at: now(),
-    by: me(),
-  };
+  });
   state.manualTasks = { ...state.manualTasks, [id]: task };
   logChange(`${task.machine}|${task.wo}|${task.die || ''}`, 'manual', null, null, 'added');
   save();
@@ -403,7 +450,7 @@ export function addManualTask(fields) {
 export function updateManualTask(id, patch) {
   const cur = state.manualTasks?.[id];
   if (!cur) return;
-  const next = { ...cur, ...patch, at: now(), by: me() };
+  const next = changed({ ...cur, ...patch });
   state.manualTasks = { ...state.manualTasks, [id]: next };
   save();
 }
@@ -427,7 +474,7 @@ export function addTodo(text, { date, assignee = null } = {}) {
   const id = uid();
   state.todos = {
     ...state.todos,
-    [id]: { id, text: body, date, assignee, done: false, at: now(), by: me() },
+    [id]: changed({ id, text: body, date, assignee, done: false }),
   };
   save();
   return id;
@@ -436,7 +483,7 @@ export function addTodo(text, { date, assignee = null } = {}) {
 export function setTodo(id, patch) {
   const cur = state.todos?.[id];
   if (!cur) return;
-  const next = { ...cur, ...patch, at: now() };
+  const next = changed({ ...cur, ...patch });
   if (patch.done === true && !cur.done) { next.doneAt = now(); next.doneBy = me(); }
   if (patch.done === false) { next.doneAt = null; next.doneBy = null; }
   state.todos = { ...state.todos, [id]: next };
@@ -455,7 +502,7 @@ export function deleteTodo(id) {
    for which shift" — that is how the department's own staging sheet reads. */
 export function setStaging(key, patch) {
   const cur = state.staging[key] || {};
-  const next = { ...cur, ...patch, at: now(), by: me() };
+  const next = changed({ ...cur, ...patch });
   if (cur.staged !== next.staged) {
     logChange(key, 'staging', null, cur.staged ? 'staged' : null, next.staged ? 'staged' : null);
   }
@@ -476,7 +523,7 @@ export function clearStaging(key) {
 export function saveShiftLog(date, shift, patch) {
   const key = `${date}|${shift}`;
   const cur = state.shiftLogs[key] || { date, shift, rows: {} };
-  state.shiftLogs[key] = { ...cur, ...patch, date, shift, at: now(), by: me() };
+  state.shiftLogs[key] = changed({ ...cur, ...patch, date, shift });
   save();
   return key;
 }
@@ -497,7 +544,7 @@ export function resetMachineConfig(key) {
 
 export function setMachineConfig(key, patch) {
   const cur = state.machineConfig[key] || {};
-  const next = { ...cur, ...patch, at: now(), by: me() };
+  const next = changed({ ...cur, ...patch });
   for (const k of ['label', 'note']) {
     if (next[k] != null && !String(next[k]).trim()) delete next[k];
   }
@@ -515,10 +562,10 @@ export function setMachineImport({ tasks, shiftUpdate, report }) {
     .concat(tasks.map((t) => ({ ...t, source: report.kind })));
   state.machineMeta = {
     ...state.machineMeta,
-    [report.kind]: {
+    [report.kind]: changed({
       fileName: report.fileName, importedAt: report.importedAt,
       count: tasks.length, parser: report.parser ?? 1,
-    },
+    }),
   };
   if (shiftUpdate) state.shiftUpdate = { ...shiftUpdate, importedAt: report.importedAt };
   save();
@@ -560,6 +607,7 @@ function apply(data) {
     if (data[k] !== undefined) state[k] = data[k];
   }
   state.shiftLogs = onlyShiftLogs(state.shiftLogs);
+  observeSnapshot(state);
 }
 
 /* An earlier version of the app also wrote `shiftLogs`, in a different shape.
@@ -576,12 +624,31 @@ function onlyShiftLogs(logs) {
   return out;
 }
 
-export function save() {
+export function storageStatus() {
+  return localSaveProblem
+    ? { ok: false, ...localSaveProblem }
+    : { ok: true, error: null, at: null };
+}
+
+function persistLocal(data = snapshot()) {
+  if (typeof localStorage === 'undefined') return false;
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+    localSaveProblem = null;
+    return true;
   } catch (e) {
     console.warn('localStorage full or blocked', e);
+    localSaveProblem = {
+      error: 'This device could not save its local copy.',
+      detail: e?.message || 'Browser storage is full or blocked.',
+      at: now(),
+    };
+    return false;
   }
+}
+
+export function save() {
+  persistLocal();
   emit();
   if (fileHandle) queueFileSave();
   queueCloudPush();
@@ -593,14 +660,18 @@ export function loadLocal() {
     if (!raw) return;
     const data = JSON.parse(raw);
     apply(data);
-    pruneDeletions();
     // Rewrite immediately if the payload still carries retired fields, so the
     // cleanup is visible now rather than waiting for the next incidental save.
     if (RETIRED_KEYS.some((k) => data[k] !== undefined)) {
-      localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+      persistLocal();
     }
   } catch (e) {
     console.warn('could not read local data', e);
+    localSaveProblem = {
+      error: 'This device could not read its saved copy.',
+      detail: e?.message || 'Browser storage is unavailable or damaged.',
+      at: now(),
+    };
   }
 }
 
@@ -649,12 +720,52 @@ async function recallHandle() {
   }
 }
 
-/* Merge two snapshots record-by-record, newest timestamp wins. */
-function mergeRecords(mine = {}, theirs = {}) {
+function stableValue(value) {
+  if (Array.isArray(value)) return `[${value.map(stableValue).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stableValue(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** Whether a candidate record should replace the current one. Logical
+    revisions remove device-clock skew from new records. Old snapshots without
+    revisions retain timestamp ordering until each record is edited once. */
+function recordWins(candidate, current) {
+  if (!current) return !!candidate;
+  if (!candidate) return false;
+  observeRevision(candidate.rev);
+  observeRevision(current.rev);
+  const a = parseRevision(candidate.rev);
+  const b = parseRevision(current.rev);
+  if (a && b) {
+    if (a.counter !== b.counter) return a.counter > b.counter;
+    if (a.device !== b.device) return a.device > b.device;
+  } else if (a || b) {
+    // Once a line has been written by the revision-aware app, a stale cached
+    // build must not put its timestamp-only copy back over it.
+    return !!a;
+  }
+  const atA = candidate.at || '';
+  const atB = current.at || '';
+  if (atA !== atB) return atA > atB;
+  return stableValue(candidate) > stableValue(current);
+}
+
+function observeSnapshot(snap) {
+  for (const map of [...DELETABLE, 'deletions']) {
+    for (const rec of Object.values(snap?.[map] || {})) observeRevision(rec?.rev);
+  }
+  for (const rec of Object.values(snap?.machineMeta || {})) observeRevision(rec?.rev);
+  persistDeviceClock();
+}
+
+/* Merge two snapshots record-by-record, newest logical revision wins. */
+export function mergeRecords(mine = {}, theirs = {}) {
   const out = { ...mine };
   for (const [k, v] of Object.entries(theirs)) {
     const a = out[k];
-    if (!a || !a.at || (v.at && v.at > a.at)) out[k] = v;
+    if (recordWins(v, a)) out[k] = v;
   }
   return out;
 }
@@ -686,9 +797,9 @@ function mergeSnapshot(remote) {
 
   // Machine tasks come from whichever side imported them most recently.
   for (const kind of ['rolling', 'cnc']) {
-    const mine = state.machineMeta?.[kind]?.importedAt || '';
-    const theirs = remote.machineMeta?.[kind]?.importedAt || '';
-    if (theirs > mine && Array.isArray(remote.tasks)) {
+    const mine = state.machineMeta?.[kind];
+    const theirs = remote.machineMeta?.[kind];
+    if (recordWins(theirs, mine) && Array.isArray(remote.tasks)) {
       state.tasks = state.tasks.filter((t) => t.source !== kind)
         .concat(remote.tasks.filter((t) => t.source === kind));
       state.machineMeta = { ...state.machineMeta, [kind]: remote.machineMeta[kind] };
@@ -754,7 +865,7 @@ export async function pullSharedFile() {
   try {
     const remote = await readHandle(fileHandle);
     mergeSnapshot(remote);
-    localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+    persistLocal();
     emit();
     return true;
   } catch (e) {
@@ -818,7 +929,7 @@ export async function pullCloud({ parts = CLOUD_PARTS } = {}) {
     // Each document is a partial snapshot; mergeSnapshot ignores absent keys.
     if (remote?.work) mergeSnapshot(remote.work);
     if (remote?.base) mergeSnapshot(remote.base);
-    localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+    persistLocal();
     setCloudState({ at: now(), error: null });
     return true;
   } catch (e) {
@@ -843,7 +954,7 @@ async function pushCloud(withBase) {
     if (withBase) docs.base = cloudDoc('base');
     await cloudPush(docs);
 
-    localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+    persistLocal();
     setCloudState({ at: now(), error: null, pushing: false });
   } catch (e) {
     setCloudState({ error: e.message, pushing: false });

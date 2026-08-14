@@ -44,8 +44,8 @@ re-read.
 3. Pick your machine from the sub-tabs, and work the queue.
 4. At the end of the shift, **Shift Update** → Write.
 
-The nav reads **Rolling · FOM · CNC & FMC · Multi Punch · Rush · Back Orders ·
-Shift Update · Setup**.
+The nav reads **Rolling · FOM · CNC & FMC · Multi Punch · Today · Staging ·
+Rush · Back Orders · Shift Update**. Setup is the gear in the header.
 
 To use it on a phone, set up **Sync across devices** in Setup once — see below.
 
@@ -404,7 +404,7 @@ different claims:
 - **In process now** — what the schedules say is running on that machine,
   whoever set it and whenever. This includes the workbook's own `IP` marks,
   which is most of them until everyone is on the app.
-- **From the workbook** — the `Shift Update 2` snapshot, dated, because it is
+- **From the workbook** — the `Shift Update` snapshot, dated, because it is
   only as current as the last time the file was saved.
 
 ## Adding a job by hand
@@ -546,7 +546,7 @@ labels.
 ## Shift update
 
 Two different things can answer "what is the last shift update for this
-machine", and they are not the same claim. The workbook's `Shift Update 2`
+machine", and they are not the same claim. The workbook's `Shift Update`
 sheet is a snapshot from whenever the file was last saved. An update written
 on the Shift Update page is the department's own record, typed during the
 shift it describes.
@@ -616,20 +616,16 @@ yesterday's report into today's. Besides feeding the
 suggestions above, each centre page shows its machine's entry over the queue,
 with a **MACHINE DOWN** badge when `#Ops` reads `DOWN`.
 
-**Which sheet that is, is decided by which tab is visible in Excel** — not by
-its name. The workbook holds four similarly-named ones (`Shift Update 2`,
-`Shift Update`, `Shift Update (3)`, `Shift Update Old`) and only the first is
-visible; the department has hidden the other three, along with 58 of the
-workbook's 73 sheets. Hiding a tab is how they archive it, so visibility is
-their own signal for which one is live, and the rule keeps working if they
-rename or reorganise.
+The source is exact: **`Shift Update` in the CNC workbook**. The user confirmed
+that the live worksheet was renamed from `Shift Update 2`. The similarly named
+`Shift Update 2`, `Shift Update (3)` and `Shift Update Old` tabs are never
+considered as fallbacks. If `Shift Update` is missing, import reports it missing
+instead of selecting something plausible.
 
-This was got wrong twice before landing on that: once reading all four sheets
-and merging them by date and shift label, which let a stale "Afternoon" block
-beat the live "Day" one; then pinned to `Shift Update 2`, which only looked
-right because that is the visible one today. If every shift-update tab is ever
-hidden, the app falls back to the fullest of them and the import report says
-`fromVisibleTab: false`.
+This was got wrong twice before: first by reading all four sheets and merging
+date/shift labels, which let stale "Afternoon" data beat a current "Day"
+block; then by choosing whichever similar tab was visible, which could still
+fall back to a hidden archive. Exact source ownership is safer than inference.
 
 A block is laid out as two side-by-side halves (columns 1–7 and 9–15), each
 with its own Date/Shift header. Blocks also **stack vertically within that one
@@ -647,29 +643,23 @@ labelled *CNC 1* in the app — rename it in Setup if the floor calls it CNC-3.
 
 Machine names on the sheet that the app has no work centre for are collected
 and reported on import rather than dropped in silence — that is how the
-department finds out the app is behind the floor again. Right now that list is
-`CNC 2, CNC 3, CNC SBZ140, CNC-3, Notching, Proline, Elumatec Saw #1–3,
-Saw #1–8`.
-
-**One thing to settle:** the newest block writes **`CNC-3`**, not `CNC 1`. The
-app is set up as CNC 1 + FMC 1 + FMC 2, so `CNC-3` currently goes to the
-unrecognised list. If the remaining CNC is really called CNC-3 on the floor,
-rename `cnc1` in `js/machines.js` and add `'CNC3': 'cnc1'` to `SU_MACHINE` in
-`js/import-machines.js`.
+department finds out the app is behind the floor again. `CNC-3` is recognised
+and maps to the `cnc1` work centre; whether the visible label should say
+“CNC 1” or “CNC-3” remains a floor-naming decision and can be changed in Setup.
 
 ## What was removed
 
 Everything driven by the Daily Schedule: order-level tracking, profile types
-and per-profile material, the hinge/8560 rule, hand-added service orders, the
-change history, shift-update posting, the process guide, the verification
-screen, and the dashboard.
+and per-profile material, the hinge/8560 rule, process guide, verification
+screen, and the old dashboard. Manual jobs, history and shift-update posting
+were later rebuilt against the machine-schedule model and are current features.
 
 The stored data went with it. On first load the app rewrites its saved payload
 without the retired fields, so an existing install — and the shared JSON on the
 network drive — sheds them rather than carrying them indefinitely. State now
-holds only `tasks`, `machineMeta`, `taskStatus`, `taskNote`, `taskEdit`,
-`backOrder`, `rush`, `taskAssign`, `taskHistory`, `machineConfig`,
-`shiftUpdate`, `shiftLogs`, `people` and `settings`.
+holds `tasks`, `machineMeta`, the keyed overlay maps, `taskHistory`,
+`shiftUpdate`, `shiftLogs`, `manualTasks`, `todos`, `staging`, `deletions`,
+`people` and local `settings`.
 
 (Shift-update posting has since come back, rebuilt around the machine layout —
 see above. An old install's `shiftLogs` were written in a different shape and
@@ -731,7 +721,8 @@ re-flagging a rush after you cleared it.
 This covers every removal in the app: statuses undone, notes cleared, edits
 reverted, rushes and back orders cleared, lines put back on their imported
 machine, manual jobs, to-dos, shift updates and machine renames. Tombstones are
-pruned after 90 days.
+retained because expiring one would let a sufficiently stale offline device
+resurrect the deleted record.
 
 `test/cloud-check.mjs` drives it on two devices: the PC clears a rush the phone
 still holds, and both must end up with it gone; then the phone re-flags it and
@@ -741,10 +732,10 @@ actually looked like.
 
 ## Sharing
 
-There are two ways to share, and they use the same per-record merge: every
-record carries an `at` timestamp and the newer one wins, so two people updating
-different lines both keep their work and only the same line updated twice
-resolves to the most recent.
+There are two ways to share, and they use the same per-record merge: `at` says
+when a person made the change, while a Lamport `rev` orders it without trusting
+device clocks. Two people updating different lines both keep their work;
+concurrent edits to one record resolve deterministically.
 
 ### On the shop floor PCs — a shared file
 
@@ -769,10 +760,10 @@ The snapshot is pushed as **two documents, not one**:
 | | what | size on the real data | pushed |
 |---|---|---|---|
 | `base` | the imported workbooks | ~1.6 MB | only on re-import |
-| `work` | statuses, notes, edits, rush, back orders, assignments, shift updates, history | ~1 KB | debounced, on every change |
+| `work` | statuses, notes, edits, rush, back orders, assignments, shift updates, history | starts at a few KB and grows with work | debounced, on every change |
 
 Together that would mean a phone uploading the workbooks every time somebody
-taps Done. Split, a tap costs a kilobyte. `test/cloud-check.mjs` asserts the
+taps Done. Split, a tap sends only the work document. `test/cloud-check.mjs` asserts the
 `work` document stays at least five times smaller than `base` and never carries
 the task list.
 
@@ -791,24 +782,24 @@ Export / Import moves it between machines.
 
 ### Putting it on a URL
 
-`.github/workflows/pages.yml` publishes the built single file to GitHub Pages
-on every push to `main`. Enable it once in **Settings → Pages → Source: GitHub
+`.github/workflows/pages.yml` verifies and publishes the built single file to
+GitHub Pages on every push to the repository's default branch. Enable it once
+in **Settings → Pages → Source: GitHub
 Actions**; the workflow will not do anything until you do. `manifest.webmanifest`
 means **Add to Home Screen** on a phone opens it like an app.
 
 ## Tests
 
 ```
-npm install                        # once — installs esbuild + playwright
-node test/machines-check.mjs       # parses both workbooks, the back-order flag, the shift update
-node test/app-check.mjs            # walks every page: status, rush, back orders, assignment, shift update
-node test/cloud-check.mjs          # two devices against a mock cloud — do they converge?
-node test/visual-qa.mjs            # every screen at five widths in both themes — layout, targets, contrast
-node build.mjs && node test/standalone-check.mjs   # same against the built file, opened via file://
-node build.mjs && node test/offline-check.mjs      # loads the site, cuts the network, reloads
+npm ci                             # installs the pinned build and test tools
+npm test                           # complete release gate, including build and offline/standalone checks
 ```
 
-`npm test` runs the first four.
+The gate generates sanitized workbook fixtures in memory, so it is safe for CI
+and does not depend on a developer's upload directory. To validate a release
+against the real schedules, set `BV_ROLLING_WORKBOOK` and `BV_CNC_WORKBOOK` to
+their local paths before running it. See [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md)
+for the complete release and operating checklist.
 
 `test/app-check.mjs` writes screenshots to `test/screens/`. It covers the
 status control, undo, bulk apply, notes, line editing, the history trail,
@@ -874,6 +865,10 @@ control that set its own `box-shadow`; and the Back Orders nav badge was
 counting assignees instead of shortages.
 
 ## Interface notes
+
+The next app-wide hierarchy and workflow upgrade is specified in
+[DESIGN_UPDATE_PLAN.md](DESIGN_UPDATE_PLAN.md). It starts with selecting a
+grounded visual direction before any production styling changes.
 
 - Everything is keyboard- and pointer-accessible; the segmented control uses
   `aria-pressed`, groups use `aria-expanded`. **Keyboard focus draws a visible

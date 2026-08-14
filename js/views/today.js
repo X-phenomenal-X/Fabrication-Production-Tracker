@@ -32,8 +32,12 @@ function machineLabel(key) {
 
 function todoRow(item, ref, rerender) {
   const carried = item.date < ref;
+  const age = (iso) => iso ? Date.now() - new Date(iso).getTime() : Infinity;
+  const justDone = item.done && age(item.doneAt) < 800;
+  const justAdded = !item.done && age(item.at) < 800;
 
-  return el('li.todo' + (item.done ? '.done' : '') + (carried ? '.carried' : ''), {},
+  return el('li.todo' + (item.done ? '.done' : '') + (carried ? '.carried' : '')
+    + (justDone ? '.just-done' : '') + (justAdded ? '.just-added' : ''), {},
     el('label.todo-check', {},
       el('input', {
         type: 'checkbox', checked: !!item.done,
@@ -115,15 +119,17 @@ function listPanel(ref, rerender) {
 
 /* ---------- what the schedules say ---------- */
 
-function attentionCard({ label, rows, tone, hint, go, tab }) {
+function attentionCard({ label, rows, tone, hint, go, tab, iconName }) {
   const n = rows.length;
   return el('button.att' + (n && tone ? '.' + tone : ''), {
     onclick: () => go(tab),
     title: `Open ${label}`,
   },
-    el('span.att-n', {}, fmtNum(n)),
-    el('span.att-k', {}, label),
-    el('span.att-hint', {}, n ? hint : 'nothing outstanding'));
+    el('span.att-icon', { 'aria-hidden': 'true' }, icon(iconName, { size: 17 })),
+    el('span.att-copy', {},
+      el('span.att-n', {}, fmtNum(n)),
+      el('span.att-k', {}, label),
+      el('span.att-hint', {}, n ? hint : 'nothing outstanding')));
 }
 
 function pileList(title, rows, tone, cap = 5) {
@@ -203,15 +209,15 @@ export function renderToday(rerender, go) {
       el('div.body', {},
         el('div.attgrid', {},
           attentionCard({ label: 'running now', rows: b.running, tone: 'work',
-            hint: 'on the machines', go, tab: 'rolling' }),
+            hint: 'on the machines', go, tab: 'rolling', iconName: 'play' }),
           attentionCard({ label: 'overdue', rows: b.overdue, tone: 'bad',
-            hint: 'past their cutting date', go, tab: 'rolling' }),
+            hint: 'past their cutting date', go, tab: 'rolling', iconName: 'clock' }),
           attentionCard({ label: 'due today', rows: b.dueToday, tone: 'warn',
-            hint: 'cutting date is today', go, tab: 'rolling' }),
+            hint: 'cutting date is today', go, tab: 'rolling', iconName: 'calendar' }),
           attentionCard({ label: 'rush', rows: b.rushNow, tone: 'warn',
-            hint: 'needed today or already past', go, tab: 'rush' }),
+            hint: 'needed today or already past', go, tab: 'rush', iconName: 'bolt' }),
           attentionCard({ label: 'back orders', rows: b.backOrders, tone: 'bad',
-            hint: 'short of material', go, tab: 'backorders' })),
+            hint: 'short of material', go, tab: 'backorders', iconName: 'alert' })),
 
         // The one job on the day's list with a deadline attached to the shift
         // rather than to a machine.

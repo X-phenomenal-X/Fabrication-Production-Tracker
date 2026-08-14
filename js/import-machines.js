@@ -19,8 +19,10 @@ import { readXlsx } from './xlsx.js';
 
      1  original
      2  FMC 1 / FMC 2, and the CNC & FMC shared queue
-     3  shift update read from the visible tab only; CNC-3 mapped to CNC 1 */
-export const PARSER_VERSION = 3;
+     3  shift update read from the visible tab only; CNC-3 mapped to CNC 1
+     4  non-numeric work orders retained; shift update pinned to its source tab
+     5  live shift-update worksheet renamed from Shift Update 2 to Shift Update */
+export const PARSER_VERSION = 5;
 
 const PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
 
@@ -44,8 +46,17 @@ function date(v) {
   return v.toISOString().slice(0, 10);
 }
 
-function isWo(v) {
-  return v != null && /^\d{3,7}$/.test(String(v).trim());
+/* Work orders are identifiers, not numbers. The real schedules carry service
+   and special work under values such as MU2026-012, DAN 509, TRIMS and PREP.
+   Restricting this column to digits silently removed real jobs. Reject only
+   the headings and separator text that can appear in repeated print headers;
+   when the workbook uses an unusual identifier, preserving it is safer than
+   inventing a narrower naming rule than the department has. */
+const WO_HEADING = /^(?:W\/?O\s*#?|WORK\s*ORDER\s*#?|PROJECT|MACHINE|DATE|SHIFT|TOTALS?|SERVICE\s*ORDERS?|BACK\s*ORDERS?)$/i;
+
+export function isWorkOrder(v) {
+  const s = txt(v);
+  return !!s && s.length <= 64 && /[A-Z0-9]/i.test(s) && !WO_HEADING.test(s);
 }
 
 /* Status vocabulary used across the machine sheets. */
@@ -143,7 +154,7 @@ function parseMachineSheet(sheet, spec, report) {
   for (const row of sheet.rows) {
     if (row.empty) continue;
     const wo = get(row.cells, 'wo');
-    if (!isWo(wo)) continue;
+    if (!isWorkOrder(wo)) continue;
 
     const qty = num(get(row.cells, 'qty'));
     const statusRaw = get(row.cells, 'status');
@@ -194,18 +205,14 @@ function parseMachineSheet(sheet, spec, report) {
 
 /* ---------- shift update ---------- */
 
-/* The CNC workbook's shift-update sheet carries the latest word on most
+/* The CNC workbook's Shift Update sheet carries the latest word on most
    machines — what ran, what is next, and whether a machine is down.
 
-   Which sheet that is, is decided by **which tab is visible in Excel**, not by
-   its name. The workbook holds four similarly-named ones — `Shift Update 2`,
-   `Shift Update`, `Shift Update (3)`, `Shift Update Old` — and only the first
-   is visible; the department has hidden the rest, along with 58 of the
-   workbook's 73 sheets. Hiding a tab is how they archive it, so visibility is
-   their own signal for which one is live, and it keeps working if they rename
-   or reorganise. Naming a sheet in code here was wrong twice: once reading all
-   four and merging them, once pinned to `Shift Update 2`, which only looked
-   right because that happens to be the visible one today.
+   The department renamed the live worksheet from `Shift Update 2` to the exact
+   name `Shift Update`. The similarly named `Shift Update 2`, `Shift Update (3)`
+   and `Shift Update Old` tabs must never be considered as fallbacks. Choosing
+   by visibility was plausible but unsafe: a workbook with the live tab
+   accidentally hidden could silently feed the app an archived update.
 
    A block is laid out as two side-by-side halves so it prints on one page:
    the left half occupies columns 1-7, the right one columns 9-15, each with
@@ -221,29 +228,7 @@ function parseMachineSheet(sheet, spec, report) {
    within each is found by its own Date header, and entries are merged per
    machine so a filled-in block always wins over an empty one from earlier in
    the sheet. */
-const SU_SHEET_RE = /^shift update/i;
-
-/** The shift-update tab to read: the visible one. If more than one is visible
-    the fullest wins; if none is (they hid them all), fall back to the fullest
-    of the hidden ones rather than showing nothing. Returns [name, parsed]. */
-function pickShiftUpdate(wb) {
-  const named = Object.entries(wb.sheets).filter(([n]) => SU_SHEET_RE.test(n));
-  if (!named.length) return [null, null];
-
-  const visible = named.filter(([n]) => !wb.hiddenSheets?.has(n));
-  const pool = visible.length ? visible : named;
-
-  let best = [null, null];
-  let bestScore = -1;
-  for (const [name, sheet] of pool) {
-    const parsed = parseShiftUpdate(sheet);
-    const score = Object.values(parsed?.machines || {})
-      .reduce((a, e) => a + e.done.length + e.next.length + e.notes.length, 0);
-    if (score > bestScore) { bestScore = score; best = [name, parsed]; }
-  }
-  if (best[1]) best[1].fromVisibleTab = visible.length > 0;
-  return best;
-}
+export const SHIFT_UPDATE_SHEET = 'Shift Update';
 
 /* Sheet labels -> machine keys. Anything not listed (Proline, Notching, the
    Saws, the standing SERVICE ORDERS / K1285 / BACK ORDER rows) is outside the
@@ -354,7 +339,7 @@ function parseShiftUpdateSheet(sheet, unknown) {
   return blocks;
 }
 
-/** Parse the Shift Update 2 sheet into { date, shift, machines: {key: entry} }.
+/** Parse the Shift Update sheet into { date, shift, machines: {key: entry} }.
     Each entry keeps the date and shift of the block it came from, since a
     machine can be listed on more than one block within the sheet. */
 export function parseShiftUpdate(sheet) {
@@ -419,7 +404,7 @@ export async function importMachineWorkbook(arrayBuffer, { kind, fileName = 'sch
 
   const wanted = specs.map((s) => s.sheet);
   const wb = await readXlsx(arrayBuffer, {
-    only: (n) => wanted.includes(n) || (kind === 'cnc' && SU_SHEET_RE.test(n)),
+    only: (n) => wanted.includes(n) || (kind === 'cnc' && n === SHIFT_UPDATE_SHEET),
   });
 
   let tasks = [];
@@ -433,15 +418,11 @@ export async function importMachineWorkbook(arrayBuffer, { kind, fileName = 'sch
   // machines, and finer than the per-line Status columns.
   let shiftUpdate = null;
   if (kind === 'cnc') {
-    const [suName, suParsed] = pickShiftUpdate(wb);
-    shiftUpdate = suParsed;
-    if (!shiftUpdate) report.missing.push('Shift Update');
+    shiftUpdate = parseShiftUpdate(wb.sheets[SHIFT_UPDATE_SHEET]);
+    if (!shiftUpdate) report.missing.push(SHIFT_UPDATE_SHEET);
     else report.shiftUpdate = {
       date: shiftUpdate.date, shift: shiftUpdate.shift,
-      sheet: suName,
-      // Worth reporting: if this ever says false, the department has hidden
-      // every shift-update tab and the app is reading an archived one.
-      fromVisibleTab: !!shiftUpdate.fromVisibleTab,
+      sheet: SHIFT_UPDATE_SHEET,
       machines: Object.keys(shiftUpdate.machines).length,
       // Machine names on the sheet the app has no work centre for. Worth
       // showing: it is how the department finds out the app is behind the floor.

@@ -10,7 +10,8 @@ the real workbooks, not assumed.
 **Live:** https://x-phenomenal-x.github.io/Fabrication-Production-Tracker/
 **Deploy:** every push to the default branch builds and publishes to Pages
 automatically. There is no separate deploy step.
-**Current as of:** commit `73f00b5`, 14 Aug 2026
+**Reviewed:** 14 Aug 2026. This file is versioned with the code; use
+`git log -1 --oneline` for the exact revision rather than trusting a copied SHA.
 
 ---
 
@@ -24,7 +25,8 @@ It is a **zero-dependency vanilla-JS app**. No framework, no runtime packages.
 This is a hard constraint, not a style preference:
 
 - It must run from a **network share with no internet** by double-clicking one
-  file (`Cutting-Tracker.html`, built by `node build.mjs`, ~180 KB, everything
+  file (`Cutting-Tracker.html`, built by `node build.mjs`, ~3.6 MB with the
+  inlined die drawings, everything
   inlined). That rules out CDNs, external fonts, and remote anything.
 - Which is why there is a **hand-rolled XLSX reader** (`js/xlsx.js`, 246 lines)
   built on `DecompressionStream('deflate-raw')` + `DOMParser`. Do not replace it
@@ -45,7 +47,7 @@ that looks fine and is quietly wrong.
 | Workbook | Sheets read | Feeds |
 |---|---|---|
 | `Rolling_Schedule_2026.xlsx` | `Auto`, `Manual`, `Complete` | Rolling (Auto/Etas), Rolling (Manual/Iota) |
-| `CNC_Schedule_Rev_E.xlsx` | `FOM1`, `FOM2`, `FOM3`, `MultiPunch & SAW`, `CNC & FMC`, `Shift Update 2` | FOM 1–3, Multi Punch, the CNC/FMC queue, and the shift update |
+| `CNC_Schedule_Rev_E.xlsx` | `FOM1`, `FOM2`, `FOM3`, `MultiPunch & SAW`, `CNC & FMC`, `Shift Update` | FOM 1–3, Multi Punch, the CNC/FMC queue, and the shift update |
 
 The Daily Schedule workbook was **deliberately dropped** — an earlier version
 tracked it and the scope was reset. Don't reintroduce it.
@@ -68,17 +70,15 @@ CNC 1 / FMC 1 / FMC 2 **by hand** in the app. `assignableIn()` / `hasQueue()` in
 
 ### FMC appears in exactly ONE place in either workbook
 
-`Shift Update 2`, in a block starting **row 57**. That sheet contains *two*
+`Shift Update`, in a block starting **row 57**. That sheet contains *two*
 vertically stacked blocks: an empty leftover Day template at the top, and the
 real one from row 57 down.
 
-**The sheet is chosen by Excel visibility, not by name.** Only `Shift Update 2`
-is visible; `Shift Update`, `Shift Update (3)` and `Shift Update Old` are
-hidden, as are 58 of the workbook's 73 sheets. Hiding a tab is how this
-department archives it, so that is the signal — and it survives them renaming
-or reorganising. `pickShiftUpdate()` in `js/import-machines.js`; `readXlsx`
-exposes `hiddenSheets`. **Do not hardcode a sheet name here** — that has been
-got wrong twice (see §9, trap 3).
+**Only the exact `Shift Update` sheet is read.** The user confirmed that the
+live worksheet was renamed from `Shift Update 2`. `Shift Update 2`,
+`Shift Update (3)` and `Shift Update Old` are never fallbacks, visible or
+hidden. If the live sheet is missing, the import reports `Shift Update` missing
+rather than showing plausible-but-stale data (see §9, trap 3).
 
 Also: the live block calls the remaining CNC machine **`CNC-3`**, not `CNC 1`.
 `SU_MACHINE` maps both to `cnc1`; the content-first merge then picks the one
@@ -128,7 +128,7 @@ row number, because they stack.
 Rolling: 1,799 lines   CNC: 2,118 lines   Total: 3,917 tasks, 738 open
 Rolling(Auto) 191 open · Rolling(Man) 69 · FOM1 100 · FOM2 184 · FOM3 51
 CNC/FMC queue 81 · Multi Punch 62 · back-order flag on 67 open lines · 202 dies
-Shift update resolves 9 machines, all from Shift Update 2
+Shift update resolves 9 machines, all from Shift Update
 
 Of the 202 distinct die strings, 164 are sub-assemblies the section book knows;
 the rest are text like "Door sash", "Mock UP", "RUSH order".
@@ -145,12 +145,12 @@ Imported sheet data is **never mutated**. Everything a person does is stored as 
 separate keyed record layered on top:
 
 ```
-state.taskStatus[key]  { status, at, by }
-state.taskNote[key]    { text, at, by }
-state.taskEdit[key]    { fields:{…}, at, by }   // corrections to sheet values
-state.backOrder[key]   { flagged, qty, assignee, note, at, by }
-state.rush[key]        { on, needBy, assignee, reason, at, by }
-state.taskAssign[key]  { machine, at, by }      // which machine took a queued line
+state.taskStatus[key]  { status, at, by, rev }
+state.taskNote[key]    { text, at, by, rev }
+state.taskEdit[key]    { fields:{…}, at, by, rev }   // corrections to sheet values
+state.backOrder[key]   { flagged, qty, assignee, note, at, by, rev }
+state.rush[key]        { on, needBy, assignee, reason, at, by, rev }
+state.taskAssign[key]  { machine, at, by, rev }      // which machine took a queued line
 ```
 
 **The key is `` `${machine}|${wo}|${die}` `` built from the *imported* values,
@@ -175,9 +175,13 @@ asserting.
 
 ### Sync: per-record merge, never whole-file last-write-wins
 
-Every record carries an `at` timestamp; the newer one wins **per record**
-(`mergeRecords()` in `js/store.js`). Two people editing different lines both
-keep their work. `taskHistory` is append-only, merged by entry `id`.
+Every new record carries an `at` timestamp for people and a logical `rev` for
+ordering. The higher revision wins **per record** (`mergeRecords()` in
+`js/store.js`), so a phone with the wrong clock cannot overwrite a genuinely
+newer edit. Concurrent edits converge deterministically. Legacy records without
+`rev` use timestamps until that record is edited once. Two people editing
+different lines both keep their work. `taskHistory` is append-only, merged by
+entry `id`.
 
 Two transports, same merge:
 - **Shared file** (File System Access API) — network drive, no internet, no
@@ -190,7 +194,7 @@ The cloud snapshot is split into **two documents**, which matters a lot:
 | part | contents | size | pushed |
 |---|---|---|---|
 | `base` | `tasks`, `machineMeta`, `shiftUpdate` | **~1.6 MB** | only on re-import |
-| `work` | statuses, notes, edits, rush, back orders, assignments, shift logs, history | **~1 KB** | debounced, every change |
+| `work` | statuses, notes, edits, rush, back orders, assignments, shift logs, history | starts at a few KB and grows with recorded work | debounced, every change |
 
 Together it would mean a phone uploading 1.6 MB every time somebody taps Done.
 
@@ -198,8 +202,9 @@ Together it would mean a phone uploading 1.6 MB every time somebody taps Done.
 
 Per-record merge reads a *missing* record as "the other device knows less", so a
 plain delete comes straight back from whichever device still has it.
-`state.deletions` records `key → at`; a tombstone newer than the record wins,
-and they are pruned after 90 days. Anything added to `DELETABLE` in
+`state.deletions` records `key → { at, by, rev }`; a newer tombstone wins.
+Tombstones are retained: expiring them would let a device that stayed offline
+past the cutoff resurrect deleted work. Anything added to `DELETABLE` in
 `js/store.js` must go through `forget()`, never `delete state.x[key]`.
 
 ### Routing: the SOP outranks the learned habit
@@ -293,9 +298,10 @@ That is deliberate and load-bearing: it still opens offline off a share.
 ## 5. Commands
 
 ```bash
-npm install                  # once (esbuild + playwright)
+npm ci                       # once (pinned esbuild + playwright)
 npm run serve                # http://localhost:8000  (modules need a server)
-node build.mjs               # regenerate Cutting-Tracker.html
+npm run build                # regenerate Cutting-Tracker.html
+npm test                     # the complete release gate below
 
 node test/machines-check.mjs   # parses both workbooks, prints what came out
 node test/app-check.mjs        # full E2E walk of every page  (~2 min)
@@ -306,11 +312,11 @@ node test/visual-qa.mjs        # 10 screens × 5 widths × 2 themes  (~6 min)
 node build.mjs && node test/standalone-check.mjs   # same over file://
 ```
 
-**All seven must pass before pushing.** They run headless Chromium from
-`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`; adjust that path
-elsewhere. Sample workbooks live in
-`/root/.claude/uploads/042835a0-704b-5601-bc20-4ed82d27578f/` — a fresh
-environment won't have them and those tests will need new sample files.
+`npm test` runs every check before Pages can publish. Tests find Playwright's
+installed Chromium automatically, or use `PLAYWRIGHT_CHROMIUM_PATH`. Public CI
+generates sanitized XLSX schedules with every required sheet and edge case;
+to run the private real-count assertions, set `BV_ROLLING_WORKBOOK` and
+`BV_CNC_WORKBOOK` to the two real files. No customer data is committed.
 
 `test/visual-qa.mjs` is the one to run after any CSS change. It does not compare
 screenshots — it **measures the rendered page**: real contrast ratios on actual
@@ -441,7 +447,7 @@ Constraints that bound any *further* redesign:
   `prefers-reduced-motion`.
 - Every `.centre` page shares one stylesheet; changes hit all four centres,
   Rush, Back Orders and Shift Update at once.
-- **Do not rename selectors.** The four test suites assert on structure
+- **Do not rename selectors casually.** The browser suite asserts on structure
   (`.cstat i`, `.seg-btn[aria-pressed]`, `.nowrun-count`, `.line`, `.dgroup-*`).
   CSS-only changes are safe; class renames are not.
 
@@ -457,9 +463,8 @@ way.
 ### Smaller known gaps
 
 - The 8560-vents-need-hinges rule was mentioned by the user but never built.
-- Service orders are added by hand in the workbook; the app has no way to add
-  a line that isn't in a sheet.
-- `test/*.mjs` depend on absolute paths to sample workbooks (see §5).
+- The Supabase key rotation and first live schedule import still need an owner
+  to confirm them on the production devices (see §6).
 
 ---
 
@@ -469,13 +474,11 @@ way.
    an input has focus. Always `scheduleRender()`.
 2. **Keying overlays on anything but the imported wo+die** → silent data loss on
    re-import or on editing a die.
-3. **Picking the shift-update sheet by name.** Two separate bugs came out of
-   this. First, reading all four and merging by date+shift label — "Afternoon"
-   is not automatically later than "Day" when they are on *different* sheets,
-   so stale Afternoon data beat the live Day block for every machine. Then,
-   pinning to `Shift Update 2`, which only looked right because that is the
-   visible tab today, and still left `cnc1` empty because the live block calls
-   it `CNC-3`. The rule that holds is **read the visible tab**.
+3. **Inferring the shift-update sheet.** Reading all four and merging by
+   date+shift let stale Afternoon data beat the live Day block. Choosing by tab
+   visibility still allowed a hidden archive fallback. The confirmed rule is
+   exact: **CNC workbook → `Shift Update`, or report it missing**. `CNC-3`
+   maps to the `cnc1` work centre independently of the sheet choice.
 4. **Counting a filled-in `#Ops` as "content."** A crew number with no
    done/next/notes is still an empty block; treating it as content let a blank
    template row beat a row with real work on it.
@@ -487,8 +490,8 @@ way.
    row. Locate on stable W/O + die instead.
 7. **Test assumptions about machine labels** — one test renames a machine, so
    later steps can't assume the original title. Wait on the nav, not the title.
-8. `npm ci` fails here — `package-lock.json` is gitignored. CI uses
-   `npm install --ignore-scripts`.
+8. **Do not remove `package-lock.json`.** CI uses `npm ci`; the lockfile and
+   exact development versions make the build and test gate reproducible.
 9. **CSS ordering.** Equal-specificity rules declared *later* win, and this
    sheet is one file. Four separate regressions came from writing a rule above
    the block it needed to beat — phone tap targets, the focus ring, the header
@@ -536,7 +539,7 @@ Paste this above the file when handing to ChatGPT or another assistant.
 >   the app infers something it says so and says why, so it can be overruled.
 > - Comments explain **why**, not what; commit messages are long and record what
 >   was rejected and why. Match that.
-> - The four test suites assert on DOM structure. CSS-only changes are safe;
+> - The browser suite asserts on DOM structure. CSS-only changes are usually safe;
 >   **renaming a class is not**.
 > - The repo is **public**. Never put credentials, real work orders or customer
 >   names in it.

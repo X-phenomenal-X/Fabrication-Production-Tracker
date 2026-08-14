@@ -6,18 +6,36 @@
 
 import { el, icon, toast } from './ui.js';
 
-let onlineListener = null;
+let connectionWatcher = null;
+let workerOnline = true;
 
 export function isOnline() {
-  return typeof navigator === 'undefined' || navigator.onLine !== false;
+  return (typeof navigator === 'undefined' || navigator.onLine !== false) && workerOnline;
 }
 
 /** Redraw when the connection comes or goes, so the header can say so. */
 export function watchConnection(rerender) {
-  if (onlineListener) return;
-  onlineListener = () => rerender();
-  window.addEventListener('online', onlineListener);
-  window.addEventListener('offline', onlineListener);
+  if (connectionWatcher) return;
+  connectionWatcher = () => rerender();
+  window.addEventListener('offline', connectionWatcher);
+  window.addEventListener('online', () => {
+    rerender();
+    // A connected network adapter is not proof that the internet returned.
+    // This same-origin request lets the worker verify a real network response.
+    fetch(`./?connection-check=${Date.now()}`, { cache: 'no-store' }).catch(() => {});
+  });
+
+  if ('serviceWorker' in navigator) {
+    const receive = (e) => {
+      if (e.data?.type !== 'bv-network') return;
+      workerOnline = e.data.online !== false;
+      rerender();
+    };
+    const ask = () => navigator.serviceWorker.controller?.postMessage('connection-status');
+    navigator.serviceWorker.addEventListener('message', receive);
+    navigator.serviceWorker.addEventListener('controllerchange', ask);
+    ask();
+  }
 }
 
 /* A new build is on the server. Worth interrupting for — a shift reading a

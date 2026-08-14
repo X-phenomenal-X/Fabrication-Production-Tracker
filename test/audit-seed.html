@@ -1,0 +1,9 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Loading sanitized tracker fixture</title>
+<p>Loading sanitized tracker fixture…</p>
+<script type="module">
+  import { makeFixture } from './fixture.mjs';
+  localStorage.setItem('bv.cutting.v1', JSON.stringify(makeFixture()));
+  location.replace('/#rolling');
+</script>

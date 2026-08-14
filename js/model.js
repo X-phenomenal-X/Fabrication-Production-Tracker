@@ -403,7 +403,7 @@ function writtenShiftUpdateFor(machineKey) {
 /** What to show as this machine's last shift update.
 
     Two things can answer that and they are not the same thing. The workbook's
-    `Shift Update 2` sheet is a snapshot from whenever the file was last saved.
+    `Shift Update` sheet is a snapshot from whenever the file was last saved.
     An update written on the Shift Update page is the department's own record,
     typed during the shift it describes.
 

@@ -3,17 +3,15 @@
 import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
+import { ROOT, workbookPaths, chromiumOptions } from './env.mjs';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
-const DIR = '/root/.claude/uploads/042835a0-704b-5601-bc20-4ed82d27578f';
+const books = workbookPaths();
 const FILES = {
-  rolling: `${DIR}/da7bb9f1-Rolling_Schedule_2026.xlsx`,
-  cnc: `${DIR}/bae855fd-CNC_Schedule_Rev_E.xlsx`,
+  rolling: books.rolling,
+  cnc: books.cnc,
 };
 
-const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-});
+const browser = await chromium.launch(chromiumOptions());
 const page = await browser.newPage();
 page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
 
@@ -86,7 +84,12 @@ const out = await page.evaluate(async (b64) => {
 
 console.log(JSON.stringify(out, null, 2).slice(0, 3000));
 
-if (out.totalTasks < 3000) throw new Error(`expected ~3900 tasks, got ${out.totalTasks}`);
+if (books.synthetic && out.totalTasks !== 440) {
+  throw new Error(`expected 440 sanitized tasks, got ${out.totalTasks}`);
+}
+if (!books.synthetic && out.totalTasks < 3000) {
+  throw new Error(`expected ~3900 real tasks, got ${out.totalTasks}`);
+}
 if (!out.runningAndShort) throw new Error('expected some lines that are both IP and back-ordered');
 console.log('\nOK');
 
