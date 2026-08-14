@@ -567,6 +567,34 @@ const fomBack = await page.evaluate(() => import('/js/model.js').then((m) => m.o
 step('after putting it back, FOM 1 = ' + fomBack);
 if (fomBack !== fomBefore.fom1) throw new Error('putting the line back did not restore FOM 1');
 
+// ---------- stale-import warning ----------
+// Exactly the situation that bit in practice: data already loaded, then a
+// parsing fix ships. The stored result does not re-parse itself, so the app
+// has to say so instead of presenting old output as current.
+await gotoTab('Setup');
+if (await page.locator('.banner.warn:has-text("Re-import")').count()) {
+  throw new Error('fresh import should not be flagged stale');
+}
+await page.evaluate(() => import('/js/store.js').then((m) => {
+  m.state.machineMeta.cnc.parser = 1;      // pretend it was read by an old build
+  m.save();
+}));
+await gotoTab('Rolling'); await gotoTab('Setup');
+const staleBanner = await page.locator('.banner.warn:has-text("Re-import")').first().textContent();
+step('stale-import banner: ' + staleBanner.replace(/\s+/g, ' ').trim().slice(0, 78) + '…');
+if (!/CNC/.test(staleBanner)) throw new Error('stale banner does not name the CNC workbook');
+
+// and the shift-update panel flags itself rather than looking like current truth
+await gotoTab('Multi Punch');
+const suStaleChip = await page.locator('.su .chip:has-text("re-import")').count();
+step('shift-update panel flags itself stale: ' + (suStaleChip ? 'yes' : 'no'));
+if (!suStaleChip) throw new Error('shift-update panel did not flag stale data');
+
+await page.evaluate(() => import('/js/store.js').then((m) => {
+  m.state.machineMeta.cnc.parser = 3;
+  m.save();
+}));
+
 // ---------- cloud sync config ----------
 // No live Supabase here, so this covers the parts that must work without one:
 // the config round-trip, the split of the snapshot into base/work, and that a

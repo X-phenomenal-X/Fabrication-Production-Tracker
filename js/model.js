@@ -3,6 +3,7 @@
    workbooks. */
 
 import { state, EDITABLE_FIELDS } from './store.js';
+import { PARSER_VERSION } from './import-machines.js';
 
 export function today() {
   return new Date().toISOString().slice(0, 10);
@@ -308,6 +309,19 @@ export function machineConfig(machine) {
     hidden: !!cfg.hidden,
     customised: !!(cfg.label || cfg.note !== undefined || cfg.ops != null),
   };
+}
+
+/* ---------- stale imports ---------- */
+
+/** Workbooks whose stored data was parsed by an older version of the importer.
+    Their rows are not wrong so much as *out of date with the code*: a parsing
+    fix only takes effect on the next import, so until then the app is showing
+    what the old parser made of the file. Returns the kinds needing a re-import. */
+export function staleImports() {
+  return ['rolling', 'cnc'].filter((kind) => {
+    const meta = state.machineMeta?.[kind];
+    return meta && (meta.parser ?? 1) < PARSER_VERSION;
+  });
 }
 
 /* ---------- shift update ---------- */

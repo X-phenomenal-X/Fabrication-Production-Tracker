@@ -1680,7 +1680,12 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
     state.tasks = state.tasks.filter((t) => t.source !== report.kind && !machines.has(t.machine)).concat(tasks.map((t) => ({ ...t, source: report.kind })));
     state.machineMeta = {
       ...state.machineMeta,
-      [report.kind]: { fileName: report.fileName, importedAt: report.importedAt, count: tasks.length }
+      [report.kind]: {
+        fileName: report.fileName,
+        importedAt: report.importedAt,
+        count: tasks.length,
+        parser: report.parser ?? 1
+      }
     };
     if (shiftUpdate) state.shiftUpdate = { ...shiftUpdate, importedAt: report.importedAt };
     save();
@@ -2002,6 +2007,611 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
   // js/views/centre.js
   init_ui();
 
+  // js/xlsx.js
+  var SIG_EOCD = 101010256;
+  var SIG_EOCD64_LOC = 117853008;
+  var SIG_EOCD64 = 101075792;
+  var SIG_CENTRAL = 33639248;
+  function findEOCD(view2, bytes) {
+    const min = Math.max(0, bytes.length - 65557);
+    for (let i = bytes.length - 22; i >= min; i--) {
+      if (view2.getUint32(i, true) === SIG_EOCD) return i;
+    }
+    throw new Error("Not a valid .xlsx file (no ZIP end-of-directory record found).");
+  }
+  function readDirectory(bytes) {
+    const view2 = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const eocd = findEOCD(view2, bytes);
+    let count = view2.getUint16(eocd + 10, true);
+    let dirOffset = view2.getUint32(eocd + 16, true);
+    if (dirOffset === 4294967295 || count === 65535) {
+      const locatorOff = eocd - 20;
+      if (locatorOff >= 0 && view2.getUint32(locatorOff, true) === SIG_EOCD64_LOC) {
+        const z64 = Number(view2.getBigUint64(locatorOff + 8, true));
+        if (view2.getUint32(z64, true) === SIG_EOCD64) {
+          count = Number(view2.getBigUint64(z64 + 32, true));
+          dirOffset = Number(view2.getBigUint64(z64 + 48, true));
+        }
+      }
+    }
+    const entries = /* @__PURE__ */ new Map();
+    let p = dirOffset;
+    for (let i = 0; i < count; i++) {
+      if (view2.getUint32(p, true) !== SIG_CENTRAL) break;
+      const method = view2.getUint16(p + 10, true);
+      const compSize = view2.getUint32(p + 20, true);
+      const nameLen = view2.getUint16(p + 28, true);
+      const extraLen = view2.getUint16(p + 30, true);
+      const commentLen = view2.getUint16(p + 32, true);
+      const localOffset = view2.getUint32(p + 42, true);
+      const name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nameLen));
+      entries.set(name, { method, compSize, localOffset });
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    return { entries, bytes, view: view2 };
+  }
+  async function inflate(raw) {
+    const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  async function readFile(zip, name) {
+    const e = zip.entries.get(name);
+    if (!e) return null;
+    const lh = e.localOffset;
+    const nameLen = zip.view.getUint16(lh + 26, true);
+    const extraLen = zip.view.getUint16(lh + 28, true);
+    const start = lh + 30 + nameLen + extraLen;
+    const raw = zip.bytes.subarray(start, start + e.compSize);
+    const out = e.method === 0 ? raw : await inflate(raw);
+    return new TextDecoder().decode(out);
+  }
+  var EXCEL_EPOCH = Date.UTC(1899, 11, 30);
+  function serialToDate(serial) {
+    if (typeof serial !== "number" || !isFinite(serial)) return null;
+    const d = new Date(EXCEL_EPOCH + Math.round(serial * 864e5));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  var BUILTIN_DATE_FMTS = /* @__PURE__ */ new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 45, 46, 47]);
+  function parseStyles(xml) {
+    if (!xml) return [];
+    const doc = new DOMParser().parseFromString(xml, "application/xml");
+    const customDate = /* @__PURE__ */ new Set();
+    for (const nf of doc.getElementsByTagName("numFmt")) {
+      const id = Number(nf.getAttribute("numFmtId"));
+      const code = (nf.getAttribute("formatCode") || "").replace(/\[[^\]]*\]/g, "").replace(/"[^"]*"/g, "");
+      if (/[ymdhs]/i.test(code)) customDate.add(id);
+    }
+    const cellXfs = doc.getElementsByTagName("cellXfs")[0];
+    if (!cellXfs) return [];
+    return Array.from(cellXfs.getElementsByTagName("xf")).map((xf) => {
+      const id = Number(xf.getAttribute("numFmtId") || 0);
+      return BUILTIN_DATE_FMTS.has(id) || customDate.has(id);
+    });
+  }
+  function parseSharedStrings(xml) {
+    if (!xml) return [];
+    const doc = new DOMParser().parseFromString(xml, "application/xml");
+    return Array.from(doc.getElementsByTagName("si")).map((si) => {
+      let out = "";
+      for (const t of si.getElementsByTagName("t")) out += t.textContent;
+      return out;
+    });
+  }
+  function colToIndex(ref) {
+    let n = 0;
+    for (let i = 0; i < ref.length; i++) {
+      const c = ref.charCodeAt(i);
+      if (c < 65 || c > 90) break;
+      n = n * 26 + (c - 64);
+    }
+    return n;
+  }
+  function parseSheet(xml, shared, dateStyles, maxRows) {
+    const doc = new DOMParser().parseFromString(xml, "application/xml");
+    const rows = [];
+    let widest = 0;
+    for (const row of doc.getElementsByTagName("row")) {
+      if (rows.length >= maxRows) break;
+      const cells = [];
+      let any = false;
+      for (const c of row.getElementsByTagName("c")) {
+        const ref = c.getAttribute("r") || "";
+        const idx = colToIndex(ref);
+        if (!idx) continue;
+        const type = c.getAttribute("t");
+        let value = null;
+        if (type === "inlineStr") {
+          let s = "";
+          for (const t of c.getElementsByTagName("t")) s += t.textContent;
+          value = s || null;
+        } else {
+          const v = c.getElementsByTagName("v")[0];
+          if (v != null) {
+            const raw = v.textContent;
+            if (type === "s") {
+              value = shared[Number(raw)] ?? null;
+            } else if (type === "e") {
+              value = { error: raw };
+            } else if (type === "str" || type === "b") {
+              value = type === "b" ? raw === "1" : raw;
+            } else {
+              const num2 = Number(raw);
+              if (isFinite(num2)) {
+                const styleIdx = Number(c.getAttribute("s") || 0);
+                value = dateStyles[styleIdx] ? serialToDate(num2) : num2;
+              } else {
+                value = raw || null;
+              }
+            }
+          }
+        }
+        if (value !== null && value !== "") any = true;
+        cells[idx - 1] = value ?? null;
+        if (idx > widest) widest = idx;
+      }
+      const r = Number(row.getAttribute("r") || rows.length + 1);
+      rows.push({ r, cells, empty: !any });
+    }
+    return { rows, width: widest };
+  }
+  async function readXlsx(arrayBuffer, { only = null, maxRows = 25e3 } = {}) {
+    if (typeof DecompressionStream === "undefined") {
+      throw new Error(
+        "This browser cannot unzip files natively. Use Chrome or Edge (version 103 or newer)."
+      );
+    }
+    const zip = readDirectory(new Uint8Array(arrayBuffer));
+    const [wbXml, relsXml, ssXml, stylesXml] = await Promise.all([
+      readFile(zip, "xl/workbook.xml"),
+      readFile(zip, "xl/_rels/workbook.xml.rels"),
+      readFile(zip, "xl/sharedStrings.xml"),
+      readFile(zip, "xl/styles.xml")
+    ]);
+    if (!wbXml) throw new Error("That file is not an Excel workbook (xl/workbook.xml missing).");
+    const shared = parseSharedStrings(ssXml);
+    const dateStyles = parseStyles(stylesXml);
+    const relTarget = /* @__PURE__ */ new Map();
+    if (relsXml) {
+      const relDoc = new DOMParser().parseFromString(relsXml, "application/xml");
+      for (const rel of relDoc.getElementsByTagName("Relationship")) {
+        relTarget.set(rel.getAttribute("Id"), rel.getAttribute("Target"));
+      }
+    }
+    const wbDoc = new DOMParser().parseFromString(wbXml, "application/xml");
+    const sheetNames = [];
+    const hiddenSheets = /* @__PURE__ */ new Set();
+    const targets = /* @__PURE__ */ new Map();
+    for (const sh of wbDoc.getElementsByTagName("sheet")) {
+      const name = sh.getAttribute("name");
+      const rid = sh.getAttribute("r:id") || sh.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+      sheetNames.push(name);
+      if ((sh.getAttribute("state") || "visible") !== "visible") hiddenSheets.add(name);
+      let target = relTarget.get(rid) || "";
+      target = target.replace(/^\/xl\//, "").replace(/^\//, "");
+      targets.set(name, target.startsWith("xl/") ? target : "xl/" + target);
+    }
+    const keep = typeof only === "function" ? only : (n) => only.includes(n);
+    const wanted = only ? sheetNames.filter(keep) : sheetNames;
+    const sheets = {};
+    for (const name of wanted) {
+      const xml = await readFile(zip, targets.get(name));
+      if (!xml) continue;
+      sheets[name] = parseSheet(xml, shared, dateStyles, maxRows);
+    }
+    return { sheetNames, hiddenSheets, sheets };
+  }
+
+  // js/import-machines.js
+  var PARSER_VERSION = 3;
+  var PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
+  function txt(v) {
+    if (v == null || typeof v === "object") return null;
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    const s = String(v).trim();
+    if (!s || s === "#N/A" || s === "#REF!" || s === "#VALUE!") return null;
+    return s;
+  }
+  function num(v) {
+    if (v == null || typeof v === "object" || v instanceof Date) return null;
+    const n = typeof v === "number" ? v : Number(String(v).trim());
+    return isFinite(n) ? n : null;
+  }
+  function date(v) {
+    if (!(v instanceof Date)) return null;
+    if (v.getTime() < PHANTOM_BEFORE) return null;
+    return v.toISOString().slice(0, 10);
+  }
+  function isWo(v) {
+    return v != null && /^\d{3,7}$/.test(String(v).trim());
+  }
+  function normTaskStatus(raw) {
+    const s = txt(raw);
+    if (!s) return "OPEN";
+    const u = s.toUpperCase();
+    if (/^(DONE|COMPLETE)/.test(u)) return "DONE";
+    if (/^(I\.?P|IN PROGRESS|RUNNING)/.test(u)) return "IP";
+    if (/^(B\/?O|BACK ?ORDER)/.test(u)) return "BO";
+    if (/HOLD/.test(u)) return "HOLD";
+    if (/READY|STOCK OK/.test(u)) return "READY";
+    return "OPEN";
+  }
+  function readsBackOrder(statusRaw, boStat, bo) {
+    const u = (txt(statusRaw) || "").toUpperCase();
+    if (/\bB\/?O\b|BACK ?ORDER/.test(u)) return true;
+    if (txt(boStat)) return true;
+    return typeof bo === "number" && bo > 0;
+  }
+  var SHEET_MAP = {
+    rolling: [
+      {
+        sheet: "Auto",
+        machine: "roll-auto",
+        cols: {
+          wo: 1,
+          project: 2,
+          floor: 3,
+          die: 4,
+          qty: 5,
+          boInt: 6,
+          boExt: 7,
+          material: 8,
+          cuttingDate: 9,
+          comments: 10,
+          status: 11,
+          product: 12,
+          setup: 13,
+          shipDate: 14,
+          rollingEta: 15,
+          machiningEta: 16
+        }
+      },
+      {
+        sheet: "Manual",
+        machine: "roll-man",
+        cols: {
+          wo: 1,
+          project: 2,
+          floor: 3,
+          die: 4,
+          qty: 5,
+          boInt: 6,
+          boExt: 7,
+          material: 8,
+          cuttingDate: 9,
+          comments: 10,
+          status: 11
+        }
+      },
+      {
+        sheet: "Complete",
+        machine: "roll-auto",
+        complete: true,
+        cols: { wo: 1, project: 2, floor: 3, die: 4, qty: 5, cuttingDate: 9, status: 11 }
+      }
+    ],
+    cnc: [
+      {
+        sheet: "FOM1",
+        machine: "fom1",
+        cols: {
+          wo: 1,
+          project: 2,
+          floor: 3,
+          die: 4,
+          qty: 5,
+          bo: 6,
+          boStat: 7,
+          cuttingDate: 8,
+          program: 9,
+          dayShift: 10,
+          status: 11,
+          shifts: 12
+        }
+      },
+      {
+        // FOM2 carries the pin-hole / 8560 vent flag, which is the hinge rule.
+        sheet: "FOM2",
+        machine: "fom2",
+        cols: {
+          wo: 1,
+          project: 2,
+          floor: 3,
+          die: 4,
+          pinHole: 5,
+          qty: 6,
+          cuttingDate: 7,
+          bo: 8,
+          boStat: 9,
+          dayShift: 10,
+          status: 11,
+          shifts: 12
+        }
+      },
+      {
+        sheet: "FOM3",
+        machine: "fom3",
+        cols: {
+          wo: 1,
+          project: 2,
+          floor: 3,
+          die: 4,
+          qty: 5,
+          cuttingDate: 6,
+          bo: 7,
+          boStat: 8,
+          dayShift: 9,
+          status: 10,
+          shifts: 11
+        }
+      },
+      {
+        sheet: "MultiPunch & SAW",
+        machine: "multipunch",
+        cols: {
+          wo: 1,
+          project: 2,
+          floor: 3,
+          die: 4,
+          qty: 5,
+          bo: 6,
+          boStat: 7,
+          rolling: 8,
+          cuttingDate: 9,
+          saw: 10,
+          punch: 11,
+          shifts: 12
+        }
+      },
+      {
+        // No machine column on this sheet — it is one queue for CNC 1, FMC 1 and
+        // FMC 2, split by hand in the app rather than guessed at here.
+        sheet: "CNC & FMC",
+        machine: "cncfmc",
+        cols: {
+          wo: 1,
+          project: 2,
+          floor: 3,
+          die: 4,
+          qty: 5,
+          bo: 6,
+          boStat: 7,
+          cuttingDate: 8,
+          status: 9
+        }
+      }
+    ]
+  };
+  function parseMachineSheet(sheet, spec, report) {
+    const out = [];
+    const c = spec.cols;
+    const get = (cells, key) => c[key] ? cells[c[key] - 1] : void 0;
+    for (const row of sheet.rows) {
+      if (row.empty) continue;
+      const wo = get(row.cells, "wo");
+      if (!isWo(wo)) continue;
+      const qty = num(get(row.cells, "qty"));
+      const statusRaw = get(row.cells, "status");
+      const status = spec.complete ? "DONE" : normTaskStatus(statusRaw);
+      const boQty = num(get(row.cells, "bo")) ?? num(get(row.cells, "boInt"));
+      const boRaw = txt(get(row.cells, "bo")) || txt(get(row.cells, "boInt"));
+      const boStat = txt(get(row.cells, "boStat"));
+      out.push({
+        id: `${spec.machine}:${String(wo).trim()}:${txt(get(row.cells, "die")) || "x"}:${row.r}`,
+        machine: spec.machine,
+        sheet: spec.sheet,
+        row: row.r,
+        wo: String(wo).trim(),
+        project: txt(get(row.cells, "project")),
+        floor: txt(get(row.cells, "floor")),
+        die: txt(get(row.cells, "die")),
+        qty,
+        status,
+        cuttingDate: date(get(row.cells, "cuttingDate")),
+        shipDate: date(get(row.cells, "shipDate")),
+        material: txt(get(row.cells, "material")),
+        comments: txt(get(row.cells, "comments")),
+        setup: txt(get(row.cells, "setup")),
+        rollingEta: date(get(row.cells, "rollingEta")) || txt(get(row.cells, "rollingEta")),
+        dayShift: txt(get(row.cells, "dayShift")),
+        shifts: num(get(row.cells, "shifts")),
+        pinHole: txt(get(row.cells, "pinHole")),
+        bo: boQty,
+        boRaw,
+        boStat,
+        backOrder: spec.complete ? false : readsBackOrder(statusRaw, boStat || boRaw, boQty),
+        archived: !!spec.complete
+      });
+    }
+    report.sheets.push({ sheet: spec.sheet, machine: spec.machine, rows: out.length });
+    return out;
+  }
+  var SU_SHEET_RE = /^shift update/i;
+  function pickShiftUpdate(wb) {
+    const named = Object.entries(wb.sheets).filter(([n]) => SU_SHEET_RE.test(n));
+    if (!named.length) return [null, null];
+    const visible = named.filter(([n]) => !wb.hiddenSheets?.has(n));
+    const pool = visible.length ? visible : named;
+    let best = [null, null];
+    let bestScore = -1;
+    for (const [name, sheet] of pool) {
+      const parsed = parseShiftUpdate(sheet);
+      const score = Object.values(parsed?.machines || {}).reduce((a, e) => a + e.done.length + e.next.length + e.notes.length, 0);
+      if (score > bestScore) {
+        bestScore = score;
+        best = [name, parsed];
+      }
+    }
+    if (best[1]) best[1].fromVisibleTab = visible.length > 0;
+    return best;
+  }
+  var SU_MACHINE = {
+    "ROLLINGETASAUTO": "roll-auto",
+    "ROLLINGIOTAMANUAL": "roll-man",
+    "FOM1": "fom1",
+    "FOM2": "fom2",
+    "FOM3": "fom3",
+    "CNC1": "cnc1",
+    // The live block writes the one remaining CNC machine as "CNC-3", while the
+    // stale block above it still lists a "CNC 1" with nothing in it. Both
+    // normalise to CNC3/CNC1 here and both point at the same work centre; the
+    // content-first merge below then picks the one that actually says something.
+    "CNC3": "cnc1",
+    "FMC1": "fmc1",
+    "FMC2": "fmc2",
+    "MULTIPUNCH": "multipunch"
+  };
+  var SU_SKIP = /* @__PURE__ */ new Set(["MACHINE", "DATE", "TOTAL", "SERVICEORDERS", "K1285PULLS", "BACKORDER"]);
+  var SU_SHIFT_RANK = { DAY: 0, AFTERNOON: 1, AFT: 1, MIDNIGHT: 2, NIGHT: 2 };
+  function suKey(label) {
+    return String(label || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+  function suWhen(date2, shift) {
+    if (!date2) return "";
+    const rank = SU_SHIFT_RANK[suKey(shift)] ?? 0;
+    return `${date2}#${rank}`;
+  }
+  function suBlockStarts(rows, off) {
+    const starts = [];
+    rows.forEach((row, i) => {
+      if (/^date$/i.test(txt(row.cells[off]) || "")) starts.push(i);
+    });
+    if (!starts.length) starts.push(1);
+    return starts;
+  }
+  function parseShiftUpdateBlock(rows, off, from, to, unknown) {
+    const g = (row, col) => row.cells[off + col - 1];
+    const header2 = rows[from];
+    const blockDate = header2 ? date(g(header2, 2)) : null;
+    const shift = header2 ? txt(g(header2, 6)) : null;
+    const out = {};
+    let cur = null;
+    for (const row of rows.slice(from + 2, to)) {
+      const name = txt(g(row, 1));
+      if (name) {
+        const k = suKey(name);
+        const key = SU_MACHINE[k];
+        cur = key || null;
+        if (!key && k && !SU_SKIP.has(k)) unknown.add(name.trim());
+        if (cur && !out[cur]) {
+          const opsRaw = g(row, 2);
+          const opsTxt = txt(opsRaw);
+          out[cur] = {
+            machine: cur,
+            label: name.trim(),
+            // "#Ops" is normally a headcount but is sometimes the word DOWN.
+            ops: typeof opsRaw === "number" ? opsRaw : null,
+            down: /DOWN/i.test(opsTxt || ""),
+            done: [],
+            next: [],
+            notes: [],
+            date: blockDate,
+            shift
+          };
+        }
+      }
+      if (!cur || !out[cur]) continue;
+      const d = txt(g(row, 4));
+      const n = txt(g(row, 6));
+      const note = txt(g(row, 7));
+      if (d) out[cur].done.push(d);
+      if (n) out[cur].next.push(n);
+      if (note) out[cur].notes.push(note);
+      if (d && /^down$/i.test(d)) out[cur].down = true;
+    }
+    return { date: blockDate, shift, machines: out };
+  }
+  function parseShiftUpdateSheet(sheet, unknown) {
+    const blocks = [];
+    for (const off of [0, 8]) {
+      const starts = suBlockStarts(sheet.rows, off);
+      starts.forEach((from, i) => {
+        const to = i + 1 < starts.length ? starts[i + 1] : sheet.rows.length;
+        blocks.push(parseShiftUpdateBlock(sheet.rows, off, from, to, unknown));
+      });
+    }
+    return blocks;
+  }
+  function parseShiftUpdate(sheet) {
+    if (!sheet) return null;
+    const unknown = /* @__PURE__ */ new Set();
+    const blocks = parseShiftUpdateSheet(sheet, unknown);
+    const wordCount = (e) => e.done.length + e.next.length + e.notes.length;
+    const said = (e) => wordCount(e) + (e.ops ? 1 : 0);
+    const better = (e, cur) => {
+      const we = wordCount(e);
+      const wc = wordCount(cur);
+      if (we > 0 !== wc > 0) return we > wc;
+      const a = suWhen(e.date, e.shift);
+      const c = suWhen(cur.date, cur.shift);
+      if (a !== c) return a > c;
+      return said(e) > said(cur);
+    };
+    const machines = {};
+    for (const b of blocks) {
+      for (const [k, e] of Object.entries(b.machines)) {
+        if (!machines[k] || better(e, machines[k])) machines[k] = e;
+      }
+    }
+    const values = Object.values(machines);
+    const latest = values.reduce((a, b) => a && !better(b, a) ? a : b, null);
+    return {
+      date: latest?.date || null,
+      shift: latest?.shift || null,
+      machines,
+      unknown: [...unknown].sort()
+    };
+  }
+  async function importMachineWorkbook(arrayBuffer, { kind, fileName = "schedule.xlsx" } = {}) {
+    const specs = SHEET_MAP[kind];
+    if (!specs) throw new Error(`Unknown workbook type "${kind}".`);
+    const report = {
+      kind,
+      fileName,
+      importedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      parser: PARSER_VERSION,
+      sheets: [],
+      missing: []
+    };
+    const wanted = specs.map((s) => s.sheet);
+    const wb = await readXlsx(arrayBuffer, {
+      only: (n) => wanted.includes(n) || kind === "cnc" && SU_SHEET_RE.test(n)
+    });
+    let tasks = [];
+    for (const spec of specs) {
+      const sheet = wb.sheets[spec.sheet];
+      if (!sheet) {
+        report.missing.push(spec.sheet);
+        continue;
+      }
+      tasks = tasks.concat(parseMachineSheet(sheet, spec, report));
+    }
+    let shiftUpdate = null;
+    if (kind === "cnc") {
+      const [suName, suParsed] = pickShiftUpdate(wb);
+      shiftUpdate = suParsed;
+      if (!shiftUpdate) report.missing.push("Shift Update");
+      else report.shiftUpdate = {
+        date: shiftUpdate.date,
+        shift: shiftUpdate.shift,
+        sheet: suName,
+        // Worth reporting: if this ever says false, the department has hidden
+        // every shift-update tab and the app is reading an archived one.
+        fromVisibleTab: !!shiftUpdate.fromVisibleTab,
+        machines: Object.keys(shiftUpdate.machines).length,
+        // Machine names on the sheet the app has no work centre for. Worth
+        // showing: it is how the department finds out the app is behind the floor.
+        unknown: shiftUpdate.unknown
+      };
+    }
+    if (!tasks.length) {
+      throw new Error(
+        `No machine schedule rows found. Expected sheets: ${specs.map((s) => s.sheet).join(", ")}. This workbook has: ${wb.sheetNames.slice(0, 12).join(", ")}`
+      );
+    }
+    report.count = tasks.length;
+    return { tasks, shiftUpdate, report };
+  }
+
   // js/model.js
   function today() {
     return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -2202,6 +2812,12 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
       hidden: !!cfg.hidden,
       customised: !!(cfg.label || cfg.note !== void 0 || cfg.ops != null)
     };
+  }
+  function staleImports() {
+    return ["rolling", "cnc"].filter((kind) => {
+      const meta = state.machineMeta?.[kind];
+      return meta && (meta.parser ?? 1) < PARSER_VERSION;
+    });
   }
   function shiftUpdateFor(machineKey) {
     const su = state.shiftUpdate;
@@ -3445,6 +4061,7 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
       el("div.su-label", {}, label),
       el("ul.su-list", {}, ...items.map((t) => el("li", {}, t)))
     ) : null;
+    const staleSu = staleImports().includes("cnc");
     return el(
       "div.su" + (su.down ? ".down" : ""),
       {},
@@ -3453,6 +4070,7 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
         {},
         el("span.su-title", {}, "Latest shift update"),
         su.date ? chip(`${su.shift || ""} ${fmtDate(su.date)}`.trim(), "mute") : null,
+        staleSu ? chip("re-import to refresh", "warn") : null,
         su.down ? el("span.badge-down", {}, icon("alert", { size: 12 }), "Machine down") : null,
         el("span.spacer"),
         su.ops != null ? el("span.small.muted", {}, `${su.ops} operator${su.ops === 1 ? "" : "s"}`) : null
@@ -4216,605 +4834,6 @@ ${add.join("\n")}` : add.join("\n");
 
   // js/views/data.js
   init_ui();
-
-  // js/xlsx.js
-  var SIG_EOCD = 101010256;
-  var SIG_EOCD64_LOC = 117853008;
-  var SIG_EOCD64 = 101075792;
-  var SIG_CENTRAL = 33639248;
-  function findEOCD(view2, bytes) {
-    const min = Math.max(0, bytes.length - 65557);
-    for (let i = bytes.length - 22; i >= min; i--) {
-      if (view2.getUint32(i, true) === SIG_EOCD) return i;
-    }
-    throw new Error("Not a valid .xlsx file (no ZIP end-of-directory record found).");
-  }
-  function readDirectory(bytes) {
-    const view2 = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const eocd = findEOCD(view2, bytes);
-    let count = view2.getUint16(eocd + 10, true);
-    let dirOffset = view2.getUint32(eocd + 16, true);
-    if (dirOffset === 4294967295 || count === 65535) {
-      const locatorOff = eocd - 20;
-      if (locatorOff >= 0 && view2.getUint32(locatorOff, true) === SIG_EOCD64_LOC) {
-        const z64 = Number(view2.getBigUint64(locatorOff + 8, true));
-        if (view2.getUint32(z64, true) === SIG_EOCD64) {
-          count = Number(view2.getBigUint64(z64 + 32, true));
-          dirOffset = Number(view2.getBigUint64(z64 + 48, true));
-        }
-      }
-    }
-    const entries = /* @__PURE__ */ new Map();
-    let p = dirOffset;
-    for (let i = 0; i < count; i++) {
-      if (view2.getUint32(p, true) !== SIG_CENTRAL) break;
-      const method = view2.getUint16(p + 10, true);
-      const compSize = view2.getUint32(p + 20, true);
-      const nameLen = view2.getUint16(p + 28, true);
-      const extraLen = view2.getUint16(p + 30, true);
-      const commentLen = view2.getUint16(p + 32, true);
-      const localOffset = view2.getUint32(p + 42, true);
-      const name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nameLen));
-      entries.set(name, { method, compSize, localOffset });
-      p += 46 + nameLen + extraLen + commentLen;
-    }
-    return { entries, bytes, view: view2 };
-  }
-  async function inflate(raw) {
-    const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-    return new Uint8Array(await new Response(stream).arrayBuffer());
-  }
-  async function readFile(zip, name) {
-    const e = zip.entries.get(name);
-    if (!e) return null;
-    const lh = e.localOffset;
-    const nameLen = zip.view.getUint16(lh + 26, true);
-    const extraLen = zip.view.getUint16(lh + 28, true);
-    const start = lh + 30 + nameLen + extraLen;
-    const raw = zip.bytes.subarray(start, start + e.compSize);
-    const out = e.method === 0 ? raw : await inflate(raw);
-    return new TextDecoder().decode(out);
-  }
-  var EXCEL_EPOCH = Date.UTC(1899, 11, 30);
-  function serialToDate(serial) {
-    if (typeof serial !== "number" || !isFinite(serial)) return null;
-    const d = new Date(EXCEL_EPOCH + Math.round(serial * 864e5));
-    return isNaN(d.getTime()) ? null : d;
-  }
-  var BUILTIN_DATE_FMTS = /* @__PURE__ */ new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 45, 46, 47]);
-  function parseStyles(xml) {
-    if (!xml) return [];
-    const doc = new DOMParser().parseFromString(xml, "application/xml");
-    const customDate = /* @__PURE__ */ new Set();
-    for (const nf of doc.getElementsByTagName("numFmt")) {
-      const id = Number(nf.getAttribute("numFmtId"));
-      const code = (nf.getAttribute("formatCode") || "").replace(/\[[^\]]*\]/g, "").replace(/"[^"]*"/g, "");
-      if (/[ymdhs]/i.test(code)) customDate.add(id);
-    }
-    const cellXfs = doc.getElementsByTagName("cellXfs")[0];
-    if (!cellXfs) return [];
-    return Array.from(cellXfs.getElementsByTagName("xf")).map((xf) => {
-      const id = Number(xf.getAttribute("numFmtId") || 0);
-      return BUILTIN_DATE_FMTS.has(id) || customDate.has(id);
-    });
-  }
-  function parseSharedStrings(xml) {
-    if (!xml) return [];
-    const doc = new DOMParser().parseFromString(xml, "application/xml");
-    return Array.from(doc.getElementsByTagName("si")).map((si) => {
-      let out = "";
-      for (const t of si.getElementsByTagName("t")) out += t.textContent;
-      return out;
-    });
-  }
-  function colToIndex(ref) {
-    let n = 0;
-    for (let i = 0; i < ref.length; i++) {
-      const c = ref.charCodeAt(i);
-      if (c < 65 || c > 90) break;
-      n = n * 26 + (c - 64);
-    }
-    return n;
-  }
-  function parseSheet(xml, shared, dateStyles, maxRows) {
-    const doc = new DOMParser().parseFromString(xml, "application/xml");
-    const rows = [];
-    let widest = 0;
-    for (const row of doc.getElementsByTagName("row")) {
-      if (rows.length >= maxRows) break;
-      const cells = [];
-      let any = false;
-      for (const c of row.getElementsByTagName("c")) {
-        const ref = c.getAttribute("r") || "";
-        const idx = colToIndex(ref);
-        if (!idx) continue;
-        const type = c.getAttribute("t");
-        let value = null;
-        if (type === "inlineStr") {
-          let s = "";
-          for (const t of c.getElementsByTagName("t")) s += t.textContent;
-          value = s || null;
-        } else {
-          const v = c.getElementsByTagName("v")[0];
-          if (v != null) {
-            const raw = v.textContent;
-            if (type === "s") {
-              value = shared[Number(raw)] ?? null;
-            } else if (type === "e") {
-              value = { error: raw };
-            } else if (type === "str" || type === "b") {
-              value = type === "b" ? raw === "1" : raw;
-            } else {
-              const num2 = Number(raw);
-              if (isFinite(num2)) {
-                const styleIdx = Number(c.getAttribute("s") || 0);
-                value = dateStyles[styleIdx] ? serialToDate(num2) : num2;
-              } else {
-                value = raw || null;
-              }
-            }
-          }
-        }
-        if (value !== null && value !== "") any = true;
-        cells[idx - 1] = value ?? null;
-        if (idx > widest) widest = idx;
-      }
-      const r = Number(row.getAttribute("r") || rows.length + 1);
-      rows.push({ r, cells, empty: !any });
-    }
-    return { rows, width: widest };
-  }
-  async function readXlsx(arrayBuffer, { only = null, maxRows = 25e3 } = {}) {
-    if (typeof DecompressionStream === "undefined") {
-      throw new Error(
-        "This browser cannot unzip files natively. Use Chrome or Edge (version 103 or newer)."
-      );
-    }
-    const zip = readDirectory(new Uint8Array(arrayBuffer));
-    const [wbXml, relsXml, ssXml, stylesXml] = await Promise.all([
-      readFile(zip, "xl/workbook.xml"),
-      readFile(zip, "xl/_rels/workbook.xml.rels"),
-      readFile(zip, "xl/sharedStrings.xml"),
-      readFile(zip, "xl/styles.xml")
-    ]);
-    if (!wbXml) throw new Error("That file is not an Excel workbook (xl/workbook.xml missing).");
-    const shared = parseSharedStrings(ssXml);
-    const dateStyles = parseStyles(stylesXml);
-    const relTarget = /* @__PURE__ */ new Map();
-    if (relsXml) {
-      const relDoc = new DOMParser().parseFromString(relsXml, "application/xml");
-      for (const rel of relDoc.getElementsByTagName("Relationship")) {
-        relTarget.set(rel.getAttribute("Id"), rel.getAttribute("Target"));
-      }
-    }
-    const wbDoc = new DOMParser().parseFromString(wbXml, "application/xml");
-    const sheetNames = [];
-    const hiddenSheets = /* @__PURE__ */ new Set();
-    const targets = /* @__PURE__ */ new Map();
-    for (const sh of wbDoc.getElementsByTagName("sheet")) {
-      const name = sh.getAttribute("name");
-      const rid = sh.getAttribute("r:id") || sh.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
-      sheetNames.push(name);
-      if ((sh.getAttribute("state") || "visible") !== "visible") hiddenSheets.add(name);
-      let target = relTarget.get(rid) || "";
-      target = target.replace(/^\/xl\//, "").replace(/^\//, "");
-      targets.set(name, target.startsWith("xl/") ? target : "xl/" + target);
-    }
-    const keep = typeof only === "function" ? only : (n) => only.includes(n);
-    const wanted = only ? sheetNames.filter(keep) : sheetNames;
-    const sheets = {};
-    for (const name of wanted) {
-      const xml = await readFile(zip, targets.get(name));
-      if (!xml) continue;
-      sheets[name] = parseSheet(xml, shared, dateStyles, maxRows);
-    }
-    return { sheetNames, hiddenSheets, sheets };
-  }
-
-  // js/import-machines.js
-  var PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
-  function txt(v) {
-    if (v == null || typeof v === "object") return null;
-    if (v instanceof Date) return v.toISOString().slice(0, 10);
-    const s = String(v).trim();
-    if (!s || s === "#N/A" || s === "#REF!" || s === "#VALUE!") return null;
-    return s;
-  }
-  function num(v) {
-    if (v == null || typeof v === "object" || v instanceof Date) return null;
-    const n = typeof v === "number" ? v : Number(String(v).trim());
-    return isFinite(n) ? n : null;
-  }
-  function date(v) {
-    if (!(v instanceof Date)) return null;
-    if (v.getTime() < PHANTOM_BEFORE) return null;
-    return v.toISOString().slice(0, 10);
-  }
-  function isWo(v) {
-    return v != null && /^\d{3,7}$/.test(String(v).trim());
-  }
-  function normTaskStatus(raw) {
-    const s = txt(raw);
-    if (!s) return "OPEN";
-    const u = s.toUpperCase();
-    if (/^(DONE|COMPLETE)/.test(u)) return "DONE";
-    if (/^(I\.?P|IN PROGRESS|RUNNING)/.test(u)) return "IP";
-    if (/^(B\/?O|BACK ?ORDER)/.test(u)) return "BO";
-    if (/HOLD/.test(u)) return "HOLD";
-    if (/READY|STOCK OK/.test(u)) return "READY";
-    return "OPEN";
-  }
-  function readsBackOrder(statusRaw, boStat, bo) {
-    const u = (txt(statusRaw) || "").toUpperCase();
-    if (/\bB\/?O\b|BACK ?ORDER/.test(u)) return true;
-    if (txt(boStat)) return true;
-    return typeof bo === "number" && bo > 0;
-  }
-  var SHEET_MAP = {
-    rolling: [
-      {
-        sheet: "Auto",
-        machine: "roll-auto",
-        cols: {
-          wo: 1,
-          project: 2,
-          floor: 3,
-          die: 4,
-          qty: 5,
-          boInt: 6,
-          boExt: 7,
-          material: 8,
-          cuttingDate: 9,
-          comments: 10,
-          status: 11,
-          product: 12,
-          setup: 13,
-          shipDate: 14,
-          rollingEta: 15,
-          machiningEta: 16
-        }
-      },
-      {
-        sheet: "Manual",
-        machine: "roll-man",
-        cols: {
-          wo: 1,
-          project: 2,
-          floor: 3,
-          die: 4,
-          qty: 5,
-          boInt: 6,
-          boExt: 7,
-          material: 8,
-          cuttingDate: 9,
-          comments: 10,
-          status: 11
-        }
-      },
-      {
-        sheet: "Complete",
-        machine: "roll-auto",
-        complete: true,
-        cols: { wo: 1, project: 2, floor: 3, die: 4, qty: 5, cuttingDate: 9, status: 11 }
-      }
-    ],
-    cnc: [
-      {
-        sheet: "FOM1",
-        machine: "fom1",
-        cols: {
-          wo: 1,
-          project: 2,
-          floor: 3,
-          die: 4,
-          qty: 5,
-          bo: 6,
-          boStat: 7,
-          cuttingDate: 8,
-          program: 9,
-          dayShift: 10,
-          status: 11,
-          shifts: 12
-        }
-      },
-      {
-        // FOM2 carries the pin-hole / 8560 vent flag, which is the hinge rule.
-        sheet: "FOM2",
-        machine: "fom2",
-        cols: {
-          wo: 1,
-          project: 2,
-          floor: 3,
-          die: 4,
-          pinHole: 5,
-          qty: 6,
-          cuttingDate: 7,
-          bo: 8,
-          boStat: 9,
-          dayShift: 10,
-          status: 11,
-          shifts: 12
-        }
-      },
-      {
-        sheet: "FOM3",
-        machine: "fom3",
-        cols: {
-          wo: 1,
-          project: 2,
-          floor: 3,
-          die: 4,
-          qty: 5,
-          cuttingDate: 6,
-          bo: 7,
-          boStat: 8,
-          dayShift: 9,
-          status: 10,
-          shifts: 11
-        }
-      },
-      {
-        sheet: "MultiPunch & SAW",
-        machine: "multipunch",
-        cols: {
-          wo: 1,
-          project: 2,
-          floor: 3,
-          die: 4,
-          qty: 5,
-          bo: 6,
-          boStat: 7,
-          rolling: 8,
-          cuttingDate: 9,
-          saw: 10,
-          punch: 11,
-          shifts: 12
-        }
-      },
-      {
-        // No machine column on this sheet — it is one queue for CNC 1, FMC 1 and
-        // FMC 2, split by hand in the app rather than guessed at here.
-        sheet: "CNC & FMC",
-        machine: "cncfmc",
-        cols: {
-          wo: 1,
-          project: 2,
-          floor: 3,
-          die: 4,
-          qty: 5,
-          bo: 6,
-          boStat: 7,
-          cuttingDate: 8,
-          status: 9
-        }
-      }
-    ]
-  };
-  function parseMachineSheet(sheet, spec, report) {
-    const out = [];
-    const c = spec.cols;
-    const get = (cells, key) => c[key] ? cells[c[key] - 1] : void 0;
-    for (const row of sheet.rows) {
-      if (row.empty) continue;
-      const wo = get(row.cells, "wo");
-      if (!isWo(wo)) continue;
-      const qty = num(get(row.cells, "qty"));
-      const statusRaw = get(row.cells, "status");
-      const status = spec.complete ? "DONE" : normTaskStatus(statusRaw);
-      const boQty = num(get(row.cells, "bo")) ?? num(get(row.cells, "boInt"));
-      const boRaw = txt(get(row.cells, "bo")) || txt(get(row.cells, "boInt"));
-      const boStat = txt(get(row.cells, "boStat"));
-      out.push({
-        id: `${spec.machine}:${String(wo).trim()}:${txt(get(row.cells, "die")) || "x"}:${row.r}`,
-        machine: spec.machine,
-        sheet: spec.sheet,
-        row: row.r,
-        wo: String(wo).trim(),
-        project: txt(get(row.cells, "project")),
-        floor: txt(get(row.cells, "floor")),
-        die: txt(get(row.cells, "die")),
-        qty,
-        status,
-        cuttingDate: date(get(row.cells, "cuttingDate")),
-        shipDate: date(get(row.cells, "shipDate")),
-        material: txt(get(row.cells, "material")),
-        comments: txt(get(row.cells, "comments")),
-        setup: txt(get(row.cells, "setup")),
-        rollingEta: date(get(row.cells, "rollingEta")) || txt(get(row.cells, "rollingEta")),
-        dayShift: txt(get(row.cells, "dayShift")),
-        shifts: num(get(row.cells, "shifts")),
-        pinHole: txt(get(row.cells, "pinHole")),
-        bo: boQty,
-        boRaw,
-        boStat,
-        backOrder: spec.complete ? false : readsBackOrder(statusRaw, boStat || boRaw, boQty),
-        archived: !!spec.complete
-      });
-    }
-    report.sheets.push({ sheet: spec.sheet, machine: spec.machine, rows: out.length });
-    return out;
-  }
-  var SU_SHEET_RE = /^shift update/i;
-  function pickShiftUpdate(wb) {
-    const named = Object.entries(wb.sheets).filter(([n]) => SU_SHEET_RE.test(n));
-    if (!named.length) return [null, null];
-    const visible = named.filter(([n]) => !wb.hiddenSheets?.has(n));
-    const pool = visible.length ? visible : named;
-    let best = [null, null];
-    let bestScore = -1;
-    for (const [name, sheet] of pool) {
-      const parsed = parseShiftUpdate(sheet);
-      const score = Object.values(parsed?.machines || {}).reduce((a, e) => a + e.done.length + e.next.length + e.notes.length, 0);
-      if (score > bestScore) {
-        bestScore = score;
-        best = [name, parsed];
-      }
-    }
-    if (best[1]) best[1].fromVisibleTab = visible.length > 0;
-    return best;
-  }
-  var SU_MACHINE = {
-    "ROLLINGETASAUTO": "roll-auto",
-    "ROLLINGIOTAMANUAL": "roll-man",
-    "FOM1": "fom1",
-    "FOM2": "fom2",
-    "FOM3": "fom3",
-    "CNC1": "cnc1",
-    // The live block writes the one remaining CNC machine as "CNC-3", while the
-    // stale block above it still lists a "CNC 1" with nothing in it. Both
-    // normalise to CNC3/CNC1 here and both point at the same work centre; the
-    // content-first merge below then picks the one that actually says something.
-    "CNC3": "cnc1",
-    "FMC1": "fmc1",
-    "FMC2": "fmc2",
-    "MULTIPUNCH": "multipunch"
-  };
-  var SU_SKIP = /* @__PURE__ */ new Set(["MACHINE", "DATE", "TOTAL", "SERVICEORDERS", "K1285PULLS", "BACKORDER"]);
-  var SU_SHIFT_RANK = { DAY: 0, AFTERNOON: 1, AFT: 1, MIDNIGHT: 2, NIGHT: 2 };
-  function suKey(label) {
-    return String(label || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  }
-  function suWhen(date2, shift) {
-    if (!date2) return "";
-    const rank = SU_SHIFT_RANK[suKey(shift)] ?? 0;
-    return `${date2}#${rank}`;
-  }
-  function suBlockStarts(rows, off) {
-    const starts = [];
-    rows.forEach((row, i) => {
-      if (/^date$/i.test(txt(row.cells[off]) || "")) starts.push(i);
-    });
-    if (!starts.length) starts.push(1);
-    return starts;
-  }
-  function parseShiftUpdateBlock(rows, off, from, to, unknown) {
-    const g = (row, col) => row.cells[off + col - 1];
-    const header2 = rows[from];
-    const blockDate = header2 ? date(g(header2, 2)) : null;
-    const shift = header2 ? txt(g(header2, 6)) : null;
-    const out = {};
-    let cur = null;
-    for (const row of rows.slice(from + 2, to)) {
-      const name = txt(g(row, 1));
-      if (name) {
-        const k = suKey(name);
-        const key = SU_MACHINE[k];
-        cur = key || null;
-        if (!key && k && !SU_SKIP.has(k)) unknown.add(name.trim());
-        if (cur && !out[cur]) {
-          const opsRaw = g(row, 2);
-          const opsTxt = txt(opsRaw);
-          out[cur] = {
-            machine: cur,
-            label: name.trim(),
-            // "#Ops" is normally a headcount but is sometimes the word DOWN.
-            ops: typeof opsRaw === "number" ? opsRaw : null,
-            down: /DOWN/i.test(opsTxt || ""),
-            done: [],
-            next: [],
-            notes: [],
-            date: blockDate,
-            shift
-          };
-        }
-      }
-      if (!cur || !out[cur]) continue;
-      const d = txt(g(row, 4));
-      const n = txt(g(row, 6));
-      const note = txt(g(row, 7));
-      if (d) out[cur].done.push(d);
-      if (n) out[cur].next.push(n);
-      if (note) out[cur].notes.push(note);
-      if (d && /^down$/i.test(d)) out[cur].down = true;
-    }
-    return { date: blockDate, shift, machines: out };
-  }
-  function parseShiftUpdateSheet(sheet, unknown) {
-    const blocks = [];
-    for (const off of [0, 8]) {
-      const starts = suBlockStarts(sheet.rows, off);
-      starts.forEach((from, i) => {
-        const to = i + 1 < starts.length ? starts[i + 1] : sheet.rows.length;
-        blocks.push(parseShiftUpdateBlock(sheet.rows, off, from, to, unknown));
-      });
-    }
-    return blocks;
-  }
-  function parseShiftUpdate(sheet) {
-    if (!sheet) return null;
-    const unknown = /* @__PURE__ */ new Set();
-    const blocks = parseShiftUpdateSheet(sheet, unknown);
-    const wordCount = (e) => e.done.length + e.next.length + e.notes.length;
-    const said = (e) => wordCount(e) + (e.ops ? 1 : 0);
-    const better = (e, cur) => {
-      const we = wordCount(e);
-      const wc = wordCount(cur);
-      if (we > 0 !== wc > 0) return we > wc;
-      const a = suWhen(e.date, e.shift);
-      const c = suWhen(cur.date, cur.shift);
-      if (a !== c) return a > c;
-      return said(e) > said(cur);
-    };
-    const machines = {};
-    for (const b of blocks) {
-      for (const [k, e] of Object.entries(b.machines)) {
-        if (!machines[k] || better(e, machines[k])) machines[k] = e;
-      }
-    }
-    const values = Object.values(machines);
-    const latest = values.reduce((a, b) => a && !better(b, a) ? a : b, null);
-    return {
-      date: latest?.date || null,
-      shift: latest?.shift || null,
-      machines,
-      unknown: [...unknown].sort()
-    };
-  }
-  async function importMachineWorkbook(arrayBuffer, { kind, fileName = "schedule.xlsx" } = {}) {
-    const specs = SHEET_MAP[kind];
-    if (!specs) throw new Error(`Unknown workbook type "${kind}".`);
-    const report = { kind, fileName, importedAt: (/* @__PURE__ */ new Date()).toISOString(), sheets: [], missing: [] };
-    const wanted = specs.map((s) => s.sheet);
-    const wb = await readXlsx(arrayBuffer, {
-      only: (n) => wanted.includes(n) || kind === "cnc" && SU_SHEET_RE.test(n)
-    });
-    let tasks = [];
-    for (const spec of specs) {
-      const sheet = wb.sheets[spec.sheet];
-      if (!sheet) {
-        report.missing.push(spec.sheet);
-        continue;
-      }
-      tasks = tasks.concat(parseMachineSheet(sheet, spec, report));
-    }
-    let shiftUpdate = null;
-    if (kind === "cnc") {
-      const [suName, suParsed] = pickShiftUpdate(wb);
-      shiftUpdate = suParsed;
-      if (!shiftUpdate) report.missing.push("Shift Update");
-      else report.shiftUpdate = {
-        date: shiftUpdate.date,
-        shift: shiftUpdate.shift,
-        sheet: suName,
-        // Worth reporting: if this ever says false, the department has hidden
-        // every shift-update tab and the app is reading an archived one.
-        fromVisibleTab: !!shiftUpdate.fromVisibleTab,
-        machines: Object.keys(shiftUpdate.machines).length,
-        // Machine names on the sheet the app has no work centre for. Worth
-        // showing: it is how the department finds out the app is behind the floor.
-        unknown: shiftUpdate.unknown
-      };
-    }
-    if (!tasks.length) {
-      throw new Error(
-        `No machine schedule rows found. Expected sheets: ${specs.map((s) => s.sheet).join(", ")}. This workbook has: ${wb.sheetNames.slice(0, 12).join(", ")}`
-      );
-    }
-    report.count = tasks.length;
-    return { tasks, shiftUpdate, report };
-  }
-
-  // js/views/data.js
   var pendingHandle = null;
   async function initSharedFile(rerender) {
     if (!supportsSharedFile()) return;
@@ -5113,6 +5132,8 @@ create policy "tracker update" on tracker_state for update using (true) with che
       ),
       node
     );
+    const stale = staleImports();
+    const KIND_LABEL = { rolling: "Rolling", cnc: "CNC" };
     const importPanel = el(
       "div.panel",
       {},
@@ -5120,6 +5141,16 @@ create policy "tracker update" on tracker_state for update using (true) with che
       el(
         "div.body",
         {},
+        stale.length ? el(
+          "div.banner.warn",
+          { style: { marginBottom: "14px" } },
+          el(
+            "div",
+            {},
+            el("strong", {}, `Re-import the ${stale.map((k) => KIND_LABEL[k]).join(" and ")} workbook${stale.length > 1 ? "s" : ""}. `),
+            "This data was read by an older version of the app. Everything you have set \u2014 statuses, notes, rush, back orders \u2014 is kept; only what the workbook itself says is re-read."
+          )
+        ) : null,
         el(
           "p.small.muted",
           { style: { marginTop: 0 } },

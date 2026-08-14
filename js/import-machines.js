@@ -11,6 +11,17 @@
 
 import { readXlsx } from './xlsx.js';
 
+/* Bumped whenever a change here would parse the same workbook differently.
+   An import is stamped with it, so the app can tell that data already loaded
+   predates a parsing fix and say so — the alternative is what actually
+   happened three times: the fix ships, the stored result stays wrong, and the
+   only clue is that the numbers look odd.
+
+     1  original
+     2  FMC 1 / FMC 2, and the CNC & FMC shared queue
+     3  shift update read from the visible tab only; CNC-3 mapped to CNC 1 */
+export const PARSER_VERSION = 3;
+
 const PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
 
 function txt(v) {
@@ -396,7 +407,10 @@ export async function importMachineWorkbook(arrayBuffer, { kind, fileName = 'sch
   const specs = SHEET_MAP[kind];
   if (!specs) throw new Error(`Unknown workbook type "${kind}".`);
 
-  const report = { kind, fileName, importedAt: new Date().toISOString(), sheets: [], missing: [] };
+  const report = {
+    kind, fileName, importedAt: new Date().toISOString(),
+    parser: PARSER_VERSION, sheets: [], missing: [],
+  };
 
   const wanted = specs.map((s) => s.sheet);
   const wb = await readXlsx(arrayBuffer, {

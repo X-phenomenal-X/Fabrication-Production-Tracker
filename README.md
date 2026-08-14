@@ -23,6 +23,20 @@ npm run serve       # http://localhost:8000
 npm run build       # regenerate Cutting-Tracker.html after changing source
 ```
 
+## Re-import after an update
+
+The workbooks are read **once, at import**. Everything the app derives from
+them — the queues, the shift update — is stored, so a change to how the app
+*parses* a file only takes effect the next time that file is imported. Until
+then you are looking at what the old parser made of it.
+
+Each import is stamped with a parser version, so the app notices this itself:
+Setup shows **"Re-import the CNC workbook — this data was read by an older
+version of the app"**, and the shift-update panel tags itself
+*re-import to refresh* rather than presenting stale output as current.
+Re-importing keeps everything you have set; only what the workbook says is
+re-read.
+
 ## First run
 
 1. **Setup** → import the Rolling workbook, then the CNC workbook.

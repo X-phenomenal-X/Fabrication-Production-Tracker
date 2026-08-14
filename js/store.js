@@ -330,7 +330,10 @@ export function setMachineImport({ tasks, shiftUpdate, report }) {
     .concat(tasks.map((t) => ({ ...t, source: report.kind })));
   state.machineMeta = {
     ...state.machineMeta,
-    [report.kind]: { fileName: report.fileName, importedAt: report.importedAt, count: tasks.length },
+    [report.kind]: {
+      fileName: report.fileName, importedAt: report.importedAt,
+      count: tasks.length, parser: report.parser ?? 1,
+    },
   };
   if (shiftUpdate) state.shiftUpdate = { ...shiftUpdate, importedAt: report.importedAt };
   save();

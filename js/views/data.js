@@ -9,6 +9,7 @@ import {
   connectCloud, disconnectCloud, pullCloud, cloudStatus, cloudConfig,
 } from '../store.js';
 import { importMachineWorkbook } from '../import-machines.js';
+import { staleImports } from '../model.js';
 import { MACHINE_BY_KEY } from '../machines.js';
 
 let pendingHandle = null;
@@ -226,9 +227,22 @@ export function renderData(rerender) {
         : chip('not loaded', 'warn')),
     node);
 
+  // A parsing fix only takes effect on the next import, so data loaded before
+  // one keeps showing whatever the old parser made of the file. Without this
+  // the only clue is that the numbers look odd.
+  const stale = staleImports();
+  const KIND_LABEL = { rolling: 'Rolling', cnc: 'CNC' };
+
   const importPanel = el('div.panel', {},
     el('header', {}, 'Schedules'),
     el('div.body', {},
+      stale.length ? el('div.banner.warn', { style: { marginBottom: '14px' } },
+        el('div', {},
+          el('strong', {}, `Re-import the ${stale.map((k) => KIND_LABEL[k]).join(' and ')} `
+            + `workbook${stale.length > 1 ? 's' : ''}. `),
+          'This data was read by an older version of the app. Everything you have '
+          + 'set — statuses, notes, rush, back orders — is kept; only what the '
+          + 'workbook itself says is re-read.')) : null,
       el('p.small.muted', { style: { marginTop: 0 } },
         'These two workbooks are the whole source of truth. Re-import either one ' +
         'whenever a new revision comes out — statuses you have set are kept.'),
