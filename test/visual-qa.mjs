@@ -78,7 +78,11 @@ const fixture = makeFixture();
    deliberately small and not operator controls (inline text links) are
    exempt by class. */
 const MEASURE = `(() => {
-  const EXEMPT = ['linkbtn'];
+  // Reference affordances, not controls a shift operates. A die badge that
+  // met the 44px floor outweighed the work order and the job name on the row
+  // it belongs to, which is the opposite of what the page is for. Checked
+  // separately, against a smaller floor.
+  const EXEMPT = ['linkbtn', 'dielink'];
   const out = [];
   for (const n of document.querySelectorAll('button, [role="button"], a, input, select, textarea')) {
     let r = n.getBoundingClientRect();
@@ -142,6 +146,20 @@ for (const theme of ['light', 'dark']) {
         const worst = small.sort((a, b) => Math.min(a.w, a.h) - Math.min(b.w, b.h))[0];
         fail(`${screen.name} @ ${vp.name}/${theme}: ${small.length} control(s) under ${min}px`
           + ` — smallest ${worst.w}×${worst.h} (${worst.tag}.${worst.cls} "${worst.text}")`);
+      }
+
+      // --- reference affordances are small, but not too small ---
+      const tiny = await page.evaluate(() => {
+        const out = [];
+        for (const n of document.querySelectorAll('.dielink')) {
+          const r = n.getBoundingClientRect();
+          if (r.height && r.height < 26) out.push(Math.round(r.height));
+        }
+        return out;
+      });
+      if (tiny.length) {
+        fail(`${screen.name} @ ${vp.name}/${theme}: ${tiny.length} die link(s) under 26px`
+          + ` — smallest ${Math.min(...tiny)}px`);
       }
 
       // --- long text wraps rather than spilling ---

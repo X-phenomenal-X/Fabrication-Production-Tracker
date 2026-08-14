@@ -717,10 +717,14 @@ dialog footer button { min-height: var(--ctl-lg); }
 }
 /* The die is the other thing read off a row at speed. Monospaced, boxed, and
    never allowed to blend into the project text beside it. */
+/* The die is a reference, not the headline. Four lines of the same work order
+   differ only by die, so it has to be readable — but the job and floor are
+   what tell you what you are looking at, and an oversized die badge was
+   outweighing both. Small, monospaced, quiet. */
 .die {
-  font-family: var(--mono); font-size: var(--t-xs); font-weight: 700;
+  font-family: var(--mono); font-size: 11.5px; font-weight: 700;
   background: var(--accent-soft); color: var(--accent);
-  padding: 3px var(--s2); border-radius: var(--r-xs); letter-spacing: -0.01em;
+  padding: 2px 7px; border-radius: var(--r-xs); letter-spacing: -0.02em;
   border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
   white-space: nowrap;
 }
@@ -729,10 +733,15 @@ dialog footer button { min-height: var(--ctl-lg); }
   font-size: 11px; font-weight: 800; letter-spacing: .04em;
   background: var(--bad-soft); color: var(--bad); padding: 3px var(--s2); border-radius: var(--r-xs);
 }
+/* What the job is. Promoted to body size and near-full ink: on a machine
+   running six lines of one work order, "Drake Street · 6,7,9,10" is the part
+   that identifies the work, and it was set as secondary text. */
 .line-where {
-  font-size: var(--t-sm); color: var(--ink-2); margin-top: 3px;
-  overflow-wrap: anywhere;
+  font-size: var(--t-md); color: var(--ink-2); margin-top: var(--s1);
+  overflow-wrap: anywhere; font-weight: 600; line-height: 1.35;
 }
+.line-where > span:first-child { color: var(--ink); font-weight: 700; }
+.line-where .muted { color: var(--ink-2); font-weight: 500; }
 .line-note { margin-top: 3px; }
 .line-usernote {
   display: flex; align-items: flex-start; gap: var(--s2); margin-top: var(--s2);
@@ -1540,7 +1549,7 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
 @media (max-width: 720px) {
   button, .btn, button.sm, .pill, .subtabs button, .dgroup-pick, .dgroup-toggle,
   .linkbtn, .iconbtn, .line-iconbtn, .bulk-btn, .bulk-x, .sug-chip, .badge-route,
-  .dielink, .diepart, .dieused-row,
+  .diepart, .dieused-row,
   input, select, textarea, .donetoggle, .line-pick, .su-recentrow {
     min-height: var(--tap);
   }
@@ -1774,9 +1783,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 
 /* The die badge is now a way in to the section book, so it reads as pressable
    without becoming another button in a row already full of them. */
-/* A real target at every width, not just on a phone — it is a button now, and
-   32px is the floor everywhere else in the app. */
-.dielink { cursor: pointer; box-shadow: none; min-height: 32px; padding: 4px var(--s2); }
+/* Hittable without being loud. The 44px floor elsewhere is for the controls a
+   shift actually operates — status, Done, staging. Looking a die up is a
+   reference affordance like the inline text links, so it takes a smaller
+   target in exchange for not outweighing the job it belongs to. */
+.dielink { cursor: pointer; box-shadow: none; min-height: 28px; padding: 3px var(--s3); }
 .dielink:hover:not(:disabled) {
   background: var(--accent); color: var(--on-fill); border-color: transparent;
 }
@@ -1823,5 +1834,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
    loses to an equal-specificity one declared later, which is exactly how the
    die link shipped at 32px on a phone twice. */
 @media (max-width: 720px) {
-  .dielink, .diepart, .dieused-row { min-height: var(--tap); }
+  .diepart, .dieused-row { min-height: var(--tap); }
+  /* Roomier to hit on a phone, still not competing with the work order. */
+  .dielink { min-height: 30px; padding: 3px var(--s4); }
 }
