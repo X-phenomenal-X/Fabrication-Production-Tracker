@@ -298,14 +298,25 @@ it's documented in the README and surfaced in the SQL dialog.
 
 ## 8. Open work
 
-### The visual upgrade (next task, not started)
+### The visual upgrade — DONE (commit `25cd719`)
 
-The user asked to "deeply work on a visual upgrade." Nothing has been done yet.
-Current state: a competent but plain flat design — see `css/app.css` `:root`
-for tokens (light + dark, `prefers-color-scheme`, with `--accent #1f6feb`,
-`--ok`, `--warn`, `--bad`, `--work` roles).
+A pass over the whole interface has landed. Four of the changes were
+corrections rather than taste, and are worth not regressing:
 
-Constraints that bound any redesign:
+- **`--ink-3` contrast.** It was 2.9:1 on white — below WCAG AA — and carries
+  most secondary text (stat labels, dates, counts). Now 4.8:1 light / 5.1:1
+  dark. If you change this token, re-check it.
+- **Elevation is tokenised** (`--shadow-1/2/3` + `--sheen`) because dark mode
+  cannot reuse light shadows; the dark theme previously had no depth at all.
+- **`:focus-visible` ring** on everything interactive — there was none before
+  outside form fields.
+- **Phone header** collapses to one row via `order` on `nav.tabs` plus hiding
+  `.brand small`, reclaiming ~100px.
+
+Plus a print stylesheet, tabular numerals globally, capped annotation bands,
+translucent sticky headers, and `:active` depress on buttons.
+
+Constraints that bound any *further* redesign:
 - **No web fonts, no external assets.** System font stack only.
 - Must stay legible **on a shop floor**: gloved taps, glare, phones and desk
   monitors. Touch targets stay generous; the 3-way status control must not
@@ -316,6 +327,9 @@ Constraints that bound any redesign:
   `prefers-reduced-motion`.
 - Every `.centre` page shares one stylesheet; changes hit all four centres,
   Rush, Back Orders and Shift Update at once.
+- **Do not rename selectors.** The four test suites assert on structure
+  (`.cstat i`, `.seg-btn[aria-pressed]`, `.nowrun-count`, `.line`, `.dgroup-*`).
+  CSS-only changes are safe; class renames are not.
 
 ### Unresolved question — `CNC-3`
 
