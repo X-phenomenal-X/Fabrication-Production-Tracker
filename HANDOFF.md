@@ -69,10 +69,18 @@ CNC 1 / FMC 1 / FMC 2 **by hand** in the app. `assignableIn()` / `hasQueue()` in
 vertically stacked blocks: an empty leftover Day template at the top, and the
 real one from row 57 down.
 
-**Only `Shift Update 2` is read.** The sheets named `Shift Update`,
-`Shift Update (3)` and `Shift Update Old` are stale leftovers the department no
-longer writes to. An earlier version read all four and merged them — see §9,
-trap 3. Don't reintroduce multi-sheet reading.
+**The sheet is chosen by Excel visibility, not by name.** Only `Shift Update 2`
+is visible; `Shift Update`, `Shift Update (3)` and `Shift Update Old` are
+hidden, as are 58 of the workbook's 73 sheets. Hiding a tab is how this
+department archives it, so that is the signal — and it survives them renaming
+or reorganising. `pickShiftUpdate()` in `js/import-machines.js`; `readXlsx`
+exposes `hiddenSheets`. **Do not hardcode a sheet name here** — that has been
+got wrong twice (see §9, trap 3).
+
+Also: the live block calls the remaining CNC machine **`CNC-3`**, not `CNC 1`.
+`SU_MACHINE` maps both to `cnc1`; the content-first merge then picks the one
+that actually says something over the blank `CNC 1` placeholder in the stale
+block at the top of the same sheet.
 
 ### Shift-update block layout
 
@@ -331,15 +339,14 @@ Constraints that bound any *further* redesign:
   (`.cstat i`, `.seg-btn[aria-pressed]`, `.nowrun-count`, `.line`, `.dgroup-*`).
   CSS-only changes are safe; class renames are not.
 
-### Unresolved question — `CNC-3`
+### Open question — is the CNC machine called CNC 1 or CNC-3?
 
-`Shift Update 2` writes the remaining CNC machine as **`CNC-3`**, not `CNC 1`.
-The app is configured as CNC 1 + FMC 1 + FMC 2, so `CNC-3` currently lands in
-the "unrecognised machine" list and `cnc1` therefore shows **no** shift-update
-entry. If the floor actually calls it CNC-3, the fix is two lines: rename `cnc1`
-in `js/machines.js` and add `'CNC3': 'cnc1'` to `SU_MACHINE` in
-`js/import-machines.js`. **Ask before changing this — it's a floor-naming
-question, not a code question.**
+The live shift-update block writes **`CNC-3`**. `SU_MACHINE` now maps it to
+`cnc1`, so the data flows correctly, but the app still *labels* the machine
+"CNC 1" — the user's own answer when asked. If the floor calls it CNC-3,
+change the label in `js/machines.js` (or just rename it in Setup, which is
+stored in `machineConfig` and shared). Cosmetic only; the data is right either
+way.
 
 ### Smaller known gaps
 
@@ -356,11 +363,13 @@ question, not a code question.**
    an input has focus. Always `scheduleRender()`.
 2. **Keying overlays on anything but the imported wo+die** → silent data loss on
    re-import or on editing a die.
-3. **Comparing shift-update blocks across sheets by date+shift label.** "Afternoon"
-   is not automatically later than "Day" when they're on *different* sheets. This
-   quietly served stale Afternoon data from the abandoned base sheet over the
-   current Day block on `Shift Update 2`, for every tracked machine. Fixed by
-   reading only `Shift Update 2`.
+3. **Picking the shift-update sheet by name.** Two separate bugs came out of
+   this. First, reading all four and merging by date+shift label — "Afternoon"
+   is not automatically later than "Day" when they are on *different* sheets,
+   so stale Afternoon data beat the live Day block for every machine. Then,
+   pinning to `Shift Update 2`, which only looked right because that is the
+   visible tab today, and still left `cnc1` empty because the live block calls
+   it `CNC-3`. The rule that holds is **read the visible tab**.
 4. **Counting a filled-in `#Ops` as "content."** A crew number with no
    done/next/notes is still an empty block; treating it as content let a blank
    template row beat a row with real work on it.

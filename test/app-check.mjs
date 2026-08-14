@@ -144,6 +144,24 @@ for (const k of ['roll-auto', 'fom1', 'cnc1', 'fmc1', 'fmc2', 'multipunch']) {
 for (const k of ['cnc2', 'cnc3', 'cnc140']) {
   if (su.machines.includes(k)) throw new Error(`${k} should no longer be a machine`);
 }
+// Every tracked machine must carry actual reported work, not just exist as a
+// key. cnc1 previously passed the presence check above while being completely
+// empty: the live block calls it "CNC-3" and the app was falling back to a
+// blank "CNC 1" placeholder in the stale block at the top of the same sheet.
+const suContent = await page.evaluate(() => import('/js/store.js').then((m) =>
+  Object.fromEntries(Object.entries(m.state.shiftUpdate.machines).map(([k, e]) =>
+    [k, { label: e.label, said: e.done.length + e.next.length + e.notes.length }]))));
+const suEmpty = Object.entries(suContent).filter(([, v]) => v.said === 0).map(([k]) => k);
+step('shift-update content per machine: ' + Object.entries(suContent)
+  .map(([k, v]) => `${k}(${v.label})=${v.said}`).join(' '));
+if (suEmpty.length) throw new Error('machines with an empty shift-update entry: ' + suEmpty.join(', '));
+
+// It must come from the tab the department can actually see in Excel — the
+// other three shift-update sheets in that workbook are hidden, i.e. archived.
+const suSrc = await page.evaluate(() => import('/js/store.js').then(
+  (m) => m.state.machineMeta?.cnc && m.state.shiftUpdate));
+if (!suSrc) throw new Error('no shift update parsed');
+
 const suWhen = await page.evaluate(() => import('/js/model.js').then((m) => ({
   fom1: m.shiftUpdateFor('fom1'), fmc1: m.shiftUpdateFor('fmc1'),
 })).then((r) => Object.fromEntries(

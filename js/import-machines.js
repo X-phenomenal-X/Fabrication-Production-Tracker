@@ -178,12 +178,18 @@ function parseMachineSheet(sheet, spec, report) {
 
 /* ---------- shift update ---------- */
 
-/* The CNC workbook's "Shift Update 2" sheet carries the latest word on most
-   machines — what ran, what is next, and whether a machine is down. This is
-   the sheet the department actually writes to; the near-identical `Shift
-   Update`, `Shift Update (3)` and `Shift Update Old` sheets are stale
-   leftovers nobody updates any more and are deliberately not read — reading
-   them was what pulled old data back in the first place.
+/* The CNC workbook's shift-update sheet carries the latest word on most
+   machines — what ran, what is next, and whether a machine is down.
+
+   Which sheet that is, is decided by **which tab is visible in Excel**, not by
+   its name. The workbook holds four similarly-named ones — `Shift Update 2`,
+   `Shift Update`, `Shift Update (3)`, `Shift Update Old` — and only the first
+   is visible; the department has hidden the rest, along with 58 of the
+   workbook's 73 sheets. Hiding a tab is how they archive it, so visibility is
+   their own signal for which one is live, and it keeps working if they rename
+   or reorganise. Naming a sheet in code here was wrong twice: once reading all
+   four and merging them, once pinned to `Shift Update 2`, which only looked
+   right because that happens to be the visible one today.
 
    A block is laid out as two side-by-side halves so it prints on one page:
    the left half occupies columns 1-7, the right one columns 9-15, each with
@@ -199,7 +205,29 @@ function parseMachineSheet(sheet, spec, report) {
    within each is found by its own Date header, and entries are merged per
    machine so a filled-in block always wins over an empty one from earlier in
    the sheet. */
-const SU_SHEET = 'Shift Update 2';
+const SU_SHEET_RE = /^shift update/i;
+
+/** The shift-update tab to read: the visible one. If more than one is visible
+    the fullest wins; if none is (they hid them all), fall back to the fullest
+    of the hidden ones rather than showing nothing. Returns [name, parsed]. */
+function pickShiftUpdate(wb) {
+  const named = Object.entries(wb.sheets).filter(([n]) => SU_SHEET_RE.test(n));
+  if (!named.length) return [null, null];
+
+  const visible = named.filter(([n]) => !wb.hiddenSheets?.has(n));
+  const pool = visible.length ? visible : named;
+
+  let best = [null, null];
+  let bestScore = -1;
+  for (const [name, sheet] of pool) {
+    const parsed = parseShiftUpdate(sheet);
+    const score = Object.values(parsed?.machines || {})
+      .reduce((a, e) => a + e.done.length + e.next.length + e.notes.length, 0);
+    if (score > bestScore) { bestScore = score; best = [name, parsed]; }
+  }
+  if (best[1]) best[1].fromVisibleTab = visible.length > 0;
+  return best;
+}
 
 /* Sheet labels -> machine keys. Anything not listed (Proline, Notching, the
    Saws, the standing SERVICE ORDERS / K1285 / BACK ORDER rows) is outside the
@@ -213,6 +241,11 @@ const SU_MACHINE = {
   'FOM2': 'fom2',
   'FOM3': 'fom3',
   'CNC1': 'cnc1',
+  // The live block writes the one remaining CNC machine as "CNC-3", while the
+  // stale block above it still lists a "CNC 1" with nothing in it. Both
+  // normalise to CNC3/CNC1 here and both point at the same work centre; the
+  // content-first merge below then picks the one that actually says something.
+  'CNC3': 'cnc1',
   'FMC1': 'fmc1',
   'FMC2': 'fmc2',
   'MULTIPUNCH': 'multipunch',
@@ -366,8 +399,9 @@ export async function importMachineWorkbook(arrayBuffer, { kind, fileName = 'sch
   const report = { kind, fileName, importedAt: new Date().toISOString(), sheets: [], missing: [] };
 
   const wanted = specs.map((s) => s.sheet);
-  if (kind === 'cnc') wanted.push(SU_SHEET);
-  const wb = await readXlsx(arrayBuffer, { only: wanted });
+  const wb = await readXlsx(arrayBuffer, {
+    only: (n) => wanted.includes(n) || (kind === 'cnc' && SU_SHEET_RE.test(n)),
+  });
 
   let tasks = [];
   for (const spec of specs) {
@@ -380,11 +414,15 @@ export async function importMachineWorkbook(arrayBuffer, { kind, fileName = 'sch
   // machines, and finer than the per-line Status columns.
   let shiftUpdate = null;
   if (kind === 'cnc') {
-    shiftUpdate = parseShiftUpdate(wb.sheets[SU_SHEET]);
-    if (!shiftUpdate) report.missing.push(SU_SHEET);
+    const [suName, suParsed] = pickShiftUpdate(wb);
+    shiftUpdate = suParsed;
+    if (!shiftUpdate) report.missing.push('Shift Update');
     else report.shiftUpdate = {
       date: shiftUpdate.date, shift: shiftUpdate.shift,
-      sheet: SU_SHEET,
+      sheet: suName,
+      // Worth reporting: if this ever says false, the department has hidden
+      // every shift-update tab and the app is reading an archived one.
+      fromVisibleTab: !!shiftUpdate.fromVisibleTab,
       machines: Object.keys(shiftUpdate.machines).length,
       // Machine names on the sheet the app has no work centre for. Worth
       // showing: it is how the department finds out the app is behind the floor.

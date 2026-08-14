@@ -4339,11 +4339,13 @@ ${add.join("\n")}` : add.join("\n");
     }
     const wbDoc = new DOMParser().parseFromString(wbXml, "application/xml");
     const sheetNames = [];
+    const hiddenSheets = /* @__PURE__ */ new Set();
     const targets = /* @__PURE__ */ new Map();
     for (const sh of wbDoc.getElementsByTagName("sheet")) {
       const name = sh.getAttribute("name");
       const rid = sh.getAttribute("r:id") || sh.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
       sheetNames.push(name);
+      if ((sh.getAttribute("state") || "visible") !== "visible") hiddenSheets.add(name);
       let target = relTarget.get(rid) || "";
       target = target.replace(/^\/xl\//, "").replace(/^\//, "");
       targets.set(name, target.startsWith("xl/") ? target : "xl/" + target);
@@ -4356,7 +4358,7 @@ ${add.join("\n")}` : add.join("\n");
       if (!xml) continue;
       sheets[name] = parseSheet(xml, shared, dateStyles, maxRows);
     }
-    return { sheetNames, sheets };
+    return { sheetNames, hiddenSheets, sheets };
   }
 
   // js/import-machines.js
@@ -4582,7 +4584,25 @@ ${add.join("\n")}` : add.join("\n");
     report.sheets.push({ sheet: spec.sheet, machine: spec.machine, rows: out.length });
     return out;
   }
-  var SU_SHEET = "Shift Update 2";
+  var SU_SHEET_RE = /^shift update/i;
+  function pickShiftUpdate(wb) {
+    const named = Object.entries(wb.sheets).filter(([n]) => SU_SHEET_RE.test(n));
+    if (!named.length) return [null, null];
+    const visible = named.filter(([n]) => !wb.hiddenSheets?.has(n));
+    const pool = visible.length ? visible : named;
+    let best = [null, null];
+    let bestScore = -1;
+    for (const [name, sheet] of pool) {
+      const parsed = parseShiftUpdate(sheet);
+      const score = Object.values(parsed?.machines || {}).reduce((a, e) => a + e.done.length + e.next.length + e.notes.length, 0);
+      if (score > bestScore) {
+        bestScore = score;
+        best = [name, parsed];
+      }
+    }
+    if (best[1]) best[1].fromVisibleTab = visible.length > 0;
+    return best;
+  }
   var SU_MACHINE = {
     "ROLLINGETASAUTO": "roll-auto",
     "ROLLINGIOTAMANUAL": "roll-man",
@@ -4590,6 +4610,11 @@ ${add.join("\n")}` : add.join("\n");
     "FOM2": "fom2",
     "FOM3": "fom3",
     "CNC1": "cnc1",
+    // The live block writes the one remaining CNC machine as "CNC-3", while the
+    // stale block above it still lists a "CNC 1" with nothing in it. Both
+    // normalise to CNC3/CNC1 here and both point at the same work centre; the
+    // content-first merge below then picks the one that actually says something.
+    "CNC3": "cnc1",
     "FMC1": "fmc1",
     "FMC2": "fmc2",
     "MULTIPUNCH": "multipunch"
@@ -4700,8 +4725,9 @@ ${add.join("\n")}` : add.join("\n");
     if (!specs) throw new Error(`Unknown workbook type "${kind}".`);
     const report = { kind, fileName, importedAt: (/* @__PURE__ */ new Date()).toISOString(), sheets: [], missing: [] };
     const wanted = specs.map((s) => s.sheet);
-    if (kind === "cnc") wanted.push(SU_SHEET);
-    const wb = await readXlsx(arrayBuffer, { only: wanted });
+    const wb = await readXlsx(arrayBuffer, {
+      only: (n) => wanted.includes(n) || kind === "cnc" && SU_SHEET_RE.test(n)
+    });
     let tasks = [];
     for (const spec of specs) {
       const sheet = wb.sheets[spec.sheet];
@@ -4713,12 +4739,16 @@ ${add.join("\n")}` : add.join("\n");
     }
     let shiftUpdate = null;
     if (kind === "cnc") {
-      shiftUpdate = parseShiftUpdate(wb.sheets[SU_SHEET]);
-      if (!shiftUpdate) report.missing.push(SU_SHEET);
+      const [suName, suParsed] = pickShiftUpdate(wb);
+      shiftUpdate = suParsed;
+      if (!shiftUpdate) report.missing.push("Shift Update");
       else report.shiftUpdate = {
         date: shiftUpdate.date,
         shift: shiftUpdate.shift,
-        sheet: SU_SHEET,
+        sheet: suName,
+        // Worth reporting: if this ever says false, the department has hidden
+        // every shift-update tab and the app is reading an archived one.
+        fromVisibleTab: !!shiftUpdate.fromVisibleTab,
         machines: Object.keys(shiftUpdate.machines).length,
         // Machine names on the sheet the app has no work centre for. Worth
         // showing: it is how the department finds out the app is behind the floor.

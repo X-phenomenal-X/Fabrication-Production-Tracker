@@ -252,37 +252,39 @@ people writing different shifts do not overwrite each other.
 
 ### The imported sheet
 
-The CNC workbook's **`Shift Update 2`** sheet carries the most current word on
-most machines, finer than the per-line Status columns. Besides feeding the
+The CNC workbook's shift-update sheet carries the most current word on most
+machines, finer than the per-line Status columns. Besides feeding the
 suggestions above, each centre page shows its machine's entry over the queue,
 with a **MACHINE DOWN** badge when `#Ops` reads `DOWN`.
 
-There are several near-identical sheets — `Shift Update`, `Shift Update (3)`,
-`Shift Update Old` — and only `Shift Update 2` is read. The department writes
-to that one; the others are stale leftovers nobody updates any more, and the
-first version of this reader learned that the hard way: it read all of them
-and merged by comparing date+shift labels *across* sheets, which quietly let
-a stale "Afternoon" block on the old base sheet win over the current "Day"
-block on `Shift Update 2`, for every tracked machine. Reading only the one
-sheet the department actually uses removes that failure mode entirely rather
-than trying to out-guess it.
+**Which sheet that is, is decided by which tab is visible in Excel** — not by
+its name. The workbook holds four similarly-named ones (`Shift Update 2`,
+`Shift Update`, `Shift Update (3)`, `Shift Update Old`) and only the first is
+visible; the department has hidden the other three, along with 58 of the
+workbook's 73 sheets. Hiding a tab is how they archive it, so visibility is
+their own signal for which one is live, and the rule keeps working if they
+rename or reorganise.
+
+This was got wrong twice before landing on that: once reading all four sheets
+and merging them by date and shift label, which let a stale "Afternoon" block
+beat the live "Day" one; then pinned to `Shift Update 2`, which only looked
+right because that is the visible one today. If every shift-update tab is ever
+hidden, the app falls back to the fullest of them and the import report says
+`fromVisibleTab: false`.
 
 A block is laid out as two side-by-side halves (columns 1–7 and 9–15), each
-with its own Date/Shift header. Blocks also **stack vertically within this one
-sheet**: an empty leftover Day template sits at the top, and the real one —
-the only place **FMC 1 and FMC 2 appear at all** — starts at row 57. Both
-halves are read, every block is found by its own Date header, and entries are
-merged per machine with two rules: whichever block actually describes work
-wins outright (a filled-in `#Ops` headcount with no done/next/notes is still
-empty for this purpose — a crew number is not a report of what happened), and
-only once both sides are equally (un)described does date+shift rank decide,
-Day before Afternoon before Midnight.
+with its own Date/Shift header. Blocks also **stack vertically within that one
+sheet**: an empty leftover template sits at the top, and the live one — the
+only place **FMC 1 and FMC 2 appear at all** — starts at row 57. Both halves
+are read, every block is found by its own Date header, and entries merge per
+machine on one rule: **a block that describes actual work always beats an empty
+one**, and a filled-in `#Ops` headcount with no done/next/notes does not count
+as work. Only when both are equally (un)filled does date+shift decide.
 
-A machine `Shift Update 2` does not mention under its mapped name — `cnc1`,
-since this sheet lists the third CNC machine as `CNC-3` rather than `CNC 1` —
-simply has nothing to show, rather than reaching for another sheet's data.
-That is deliberate: showing nothing is honest about what the department
-actually wrote down; showing a different sheet's leftover entry is not.
+**The live block calls the remaining CNC machine `CNC-3`, not `CNC 1`.** Both
+map to the same work centre, so the app shows its real entry rather than the
+blank `CNC 1` placeholder left in the stale block above. The machine is still
+labelled *CNC 1* in the app — rename it in Setup if the floor calls it CNC-3.
 
 Machine names on the sheet that the app has no work centre for are collected
 and reported on import rather than dropped in silence — that is how the

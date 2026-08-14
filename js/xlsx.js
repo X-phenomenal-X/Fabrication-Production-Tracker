@@ -186,7 +186,7 @@ function parseSheet(xml, shared, dateStyles, maxRows) {
 }
 
 /**
- * Read an .xlsx into { sheetNames, sheets: { [name]: { rows, width } } }.
+ * Read an .xlsx into { sheetNames, hiddenSheets, sheets: { [name]: { rows, width } } }.
  * `only` limits which sheets are parsed — important here because the workbook
  * contains a 1M-row scratch sheet we never need. It takes a list of names, or
  * a predicate for the sheets whose names are only known by pattern.
@@ -221,6 +221,11 @@ export async function readXlsx(arrayBuffer, { only = null, maxRows = 25000 } = {
 
   const wbDoc = new DOMParser().parseFromString(wbXml, 'application/xml');
   const sheetNames = [];
+  /* Which tabs Excel hides. Worth surfacing: in the department's workbooks a
+     hidden sheet is one they have archived — 58 of the CNC workbook's 73
+     sheets are hidden — so visibility is the best available signal for which
+     of several similarly-named sheets is the live one. */
+  const hiddenSheets = new Set();
   const targets = new Map();
   for (const sh of wbDoc.getElementsByTagName('sheet')) {
     const name = sh.getAttribute('name');
@@ -228,6 +233,7 @@ export async function readXlsx(arrayBuffer, { only = null, maxRows = 25000 } = {
       sh.getAttribute('r:id') ||
       sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
     sheetNames.push(name);
+    if ((sh.getAttribute('state') || 'visible') !== 'visible') hiddenSheets.add(name);
     let target = relTarget.get(rid) || '';
     target = target.replace(/^\/xl\//, '').replace(/^\//, '');
     targets.set(name, target.startsWith('xl/') ? target : 'xl/' + target);
@@ -242,5 +248,5 @@ export async function readXlsx(arrayBuffer, { only = null, maxRows = 25000 } = {
     sheets[name] = parseSheet(xml, shared, dateStyles, maxRows);
   }
 
-  return { sheetNames, sheets };
+  return { sheetNames, hiddenSheets, sheets };
 }
