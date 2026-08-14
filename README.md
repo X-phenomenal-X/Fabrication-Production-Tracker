@@ -233,46 +233,39 @@ Updates are stamped with who wrote them and when, saved under `date|shift`, and
 merged record-by-record through the shared file like everything else — so two
 people writing different shifts do not overwrite each other.
 
-### The imported sheets
+### The imported sheet
 
-The CNC workbook's shift-update sheets carry the most current word on most
-machines, finer than the per-line Status columns. Besides feeding the
+The CNC workbook's **`Shift Update 2`** sheet carries the most current word on
+most machines, finer than the per-line Status columns. Besides feeding the
 suggestions above, each centre page shows its machine's entry over the queue,
 with a **MACHINE DOWN** badge when `#Ops` reads `DOWN`.
 
+There are several near-identical sheets — `Shift Update`, `Shift Update (3)`,
+`Shift Update Old` — and only `Shift Update 2` is read. The department writes
+to that one; the others are stale leftovers nobody updates any more, and the
+first version of this reader learned that the hard way: it read all of them
+and merged by comparing date+shift labels *across* sheets, which quietly let
+a stale "Afternoon" block on the old base sheet win over the current "Day"
+block on `Shift Update 2`, for every tracked machine. Reading only the one
+sheet the department actually uses removes that failure mode entirely rather
+than trying to out-guess it.
+
 A block is laid out as two side-by-side halves (columns 1–7 and 9–15), each
-with its own Date/Shift header. Blocks also **stack vertically**, and that
-turned out to matter: the sheet named exactly `Shift Update` is still the old
-layout listing CNC 1, CNC 2, CNC 3 and CNC SBZ140, while `Shift Update 2` holds
-an empty leftover Day template at the top and, from row 57 down, the real one —
-the only place **FMC 1 and FMC 2 appear anywhere in either workbook**.
+with its own Date/Shift header. Blocks also **stack vertically within this one
+sheet**: an empty leftover Day template sits at the top, and the real one —
+the only place **FMC 1 and FMC 2 appear at all** — starts at row 57. Both
+halves are read, every block is found by its own Date header, and entries are
+merged per machine with two rules: whichever block actually describes work
+wins outright (a filled-in `#Ops` headcount with no done/next/notes is still
+empty for this purpose — a crew number is not a report of what happened), and
+only once both sides are equally (un)described does date+shift rank decide,
+Day before Afternoon before Midnight.
 
-Reading one sheet whole would mean choosing between the current data and the
-only block that knows the FMCs exist. So every `Shift Update*` sheet is read,
-every block within it is found by its own Date header, and entries are merged
-per machine by three rules, in order:
-
-1. **Whichever block actually describes work wins outright.** An entry with a
-   crew count but no done/next/notes is still empty for this purpose — a
-   headcount is not a report of what happened, and must never let a blank
-   template beat a filled-in row.
-2. **Between two blocks that both say something, the sheet wins**: `Shift
-   Update 2` outranks the base `Shift Update`, which outranks the near-
-   duplicate `(3)` and `Old` copies. This is the rule that actually matters —
-   date and shift labels are not a safe way to compare *different* sheets,
-   since nothing says the "Afternoon" block on an older sheet was written
-   after the "Day" block on a newer one. It very much was not: every tracked
-   machine's most current entry was sitting in `Shift Update 2`'s Day block,
-   and comparing by shift label alone was quietly pulling stale Afternoon
-   entries from the base sheet over it.
-3. **Within the same sheet**, date and shift *do* mean what they say — Day
-   before Afternoon before Midnight is a real ordering there, so it is still
-   used to pick between two blocks stacked in one sheet.
-
-Each entry keeps the date and shift of the block it actually came from, so
-FOM 1 can show its Day entry while `cnc1` — which `Shift Update 2` does not
-mention under that name — falls through to its Afternoon entry from the base
-sheet, and the panel says which for each.
+A machine `Shift Update 2` does not mention under its mapped name — `cnc1`,
+since this sheet lists the third CNC machine as `CNC-3` rather than `CNC 1` —
+simply has nothing to show, rather than reaching for another sheet's data.
+That is deliberate: showing nothing is honest about what the department
+actually wrote down; showing a different sheet's leftover entry is not.
 
 Machine names on the sheet that the app has no work centre for are collected
 and reported on import rather than dropped in silence — that is how the

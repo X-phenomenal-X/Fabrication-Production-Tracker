@@ -178,25 +178,28 @@ function parseMachineSheet(sheet, spec, report) {
 
 /* ---------- shift update ---------- */
 
-/* The CNC workbook's "Shift Update" sheets carry the latest word on most
-   machines — what ran, what is next, and whether a machine is down. A block is
-   laid out as two side-by-side halves so it prints on one page: the left half
-   occupies columns 1-7, the right one columns 9-15, each with its own
-   Date/Shift header and this column layout:
+/* The CNC workbook's "Shift Update 2" sheet carries the latest word on most
+   machines — what ran, what is next, and whether a machine is down. This is
+   the sheet the department actually writes to; the near-identical `Shift
+   Update`, `Shift Update (3)` and `Shift Update Old` sheets are stale
+   leftovers nobody updates any more and are deliberately not read — reading
+   them was what pulled old data back in the first place.
+
+   A block is laid out as two side-by-side halves so it prints on one page:
+   the left half occupies columns 1-7, the right one columns 9-15, each with
+   its own Date/Shift header and this column layout:
 
      Machine | #Ops | (bullet) | Work Done / In Progress | (bullet) | Next in Schedule | Notes
 
    A machine's entry runs from its name row until the next name row.
 
-   Blocks also stack *vertically*: `Shift Update 2` holds the old Day sheet at
-   the top and, from row 57 down, a newer one on the same day that is the only
-   place FMC 1 and FMC 2 appear. So every `Shift Update*` sheet is read, every
-   block within it is found by its own Date header, and entries are merged per
-   machine with the newest shift winning. Taking one sheet whole would mean
-   choosing between the newest shift and the only sheet that knows about the
-   FMCs. */
-const SU_SHEET = 'Shift Update';
-const SU_SHEET_RE = /^shift update/i;
+   Blocks also stack *vertically* within this one sheet: an empty leftover Day
+   block sits at the top, and the real one — the only place FMC 1 and FMC 2
+   appear at all — starts at row 57. Both column halves are read, every block
+   within each is found by its own Date header, and entries are merged per
+   machine so a filled-in block always wins over an empty one from earlier in
+   the sheet. */
+const SU_SHEET = 'Shift Update 2';
 
 /* Sheet labels -> machine keys. Anything not listed (Proline, Notching, the
    Saws, the standing SERVICE ORDERS / K1285 / BACK ORDER rows) is outside the
@@ -219,25 +222,6 @@ const SU_MACHINE = {
 const SU_SKIP = new Set(['MACHINE', 'DATE', 'TOTAL', 'SERVICEORDERS', 'K1285PULLS', 'BACKORDER']);
 
 const SU_SHIFT_RANK = { DAY: 0, AFTERNOON: 1, AFT: 1, MIDNIGHT: 2, NIGHT: 2 };
-
-/* The sheets are not equally trustworthy — the department's own naming says
-   which one supersedes which. `Shift Update 2` is the only sheet with FMC 1
-   and FMC 2 on it at all, which is how it gave itself away as the current
-   one; `(3)` and `Old` are near-identical leftovers the department does not
-   write to. This decides a conflict BETWEEN sheets. It must never be
-   confused with SU_SHIFT_RANK above, which only decides between multiple
-   blocks stacked inside the SAME sheet — Afternoon does not outrank Day just
-   because Afternoon usually comes later in a shift, when the Day block is
-   sitting on the sheet that is actually current and Afternoon is stale. */
-const SU_SHEET_PRIORITY = {
-  'Shift Update 2': 3,
-  'Shift Update': 2,
-  'Shift Update (3)': 1,
-  'Shift Update Old': 0,
-};
-function sheetPriority(name) {
-  return SU_SHEET_PRIORITY[name] ?? 2; // an unrecognised future sheet is trusted like the base one
-}
 
 function suKey(label) {
   return String(label || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -307,33 +291,28 @@ function parseShiftUpdateBlock(rows, off, from, to, unknown) {
   return { date: blockDate, shift, machines: out };
 }
 
-/** Every block on one sheet: both column halves, every vertically stacked
-    block within each half. Each entry is tagged with the sheet it came from —
-    needed to arbitrate between sheets below, and stripped again before this
-    becomes stored state. */
-function parseShiftUpdateSheet(name, sheet, unknown) {
+/** Every block on the sheet: both column halves, every vertically stacked
+    block within each half. */
+function parseShiftUpdateSheet(sheet, unknown) {
   const blocks = [];
   for (const off of [0, 8]) {
     const starts = suBlockStarts(sheet.rows, off);
     starts.forEach((from, i) => {
       const to = i + 1 < starts.length ? starts[i + 1] : sheet.rows.length;
-      const block = parseShiftUpdateBlock(sheet.rows, off, from, to, unknown);
-      for (const e of Object.values(block.machines)) e.sheet = name;
-      blocks.push(block);
+      blocks.push(parseShiftUpdateBlock(sheet.rows, off, from, to, unknown));
     });
   }
   return blocks;
 }
 
-/** Parse every Shift Update sheet into { date, shift, machines: {key: entry} }.
-    Each entry keeps the date and shift of the block it came from, since they
-    no longer all come from the same one. */
-export function parseShiftUpdate(sheets) {
-  const entries = Object.entries(sheets || {}).filter(([, s]) => s);
-  if (!entries.length) return null;
+/** Parse the Shift Update 2 sheet into { date, shift, machines: {key: entry} }.
+    Each entry keeps the date and shift of the block it came from, since a
+    machine can be listed on more than one block within the sheet. */
+export function parseShiftUpdate(sheet) {
+  if (!sheet) return null;
 
   const unknown = new Set();
-  const blocks = entries.flatMap(([name, s]) => parseShiftUpdateSheet(name, s, unknown));
+  const blocks = parseShiftUpdateSheet(sheet, unknown);
 
   // Actual described work — done, next and notes. A row can have its #Ops
   // headcount filled in with nothing else on it, which is still an empty
@@ -344,20 +323,14 @@ export function parseShiftUpdate(sheets) {
   // something or both say nothing.
   const said = (e) => wordCount(e) + (e.ops ? 1 : 0);
   // An entry that describes no actual work must never beat one that does,
-  // whatever the sheet or shift label claims — every sheet, including Shift
-  // Update 2 itself, carries some machines twice: once in a block someone
-  // actually filled in, once in an untouched template row elsewhere. Content
-  // is checked before anything else so a blank leftover can never win.
-  // Only once both sides are equally (un)described does which sheet the
-  // entry came from decide it, then date+shift within that sheet, then
-  // whichever says more overall as the last resort.
+  // whatever its shift label claims — this sheet carries some machines
+  // twice: once in a block someone actually filled in, once in an untouched
+  // template row elsewhere on the same sheet. Content is checked before
+  // date+shift so a blank leftover block can never win over a filled one.
   const better = (e, cur) => {
     const we = wordCount(e);
     const wc = wordCount(cur);
     if ((we > 0) !== (wc > 0)) return we > wc;
-    const pe = sheetPriority(e.sheet);
-    const pc = sheetPriority(cur.sheet);
-    if (pe !== pc) return pe > pc;
     const a = suWhen(e.date, e.shift);
     const c = suWhen(cur.date, cur.shift);
     if (a !== c) return a > c;
@@ -373,7 +346,6 @@ export function parseShiftUpdate(sheets) {
 
   const values = Object.values(machines);
   const latest = values.reduce((a, b) => (a && !better(b, a) ? a : b), null);
-  for (const e of values) delete e.sheet;
 
   return {
     date: latest?.date || null,
@@ -394,9 +366,8 @@ export async function importMachineWorkbook(arrayBuffer, { kind, fileName = 'sch
   const report = { kind, fileName, importedAt: new Date().toISOString(), sheets: [], missing: [] };
 
   const wanted = specs.map((s) => s.sheet);
-  const wb = await readXlsx(arrayBuffer, {
-    only: (n) => wanted.includes(n) || (kind === 'cnc' && SU_SHEET_RE.test(n)),
-  });
+  if (kind === 'cnc') wanted.push(SU_SHEET);
+  const wb = await readXlsx(arrayBuffer, { only: wanted });
 
   let tasks = [];
   for (const spec of specs) {
@@ -409,13 +380,11 @@ export async function importMachineWorkbook(arrayBuffer, { kind, fileName = 'sch
   // machines, and finer than the per-line Status columns.
   let shiftUpdate = null;
   if (kind === 'cnc') {
-    const suSheets = Object.fromEntries(
-      Object.entries(wb.sheets).filter(([n]) => SU_SHEET_RE.test(n)));
-    shiftUpdate = parseShiftUpdate(suSheets);
+    shiftUpdate = parseShiftUpdate(wb.sheets[SU_SHEET]);
     if (!shiftUpdate) report.missing.push(SU_SHEET);
     else report.shiftUpdate = {
       date: shiftUpdate.date, shift: shiftUpdate.shift,
-      sheets: Object.keys(suSheets),
+      sheet: SU_SHEET,
       machines: Object.keys(shiftUpdate.machines).length,
       // Machine names on the sheet the app has no work centre for. Worth
       // showing: it is how the department finds out the app is behind the floor.
