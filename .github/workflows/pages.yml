@@ -1,15 +1,16 @@
 # Publishes the tracker to GitHub Pages so it can be opened on a phone.
 #
 # The site is the single self-contained Cutting-Tracker.html, served as
-# index.html — same file that gets copied to the shared drive, so there is only
-# ever one build to trust.
+# index.html — the same file that gets copied to the shared drive, so there is
+# only ever one build to trust. It is rebuilt here rather than taken from the
+# repo, so the published copy can never be the stale one somebody forgot to
+# regenerate.
 #
 # Enable it once: repo Settings -> Pages -> Source: GitHub Actions.
 name: Publish tracker
 
 on:
   push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -23,19 +24,38 @@ concurrency:
 
 jobs:
   build:
+    # Publish only from the default branch, whatever it happens to be called.
+    # Naming a branch here would silently stop publishing the day the repo is
+    # reorganised.
+    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci --omit=optional --ignore-scripts
+
+      # package-lock.json is gitignored, so `npm ci` has nothing to work from.
+      # --ignore-scripts stops Playwright downloading browsers it does not need
+      # to run esbuild.
+      - run: npm install --no-audit --no-fund --ignore-scripts
+
       - run: node build.mjs
+
+      - name: Warn if the committed build is stale
+        run: |
+          if ! git diff --quiet -- Cutting-Tracker.html; then
+            echo "::warning::Cutting-Tracker.html in the repo differs from a fresh build."
+            echo "The published site is correct, but the copy on the shared drive is out of date —" >> "$GITHUB_STEP_SUMMARY"
+            echo "run \`node build.mjs\` and commit the result." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Assemble the site
         run: |
           mkdir -p _site
           cp Cutting-Tracker.html _site/index.html
           cp manifest.webmanifest _site/manifest.webmanifest
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
