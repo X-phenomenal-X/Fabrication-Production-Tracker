@@ -255,3 +255,51 @@ export function shiftUpdateFor(machineKey) {
   if (!entry) return null;
   return { ...entry, date: su.date, shift: su.shift };
 }
+
+/* ---------- shift windows ---------- */
+
+/* Day 07:00-15:00, Afternoon 15:00-23:00, Midnight 23:00-07:00 — the last
+   crosses into the next day. Times are local, matching how the floor talks. */
+export function shiftWindow(date, shift) {
+  const mk = (d, h) => {
+    const x = new Date(d + 'T00:00:00');
+    x.setHours(h, 0, 0, 0);
+    return x.getTime();
+  };
+  if (shift === 'DAY') return [mk(date, 7), mk(date, 15)];
+  if (shift === 'AFT') return [mk(date, 15), mk(date, 23)];
+  return [mk(date, 23), mk(addDays(date, 1), 7)];
+}
+
+/** Look a line up by its stable key, so history entries can be shown as work. */
+export function taskByKey(key) {
+  for (const t of tasksInScope()) {
+    if (taskStatusKey(t) === key) return resolveTask(t);
+  }
+  return null;
+}
+
+/** What actually got tracked on a machine during a shift, reconstructed from
+    the history log. This is what makes the update easy to write: the lines
+    someone moved are offered rather than typed from memory. */
+export function workInShift(machineKey, date, shift) {
+  const [from, to] = shiftWindow(date, shift);
+  const seen = new Map();
+
+  for (const h of state.taskHistory || []) {
+    if (h.kind !== 'status') continue;
+    const t = Date.parse(h.at);
+    if (!(t >= from && t < to)) continue;
+    if (!h.key.startsWith(machineKey + '|')) continue;
+    // Several changes to one line collapse to its latest state in the window.
+    if (!seen.has(h.key)) seen.set(h.key, h);
+  }
+
+  const out = [];
+  for (const [key, h] of seen) {
+    const task = taskByKey(key);
+    if (!task) continue;
+    out.push({ task, to: h.to, by: h.by, at: h.at });
+  }
+  return out.sort((a, b) => (a.at < b.at ? -1 : 1));
+}

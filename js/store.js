@@ -18,7 +18,7 @@ const IDB_STORE = 'handles';
    JSON on the network drive — sheds them rather than carrying them forever. */
 const RETIRED_KEYS = [
   'meta', 'orders', 'wip', 'prep', 'screens', 'progress', 'material',
-  'history', 'manualOrders', 'shiftLogs', 'plan', 'guide', 'audit',
+  'history', 'manualOrders', 'plan', 'guide', 'audit',
   'lastImportReport',
 ];
 
@@ -32,6 +32,7 @@ export const state = {
   backOrder: {},    // same key -> { flagged, qty, assignee, note, at, by }
   taskHistory: [],  // every change to a line, newest first
   machineConfig: {}, // machineKey -> { label, note, ops, hidden }
+  shiftLogs: {},    // `${date}|${shift}` -> { date, shift, rows, notes, at, by }
   people: [],
   settings: { me: null },
 };
@@ -216,6 +217,20 @@ export function clearTaskEdits(key, sheet = {}) {
   save();
 }
 
+/** Save (or update) the shift update for one date and shift. */
+export function saveShiftLog(date, shift, patch) {
+  const key = `${date}|${shift}`;
+  const cur = state.shiftLogs[key] || { date, shift, rows: {} };
+  state.shiftLogs[key] = { ...cur, ...patch, date, shift, at: now(), by: me() };
+  save();
+  return key;
+}
+
+export function deleteShiftLog(key) {
+  delete state.shiftLogs[key];
+  save();
+}
+
 /** Per-machine overrides: display name, note and usual operator count. */
 export function setMachineConfig(key, patch) {
   const cur = state.machineConfig[key] || {};
@@ -257,6 +272,7 @@ function snapshot() {
     backOrder: state.backOrder,
     taskHistory: state.taskHistory,
     machineConfig: state.machineConfig,
+    shiftLogs: state.shiftLogs,
     people: state.people,
     settings: state.settings,
   };
@@ -268,6 +284,21 @@ function apply(data) {
     if (k === 'v') continue;
     if (data[k] !== undefined) state[k] = data[k];
   }
+  state.shiftLogs = onlyShiftLogs(state.shiftLogs);
+}
+
+/* An earlier version of the app also wrote `shiftLogs`, in a different shape.
+   Keep only entries in the current shape so a stale install does not render
+   a half-formed update. */
+function onlyShiftLogs(logs) {
+  const out = {};
+  for (const [k, v] of Object.entries(logs || {})) {
+    if (v && typeof v === 'object' && v.rows && typeof v.rows === 'object'
+        && !Array.isArray(v.rows) && v.date && v.shift) {
+      out[k] = v;
+    }
+  }
+  return out;
 }
 
 export function save() {
@@ -364,6 +395,7 @@ function mergeSnapshot(remote) {
   state.taskHistory.sort((a, b) => (a.at < b.at ? 1 : -1));
   if (state.taskHistory.length > HISTORY_CAP) state.taskHistory.length = HISTORY_CAP;
   state.machineConfig = mergeRecords(state.machineConfig, remote.machineConfig);
+  state.shiftLogs = mergeRecords(state.shiftLogs, remote.shiftLogs);
   state.people = Array.from(new Set([...(state.people || []), ...(remote.people || [])]));
 
   // Machine tasks come from whichever side imported them most recently.

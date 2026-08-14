@@ -15,7 +15,7 @@ const CNC = `${DIR}/bae855fd-CNC_Schedule_Rev_E.xlsx`;
 const SHOT = path.join(ROOT, 'test', 'screens');
 
 const RETIRED = ['orders', 'wip', 'prep', 'screens', 'progress', 'material', 'history',
-  'manualOrders', 'shiftLogs', 'plan', 'guide', 'audit'];
+  'manualOrders', 'plan', 'guide', 'audit'];
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 
@@ -50,7 +50,7 @@ step('app booted');
 
 const tabs = await page.$$eval('nav.tabs button', (ns) => ns.map((n) => n.textContent.trim()));
 step('tabs: ' + tabs.join(', '));
-if (tabs.join(',') !== 'Rolling,FOM,CNC,Multi Punch,Back Orders,Setup') {
+if (tabs.join(',') !== 'Rolling,FOM,CNC,Multi Punch,Back Orders,Shift Update,Setup') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -352,6 +352,74 @@ await page.waitForSelector('dialog', { state: 'detached' });
 const boAfter = await page.evaluate((k) => import('/js/store.js').then((m) => m.state.backOrder[k]), boRec.key);
 step('back order after re-import: ' + JSON.stringify(boAfter));
 if (!boAfter || boAfter.qty !== 12) throw new Error('back order lost on re-import');
+
+// ---------- shift update ----------
+await page.click('nav.tabs button:has-text("Shift Update")');
+await page.waitForSelector('.sucard');
+
+const suCards = await page.$$eval('.sucard-name', (ns) => ns.map((n) => n.textContent.trim()));
+const suGroups = await page.$$eval('.dgroup-label', (ns) => ns.map((n) => n.textContent.trim()));
+step(`shift update — groups [${suGroups.join(' ')}] | ${suCards.length} cards: ${suCards.join(', ')}`);
+if (suGroups.join(',') !== 'Department,Rolling,FOM,CNC,Multi Punch') {
+  throw new Error('unexpected shift update sections: ' + suGroups.join(','));
+}
+if (!suCards.includes('FOM 1') || !suCards.includes('FOM 2')) {
+  throw new Error('FOM machines missing their own section');
+}
+
+// the workbook's own entry is offered as a one-click pull
+const pulls = await page.$$eval('.linkbtn', (ns) => ns.length);
+step('cards offering "Pull last update": ' + pulls);
+if (!pulls) throw new Error('no workbook entry offered on any card');
+
+const suFom1 = page.locator('.sucard').filter({ hasText: 'FOM 1' }).first();
+await suFom1.locator('.linkbtn').click();
+await page.waitForTimeout(200);
+const pulled = await suFom1.locator('textarea').first().inputValue();
+step('FOM 1 pulled from workbook: ' + JSON.stringify(pulled.slice(0, 60)));
+if (!pulled.trim()) throw new Error('pulling the workbook entry filled nothing in');
+
+// a chip inserts a single line
+const chipCount = await suFom1.locator('.sug-chip').count();
+if (chipCount) {
+  const chipText = (await suFom1.locator('.sug-chip').first().textContent()).trim();
+  await suFom1.locator('.sug-chip').first().click();
+  await page.waitForTimeout(200);
+  const after = await suFom1.locator('textarea').first().inputValue();
+  step(`chip "${chipText.slice(0, 40)}" -> ${after.split('\n').length} lines`);
+}
+
+await suFom1.locator('.sucard-ops input').fill('2');
+await suFom1.locator('textarea').nth(2).fill('Blade change at 18:00');
+
+await page.locator('.su-general textarea').fill('Three on midnights. Skid of 8560 due tomorrow.');
+await page.screenshot({ path: path.join(SHOT, 'shift-write.png'), fullPage: true });
+
+await page.click('.su-actions button.primary');
+await page.waitForSelector('.suread');
+const suSaved = await page.evaluate(() => import('/js/store.js').then((m) => {
+  const k = Object.keys(m.state.shiftLogs)[0];
+  const l = m.state.shiftLogs[k];
+  return { key: k, by: l.by, at: !!l.at, ops: l.rows.fom1?.ops, notes: l.notes, machines: Object.keys(l.rows) };
+}));
+step('saved: ' + JSON.stringify(suSaved));
+if (suSaved.ops !== '2') throw new Error('#Ops not saved against FOM 1');
+if (suSaved.by !== 'Abhay' || !suSaved.at) throw new Error('shift update missing who/when');
+if (!suSaved.notes.startsWith('Three on midnights')) throw new Error('general notes not saved');
+
+const readNames = await page.$$eval('.suread-name strong', (ns) => ns.map((n) => n.textContent.trim()));
+step('read view shows: ' + readNames.join(', '));
+if (!readNames.includes('FOM 1')) throw new Error('saved machine missing from the read view');
+await page.screenshot({ path: path.join(SHOT, 'shift-read.png'), fullPage: true });
+
+// it survives a reload, and the recent list points back at it
+await page.reload();
+await page.waitForSelector('header.top');
+await page.click('nav.tabs button:has-text("Shift Update")');
+await page.waitForSelector('.su-recentrow');
+const recent = await page.$$eval('.su-recentrow', (ns) => ns.map((n) => n.textContent.trim()));
+step('recent updates: ' + recent.join(' | '));
+if (!recent.length) throw new Error('saved update missing from the recent list');
 
 // phone
 await page.click('nav.tabs button:has-text("Rolling")');

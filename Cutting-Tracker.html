@@ -604,6 +604,120 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 }
 .bo-sheetnote svg { flex-shrink: 0; margin-top: 2px; color: var(--warn); }
 
+/* ---------- shift update page ---------- */
+
+.centre-sub { font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
+.dot-sep { margin: 0 6px; color: var(--ink-3); }
+
+.linkbtn {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: none; border: 0; padding: 3px 7px; border-radius: 6px;
+  font-size: 11.5px; font-weight: 600; color: var(--accent); cursor: pointer;
+  transition: background .14s ease;
+}
+.linkbtn:hover { background: var(--accent-soft); }
+
+.su-when { display: flex; flex-direction: column; align-items: flex-end; gap: 0; }
+.su-when .subtabs { margin-top: 8px; }
+.su-date { width: auto; padding: 6px 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* One card per machine. Two up on a desk monitor, one up on a tablet at the
+   machine — the shift update is written on both. */
+.sugrid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 12px; margin-top: 9px;
+}
+
+.sucard {
+  position: relative;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; transition: border-color .16s ease, box-shadow .16s ease;
+}
+.sucard:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* A filled-in card gets a green spine, so what is left to write is obvious
+   at a glance without reading any of it. Kept off box-shadow so it survives
+   the focus ring. */
+.sucard.filled::before {
+  content: ''; position: absolute; inset: 0 auto 0 0; width: 3px;
+  background: var(--ok);
+}
+
+.sucard-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 9px 13px; border-bottom: 1px solid var(--line-soft); background: var(--panel-2);
+}
+.sucard-name { font-weight: 700; font-size: 13.5px; letter-spacing: -0.01em; }
+.sucard-sub { font-size: 11px; color: var(--ink-3); }
+.sucard-ops { display: flex; align-items: center; gap: 6px; }
+.sucard-ops > span { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); }
+.sucard-ops input { width: 58px; padding: 4px 7px; text-align: center; font-variant-numeric: tabular-nums; }
+
+.sucard-body { padding: 12px 13px; display: grid; gap: 11px; }
+.sucard-body textarea { min-height: 0; font-size: 13px; }
+
+.sugs { padding: 0 13px 11px; display: grid; gap: 7px; }
+.sug { display: flex; align-items: flex-start; gap: 8px; }
+.sug-label {
+  flex-shrink: 0; width: 108px; padding-top: 4px;
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--ink-3); line-height: 1.3;
+}
+.sug-items { display: flex; flex-wrap: wrap; gap: 4px; }
+.sug-chip {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+  padding: 3px 8px; border-radius: 999px; cursor: pointer;
+  font-size: 11.5px; font-weight: 500; text-align: left;
+  background: var(--panel-2); color: var(--ink-2); border: 1px dashed var(--line);
+  transition: all .14s ease;
+}
+.sug-chip:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); border-style: solid; }
+.sug-chip:active { transform: scale(.97); }
+.sug-chip svg { flex-shrink: 0; opacity: .55; }
+.sug-chip:hover svg { opacity: 1; }
+.sug-chip.used {
+  background: var(--ok-soft); color: var(--ok);
+  border-style: solid; border-color: transparent; cursor: default;
+}
+.sug-chip.used svg { opacity: 1; }
+.sug-chip.used:hover { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.sug-chip.used:active { transform: none; }
+
+.su-general { margin-top: 18px; }
+
+/* Stays in reach at the bottom of a long page rather than scrolling away. */
+.su-actions {
+  position: sticky; bottom: 12px; z-index: 5;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 18px; padding: 10px 14px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 6px 22px rgba(16,24,32,.10);
+}
+.su-actions button { display: inline-flex; align-items: center; gap: 7px; }
+
+/* ---------- shift update, reading ---------- */
+
+.suread { padding: 13px 15px; border-bottom: 1px solid var(--line-soft); }
+.suread:last-child { border-bottom: 0; }
+.suread-name { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.suread-name strong { font-size: 13.5px; letter-spacing: -0.01em; }
+.suread-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.suread-text { font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+
+.su-recent { margin-top: 20px; }
+.su-recentrow {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  cursor: pointer; transition: background .14s ease;
+}
+.su-recentrow:hover { background: var(--panel-2); }
+.su-recentrow.here { background: var(--accent-soft); }
+
+@media (max-width: 720px) {
+  .sugrid { grid-template-columns: 1fr; }
+  .sug { flex-direction: column; gap: 3px; }
+  .sug-label { width: auto; padding-top: 0; }
+  .su-when { align-items: stretch; }
+}
+
 </style>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#9986;</text></svg>">
 </head>
@@ -625,6 +739,278 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       __defProp(target, name, { get: all[name], enumerable: true });
   };
 
+  // js/ui.js
+  var ui_exports = {};
+  __export(ui_exports, {
+    animateHeight: () => animateHeight,
+    bar: () => bar,
+    chip: () => chip,
+    clear: () => clear,
+    confirmDialog: () => confirmDialog,
+    download: () => download,
+    el: () => el,
+    flash: () => flash,
+    fmtDate: () => fmtDate,
+    fmtNum: () => fmtNum,
+    fmtWhen: () => fmtWhen,
+    icon: () => icon,
+    modal: () => modal,
+    renderDoc: () => renderDoc,
+    toast: () => toast,
+    toastAction: () => toastAction
+  });
+  function el(tag, props = {}, ...kids) {
+    const [name, ...classes] = tag.split(".");
+    const node = document.createElement(name || "div");
+    if (classes.length) node.className = classes.join(" ");
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v == null || v === false) continue;
+      if (k === "class") node.className = [node.className, v].filter(Boolean).join(" ");
+      else if (k === "html") node.innerHTML = v;
+      else if (k === "text") node.textContent = v;
+      else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+      else if (k === "style" && typeof v === "object") Object.assign(node.style, v);
+      else if (k in node && k !== "list" && typeof v !== "object") node[k] = v;
+      else node.setAttribute(k, v);
+    }
+    for (const kid of kids.flat(9)) {
+      if (kid == null || kid === false) continue;
+      node.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    }
+    return node;
+  }
+  function clear(node) {
+    node.replaceChildren();
+    return node;
+  }
+  function chip(text, tone = "mute", title) {
+    return el("span.chip." + tone, { title: title || void 0 }, text);
+  }
+  function bar(pct, done) {
+    return el(
+      "span.bar" + (done ? ".done" : ""),
+      {},
+      el("i", { style: { width: Math.max(0, Math.min(100, pct || 0)) + "%" } })
+    );
+  }
+  function fmtDate(iso, { withDay = false } = {}) {
+    if (!iso) return "\u2014";
+    const d = /* @__PURE__ */ new Date(iso + "T00:00:00Z");
+    if (isNaN(d)) return iso;
+    const base = `${MON[d.getUTCMonth()]} ${d.getUTCDate()}`;
+    const yr = d.getUTCFullYear() !== (/* @__PURE__ */ new Date()).getFullYear() ? ` ${d.getUTCFullYear()}` : "";
+    return withDay ? `${DAY_NAMES[d.getUTCDay()]} ${base}${yr}` : base + yr;
+  }
+  function fmtWhen(iso) {
+    if (!iso) return "\u2014";
+    const d = new Date(iso);
+    if (isNaN(d)) return iso;
+    const mins = Math.round((Date.now() - d.getTime()) / 6e4);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.round(hrs / 24);
+    if (days < 7) return `${days}d ago`;
+    return `${MON[d.getMonth()]} ${d.getDate()}`;
+  }
+  function fmtNum(n) {
+    if (n == null || !isFinite(n)) return "\u2014";
+    return n.toLocaleString();
+  }
+  function toast(msg, ms = 2600) {
+    document.querySelectorAll(".toast").forEach((t2) => t2.remove());
+    const t = el("div.toast", { text: msg });
+    document.body.append(t);
+    setTimeout(() => t.remove(), ms);
+  }
+  function confirmDialog(title, message, { confirmLabel = "Confirm", danger = false } = {}) {
+    return new Promise((resolve) => {
+      const dlg = el(
+        "dialog",
+        {},
+        el("header", {}, title),
+        el("div.body", {}, el("p", { text: message })),
+        el(
+          "footer",
+          {},
+          el("button", { onclick: () => {
+            dlg.close();
+            resolve(false);
+          } }, "Cancel"),
+          el("button", { class: danger ? "danger" : "primary", onclick: () => {
+            dlg.close();
+            resolve(true);
+          } }, confirmLabel)
+        )
+      );
+      dlg.addEventListener("close", () => dlg.remove(), { once: true });
+      document.body.append(dlg);
+      dlg.showModal();
+    });
+  }
+  function modal(title, bodyNode, { actions = [], wide = false } = {}) {
+    const dlg = el(
+      "dialog",
+      wide ? { style: { maxWidth: "900px" } } : {},
+      el(
+        "header",
+        {},
+        title,
+        el("span.spacer"),
+        el("button.ghost.sm", { onclick: () => dlg.close() }, "Close")
+      ),
+      el("div.body", {}, bodyNode),
+      actions.length ? el("footer", {}, ...actions.map((a) => el("button", { class: a.class || "", onclick: () => a.onClick(dlg) }, a.label))) : null
+    );
+    dlg.addEventListener("close", () => dlg.remove(), { once: true });
+    document.body.append(dlg);
+    dlg.showModal();
+    return dlg;
+  }
+  function renderDoc(text) {
+    const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+    const lines = String(text || "").split("\n");
+    let out = "";
+    let list = null;
+    const closeList = () => {
+      if (list) {
+        out += `</${list}>`;
+        list = null;
+      }
+    };
+    for (const raw of lines) {
+      const line = raw.trimEnd();
+      let m;
+      if (m = line.match(/^###\s+(.*)/)) {
+        closeList();
+        out += `<h4>${esc(m[1])}</h4>`;
+      } else if (m = line.match(/^##\s+(.*)/)) {
+        closeList();
+        out += `<h3>${esc(m[1])}</h3>`;
+      } else if (m = line.match(/^\s*[-*]\s+(.*)/)) {
+        if (list !== "ul") {
+          closeList();
+          out += "<ul>";
+          list = "ul";
+        }
+        out += `<li>${inline(esc(m[1]))}</li>`;
+      } else if (m = line.match(/^\s*\d+[.)]\s+(.*)/)) {
+        if (list !== "ol") {
+          closeList();
+          out += "<ol>";
+          list = "ol";
+        }
+        out += `<li>${inline(esc(m[1]))}</li>`;
+      } else if (!line.trim()) {
+        closeList();
+      } else {
+        closeList();
+        out += `<p>${inline(esc(line))}</p>`;
+      }
+    }
+    closeList();
+    return out;
+    function inline(s) {
+      return s.replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    }
+  }
+  function download(filename, text, type = "application/json") {
+    const blob = new Blob([text], { type });
+    const url = URL.createObjectURL(blob);
+    const a = el("a", { href: url, download: filename });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4e3);
+  }
+  function icon(name, { size = 16, cls = "" } = {}) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", String(size));
+    svg.setAttribute("height", String(size));
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    if (cls) svg.setAttribute("class", cls);
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", ICON_PATHS[name] || ICON_PATHS.dot);
+    if (name === "play") {
+      p.setAttribute("fill", "currentColor");
+      p.setAttribute("stroke", "none");
+    }
+    svg.append(p);
+    return svg;
+  }
+  function toastAction(msg, actionLabel, onAction, ms = 6e3) {
+    document.querySelectorAll(".toast").forEach((t2) => t2.remove());
+    const t = el(
+      "div.toast.toast-action",
+      {},
+      el("span", {}, msg),
+      el("button", {
+        onclick: () => {
+          t.remove();
+          onAction();
+        }
+      }, actionLabel)
+    );
+    document.body.append(t);
+    const timer = setTimeout(() => t.remove(), ms);
+    t.addEventListener("remove", () => clearTimeout(timer));
+    return t;
+  }
+  function animateHeight(node, expand) {
+    if (typeof node.animate !== "function") return;
+    const h = node.scrollHeight;
+    const from = expand ? 0 : h;
+    const to = expand ? h : 0;
+    node.style.overflow = "hidden";
+    const anim = node.animate(
+      [
+        { height: from + "px", opacity: expand ? 0 : 1 },
+        { height: to + "px", opacity: expand ? 1 : 0 }
+      ],
+      { duration: 180, easing: "cubic-bezier(.4,0,.2,1)" }
+    );
+    anim.onfinish = () => {
+      node.style.overflow = "";
+      node.style.height = "";
+    };
+  }
+  function flash(node) {
+    if (!node || typeof node.animate !== "function") return;
+    node.animate(
+      [{ backgroundColor: "var(--accent-soft)" }, { backgroundColor: "transparent" }],
+      { duration: 700, easing: "ease-out" }
+    );
+  }
+  var DAY_NAMES, MON, ICON_PATHS;
+  var init_ui = __esm({
+    "js/ui.js"() {
+      DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      ICON_PATHS = {
+        check: "M20 6 9 17l-5-5",
+        play: "M6 4l14 8-14 8z",
+        dot: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
+        chevron: "M9 6l6 6-6 6",
+        search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4",
+        note: "M4 5h16M4 10h16M4 15h10",
+        gear: "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7.9 19.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 7.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z",
+        alert: "M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
+        undo: "M3 7v6h6M3 13a9 9 0 1 0 3-7.7L3 8",
+        x: "M18 6 6 18M6 6l12 12",
+        upload: "M12 16V4M7 9l5-5 5 5M4 20h16",
+        pencil: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
+        clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2"
+      };
+    }
+  });
+
   // js/store.js
   var store_exports = {};
   __export(store_exports, {
@@ -633,6 +1019,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     clearBackOrder: () => clearBackOrder,
     clearTaskEdits: () => clearTaskEdits,
     connectSharedFile: () => connectSharedFile,
+    deleteShiftLog: () => deleteShiftLog,
     disconnectSharedFile: () => disconnectSharedFile,
     exportJson: () => exportJson,
     grantSharedFile: () => grantSharedFile,
@@ -648,6 +1035,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     resetAll: () => resetAll,
     restoreTaskStatus: () => restoreTaskStatus,
     save: () => save,
+    saveShiftLog: () => saveShiftLog,
     setBackOrder: () => setBackOrder,
     setMachineConfig: () => setMachineConfig,
     setMachineImport: () => setMachineImport,
@@ -777,6 +1165,17 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     delete state.taskEdit[key];
     save();
   }
+  function saveShiftLog(date2, shift, patch) {
+    const key = `${date2}|${shift}`;
+    const cur = state.shiftLogs[key] || { date: date2, shift, rows: {} };
+    state.shiftLogs[key] = { ...cur, ...patch, date: date2, shift, at: now(), by: me() };
+    save();
+    return key;
+  }
+  function deleteShiftLog(key) {
+    delete state.shiftLogs[key];
+    save();
+  }
   function setMachineConfig(key, patch) {
     const cur = state.machineConfig[key] || {};
     const next = { ...cur, ...patch, at: now(), by: me() };
@@ -808,6 +1207,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       backOrder: state.backOrder,
       taskHistory: state.taskHistory,
       machineConfig: state.machineConfig,
+      shiftLogs: state.shiftLogs,
       people: state.people,
       settings: state.settings
     };
@@ -818,6 +1218,16 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       if (k === "v") continue;
       if (data[k] !== void 0) state[k] = data[k];
     }
+    state.shiftLogs = onlyShiftLogs(state.shiftLogs);
+  }
+  function onlyShiftLogs(logs) {
+    const out = {};
+    for (const [k, v] of Object.entries(logs || {})) {
+      if (v && typeof v === "object" && v.rows && typeof v.rows === "object" && !Array.isArray(v.rows) && v.date && v.shift) {
+        out[k] = v;
+      }
+    }
+    return out;
   }
   function save() {
     try {
@@ -896,6 +1306,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     state.taskHistory.sort((a, b) => a.at < b.at ? 1 : -1);
     if (state.taskHistory.length > HISTORY_CAP) state.taskHistory.length = HISTORY_CAP;
     state.machineConfig = mergeRecords(state.machineConfig, remote.machineConfig);
+    state.shiftLogs = mergeRecords(state.shiftLogs, remote.shiftLogs);
     state.people = Array.from(/* @__PURE__ */ new Set([...state.people || [], ...remote.people || []]));
     for (const kind of ["rolling", "cnc"]) {
       const mine = state.machineMeta?.[kind]?.importedAt || "";
@@ -1011,7 +1422,6 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         "material",
         "history",
         "manualOrders",
-        "shiftLogs",
         "plan",
         "guide",
         "audit",
@@ -1036,6 +1446,8 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         // every change to a line, newest first
         machineConfig: {},
         // machineKey -> { label, note, ops, hidden }
+        shiftLogs: {},
+        // `${date}|${shift}` -> { date, shift, rows, notes, at, by }
         people: [],
         settings: { me: null }
       };
@@ -1054,182 +1466,12 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     }
   });
 
-  // js/ui.js
-  function el(tag, props = {}, ...kids) {
-    const [name, ...classes] = tag.split(".");
-    const node = document.createElement(name || "div");
-    if (classes.length) node.className = classes.join(" ");
-    for (const [k, v] of Object.entries(props || {})) {
-      if (v == null || v === false) continue;
-      if (k === "class") node.className = [node.className, v].filter(Boolean).join(" ");
-      else if (k === "html") node.innerHTML = v;
-      else if (k === "text") node.textContent = v;
-      else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
-      else if (k === "style" && typeof v === "object") Object.assign(node.style, v);
-      else if (k in node && k !== "list" && typeof v !== "object") node[k] = v;
-      else node.setAttribute(k, v);
-    }
-    for (const kid of kids.flat(9)) {
-      if (kid == null || kid === false) continue;
-      node.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
-    }
-    return node;
-  }
-  function chip(text, tone = "mute", title) {
-    return el("span.chip." + tone, { title: title || void 0 }, text);
-  }
-  var DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  function fmtDate(iso, { withDay = false } = {}) {
-    if (!iso) return "\u2014";
-    const d = /* @__PURE__ */ new Date(iso + "T00:00:00Z");
-    if (isNaN(d)) return iso;
-    const base = `${MON[d.getUTCMonth()]} ${d.getUTCDate()}`;
-    const yr = d.getUTCFullYear() !== (/* @__PURE__ */ new Date()).getFullYear() ? ` ${d.getUTCFullYear()}` : "";
-    return withDay ? `${DAY_NAMES[d.getUTCDay()]} ${base}${yr}` : base + yr;
-  }
-  function fmtWhen(iso) {
-    if (!iso) return "\u2014";
-    const d = new Date(iso);
-    if (isNaN(d)) return iso;
-    const mins = Math.round((Date.now() - d.getTime()) / 6e4);
-    if (mins < 1) return "just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.round(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.round(hrs / 24);
-    if (days < 7) return `${days}d ago`;
-    return `${MON[d.getMonth()]} ${d.getDate()}`;
-  }
-  function fmtNum(n) {
-    if (n == null || !isFinite(n)) return "\u2014";
-    return n.toLocaleString();
-  }
-  function toast(msg, ms = 2600) {
-    document.querySelectorAll(".toast").forEach((t2) => t2.remove());
-    const t = el("div.toast", { text: msg });
-    document.body.append(t);
-    setTimeout(() => t.remove(), ms);
-  }
-  function confirmDialog(title, message, { confirmLabel = "Confirm", danger = false } = {}) {
-    return new Promise((resolve) => {
-      const dlg = el(
-        "dialog",
-        {},
-        el("header", {}, title),
-        el("div.body", {}, el("p", { text: message })),
-        el(
-          "footer",
-          {},
-          el("button", { onclick: () => {
-            dlg.close();
-            resolve(false);
-          } }, "Cancel"),
-          el("button", { class: danger ? "danger" : "primary", onclick: () => {
-            dlg.close();
-            resolve(true);
-          } }, confirmLabel)
-        )
-      );
-      dlg.addEventListener("close", () => dlg.remove(), { once: true });
-      document.body.append(dlg);
-      dlg.showModal();
-    });
-  }
-  function modal(title, bodyNode, { actions = [], wide = false } = {}) {
-    const dlg = el(
-      "dialog",
-      wide ? { style: { maxWidth: "900px" } } : {},
-      el(
-        "header",
-        {},
-        title,
-        el("span.spacer"),
-        el("button.ghost.sm", { onclick: () => dlg.close() }, "Close")
-      ),
-      el("div.body", {}, bodyNode),
-      actions.length ? el("footer", {}, ...actions.map((a) => el("button", { class: a.class || "", onclick: () => a.onClick(dlg) }, a.label))) : null
-    );
-    dlg.addEventListener("close", () => dlg.remove(), { once: true });
-    document.body.append(dlg);
-    dlg.showModal();
-    return dlg;
-  }
-  function download(filename, text, type = "application/json") {
-    const blob = new Blob([text], { type });
-    const url = URL.createObjectURL(blob);
-    const a = el("a", { href: url, download: filename });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4e3);
-  }
-  var ICON_PATHS = {
-    check: "M20 6 9 17l-5-5",
-    play: "M6 4l14 8-14 8z",
-    dot: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
-    chevron: "M9 6l6 6-6 6",
-    search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4",
-    note: "M4 5h16M4 10h16M4 15h10",
-    gear: "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7.9 19.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 7.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z",
-    alert: "M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
-    undo: "M3 7v6h6M3 13a9 9 0 1 0 3-7.7L3 8",
-    x: "M18 6 6 18M6 6l12 12",
-    upload: "M12 16V4M7 9l5-5 5 5M4 20h16",
-    pencil: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
-    clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2"
-  };
-  function icon(name, { size = 16, cls = "" } = {}) {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("width", String(size));
-    svg.setAttribute("height", String(size));
-    svg.setAttribute("fill", "none");
-    svg.setAttribute("stroke", "currentColor");
-    svg.setAttribute("stroke-width", "2");
-    svg.setAttribute("stroke-linecap", "round");
-    svg.setAttribute("stroke-linejoin", "round");
-    svg.setAttribute("aria-hidden", "true");
-    if (cls) svg.setAttribute("class", cls);
-    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    p.setAttribute("d", ICON_PATHS[name] || ICON_PATHS.dot);
-    if (name === "play") {
-      p.setAttribute("fill", "currentColor");
-      p.setAttribute("stroke", "none");
-    }
-    svg.append(p);
-    return svg;
-  }
-  function toastAction(msg, actionLabel, onAction, ms = 6e3) {
-    document.querySelectorAll(".toast").forEach((t2) => t2.remove());
-    const t = el(
-      "div.toast.toast-action",
-      {},
-      el("span", {}, msg),
-      el("button", {
-        onclick: () => {
-          t.remove();
-          onAction();
-        }
-      }, actionLabel)
-    );
-    document.body.append(t);
-    const timer = setTimeout(() => t.remove(), ms);
-    t.addEventListener("remove", () => clearTimeout(timer));
-    return t;
-  }
-  function flash(node) {
-    if (!node || typeof node.animate !== "function") return;
-    node.animate(
-      [{ backgroundColor: "var(--accent-soft)" }, { backgroundColor: "transparent" }],
-      { duration: 700, easing: "ease-out" }
-    );
-  }
-
   // js/app.js
+  init_ui();
   init_store();
 
   // js/views/centre.js
+  init_ui();
   init_store();
 
   // js/model.js
@@ -1398,8 +1640,43 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     if (!entry) return null;
     return { ...entry, date: su.date, shift: su.shift };
   }
+  function shiftWindow(date2, shift) {
+    const mk = (d, h) => {
+      const x = /* @__PURE__ */ new Date(d + "T00:00:00");
+      x.setHours(h, 0, 0, 0);
+      return x.getTime();
+    };
+    if (shift === "DAY") return [mk(date2, 7), mk(date2, 15)];
+    if (shift === "AFT") return [mk(date2, 15), mk(date2, 23)];
+    return [mk(date2, 23), mk(addDays(date2, 1), 7)];
+  }
+  function taskByKey(key) {
+    for (const t of tasksInScope()) {
+      if (taskStatusKey(t) === key) return resolveTask(t);
+    }
+    return null;
+  }
+  function workInShift(machineKey, date2, shift) {
+    const [from, to] = shiftWindow(date2, shift);
+    const seen = /* @__PURE__ */ new Map();
+    for (const h of state.taskHistory || []) {
+      if (h.kind !== "status") continue;
+      const t = Date.parse(h.at);
+      if (!(t >= from && t < to)) continue;
+      if (!h.key.startsWith(machineKey + "|")) continue;
+      if (!seen.has(h.key)) seen.set(h.key, h);
+    }
+    const out = [];
+    for (const [key, h] of seen) {
+      const task = taskByKey(key);
+      if (!task) continue;
+      out.push({ task, to: h.to, by: h.by, at: h.at });
+    }
+    return out.sort((a, b) => a.at < b.at ? -1 : 1);
+  }
 
   // js/views/backorders.js
+  init_ui();
   init_store();
 
   // js/machines.js
@@ -1650,7 +1927,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         ))
       );
     }
-    const sections = groups.map((g) => {
+    const sections2 = groups.map((g) => {
       const short = g.rows.reduce((a, r) => a + (r.bo.qty || 0), 0);
       return el(
         "section.dgroup",
@@ -1707,7 +1984,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         )))
       );
     });
-    return el("div.centre", {}, head, ...sections);
+    return el("div.centre", {}, head, ...sections2);
   }
 
   // js/views/centre.js
@@ -2345,7 +2622,500 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     };
   }
 
+  // js/views/shiftupdate.js
+  init_ui();
+  init_store();
+
+  // js/shifts.js
+  var SHIFTS = {
+    DAY: { key: "DAY", label: "Day", from: 7, to: 15, full: true },
+    AFT: { key: "AFT", label: "Afternoon", from: 15, to: 23, full: true },
+    NIGHT: { key: "NIGHT", label: "Midnight", from: 23, to: 7, full: false, crew: 3 }
+  };
+  var SHIFT_ORDER = ["DAY", "AFT", "NIGHT"];
+  function shiftAt(date2 = /* @__PURE__ */ new Date()) {
+    const h = date2.getHours();
+    if (h >= 7 && h < 15) return "DAY";
+    if (h >= 15 && h < 23) return "AFT";
+    return "NIGHT";
+  }
+
+  // js/views/shiftupdate.js
+  var CENTRES = [
+    ["Rolling", "Rolling"],
+    ["FOM", "FOM"],
+    ["CNC", "CNC"],
+    ["Punch", "Multi Punch"]
+  ];
+  var FIELDS = [
+    ["done", "Work done / in progress"],
+    ["next", "Next in schedule"],
+    ["notes", "Notes"]
+  ];
+  var view = { date: today(), shift: shiftAt(), mode: "write" };
+  var draft = null;
+  var draftKey = null;
+  function logKey(date2, shift) {
+    return `${date2}|${shift}`;
+  }
+  function currentLog() {
+    return state.shiftLogs?.[logKey(view.date, view.shift)] || null;
+  }
+  function loadDraft() {
+    const key = logKey(view.date, view.shift);
+    if (draftKey === key && draft) return draft;
+    const saved = currentLog();
+    draftKey = key;
+    draft = {
+      rows: JSON.parse(JSON.stringify(saved?.rows || {})),
+      notes: saved?.notes || ""
+    };
+    return draft;
+  }
+  function dropDraft() {
+    draft = null;
+    draftKey = null;
+  }
+  function rowFor(key) {
+    const d = loadDraft();
+    if (!d.rows[key]) d.rows[key] = { ops: "", done: "", next: "", notes: "" };
+    return d.rows[key];
+  }
+  function hasContent(r) {
+    return !!(r && (r.done || r.next || r.notes || r.ops));
+  }
+  function sections() {
+    const byGroup = machinesByGroup();
+    const out = [{
+      label: "Department",
+      hint: "Standing rows \u2014 reported every shift",
+      rows: STANDING_ROWS.map((r) => ({ ...r, standing: true }))
+    }];
+    for (const [group, label] of CENTRES) {
+      const rows = (byGroup.get(group) || []).map(machineConfig).filter((m) => !m.hidden);
+      if (rows.length) out.push({ label, rows });
+    }
+    return out;
+  }
+  function suggestions(row, entry, rerender) {
+    const add = (field, text) => {
+      const cur = row[field] || "";
+      if (cur.split("\n").some((l) => l.trim() === text.trim())) return false;
+      row[field] = cur ? `${cur}
+${text}` : text;
+      return true;
+    };
+    const has = (field, text) => (row[field] || "").split("\n").some((l) => l.trim() === text.trim());
+    const group = (label, field, items) => items.length ? el(
+      "div.sug",
+      {},
+      el("span.sug-label", {}, label),
+      el("div.sug-items", {}, ...items.map((text) => {
+        const used = has(field, text);
+        return el("button.sug-chip" + (used ? ".used" : ""), {
+          type: "button",
+          title: used ? "Already in the update" : "Add to " + FIELDS.find(([f]) => f === field)[1],
+          onclick: () => {
+            if (add(field, text)) rerender();
+          }
+        }, icon("check", { size: 10 }), text);
+      }))
+    ) : null;
+    const tracked = entry.tracked || [];
+    const sheet = entry.sheet;
+    return el(
+      "div.sugs",
+      {},
+      group(`Moved this shift \xB7 ${tracked.length}`, "done", tracked),
+      sheet ? group("From the workbook", "done", sheet.done || []) : null,
+      sheet ? group("Next, from the workbook", "next", sheet.next || []) : null,
+      sheet ? group("Workbook notes", "notes", sheet.notes || []) : null
+    );
+  }
+  function trackedLines(machineKey) {
+    if (!machineKey) return [];
+    return workInShift(machineKey, view.date, view.shift).map(({ task, to }) => {
+      const what = task.project || task.wo;
+      const where = task.floor ? ` ${task.floor}` : "";
+      const die = task.die ? ` (${task.die})` : "";
+      const st = to === "DONE" ? " \u2014 Done" : to === "IN_PROGRESS" ? " \u2014 IP" : "";
+      return `${what}${where}${die}${st}`;
+    });
+  }
+  function card(machine, rerender) {
+    const row = rowFor(machine.key);
+    const sheet = machine.standing ? null : shiftUpdateFor(machine.key);
+    const tracked = machine.standing ? [] : trackedLines(machine.key);
+    const filled = hasContent(row);
+    const box = (field, label, placeholder, lines) => el(
+      "label.field",
+      {},
+      el("span", {}, label),
+      el("textarea", {
+        value: row[field] || "",
+        placeholder,
+        rows: lines,
+        oninput: (e) => {
+          row[field] = e.target.value;
+        }
+      })
+    );
+    const pullAll = sheet && (sheet.done.length || sheet.next.length) ? el("button.linkbtn", {
+      type: "button",
+      title: "Copy the workbook entry into all three boxes",
+      onclick: () => {
+        for (const [field, key] of [["done", "done"], ["next", "next"], ["notes", "notes"]]) {
+          const items = sheet[key] || [];
+          if (!items.length) continue;
+          const have = new Set((row[field] || "").split("\n").map((l) => l.trim()));
+          const add = items.filter((t) => !have.has(t.trim()));
+          if (!add.length) continue;
+          row[field] = row[field] ? `${row[field]}
+${add.join("\n")}` : add.join("\n");
+        }
+        rerender();
+      }
+    }, icon("undo", { size: 11 }), "Pull last update") : null;
+    return el(
+      "div.sucard" + (filled ? ".filled" : ""),
+      {},
+      el(
+        "div.sucard-head",
+        {},
+        el("span.sucard-name", {}, machine.label),
+        machine.note ? el("span.sucard-sub", {}, machine.note) : null,
+        sheet?.down ? chip("Down", "bad") : null,
+        el("span.spacer"),
+        pullAll,
+        machine.standing ? null : el(
+          "label.sucard-ops",
+          {},
+          el("span", {}, "#Ops"),
+          el("input", {
+            type: "number",
+            min: "0",
+            inputmode: "numeric",
+            value: row.ops ?? "",
+            placeholder: machine.ops == null ? "\u2014" : String(machine.ops),
+            oninput: (e) => {
+              row.ops = e.target.value;
+            }
+          })
+        )
+      ),
+      el(
+        "div.sucard-body",
+        {},
+        box("done", "Work done / in progress", "1-\n2-\n3-", 3),
+        box("next", "Next in schedule", "1-\n2-\n3-", 3),
+        box("notes", "Notes", "Breakdowns, material, anything the next shift needs", 2)
+      ),
+      suggestions(row, { tracked, sheet }, rerender)
+    );
+  }
+  function writeView(rerender) {
+    const d = loadDraft();
+    const saved = currentLog();
+    const all = sections();
+    const total = all.reduce((a, s) => a + s.rows.length, 0);
+    const done = all.reduce((a, s) => a + s.rows.filter((m) => hasContent(d.rows[m.key])).length, 0);
+    const blocks = all.map((s) => el(
+      "section.dgroup",
+      {},
+      el(
+        "div.dgroup-head",
+        {},
+        el("span.dgroup-label", {}, s.label),
+        el("span.dgroup-count", {}, `${s.rows.filter((m) => hasContent(d.rows[m.key])).length}/${s.rows.length}`),
+        s.hint ? el("span.small.muted", {}, s.hint) : null
+      ),
+      el("div.sugrid", {}, ...s.rows.map((m) => card(m, rerender)))
+    ));
+    return el(
+      "div",
+      {},
+      ...blocks,
+      el(
+        "div.panel.su-general",
+        {},
+        el("header", {}, "General notes"),
+        el(
+          "div.body",
+          {},
+          el("textarea", {
+            value: d.notes,
+            rows: 3,
+            placeholder: "Anything not tied to one machine \u2014 people, material, safety, visitors.",
+            oninput: (e) => {
+              d.notes = e.target.value;
+            }
+          })
+        )
+      ),
+      el(
+        "div.su-actions",
+        {},
+        el(
+          "span.small.muted",
+          {},
+          saved ? `Last saved by ${saved.by} \xB7 ${fmtWhen(saved.at)}` : "Not saved yet",
+          el("span.dot-sep", {}, "\xB7"),
+          `${done} of ${total} filled in`
+        ),
+        el("span.spacer"),
+        saved ? el("button.danger", {
+          onclick: async () => {
+            const ok = await confirmDialog(
+              "Delete this shift update?",
+              `The ${SHIFTS[view.shift].label} update for ${fmtDate(view.date, { withDay: true })} will be removed for everyone.`,
+              { confirmLabel: "Delete", danger: true }
+            );
+            if (!ok) return;
+            deleteShiftLog(logKey(view.date, view.shift));
+            dropDraft();
+            toast("Shift update deleted");
+            rerender();
+          }
+        }, "Delete") : null,
+        el("button.primary", {
+          onclick: () => {
+            const rows = Object.fromEntries(
+              Object.entries(d.rows).filter(([, r]) => hasContent(r))
+            );
+            if (!Object.keys(rows).length && !d.notes.trim()) {
+              toast("Fill in at least one machine first");
+              return;
+            }
+            saveShiftLog(view.date, view.shift, { rows, notes: d.notes.trim() });
+            dropDraft();
+            view.mode = "read";
+            toast("Shift update saved");
+            rerender();
+          }
+        }, icon("check", { size: 14 }), "Save shift update")
+      )
+    );
+  }
+  function asText(log) {
+    const out = [`${SHIFTS[log.shift]?.label || log.shift} shift \u2014 ${fmtDate(log.date, { withDay: true })}`, ""];
+    for (const s of sections()) {
+      const rows = s.rows.filter((m) => hasContent(log.rows[m.key]));
+      if (!rows.length) continue;
+      out.push(`== ${s.label} ==`);
+      for (const m of rows) {
+        const r = log.rows[m.key];
+        out.push(`${m.label}${r.ops ? `  (${r.ops} ops)` : ""}`);
+        for (const [field, label] of FIELDS) {
+          if (!r[field]) continue;
+          out.push(`  ${label}:`);
+          for (const line of String(r[field]).split("\n")) {
+            if (line.trim()) out.push(`    ${line.trim()}`);
+          }
+        }
+        out.push("");
+      }
+    }
+    if (log.notes) out.push("== General notes ==", log.notes, "");
+    out.push(`Written by ${log.by}`);
+    return out.join("\n");
+  }
+  function readView(rerender) {
+    const log = currentLog();
+    if (!log) {
+      return el("div.panel", {}, el(
+        "div.empty",
+        {},
+        el("div.empty-icon", {}, icon("note", { size: 28 })),
+        el("h3", {}, "Nothing written for this shift"),
+        el("p", {}, `No ${SHIFTS[view.shift].label.toLowerCase()} update for ${fmtDate(view.date, { withDay: true })}.`),
+        el("button.primary", {
+          style: { marginTop: "12px" },
+          onclick: () => {
+            view.mode = "write";
+            rerender();
+          }
+        }, "Write the update")
+      ));
+    }
+    const blocks = sections().map((s) => {
+      const rows = s.rows.filter((m) => hasContent(log.rows[m.key]));
+      if (!rows.length) return null;
+      return el(
+        "section.dgroup",
+        {},
+        el("div.dgroup-head", {}, el("span.dgroup-label", {}, s.label)),
+        el("div.dgroup-body", {}, ...rows.map((m) => {
+          const r = log.rows[m.key];
+          return el(
+            "div.suread",
+            {},
+            el(
+              "div.suread-name",
+              {},
+              el("strong", {}, m.label),
+              r.ops ? chip(`${r.ops} ops`, "mute") : null
+            ),
+            el("div.suread-cols", {}, ...FIELDS.map(([field, label]) => r[field] ? el(
+              "div.suread-col",
+              {},
+              el("div.su-label", {}, label),
+              el("div.suread-text", {}, String(r[field]))
+            ) : null))
+          );
+        }))
+      );
+    }).filter(Boolean);
+    return el(
+      "div",
+      {},
+      ...blocks,
+      log.notes ? el(
+        "div.panel.su-general",
+        {},
+        el("header", {}, "General notes"),
+        el("div.body", {}, el("div.suread-text", {}, log.notes))
+      ) : null,
+      el(
+        "div.su-actions",
+        {},
+        el("span.small.muted", {}, `Written by ${log.by} \xB7 ${fmtWhen(log.at)}`),
+        el("span.spacer"),
+        el("button", {
+          onclick: async () => {
+            const text = asText(log);
+            try {
+              await navigator.clipboard.writeText(text);
+              toast("Copied \u2014 paste it wherever you need");
+            } catch {
+              const ta = el("textarea", {
+                value: text,
+                style: { width: "100%", minHeight: "340px", fontFamily: "inherit" }
+              });
+              const { modal: modal2 } = await Promise.resolve().then(() => (init_ui(), ui_exports));
+              modal2("Shift update text", ta, { wide: true });
+              ta.select();
+            }
+          }
+        }, icon("note", { size: 14 }), "Copy as text"),
+        el("button.primary", {
+          onclick: () => {
+            view.mode = "write";
+            rerender();
+          }
+        }, icon("pencil", { size: 14 }), "Edit")
+      )
+    );
+  }
+  function renderShiftUpdate(rerender, go2) {
+    if (!hasTasks()) {
+      return el(
+        "div.panel",
+        {},
+        el(
+          "div.empty",
+          {},
+          el("div.empty-icon", {}, icon("upload", { size: 28 })),
+          el("h3", {}, "No schedule loaded yet"),
+          el("p", {}, "Import the Rolling and CNC workbooks to get started."),
+          el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
+        )
+      );
+    }
+    const posted = Object.values(state.shiftLogs || {}).sort((a, b) => a.date + SHIFT_ORDER.indexOf(a.shift) < b.date + SHIFT_ORDER.indexOf(b.shift) ? 1 : -1);
+    const saved = currentLog();
+    const head = el(
+      "div.centre-head",
+      {},
+      el(
+        "div.row.centre-title-row",
+        {},
+        el(
+          "div",
+          {},
+          el("h1.centre-title", {}, "Shift update"),
+          el("div.centre-sub", {}, `Writing as ${me()}`)
+        ),
+        el("span.spacer"),
+        el(
+          "div.su-when",
+          {},
+          el("input.su-date", {
+            type: "date",
+            value: view.date,
+            "aria-label": "Shift date",
+            onchange: (e) => {
+              view.date = e.target.value || today();
+              dropDraft();
+              rerender();
+            }
+          }),
+          el("div.subtabs", {}, ...SHIFT_ORDER.map((k) => el("button", {
+            "aria-current": String(view.shift === k),
+            title: SHIFTS[k].full ? "Full crew" : `${SHIFTS[k].crew}-person crew`,
+            onclick: () => {
+              view.shift = k;
+              dropDraft();
+              rerender();
+            }
+          }, SHIFTS[k].label)))
+        )
+      ),
+      el(
+        "div.centre-filters",
+        {},
+        el("div.filterpills", {}, ...[["write", "Write"], ["read", "Read"]].map(([k, label]) => el("button.pill", {
+          "aria-current": String(view.mode === k),
+          onclick: () => {
+            view.mode = k;
+            rerender();
+          }
+        }, label))),
+        saved ? chip("saved", "ok") : chip("not written yet", "warn"),
+        SHIFTS[view.shift].full ? null : chip(`${SHIFTS[view.shift].crew}-person crew`, "mute"),
+        el("span.spacer"),
+        posted.length ? el("span.small.muted", {}, `${posted.length} update${posted.length === 1 ? "" : "s"} on file`) : null
+      )
+    );
+    const recent = posted.length ? el(
+      "div.panel.su-recent",
+      {},
+      el("header", {}, "Recent updates"),
+      el("ul.list", {}, ...posted.slice(0, 8).map((l) => {
+        const here = l.date === view.date && l.shift === view.shift;
+        return el(
+          "li.su-recentrow" + (here ? ".here" : ""),
+          {
+            onclick: () => {
+              view.date = l.date;
+              view.shift = l.shift;
+              view.mode = "read";
+              dropDraft();
+              rerender();
+            }
+          },
+          chip(SHIFTS[l.shift]?.label || l.shift, SHIFTS[l.shift]?.full ? "mute" : "warn"),
+          el("strong", {}, fmtDate(l.date, { withDay: true })),
+          el(
+            "span.muted.small",
+            {},
+            `${Object.keys(l.rows || {}).length} machine${Object.keys(l.rows || {}).length === 1 ? "" : "s"}`
+          ),
+          el("span.spacer"),
+          el("span.muted.small", {}, `${l.by} \xB7 ${fmtWhen(l.at)}`)
+        );
+      }))
+    ) : null;
+    return el(
+      "div.centre",
+      {},
+      head,
+      view.mode === "write" ? writeView(rerender) : readView(rerender),
+      recent
+    );
+  }
+
   // js/views/data.js
+  init_ui();
   init_store();
 
   // js/xlsx.js
@@ -2353,43 +3123,43 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   var SIG_EOCD64_LOC = 117853008;
   var SIG_EOCD64 = 101075792;
   var SIG_CENTRAL = 33639248;
-  function findEOCD(view, bytes) {
+  function findEOCD(view2, bytes) {
     const min = Math.max(0, bytes.length - 65557);
     for (let i = bytes.length - 22; i >= min; i--) {
-      if (view.getUint32(i, true) === SIG_EOCD) return i;
+      if (view2.getUint32(i, true) === SIG_EOCD) return i;
     }
     throw new Error("Not a valid .xlsx file (no ZIP end-of-directory record found).");
   }
   function readDirectory(bytes) {
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const eocd = findEOCD(view, bytes);
-    let count = view.getUint16(eocd + 10, true);
-    let dirOffset = view.getUint32(eocd + 16, true);
+    const view2 = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const eocd = findEOCD(view2, bytes);
+    let count = view2.getUint16(eocd + 10, true);
+    let dirOffset = view2.getUint32(eocd + 16, true);
     if (dirOffset === 4294967295 || count === 65535) {
       const locatorOff = eocd - 20;
-      if (locatorOff >= 0 && view.getUint32(locatorOff, true) === SIG_EOCD64_LOC) {
-        const z64 = Number(view.getBigUint64(locatorOff + 8, true));
-        if (view.getUint32(z64, true) === SIG_EOCD64) {
-          count = Number(view.getBigUint64(z64 + 32, true));
-          dirOffset = Number(view.getBigUint64(z64 + 48, true));
+      if (locatorOff >= 0 && view2.getUint32(locatorOff, true) === SIG_EOCD64_LOC) {
+        const z64 = Number(view2.getBigUint64(locatorOff + 8, true));
+        if (view2.getUint32(z64, true) === SIG_EOCD64) {
+          count = Number(view2.getBigUint64(z64 + 32, true));
+          dirOffset = Number(view2.getBigUint64(z64 + 48, true));
         }
       }
     }
     const entries = /* @__PURE__ */ new Map();
     let p = dirOffset;
     for (let i = 0; i < count; i++) {
-      if (view.getUint32(p, true) !== SIG_CENTRAL) break;
-      const method = view.getUint16(p + 10, true);
-      const compSize = view.getUint32(p + 20, true);
-      const nameLen = view.getUint16(p + 28, true);
-      const extraLen = view.getUint16(p + 30, true);
-      const commentLen = view.getUint16(p + 32, true);
-      const localOffset = view.getUint32(p + 42, true);
+      if (view2.getUint32(p, true) !== SIG_CENTRAL) break;
+      const method = view2.getUint16(p + 10, true);
+      const compSize = view2.getUint32(p + 20, true);
+      const nameLen = view2.getUint16(p + 28, true);
+      const extraLen = view2.getUint16(p + 30, true);
+      const commentLen = view2.getUint16(p + 32, true);
+      const localOffset = view2.getUint32(p + 42, true);
       const name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nameLen));
       entries.set(name, { method, compSize, localOffset });
       p += 46 + nameLen + extraLen + commentLen;
     }
-    return { entries, bytes, view };
+    return { entries, bytes, view: view2 };
   }
   async function inflate(raw) {
     const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
@@ -3228,19 +3998,6 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     );
   }
 
-  // js/shifts.js
-  var SHIFTS = {
-    DAY: { key: "DAY", label: "Day", from: 7, to: 15, full: true },
-    AFT: { key: "AFT", label: "Afternoon", from: 15, to: 23, full: true },
-    NIGHT: { key: "NIGHT", label: "Midnight", from: 23, to: 7, full: false, crew: 3 }
-  };
-  function shiftAt(date2 = /* @__PURE__ */ new Date()) {
-    const h = date2.getHours();
-    if (h >= 7 && h < 15) return "DAY";
-    if (h >= 15 && h < 23) return "AFT";
-    return "NIGHT";
-  }
-
   // js/app.js
   var TABS = [
     { key: "rolling", label: "Rolling", render: makeCentreView("Rolling") },
@@ -3248,6 +4005,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     { key: "cnc", label: "CNC", render: makeCentreView("CNC") },
     { key: "punch", label: "Multi Punch", render: makeCentreView("Punch") },
     { key: "backorders", label: "Back Orders", render: renderBackOrders },
+    { key: "shift", label: "Shift Update", render: renderShiftUpdate },
     { key: "setup", label: "Setup", render: renderData }
   ];
   var current = location.hash.slice(1) || "rolling";

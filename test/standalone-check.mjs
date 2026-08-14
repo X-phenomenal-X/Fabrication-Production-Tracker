@@ -38,7 +38,9 @@ step('File System Access available: ' + await page.evaluate(() => 'showOpenFileP
 
 const tabs = await page.$$eval('nav.tabs button', (ns) => ns.map((n) => n.textContent.trim()));
 step('tabs: ' + tabs.join(', '));
-if (tabs.join(',') !== 'Rolling,FOM,CNC,Multi Punch,Setup') throw new Error('unexpected nav: ' + tabs.join(','));
+if (tabs.join(',') !== 'Rolling,FOM,CNC,Multi Punch,Back Orders,Shift Update,Setup') {
+  throw new Error('unexpected nav: ' + tabs.join(','));
+}
 
 // import Rolling + CNC through the real UI
 await page.click('nav.tabs button:has-text("Setup")');

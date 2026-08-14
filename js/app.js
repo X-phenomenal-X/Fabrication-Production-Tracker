@@ -4,6 +4,7 @@ import { el, clear, chip } from './ui.js';
 import { state, loadLocal, save, onChange, me, sharedFileName } from './store.js';
 import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
+import { renderShiftUpdate } from './views/shiftupdate.js';
 import { renderData, initSharedFile } from './views/data.js';
 import { SHIFTS, shiftAt } from './shifts.js';
 
@@ -15,6 +16,7 @@ const TABS = [
   { key: 'cnc', label: 'CNC', render: makeCentreView('CNC') },
   { key: 'punch', label: 'Multi Punch', render: makeCentreView('Punch') },
   { key: 'backorders', label: 'Back Orders', render: renderBackOrders },
+  { key: 'shift', label: 'Shift Update', render: renderShiftUpdate },
   { key: 'setup', label: 'Setup', render: renderData },
 ];
 
