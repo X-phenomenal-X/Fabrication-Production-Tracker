@@ -64,7 +64,44 @@ function tokenise(text) {
 
 const NOISE = /Caldari Road|bvglazing\.com|REVISION LOG|SERIES UPDATES|^DATE\b|^\d{4}-\d{2}-\d{2}$|^-+$/;
 
+/* The drawing sheets carry the same components in a cleaner table than the
+   listings do — one header line and one row of four values:
+
+       SA80-106HTX - 1" Vert. Male Split Mullion Frame_HT w/Foam
+       Exterior      Upper           Lower           Interior
+       Aluminum      Thermal Break   Thermal Break   Aluminum
+        80-113        84-916          84-916          80-105
+
+   Worth reading, because a series whose listing PDF cannot be fetched can
+   still be recovered from its drawings. Tried first; the listings fall
+   through to the scanner below because their layout does not match. */
+const DWG_HEAD = /^\s*(SA\d{2}-\d{3}[A-Z]*)\s*[-\u2013]\s*(.+?)\s*$/m;
+const DWG_VALS = new RegExp(
+  '^\\s*(-{2,}|\\d{2}-\\d{3}[A-Z]*)\\s+(-{2,}|\\d{2}-\\d{3}[A-Z]*)'
+  + '\\s+(-{2,}|\\d{2}-\\d{3}[A-Z]*)\\s+(-{2,}|\\d{2}-\\d{3}[A-Z]*)\\s*$', 'm');
+
+function parseDrawingTables(text, series) {
+  const out = [];
+  for (const page of text.split('\f')) {
+    const head = DWG_HEAD.exec(page);
+    if (!head) continue;
+    const vals = DWG_VALS.exec(page.slice(head.index + head[0].length));
+    if (!vals) continue;
+    const die = (v) => (/^\d/.test(v) ? v : null);
+    out.push({
+      sa: head[1], series, desc: head[2].replace(/\s+/g, ' ').trim() || null,
+      exterior: die(vals[1]), upperTB: die(vals[2]),
+      lowerTB: die(vals[3]), interior: die(vals[4]),
+      note: null,
+    });
+  }
+  return out;
+}
+
 function parse(text, series) {
+  const fromDrawings = parseDrawingTables(text, series);
+  if (fromDrawings.length) return fromDrawings;
+
   const out = [];
   let cur = null;
 
