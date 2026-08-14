@@ -58,8 +58,19 @@ scan.
 
 ## Status
 
-Three states, one click each: **Not started → In Progress → Done**. This
-replaces editing the Status cell in the spreadsheet.
+Three states, shown as an explicit segmented control: **Not started ·
+In Progress · Done**. Tap the state you want — it does not cycle. Cycling
+means a mis-tap silently advances a line and going Done → Not started takes
+three taps; with gloves on, neither is acceptable.
+
+Every change raises an **Undo** for a few seconds.
+
+**Select lines and set them together.** Each line has a checkbox and each date
+group has *Select all*; a bar appears at the bottom to apply one status to the
+whole selection, also undoable. A shift finishing 74 overdue lines for one
+project should not click 74 times.
+
+This replaces editing the Status cell in the spreadsheet.
 
 A status you set is stored keyed by `machine|wo|die` — deliberately *not* the
 sheet row it happened to sit on, since row numbers shift on every re-import.
@@ -71,6 +82,19 @@ for a line that is running *and* short of material. Reading that as a single
 status silently loses the back-order half — 67 open lines in the sample data.
 It is parsed into its own flag and shown as a red **B/O** badge beside the
 status, and counted in the header.
+
+## Notes
+
+Any line can carry a free-text note — what is holding it up, what was short,
+anything the next shift needs. Notes show inline on the line, are stamped with
+who and when, and are searchable. This is the field the spreadsheets never had.
+
+## Editing the setup
+
+Each machine has a gear icon: rename it, change what it runs, and set the usual
+operator count. Those overrides are stored with everything else and shared
+through the same file, so the department's naming wins over the built-in
+labels.
 
 ## Latest shift update
 
@@ -120,4 +144,17 @@ node test/app-check.mjs            # walks all four centre pages, status click, 
 node build.mjs && node test/standalone-check.mjs   # same against the built file, opened via file://
 ```
 
-`test/app-check.mjs` writes screenshots to `test/screens/`.
+`test/app-check.mjs` writes screenshots to `test/screens/`. It covers the
+status control, undo, bulk apply, notes, machine rename, and that a status
+survives both a reload and a re-import.
+
+## Interface notes
+
+- Everything is keyboard- and pointer-accessible; the segmented control uses
+  `aria-pressed`, groups use `aria-expanded`.
+- Icons are inline SVG — nothing is fetched, so the app still runs from a
+  network share with no internet.
+- Transitions are short (120–180ms) and are disabled entirely under
+  `prefers-reduced-motion`.
+- Light and dark both ship; the palette is defined once as tokens and only the
+  values change under `prefers-color-scheme: dark`.

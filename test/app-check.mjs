@@ -154,12 +154,24 @@ await page.waitForTimeout(250);
 
 const line = page.locator('.line').filter({ hasText: target.wo })
   .filter({ hasText: target.die || '—' }).first();
-const before = (await line.locator('.status').textContent()).trim();
-await line.locator('.status').click();
+const activeTitle = () => line.locator('.seg-btn[aria-pressed="true"]').getAttribute('title');
+const before = await activeTitle();
+// Explicit three-way control: pick the state directly rather than cycling.
+await line.locator('.seg-btn[title="In Progress"]').click();
 await page.waitForTimeout(250);
-const after = (await line.locator('.status').textContent()).trim();
-step(`status cycled: "${before}" -> "${after}"`);
+const after = await activeTitle();
+step(`status set: "${before}" -> "${after}"`);
 if (after !== 'In Progress') throw new Error(`expected "In Progress", got "${after}"`);
+
+// undo restores it
+const undo = page.locator('.toast-action button');
+if (await undo.count()) {
+  await undo.click();
+  await page.waitForTimeout(250);
+  step('undo restored: "' + (await activeTitle()) + '"');
+  await line.locator('.seg-btn[title="In Progress"]').click();
+  await page.waitForTimeout(250);
+}
 
 const key = `roll-auto|${target.wo}|${target.die}`;
 const stored = await page.evaluate((k) => import('/js/store.js').then((m) => m.state.taskStatus[k]), key);
@@ -185,6 +197,43 @@ await page.waitForSelector('dialog', { state: 'detached' });
 const afterReimport = await page.evaluate((k) => import('/js/store.js').then((m) => m.state.taskStatus[k]), key);
 step('after re-import: ' + JSON.stringify(afterReimport));
 if (afterReimport?.status !== stored.status) throw new Error('status lost on re-import — stable key broken');
+
+// bulk select + apply — the re-import check left us on Setup
+await page.click('nav.tabs button:has-text("Rolling")');
+await page.waitForFunction(() => document.querySelector('.centre-title')?.textContent.trim() === 'Rolling (Auto)');
+await page.$$eval('.dgroup-pick', (ns) => ns[0]?.click());
+await page.waitForTimeout(250);
+const bulkCount = await page.locator('.bulk-count').textContent().catch(() => null);
+step('bulk bar: ' + (bulkCount || 'not shown'));
+if (!bulkCount) throw new Error('bulk bar did not appear after Select all');
+await page.locator('.bulk-btn', { hasText: 'Done' }).click();
+await page.waitForTimeout(300);
+const bulkApplied = await page.evaluate(() => import('/js/store.js').then((m) =>
+  Object.values(m.state.taskStatus).filter((v) => v.status === 'DONE').length));
+step('lines set to Done in bulk: ' + bulkApplied);
+if (bulkApplied < 2) throw new Error('bulk apply did not take');
+await page.locator('.toast-action button').click();   // undo the bulk change
+await page.waitForTimeout(300);
+step('bulk undone');
+
+// a note can be added to a line
+await page.locator('.line-notebtn').first().click();
+await page.waitForSelector('dialog textarea');
+await page.fill('dialog textarea', 'Waiting on 3 bars from the mill.');
+await page.click('dialog footer button.primary');
+await page.waitForTimeout(250);
+const noteCount = await page.evaluate(() => import('/js/store.js').then((m) =>
+  Object.keys(m.state.taskNote).length));
+step('notes stored: ' + noteCount);
+if (!noteCount) throw new Error('note was not saved');
+
+// machine can be renamed
+await page.locator('.iconbtn').first().click();
+await page.waitForSelector('dialog input');
+await page.fill('dialog input', 'Etas Line 1');
+await page.click('dialog footer button.primary');
+await page.waitForFunction(() => document.querySelector('.centre-title')?.textContent.trim() === 'Etas Line 1');
+step('machine renamed to: ' + await page.$eval('.centre-title', (n) => n.textContent.trim()));
 
 // phone
 await page.click('nav.tabs button:has-text("Rolling")');

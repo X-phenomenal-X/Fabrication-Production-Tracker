@@ -65,7 +65,7 @@ step('shift update panel: ' + (suOk ? 'shown' : 'absent'));
 // status click survives a reload from disk. This build is a single bundled
 // IIFE with no importable /js/*.js modules from outside it, so the target
 // row is found from the rendered DOM rather than by reaching into JS state.
-const scout = page.locator('.line').filter({ has: page.locator('.status', { hasText: 'Not started' }) }).first();
+const scout = page.locator('.line').filter({ has: page.locator('.seg-btn[aria-pressed="true"][title="Not started"]') }).first();
 const wo = (await scout.locator('.line-id .mono').textContent()).trim();
 const dieEl = scout.locator('.die');
 const die = (await dieEl.count()) ? (await dieEl.textContent()).trim() : '';
@@ -76,9 +76,9 @@ step(`target line: W/O ${wo} die ${die || '(none)'}`);
 // text, so re-resolving it would silently grab a different, unclicked row.
 const stableRow = page.locator('.line').filter({ hasText: wo })
   .filter({ hasText: die || '—' }).first();
-await stableRow.locator('.status').click();
+await stableRow.locator('.seg-btn[title="In Progress"]').click();
 await page.waitForTimeout(300);
-const afterClick = (await stableRow.locator('.status').textContent()).trim();
+const afterClick = await stableRow.locator('.seg-btn[aria-pressed="true"]').getAttribute('title');
 if (afterClick !== 'In Progress') throw new Error(`expected "In Progress", got "${afterClick}"`);
 
 const key = `roll-auto|${wo}|${die}`;

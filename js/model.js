@@ -98,13 +98,19 @@ export function dateGroupOf(task, ref = today()) {
 }
 
 /** A machine's queue, bucketed by cutting date and ready to render. */
-export function groupedQueue(machineKey, { showDone = false, q = '', ref = today() } = {}) {
+export function groupedQueue(machineKey, { showDone = false, q = '', filter = 'ALL', ref = today() } = {}) {
   const term = q.trim().toLowerCase();
   const rows = tasksForMachine(machineKey)
     .filter((r) => showDone || r.status.key !== 'DONE')
     .filter((r) => {
+      if (filter === 'ALL') return true;
+      if (filter === 'BO') return !!r.task.backOrder;
+      return r.status.key === filter;
+    })
+    .filter((r) => {
       if (!term) return true;
-      const hay = [r.task.wo, r.task.project, r.task.floor, r.task.die]
+      const note = taskNoteFor(taskStatusKey(r.task))?.text || '';
+      const hay = [r.task.wo, r.task.project, r.task.floor, r.task.die, r.task.comments, note]
         .filter(Boolean).join(' ').toLowerCase();
       return hay.includes(term);
     });
@@ -128,6 +134,26 @@ export function machineSummary(machineKey, ref = today()) {
     overdue: open.filter((r) => dateGroupOf(r.task, ref) === 'OVERDUE').length,
     backOrder: open.filter((r) => r.task.backOrder).length,
     done: all.length - open.length,
+  };
+}
+
+/* ---------- notes & machine config ---------- */
+
+export function taskNoteFor(key) {
+  return state.taskNote?.[key] || null;
+}
+
+/** A machine as the department has configured it: the built-in definition
+    with any local overrides (renamed, re-noted, different crew) applied. */
+export function machineConfig(machine) {
+  const cfg = state.machineConfig?.[machine.key] || {};
+  return {
+    ...machine,
+    label: cfg.label || machine.label,
+    note: cfg.note !== undefined ? cfg.note : machine.note,
+    ops: cfg.ops !== undefined && cfg.ops !== null ? cfg.ops : machine.ops,
+    hidden: !!cfg.hidden,
+    customised: !!(cfg.label || cfg.note !== undefined || cfg.ops != null),
   };
 }
 

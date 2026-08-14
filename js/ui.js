@@ -150,3 +150,77 @@ export function download(filename, text, type = 'application/json') {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
+
+/* ---------- icons ---------- */
+
+/* Inline SVG so nothing is fetched — the app has to run from a network share
+   with no internet. 24x24 grid, stroke-based, sized by CSS. */
+const ICON_PATHS = {
+  check: 'M20 6 9 17l-5-5',
+  play: 'M6 4l14 8-14 8z',
+  dot: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+  chevron: 'M9 6l6 6-6 6',
+  search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4',
+  note: 'M4 5h16M4 10h16M4 15h10',
+  gear: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7.9 19.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 7.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z',
+  alert: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
+  undo: 'M3 7v6h6M3 13a9 9 0 1 0 3-7.7L3 8',
+  x: 'M18 6 6 18M6 6l12 12',
+  upload: 'M12 16V4M7 9l5-5 5 5M4 20h16',
+};
+
+export function icon(name, { size = 16, cls = '' } = {}) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  if (cls) svg.setAttribute('class', cls);
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', ICON_PATHS[name] || ICON_PATHS.dot);
+  if (name === 'play') { p.setAttribute('fill', 'currentColor'); p.setAttribute('stroke', 'none'); }
+  svg.append(p);
+  return svg;
+}
+
+/** Toast with an action, e.g. Undo. Returns the node so it can be dismissed. */
+export function toastAction(msg, actionLabel, onAction, ms = 6000) {
+  document.querySelectorAll('.toast').forEach((t) => t.remove());
+  const t = el('div.toast.toast-action', {},
+    el('span', {}, msg),
+    el('button', {
+      onclick: () => { t.remove(); onAction(); },
+    }, actionLabel));
+  document.body.append(t);
+  const timer = setTimeout(() => t.remove(), ms);
+  t.addEventListener('remove', () => clearTimeout(timer));
+  return t;
+}
+
+/** Expand/collapse a block by animating its natural height, then releasing
+    the constraint so later content changes are not clipped. */
+export function animateHeight(node, expand) {
+  if (typeof node.animate !== 'function') return;
+  const h = node.scrollHeight;
+  const from = expand ? 0 : h;
+  const to = expand ? h : 0;
+  node.style.overflow = 'hidden';
+  const anim = node.animate(
+    [{ height: from + 'px', opacity: expand ? 0 : 1 },
+     { height: to + 'px', opacity: expand ? 1 : 0 }],
+    { duration: 180, easing: 'cubic-bezier(.4,0,.2,1)' });
+  anim.onfinish = () => { node.style.overflow = ''; node.style.height = ''; };
+}
+
+/** Brief highlight so a change is visible where it happened. */
+export function flash(node) {
+  if (!node || typeof node.animate !== 'function') return;
+  node.animate(
+    [{ backgroundColor: 'var(--accent-soft)' }, { backgroundColor: 'transparent' }],
+    { duration: 700, easing: 'ease-out' });
+}

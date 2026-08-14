@@ -27,6 +27,8 @@ export const state = {
   machineMeta: {},  // kind -> { fileName, importedAt, count }
   taskStatus: {},   // `${machine}|${wo}|${die}` -> { status, at, by }
   shiftUpdate: null, // latest Shift Update sheet: { date, shift, machines }
+  taskNote: {},     // `${machine}|${wo}|${die}` -> { text, at, by }
+  machineConfig: {}, // machineKey -> { label, note, ops, hidden }
   people: [],
   settings: { me: null },
 };
@@ -67,6 +69,48 @@ export function setTaskStatus(key, status) {
   save();
 }
 
+/** Set several lines at once — a shift finishing a batch should not have to
+    click each line. Returns what the previous values were, so it can be undone. */
+export function setTaskStatusMany(keys, status) {
+  const before = keys.map((k) => ({ key: k, prev: state.taskStatus[k]?.status ?? null }));
+  const at = now();
+  const by = me();
+  for (const k of keys) state.taskStatus[k] = { status, at, by };
+  save();
+  return before;
+}
+
+/** Restore a set of lines to what they were before the last change. */
+export function restoreTaskStatus(before) {
+  const at = now();
+  const by = me();
+  for (const { key, prev } of before) {
+    if (prev == null) delete state.taskStatus[key];
+    else state.taskStatus[key] = { status: prev, at, by };
+  }
+  save();
+}
+
+/** A free-text note an operator can leave on a line — why it is stuck, what
+    was short, anything the next shift needs. Empty text clears it. */
+export function setTaskNote(key, text) {
+  const t = String(text || '').trim();
+  if (!t) delete state.taskNote[key];
+  else state.taskNote[key] = { text: t, at: now(), by: me() };
+  save();
+}
+
+/** Per-machine overrides: display name, note and usual operator count. */
+export function setMachineConfig(key, patch) {
+  const cur = state.machineConfig[key] || {};
+  const next = { ...cur, ...patch, at: now(), by: me() };
+  for (const k of ['label', 'note']) {
+    if (next[k] != null && !String(next[k]).trim()) delete next[k];
+  }
+  state.machineConfig[key] = next;
+  save();
+}
+
 /** Load a machine workbook. Tasks for that workbook's machines are replaced;
     the other workbook's tasks are left alone, so Rolling and CNC can be
     imported independently. */
@@ -92,6 +136,8 @@ function snapshot() {
     machineMeta: state.machineMeta,
     taskStatus: state.taskStatus,
     shiftUpdate: state.shiftUpdate,
+    taskNote: state.taskNote,
+    machineConfig: state.machineConfig,
     people: state.people,
     settings: state.settings,
   };
@@ -189,6 +235,8 @@ function mergeRecords(mine = {}, theirs = {}) {
 function mergeSnapshot(remote) {
   if (!remote) return;
   state.taskStatus = mergeRecords(state.taskStatus, remote.taskStatus);
+  state.taskNote = mergeRecords(state.taskNote, remote.taskNote);
+  state.machineConfig = mergeRecords(state.machineConfig, remote.machineConfig);
   state.people = Array.from(new Set([...(state.people || []), ...(remote.people || [])]));
 
   // Machine tasks come from whichever side imported them most recently.
