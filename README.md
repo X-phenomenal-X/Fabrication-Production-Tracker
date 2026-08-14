@@ -403,10 +403,31 @@ produces a sentence an operator can act on rather than a stack trace.
 ## Interface notes
 
 - Everything is keyboard- and pointer-accessible; the segmented control uses
-  `aria-pressed`, groups use `aria-expanded`.
+  `aria-pressed`, groups use `aria-expanded`. **Keyboard focus draws a visible
+  ring** on every interactive element via `:focus-visible`, so it never shows
+  for pointer users.
+- **Contrast meets WCAG AA.** `--ink-3` carries most of the secondary text on
+  the page — stat labels, dates, counts — and used to sit at 2.9:1 on white,
+  which fails. It is now 4.8:1 light and 5.1:1 dark. On a shop floor under
+  glare that is the difference between readable and squinted at.
+- **Elevation is tokenised** (`--shadow-1/2/3` plus `--sheen`) because dark
+  mode cannot reuse light-mode shadows: a black shadow on a near-black surface
+  is invisible, which is why the dark theme used to read completely flat. Dark
+  adds a hairline top highlight instead.
+- Numbers use `font-variant-numeric: tabular-nums` globally — quantities down a
+  column and counts across the stat strip are read against each other.
 - Icons are inline SVG — nothing is fetched, so the app still runs from a
-  network share with no internet.
-- Transitions are short (120–180ms) and are disabled entirely under
-  `prefers-reduced-motion`.
+  network share with no internet. No web fonts either, for the same reason.
+- Transitions are short (100–180ms) and are disabled entirely under
+  `prefers-reduced-motion`. Buttons depress on `:active`: with gloves on, that
+  is most of the confirmation you get that a tap landed.
 - Light and dark both ship; the palette is defined once as tokens and only the
   values change under `prefers-color-scheme: dark`.
+- **On a phone** the header collapses to one row — the tagline is dropped and
+  the nav moves below with `order`, reclaiming about 100px of vertical space
+  before any content. The nav scrolls horizontally in a single row rather than
+  wrapping to three.
+- **There is a print stylesheet.** Printing a queue or a shift update for the
+  floor is a real thing people do with a page like this; it hides the nav,
+  sticky headers, per-line tools and the action bar, and keeps rows from
+  breaking across pages.

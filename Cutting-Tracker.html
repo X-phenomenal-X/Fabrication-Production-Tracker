@@ -16,48 +16,75 @@
 /* BV Cutting — department tracker */
 
 :root {
-  --bg: #f4f6f8;
+  --bg: #eef1f5;
   --panel: #ffffff;
-  --panel-2: #fafbfc;
-  --line: #dfe4ea;
-  --line-soft: #eceff3;
-  --ink: #16202b;
-  --ink-2: #5b6b7c;
-  --ink-3: #8b9aab;
-  --accent: #1f6feb;
-  --accent-soft: #e8f0fe;
-  --ok: #1a7f4b;
-  --ok-soft: #e4f5ec;
-  --warn: #a8620a;
-  --warn-soft: #fdf1de;
-  --bad: #c0341d;
-  --bad-soft: #fdeae6;
-  --work: #6b3fc4;
-  --work-soft: #f0eafc;
+  --panel-2: #f7f9fb;
+  --line: #d8dee7;
+  --line-soft: #e8ecf1;
+  --ink: #131c26;
+  --ink-2: #55657a;
+  /* #64748b, not the lighter grey this used to be: at 2.9:1 on white the old
+     value failed WCAG AA, and this token carries most of the secondary text on
+     the page — stat labels, dates, counts. Under shop lighting and glare that
+     is the difference between readable and squinted at. Now 4.8:1. */
+  --ink-3: #64748b;
+
+  --accent: #1667d8;
+  --accent-soft: #e7f0fd;
+  --ok: #16794a;
+  --ok-soft: #e2f4ea;
+  --warn: #9d5c06;
+  --warn-soft: #fdf0dc;
+  --bad: #bc3119;
+  --bad-soft: #fde9e5;
+  --work: #6438bf;
+  --work-soft: #efe9fc;
+
+  /* Elevation. Defined as tokens because dark mode cannot use the same
+     shadows — a black shadow on a near-black surface is invisible, which is
+     why the dark theme used to read completely flat. */
+  --shadow-1: 0 1px 2px rgba(19,28,38,.06);
+  --shadow-2: 0 1px 2px rgba(19,28,38,.05), 0 4px 12px rgba(19,28,38,.06);
+  --shadow-3: 0 2px 6px rgba(19,28,38,.08), 0 12px 32px rgba(19,28,38,.14);
+  /* A hairline of light along the top edge; reads as a raised surface without
+     costing any contrast. Transparent in light mode, where shadow does the job. */
+  --sheen: transparent;
+
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 32%, transparent);
+
   --radius: 10px;
+  --r-sm: 7px;
+  --r-lg: 14px;
+
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0f151b;
-    --panel: #171f27;
-    --panel-2: #1c252e;
-    --line: #2b3742;
-    --line-soft: #232d37;
-    --ink: #e6edf3;
-    --ink-2: #9db0c2;
-    --ink-3: #6e8296;
-    --accent: #4d94ff;
-    --accent-soft: #16283f;
-    --ok: #4ac98a;
-    --ok-soft: #123122;
-    --warn: #e0a44a;
-    --warn-soft: #33260f;
-    --bad: #ff7a63;
-    --bad-soft: #3a1a14;
-    --work: #b092f0;
-    --work-soft: #241a3d;
+    --bg: #0d1319;
+    --panel: #161e27;
+    --panel-2: #1b242e;
+    --line: #2c3846;
+    --line-soft: #222c37;
+    --ink: #e8eff6;
+    --ink-2: #a3b5c7;
+    --ink-3: #7d90a3;          /* 5.1:1 on --panel; the old value was 4.2:1 */
+
+    --accent: #5b9dff;
+    --accent-soft: #16294180;
+    --ok: #4fd093;
+    --ok-soft: #10331f80;
+    --warn: #e5a94f;
+    --warn-soft: #35270f80;
+    --bad: #ff8069;
+    --bad-soft: #3d1b1480;
+    --work: #b393f5;
+    --work-soft: #261b4080;
+
+    --shadow-1: 0 1px 2px rgba(0,0,0,.4);
+    --shadow-2: 0 2px 6px rgba(0,0,0,.45), 0 8px 20px rgba(0,0,0,.32);
+    --shadow-3: 0 8px 24px rgba(0,0,0,.5), 0 24px 56px rgba(0,0,0,.36);
+    --sheen: inset 0 1px 0 rgba(255,255,255,.045);
   }
 }
 
@@ -69,6 +96,28 @@ body {
   color: var(--ink);
   font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Numbers are read against each other constantly here — quantities down a
+   column, counts across a stat strip — so they line up by default rather than
+   per-component. */
+.mono, .cstat b, .stat .n, .subtab-count, .dgroup-count, .line-qty,
+input[type="number"], .nowrun-meta, td.num, th.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Keyboard focus was invisible before this: the only focus styling was on
+   inputs. Everything interactive now shows the same ring, and only for
+   keyboard users, so pointer users never see it. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: var(--r-sm);
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  border-radius: 8px;
 }
 
 /* ---------- layout ---------- */
@@ -77,33 +126,60 @@ body {
 
 header.top {
   position: sticky; top: 0; z-index: 40;
-  background: var(--panel);
+  /* Slightly translucent so content scrolling under it stays sensed rather
+     than hard-clipped; the solid fallback matters because backdrop-filter is
+     the one thing here that silently does nothing on older Edge. */
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: saturate(1.6) blur(12px);
+  -webkit-backdrop-filter: saturate(1.6) blur(12px);
   border-bottom: 1px solid var(--line);
-  padding: 10px 16px;
+  padding: 10px 18px;
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
 }
+@supports not (backdrop-filter: blur(1px)) {
+  header.top { background: var(--panel); }
+}
 
-.brand { font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 8px; }
-.brand small { font-weight: 500; color: var(--ink-3); font-size: 12px; }
+.brand {
+  font-weight: 700; letter-spacing: -0.015em; font-size: 15px;
+  display: flex; align-items: baseline; gap: 9px;
+}
+/* The department name carries a mark in the accent so the header has one
+   fixed point the eye can return to. */
+.brand::before {
+  content: ''; align-self: center;
+  width: 9px; height: 18px; border-radius: 3px; margin-right: 1px;
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--work)));
+}
+.brand small { font-weight: 500; color: var(--ink-3); font-size: 12px; letter-spacing: 0; }
 
 nav.tabs { display: flex; gap: 2px; flex-wrap: wrap; margin-left: auto; }
 nav.tabs button {
+  position: relative;
   border: 1px solid transparent; background: none; color: var(--ink-2);
   padding: 7px 13px; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 500;
+  transition: color .14s, background .14s;
 }
 nav.tabs button:hover { background: var(--panel-2); color: var(--ink); }
-nav.tabs button[aria-current="true"] { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
+nav.tabs button[aria-current="true"] {
+  background: var(--accent-soft); color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  font-weight: 600;
+}
 
-main { flex: 1; padding: 18px; max-width: 1500px; width: 100%; margin: 0 auto; }
+main { flex: 1; padding: 20px 18px 18px; max-width: 1500px; width: 100%; margin: 0 auto; }
 
 /* ---------- primitives ---------- */
 
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow-1), var(--sheen);
+}
 .panel + .panel { margin-top: 16px; }
 .panel > h2, .panel > header {
   margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--line-soft);
-  font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2);
-  display: flex; align-items: center; gap: 10px; font-weight: 600;
+  font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-2);
+  display: flex; align-items: center; gap: 10px; font-weight: 700;
 }
 .panel > header h2 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
 .panel .body { padding: 16px; }
@@ -116,14 +192,25 @@ main { flex: 1; padding: 18px; max-width: 1500px; width: 100%; margin: 0 auto; }
 .grid.three { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 
 button, .btn {
-  font: inherit; font-weight: 500; cursor: pointer;
+  font: inherit; font-weight: 550; cursor: pointer;
   background: var(--panel); color: var(--ink);
   border: 1px solid var(--line); border-radius: 8px; padding: 7px 13px;
+  box-shadow: var(--shadow-1);
+  transition: border-color .14s, background .14s, box-shadow .14s, transform .1s;
 }
-button:hover:not(:disabled) { border-color: var(--ink-3); }
-button:disabled { opacity: .45; cursor: not-allowed; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button:hover:not(:disabled) { border-color: var(--ink-3); box-shadow: var(--shadow-2); }
+/* A press that visibly gives is worth more here than anywhere else: with
+   gloves on, the tap feedback is most of the confirmation you get. */
+button:active:not(:disabled) { transform: translateY(1px); box-shadow: var(--shadow-1); }
+button:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+button.primary {
+  background: var(--accent); border-color: transparent; color: #fff;
+  box-shadow: var(--shadow-1), 0 1px 3px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+button.primary:hover:not(:disabled) {
+  filter: brightness(1.07);
+  box-shadow: var(--shadow-2), 0 2px 8px color-mix(in srgb, var(--accent) 45%, transparent);
+}
 button.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
 button.ghost { border-color: transparent; background: none; color: var(--ink-2); }
 button.ghost:hover { background: var(--panel-2); color: var(--ink); }
@@ -211,11 +298,15 @@ td.num, th.num { text-align: right; font-family: var(--mono); font-size: 12.5px;
 .banner.info { background: var(--accent-soft); color: var(--accent); }
 
 dialog {
-  border: 1px solid var(--line); border-radius: 12px; padding: 0; background: var(--panel); color: var(--ink);
-  max-width: 640px; width: calc(100% - 32px); box-shadow: 0 18px 50px rgba(0,0,0,.24);
+  border: 1px solid var(--line); border-radius: var(--r-lg); padding: 0;
+  background: var(--panel); color: var(--ink);
+  max-width: 640px; width: calc(100% - 32px);
+  box-shadow: var(--shadow-3), var(--sheen);
+  animation: dialogin .16s cubic-bezier(.4,0,.2,1);
 }
-dialog::backdrop { background: rgba(8,12,16,.5); }
-dialog header { padding: 14px 18px; border-bottom: 1px solid var(--line-soft); font-weight: 600; display: flex; align-items: center; }
+@keyframes dialogin { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+dialog::backdrop { background: rgba(8,12,16,.55); backdrop-filter: blur(2px); }
+dialog header { padding: 14px 18px; border-bottom: 1px solid var(--line-soft); font-weight: 650; display: flex; align-items: center; }
 dialog .body { padding: 18px; max-height: 65vh; overflow: auto; }
 dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); display: flex; gap: 8px; justify-content: flex-end; }
 
@@ -229,9 +320,11 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 
 .toast {
   position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-  background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px;
-  font-size: 13px; font-weight: 500; z-index: 100; box-shadow: 0 8px 26px rgba(0,0,0,.28);
+  background: var(--ink); color: var(--bg); padding: 11px 19px; border-radius: 999px;
+  font-size: 13px; font-weight: 550; z-index: 100; box-shadow: var(--shadow-3);
+  animation: toastin .18s cubic-bezier(.4,0,.2,1);
 }
+@keyframes toastin { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 .list { list-style: none; margin: 0; padding: 0; }
 .list li { padding: 10px 16px; border-bottom: 1px solid var(--line-soft); }
@@ -243,15 +336,30 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 
 @media (max-width: 720px) {
   main { padding: 12px; }
-  header.top { padding: 9px 12px; gap: 8px; }
+  header.top { padding: 8px 12px; gap: 8px; }
+
+  /* The header was costing ~150px before any content on a 390px-wide phone:
+     brand and chips wrapping, then the nav, then the name picker alone on a
+     third row. Sending the nav last lets brand, chips and picker share the
+     top row, and dropping the tagline — decoration — buys the rest. */
+  nav.tabs { order: 10; }
+  .brand small { display: none; }
+  .brand { font-size: 14px; }
+  header.top > div:last-of-type { margin-left: auto !important; }
+  header.top select { padding: 5px 8px; font-size: 13px; }
+
   /* Eight tabs wrap to three rows and eat the screen; one scrolling row keeps
      the header the same height however many pages there are. */
   nav.tabs { width: 100%; margin-left: 0; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
   nav.tabs::-webkit-scrollbar { display: none; }
   nav.tabs button { padding: 7px 11px; font-size: 13px; white-space: nowrap; }
+
   .hide-sm { display: none !important; }
   .oplabel { width: 88px; }
   .stat .n { font-size: 19px; }
+  .cstat { padding: 8px 6px; min-width: 0; }
+  .cstat b { font-size: 19px; }
+  .centre-title { font-size: 22px; }
 }
 
 /* ---------- work-centre page ---------- */
@@ -261,13 +369,18 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 
 .centre-head {
   position: sticky; top: 0; z-index: 20;
-  background: var(--bg);
-  padding: 14px 0 12px;
-  margin: -18px 0 4px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 16px 0 12px;
+  margin: -20px 0 4px;
   border-bottom: 1px solid var(--line);
 }
+@supports not (backdrop-filter: blur(1px)) {
+  .centre-head { background: var(--bg); }
+}
 .centre-title-row { gap: 16px; }
-.centre-title { margin: 0; font-size: 23px; font-weight: 700; letter-spacing: -0.02em; }
+.centre-title { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; }
 
 .iconbtn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -277,16 +390,35 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 }
 .iconbtn:hover { color: var(--ink); background: var(--panel-2); border-color: var(--line); }
 
-.centre-stats { display: flex; gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); border-radius: 9px; overflow: hidden; }
-.cstat { background: var(--panel); padding: 7px 15px; text-align: center; min-width: 64px; }
-.cstat b { display: block; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-.cstat i { display: block; font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); font-weight: 700; margin-top: 1px; }
-.cstat.bad b { color: var(--bad); }
+.centre-stats {
+  display: flex; gap: 1px; background: var(--line);
+  border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+  box-shadow: var(--shadow-1), var(--sheen);
+}
+.cstat { background: var(--panel); padding: 9px 16px; text-align: center; min-width: 70px; }
+/* These five numbers are the whole reason to look at the top of the page, so
+   they are sized to be read from a step back rather than leaned into. */
+.cstat b { display: block; font-size: 21px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.cstat i {
+  display: block; font-style: normal; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink-3); font-weight: 700; margin-top: 2px;
+}
+/* A zero is good news on every one of the coloured stats, so it stays neutral
+   and only a real count takes the alarm colour. */
+.cstat.bad b  { color: var(--bad); }
 .cstat.work b { color: var(--work); }
+.cstat.warn b { color: var(--warn); }
 
-.progress { height: 4px; border-radius: 999px; background: var(--line-soft); overflow: hidden; margin-top: 12px; }
-.progress > i { display: block; height: 100%; background: var(--ok); border-radius: 999px; transition: width .4s cubic-bezier(.4,0,.2,1); }
-.progress-cap { font-size: 11px; color: var(--ink-3); margin-top: 4px; font-weight: 500; }
+.progress {
+  height: 5px; border-radius: 999px; background: var(--line-soft);
+  overflow: hidden; margin-top: 13px;
+}
+.progress > i {
+  display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ok) 78%, var(--accent)), var(--ok));
+  transition: width .4s cubic-bezier(.4,0,.2,1);
+}
+.progress-cap { font-size: 11.5px; color: var(--ink-3); margin-top: 5px; font-weight: 500; }
 
 /* sub-tabs */
 
@@ -355,33 +487,39 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 }
 .dgroup-pick:hover { color: var(--accent); background: var(--accent-soft); }
 .dgroup-body {
-  margin-top: 7px;
+  margin-top: 8px;
   border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--panel); overflow: hidden;
-  box-shadow: 0 1px 2px rgba(16,24,32,.04);
+  box-shadow: var(--shadow-1), var(--sheen);
 }
 
 /* a scheduled line */
 
 .line {
   display: flex; align-items: center; gap: 13px;
-  padding: 11px 14px; border-bottom: 1px solid var(--line-soft);
-  transition: background .12s;
+  padding: 12px 14px; border-bottom: 1px solid var(--line-soft);
+  transition: background .12s, box-shadow .12s;
 }
 .line:last-of-type { border-bottom: 0; }
 .line:hover { background: var(--panel-2); }
-.line.sel { background: var(--accent-soft); }
+/* A selected row is picked out by a spine as well as a tint: the tint alone is
+   the same cue the rush and running states already use, and on a glared screen
+   three tints are hard to tell apart. */
+.line.sel { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
 
 .line-pick { display: flex; align-items: center; flex-shrink: 0; cursor: pointer; }
 .line-pick input { width: 17px; height: 17px; cursor: pointer; accent-color: var(--accent); }
 
 .line-main { flex: 1; min-width: 0; }
 .line-id { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.line-id .mono { font-size: 14.5px; letter-spacing: -0.01em; }
+/* The work order is what anyone is scanning for down a long list, so it is the
+   heaviest thing on the row. */
+.line-id .mono { font-size: 15px; font-weight: 700; letter-spacing: -0.015em; color: var(--ink); }
 .die {
   font-family: var(--mono); font-size: 11.5px; font-weight: 700;
   background: var(--accent-soft); color: var(--accent);
   padding: 2px 7px; border-radius: 5px; letter-spacing: -0.01em;
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
 }
 .badge-bo {
   display: inline-flex; align-items: center; gap: 3px;
@@ -830,6 +968,51 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 @media (max-width: 720px) {
   .nowrun-line { padding: 12px; }
   .nowrun-meta { flex-basis: 100%; justify-content: space-between; }
+}
+
+/* ---------- v2 refinements ---------- */
+
+/* The note / back-order / rush bands are annotations on a row, not content in
+   their own right. Unbounded they stretch the full width of a desk monitor and
+   read as separate blocks; capped, they stay attached to the line above them. */
+.line-usernote, .line-boband, .line-rushband { max-width: 68ch; }
+
+/* Sub-tabs carry the machine you are looking at — on a centre page that is the
+   single most important piece of state, so the selected one is unmistakable. */
+.subtabs button[aria-current="true"] {
+  box-shadow: var(--shadow-2), 0 2px 8px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.subtabs button { box-shadow: var(--shadow-1); }
+
+/* Group headers earn a little more weight now that rows are heavier. */
+.dgroup-label { font-size: 12.5px; }
+
+/* Alarm tones on a group header should read before the words do. */
+.dgroup-label.bad  { color: var(--bad); }
+.dgroup-label.warn { color: var(--warn); }
+
+.su, .nowrun { box-shadow: var(--shadow-1), var(--sheen); }
+.sucard { box-shadow: var(--shadow-1), var(--sheen); }
+.bulkbar { box-shadow: var(--shadow-3); }
+
+/* Inputs sit on the panel; against a panel-coloured background they vanished
+   at a glance. A recessed field reads as somewhere to type. */
+input, select, textarea { background: var(--panel-2); }
+input:focus, select:focus, textarea:focus { background: var(--panel); }
+
+/* Selection colour, so dragging over a work order looks deliberate. */
+::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+
+/* Printing a shift update or a queue for the floor is a real thing people do
+   with a page like this; without help it prints the nav, the sticky headers
+   and the action bar over the top of the content. */
+@media print {
+  header.top, nav.tabs, .bulkbar, .toast, .line-tools, .line-pick,
+  .centre-filters, .subtabs, .su-actions, .showmore { display: none !important; }
+  .centre-head { position: static; backdrop-filter: none; }
+  body { background: #fff; }
+  .panel, .dgroup-body, .nowrun, .su, .sucard { box-shadow: none; break-inside: avoid; }
+  .line { break-inside: avoid; }
 }
 
 </style>
