@@ -4,10 +4,13 @@ Written to be pasted into another assistant (ChatGPT or otherwise) as context,
 or read by a person picking this up cold. Everything here is verified against
 the real workbooks, not assumed.
 
-**Repo:** `X-phenomenal-X/Fabrication-Production-Tracker`
+**Repo:** `X-phenomenal-X/Fabrication-Production-Tracker` — **public**
 **Default branch:** `claude/dept-operations-dashboard-v9un45` (there is no
 `main` — that branch *is* the default; don't try to merge into `main`)
 **Live:** https://x-phenomenal-x.github.io/Fabrication-Production-Tracker/
+**Deploy:** every push to the default branch builds and publishes to Pages
+automatically. There is no separate deploy step.
+**Current as of:** commit `73f00b5`, 14 Aug 2026
 
 ---
 
@@ -126,6 +129,10 @@ Rolling: 1,799 lines   CNC: 2,118 lines   Total: 3,917 tasks, 738 open
 Rolling(Auto) 191 open · Rolling(Man) 69 · FOM1 100 · FOM2 184 · FOM3 51
 CNC/FMC queue 81 · Multi Punch 62 · back-order flag on 67 open lines · 202 dies
 Shift update resolves 9 machines, all from Shift Update 2
+
+Of the 202 distinct die strings, 164 are sub-assemblies the section book knows;
+the rest are text like "Door sash", "Mock UP", "RUSH order".
+Routing SOP: widths 1,537 · heights 702 · vents 553 · unsplit 429 · 696 outside
 ```
 
 ---
@@ -187,9 +194,42 @@ The cloud snapshot is split into **two documents**, which matters a lot:
 
 Together it would mean a phone uploading 1.6 MB every time somebody taps Done.
 
+### Deletions need tombstones
+
+Per-record merge reads a *missing* record as "the other device knows less", so a
+plain delete comes straight back from whichever device still has it.
+`state.deletions` records `key → at`; a tombstone newer than the record wins,
+and they are pruned after 90 days. Anything added to `DELETABLE` in
+`js/store.js` must go through `forget()`, never `delete state.x[key]`.
+
+### Routing: the SOP outranks the learned habit
+
+`js/routing.js` encodes **SOP-WW-CUT-008 v8.0** (Window Wall & Vents Material
+Flow). `suggestedMachine()` in `js/model.js` asks it first and only falls back
+to counted history when the SOP does not cover the line. Three things about it
+that are easy to get wrong and are load-bearing:
+
+- **High thermal is a *widths* question and only a widths question.** The
+  flowchart asks it after the widths/heights split. `SA80-106HT` is a *vertical*
+  male frame — a height, bound for the saw. Using the HT suffix to split
+  auto-rolling material routes about a third of it to FOM 2 wrongly.
+- **The SOP covers window wall (8000 series) and vents (8500) only.** The same
+  rolling machines run sliding door, flashing and door sash, and FOM 1 is the
+  8900-and-screen machine. 696 of 3,917 lines are outside it and `routeFor()`
+  returns `null` for them rather than inventing a route.
+- **The tracks are read off the machine the workbook has the line on**, because
+  no column states them. Where that is a guess the UI says which guess and why.
+
+The other half of the SOP is **paperwork** — which document set travels with the
+job and whose office it is in. That is on every step of the route panel.
+
 ### Rendering
 
 - Vanilla `el()` DOM helper in `js/ui.js`. No virtual DOM.
+- **The header is rebuilt on every render**, so anything stateful in it must be
+  restored afterwards. The nav scroller is: `settleNav()` in `js/app.js` carries
+  `scrollLeft` across rebuilds and re-centres the active tab only when the tab
+  *changes*. Centring on every render drags the row out from under a thumb.
 - **All view-triggered redraws go through `scheduleRender()`** (a
   `requestAnimationFrame` defer in `js/app.js`). Tearing down the DOM
   synchronously inside a `blur`/`change` handler throws
@@ -201,30 +241,52 @@ Together it would mean a phone uploading 1.6 MB every time somebody taps Done.
 ## 4. File map
 
 ```
-index.html                 shell; also the build template
-build.mjs                  esbuild → Cutting-Tracker.html (inlines CSS+JS)
-manifest.webmanifest       Add-to-Home-Screen on phones
+index.html                  shell; also the build template
+build.mjs                   esbuild → Cutting-Tracker.html (inlines CSS+JS)
+sw.js                (105)  service worker — network-first, offline fallback
+manifest.webmanifest        Add-to-Home-Screen on phones
 .github/workflows/pages.yml publishes the built file to GitHub Pages
 
-css/app.css          (818)  design tokens + every component
-js/app.js            (123)  shell: TABS, header, render loop
-js/ui.js             (231)  el(), icons, chips, toasts, modal, fmt*
-js/xlsx.js           (246)  dependency-free XLSX reader
-js/import-machines.js(404)  workbook parsers + shift-update parser
-js/machines.js       (59)   machine registry (the 10 machines + standing rows)
+css/app.css          (1963) design tokens + every component
+js/app.js            (285)  shell: TABS, header, nav scroller, render loop
+js/ui.js             (234)  el(), icons, chips, toasts, modal, fmt*
+js/xlsx.js           (252)  dependency-free XLSX reader
+js/import-machines.js(461)  workbook parsers + shift-update parser
+js/machines.js       (80)   machine registry (the 10 machines + standing rows)
 js/shifts.js         (17)   shift windows
-js/store.js          (740)  state, persistence, shared file, cloud orchestration
+js/store.js          (937)  state, persistence, shared file, cloud, tombstones
 js/cloud.js          (177)  Supabase REST transport (dumb; no app knowledge)
-js/model.js          (400)  derived views: queues, grouping, resolve*, runningNow
-js/views/centre.js   (696)  THE work-centre page (all 4 centres are this file)
-js/views/rush.js     (244)  rush dialog + Rush page
-js/views/backorders.js(215) back-order dialog + Back Orders page
-js/views/shiftupdate.js(477) Shift Update write/read page
-js/views/data.js     (384)  Setup: import, shared file, cloud, people, backup
+js/model.js          (708)  derived views: queues, grouping, resolve*, runningNow
+js/offline.js        (84)   service-worker registration + update prompt
+js/routing.js        (299)  SOP-WW-CUT-008 encoded — see §3
+js/dies.js           (140)  section-book lookup, both directions
+js/subassemblies.js  (gen)  996 sub-assemblies, 84 KB — generated
+js/drawings.js       (gen)  883 die pictures, 3.3 MB — generated
+js/views/centre.js   (819)  THE work-centre page (all 4 centres are this file)
+js/views/today.js    (235)  Today: to-dos + the cross-machine board
+js/views/staging.js  (190)  Staging — an overlay on the rolling lines
+js/views/rush.js     (250)  rush dialog + Rush page
+js/views/backorders.js(233) back-order dialog + Back Orders page
+js/views/shiftupdate.js(548) Shift Update write/read page
+js/views/dies.js     (168)  die lookup dialog
+js/views/routing.js  (156)  per-line routing + paperwork, and the rules
+js/views/manual.js   (138)  add a job that is in no workbook
+js/views/data.js     (485)  Setup: import, shared file, cloud, people, backup
+
+tools/parse-subassemblies.mjs   section-book Listings → js/subassemblies.js
+tools/extract-drawings.py       drawing PDFs → js/drawings.js
+tools/extract-listing-thumbs.py Listing thumbnails → thumbs.json (gap filler)
 ```
 
 `js/views/centre.js` is parameterised by centre — `makeCentreView('FOM')`.
 All four centre pages are that one file with different data.
+
+**Nine nav pages:** Rolling · FOM · CNC & FMC · Multi Punch · Today · Staging ·
+Rush · Back Orders · Shift Update. Setup is the header gear, not a tenth tab —
+the nav had already run out of width.
+
+`Cutting-Tracker.html` is now **~3.6 MB**, almost all of it the die drawings.
+That is deliberate and load-bearing: it still opens offline off a share.
 
 ---
 
@@ -238,14 +300,25 @@ node build.mjs               # regenerate Cutting-Tracker.html
 node test/machines-check.mjs   # parses both workbooks, prints what came out
 node test/app-check.mjs        # full E2E walk of every page  (~2 min)
 node test/cloud-check.mjs      # two devices vs a mock cloud — do they converge?
+node test/routing-check.mjs    # every leaf of the routing SOP, then real data
+node test/offline-check.mjs    # kills the network mid-session, asserts it works
+node test/visual-qa.mjs        # 10 screens × 5 widths × 2 themes  (~6 min)
 node build.mjs && node test/standalone-check.mjs   # same over file://
 ```
 
-**All four must pass before pushing.** They run headless Chromium from
+**All seven must pass before pushing.** They run headless Chromium from
 `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`; adjust that path
 elsewhere. Sample workbooks live in
 `/root/.claude/uploads/042835a0-704b-5601-bc20-4ed82d27578f/` — a fresh
 environment won't have them and those tests will need new sample files.
+
+`test/visual-qa.mjs` is the one to run after any CSS change. It does not compare
+screenshots — it **measures the rendered page**: real contrast ratios on actual
+foreground/background pairs, tap-target boxes, horizontal overflow, whether the
+active nav tab is inside the nav, accessible names, the 96px phone-header
+budget, focus visibility, and that nothing conveys status by colour alone. It
+uses `test/fixture.mjs`, a **sanitized** dataset — no real work orders or
+customer names — with deliberately awkward text to catch wrapping bugs.
 
 `test/cloud-check.mjs` is worth understanding: there is no Supabase to reach
 from a test, so it stands up a **mock speaking the same PostgREST shapes** —
@@ -260,16 +333,23 @@ with separate localStorage as two people and asserts they converge.
 
 - **Pages is enabled and deploying.** The workflow triggers on any push and
   publishes only when the ref is the repo's default branch.
-- **Cloud sync is configured** on at least the user's phone, against a Supabase
-  project, site name `Cutting Dept.`
+- **Cloud sync is configured and confirmed working** on the user's phone,
+  against a Supabase project, site name `Cutting Dept.`
 - **Credentials are NOT in this repo and must not be.** The repo is **public**.
   The Supabase URL + anon key live in each device's `localStorage` under
   `bv.cutting.cloud`, entered via Setup → Sync across devices.
   ⚠️ The anon key was pasted into a chat transcript during setup — it is worth
   rotating in Supabase (Settings → API) and re-entering on each device.
-- **No schedule data has been imported into the live app yet.** The workbooks
-  need to be dragged into Setup on any one synced device; that pushes `base` to
+- **Real work orders and customer names must never be committed.** The test
+  fixture is sanitized for exactly this reason; sample workbooks stay outside
+  the repo.
+- **Whether the schedules have been imported into the live app is unconfirmed.**
+  Dragging both workbooks into Setup on any one synced device pushes `base` to
   the cloud and every other device picks it up.
+- **Works offline as a PWA.** `sw.js` is network-first with an offline
+  fallback; its cache name is stamped with the deploying commit, so a deploy
+  retires the previous cache. An open tab gets an update *toast with a button* —
+  it never reloads out from under someone mid-task.
 
 The Supabase table (created once via the SQL in Setup → Show setup SQL):
 
@@ -304,7 +384,33 @@ it's documented in the README and surfaced in the SQL dialog.
 
 ---
 
-## 8. Open work
+## 8. What landed since the first handoff
+
+All of this is done, tested and deployed. Listed so you don't rebuild it.
+
+| | |
+|---|---|
+| **Die lookup** | 996 sub-assemblies from the Sub-Assembly Section Book, both directions (*what is S80.106* / *where does 80-105 go*), plus **883 die pictures** — 620 full drawing sheets and 263 Assembly Diagram thumbnails pulled from the Listings where a sheet could not be got. 163 of the 164 book-known dies in use have a picture. |
+| **Staging page** | The step before rolling. An overlay on the rolling lines, not a queue of its own, so a staged line is the same line the roller picks up. Lines already running or finished are past staging and drop out. |
+| **Today** | Cross-machine board plus carried-over to-dos. |
+| **Manual jobs** | Add a line that is in no workbook (service orders). Survives re-import. |
+| **Routing SOP** | §3 above. `js/routing.js` + the per-line route/paperwork panel. |
+| **Offline** | Service worker, update prompt, `test/offline-check.mjs`. |
+| **Tombstones** | Deletes that don't resurrect. |
+| **Visual QA** | `test/visual-qa.mjs` — 10 screens × 5 widths × 2 themes, measured not eyeballed. |
+
+### Open questions worth putting to the user
+
+1. **300 lines contradict the routing SOP.** They carry one of the five saw
+   dies (`SA80-104/105/255/256/261`) but are scheduled on **FOM 2**, where the
+   SOP routes them through the Elumatec saw and the widths punch. The app flags
+   this in red on the line rather than hiding it. Either the schedules predate
+   v8.0 or the rule is an addition to what FOM 2 already does — unresolved.
+2. **Widths Punch vs Multi Punch.** The SOP draws them as separate stations with
+   separate paperwork; the schedules only ever name one punch, and the app has
+   one machine. Widths Punch is shown on the route but never assigned to.
+3. **`S89.083HT`** is the one die in use with no picture at all.
+4. Is the CNC machine called **CNC 1 or CNC-3**? (see below)
 
 ### The visual upgrade — DONE (commit `25cd719`)
 
@@ -383,17 +489,59 @@ way.
    later steps can't assume the original title. Wait on the nav, not the title.
 8. `npm ci` fails here — `package-lock.json` is gitignored. CI uses
    `npm install --ignore-scripts`.
+9. **CSS ordering.** Equal-specificity rules declared *later* win, and this
+   sheet is one file. Four separate regressions came from writing a rule above
+   the block it needed to beat — phone tap targets, the focus ring, the header
+   width rules, the die link. The phone, focus and header blocks live at the
+   **end of the sheet on purpose**. Put new overrides after what they override,
+   or raise specificity deliberately.
+10. **`transform` on `.centre` broke `position: fixed` children.** A page-in
+    keyframe with a transform makes the element the containing block for fixed
+    descendants while it runs, which threw the bulk-action bar to the bottom of
+    a 9,000px document for 180 ms after *every* re-render. The animation is
+    opacity-only now. Same trap applies to `filter` and `backdrop-filter`.
+11. **Assuming a column is populated.** The `MultiPunch & SAW` sheet has a SAW
+    column and it is **entirely empty**; PUNCH carries 30 `IP` marks. Check a
+    column has data before routing logic through it.
+12. **A test assertion that cannot fail is worthless.** When adding one, break
+    the fix deliberately and confirm the test goes red. The nav-visibility check
+    was written that way and caught six pages when reverted.
 
 ---
 
 ## 10. Suggested prompt for continuing elsewhere
 
-> I'm continuing work on a production tracker for a window-fabrication cutting
-> department. It's a zero-dependency vanilla-JS app (no framework, no runtime
-> packages) that must run offline from a single self-contained HTML file, and
-> also deploys to GitHub Pages for phone use. The handoff document below covers
-> the architecture, the verified quirks of the source Excel workbooks, and the
-> invariants I must not break. Read it fully before proposing changes, and ask
-> before altering anything under "Open work".
+Paste this above the file when handing to ChatGPT or another assistant.
+
+> I'm continuing work on a production tracker for the Cutting department of a
+> window-and-curtainwall fabricator. It is a **zero-dependency vanilla-JS app** —
+> no framework, no build-time UI library, no runtime packages — that must run
+> **offline from a single self-contained HTML file** double-clicked off a
+> network share, and also deploys to GitHub Pages so it works on phones on the
+> shop floor.
+>
+> The handoff below covers the architecture, the verified quirks of the two
+> source Excel workbooks, the routing SOP, and the invariants I must not break.
+> **Read it fully before proposing anything.**
+>
+> How I want you to work on this:
+>
+> - **Do not suggest adding dependencies.** Not React, not SheetJS, not a CSS
+>   framework, not a date library. The offline-single-file constraint is the
+>   whole reason the code looks like it does.
+> - **Verify against the data before asserting anything about it.** Most of the
+>   expensive mistakes in this project came from assuming a column was populated
+>   or a label meant what it looked like. If you can't check, say so.
+> - **Prefer showing nothing over showing something plausible-but-wrong.** Where
+>   the app infers something it says so and says why, so it can be overruled.
+> - Comments explain **why**, not what; commit messages are long and record what
+>   was rejected and why. Match that.
+> - The four test suites assert on DOM structure. CSS-only changes are safe;
+>   **renaming a class is not**.
+> - The repo is **public**. Never put credentials, real work orders or customer
+>   names in it.
+>
+> If something in here is ambiguous or looks wrong, ask me rather than picking
+> an interpretation and building on it.
 >
 > [paste this file]
