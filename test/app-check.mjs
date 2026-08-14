@@ -1,6 +1,8 @@
-/* End-to-end smoke test: serves the app, imports the real workbook, walks every
-   tab, exercises progress entry, and fails on any console error.
-   Run: node test/app-check.mjs [path-to-xlsx] */
+/* End-to-end smoke test for the minimal Tracker app: serves the app, imports
+   the real Rolling and CNC workbooks, walks the Tracker, exercises the
+   status-cycle click, confirms it survives a reload AND a re-import, and
+   fails on any console error.
+   Run: node test/app-check.mjs */
 import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
@@ -8,7 +10,6 @@ import http from 'http';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DIR = '/root/.claude/uploads/042835a0-704b-5601-bc20-4ed82d27578f';
-const XLSX = process.argv[2] || `${DIR}/6c674bbc-Daily_Schedule_Aug_10_Rev_B.xlsx`;
 const ROLLING = `${DIR}/da7bb9f1-Rolling_Schedule_2026.xlsx`;
 const CNC = `${DIR}/bae855fd-CNC_Schedule_Rev_E.xlsx`;
 const SHOT = path.join(ROOT, 'test', 'screens');
@@ -36,7 +37,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 950 } });
 
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-page.on('pageerror', (e) => errors.push('pageerror: ' + e.message + '\n     STACK: ' + (e.stack||'').split('\n').slice(0,4).join(' | ')));
+page.on('pageerror', (e) => errors.push('pageerror: ' + e.message + '\n     STACK: ' + (e.stack || '').split('\n').slice(0, 4).join(' | ')));
 
 const step = (s) => console.log('  •', s);
 
@@ -44,22 +45,24 @@ await page.goto(base + '/index.html');
 await page.waitForSelector('header.top');
 step('app booted');
 
+// only two tabs should exist now
+const tabs = await page.$$eval('nav.tabs button', (ns) => ns.map((n) => n.textContent.trim()));
+step('tabs: ' + tabs.join(', '));
+if (tabs.join(',') !== 'Tracker,Setup') throw new Error('expected exactly Tracker, Setup — got ' + tabs.join(','));
+
 // identity
-await page.evaluate(() => {
-  const s = document.querySelector('header.top select');
-  s.value = '__add';
-});
-await page.evaluate(() => {
-  // set identity directly; prompt() is not available headless
-  return import('/js/store.js').then((m) => {
-    m.state.people.push('Abhay');
-    m.state.settings.me = 'Abhay';
-    m.save();
-  });
-});
+await page.evaluate(() => import('/js/store.js').then((m) => {
+  m.state.people.push('Abhay');
+  m.state.settings.me = 'Abhay';
+  m.save();
+}));
 step('identity set');
 
-// base schedules first: rolling, then CNC
+// empty state before any import
+await page.waitForSelector('main .empty');
+step('empty state shown before import');
+
+// Setup: import Rolling then CNC
 await page.click('nav.tabs button:has-text("Setup")');
 await page.waitForSelector('.drop');
 
@@ -73,158 +76,85 @@ for (const [label, file] of [['Rolling workbook', ROLLING], ['CNC workbook', CNC
   await page.click('dialog header button');
   await page.waitForSelector('dialog', { state: 'detached' });
 }
+
 const taskCount = await page.evaluate(() => import('/js/store.js').then((m) => m.state.tasks.length));
 step('machine tasks loaded: ' + taskCount);
-await page.screenshot({ path: path.join(SHOT, '10-setup.png'), fullPage: true });
 
-// then the daily schedule, used for verification
-const chooser = page.waitForEvent('filechooser');
-await page.click('.drop:has-text("Daily Schedule") button');
-await (await chooser).setFiles(XLSX);
-await page.waitForSelector('dialog .stat', { timeout: 60000 });
-const importStats = await page.$$eval('dialog .stat', (ns) =>
-  ns.map((n) => n.querySelector('.k').textContent + '=' + n.querySelector('.n').textContent));
-step('import dialog: ' + importStats.join(' '));
-await page.screenshot({ path: path.join(SHOT, '1-import.png') });
-
-await page.click('dialog footer button.primary');
-await page.waitForSelector('dialog', { state: 'detached' });
-step('workbook loaded');
-
-// today
-await page.click('nav.tabs button:has-text("Dashboard")');
-await page.waitForSelector('.stats');
-const stats = await page.$$eval('main .stat', (ns) =>
-  ns.map((n) => n.querySelector('.k').textContent + '=' + n.querySelector('.n').textContent));
-step('dashboard stats: ' + stats.slice(0, 6).join(' '));
-const cards = await page.$$eval('main .panel header', (ns) => ns.map((n) => n.childNodes[0]?.textContent?.trim()).filter(Boolean));
-step('machine cards: ' + cards.filter((c) => /FOM|CNC|Rolling|Elumatec|Punch|Prep/.test(c)).join(', '));
-await page.screenshot({ path: path.join(SHOT, '2-dashboard.png'), fullPage: true });
-
-// board + order detail + progress entry
-await page.click('nav.tabs button:has-text("Orders")');
-await page.waitForSelector('table tbody tr');
-const boardRows = await page.$$eval('table tbody tr', (r) => r.length);
-step(`board rows: ${boardRows}`);
-await page.screenshot({ path: path.join(SHOT, '3-board.png'), fullPage: false });
-
-await page.click('table tbody tr');
-await page.waitForSelector('dialog .oprow');
-const opCount = await page.$$eval('dialog .oprow', (n) => n.length);
-step(`order detail ops: ${opCount}`);
-
-// enter progress into the first numeric op
-const input = await page.$('dialog .opinput input');
-if (input) {
-  await input.fill('10');
-  await input.dispatchEvent('change');
-  await page.waitForTimeout(200);
-  step('logged progress = 10');
+// Tracker: four group headers with real content
+await page.click('nav.tabs button:has-text("Tracker")');
+await page.waitForSelector('main h2');
+const groups = await page.$$eval('main h2', (ns) => ns.map((n) => n.textContent.trim()));
+step('groups shown: ' + groups.join(', '));
+if (!['Rolling', 'FOM', 'CNC', 'Punch'].every((g) => groups.includes(g))) {
+  throw new Error('expected Rolling, FOM, CNC, Punch — got ' + groups.join(', '));
 }
-// profile grouping + per-profile material + history trail
-const profiles = await page.$$eval('dialog .row > strong', (ns) => ns.map((n) => n.textContent.trim()).filter((t) => /Widths|Heights|Vents|Louvers|Service|Hinges|Extra/.test(t)));
-step('profiles on order: ' + profiles.join(', '));
-const matSel = await page.$('dialog select');
-if (matSel) {
-  await matSel.selectOption('SHORT');
-  await page.waitForTimeout(250);
-  step('set a profile material to Short');
-}
-const hist = await page.$$eval('dialog .list li', (n) => n.length);
-step('history entries on order: ' + hist);
-await (await page.$('dialog')).screenshot({ path: path.join(SHOT, '4-order.png') });
-await page.click('dialog footer button.primary');
-await page.waitForSelector('dialog', { state: 'detached' });
 
-// verify it persisted
-const persisted = await page.evaluate(() => import('/js/store.js').then((m) => {
-  const keys = Object.keys(m.state.progress);
-  return keys.length ? { key: keys[0], val: m.state.progress[keys[0]] } : null;
-}));
-step('persisted progress: ' + JSON.stringify(persisted));
+const machineCards = await page.$$eval('main .panel header', (ns) =>
+  ns.map((n) => n.childNodes[0]?.textContent?.trim()).filter(Boolean));
+step('machine cards: ' + machineCards.join(', '));
+await page.screenshot({ path: path.join(SHOT, 'tracker.png'), fullPage: true });
 
-// manual (service) order
-await page.click('button:has-text("+ Add order")');
-await page.waitForSelector('dialog input');
-await page.fill('dialog input', 'SO-2026-014');
-await page.click('dialog footer button.primary');
-await page.waitForTimeout(300);
-const manual = await page.evaluate(() => import('/js/store.js').then((m) =>
-  Object.values(m.state.manualOrders).filter((o) => !o.deleted).map((o) => o.wo)));
-step('manual orders: ' + JSON.stringify(manual));
+// Pick a specific Not-started line to click, rather than "whatever renders
+// first" — a click that lands on Done disappears from view by design (Done
+// is hidden by default), so grabbing "the first chip" again afterwards can
+// silently land on an unrelated row that happens to read the same label.
+const target = await page.evaluate(async () => {
+  const model = await import('/js/model.js');
+  const row = model.tasksForMachine('roll-auto').find((r) => r.status.key === 'NOT_STARTED');
+  return row ? { wo: row.task.wo, die: row.task.die || '' } : null;
+});
+if (!target) throw new Error('no Not-started line found on Rolling (Auto) to test with');
+step('target line: W/O ' + target.wo + ' die ' + (target.die || '(none)'));
 
-// an 8560 job should pick up Hinges automatically
-const hinge = await page.evaluate(() => Promise.all([import('/js/model.js'), import('/js/store.js')])
-  .then(([mm, st]) => {
-    const o = st.state.orders.find((x) => ['1107', '1093', '1131', '1124'].includes(String(x.job)));
-    if (!o) return 'no 8560 job found';
-    return { wo: o.wo, job: o.job, hinges: mm.hingesApply(o),
-             profiles: mm.profileRollup(o).map((r) => r.profile.label) };
-  }));
-step('8560 hinge rule: ' + JSON.stringify(hinge));
+const panel = page.locator('.panel', { hasText: 'Rolling (Auto)' }).first();
+const row = panel.locator('table tbody tr')
+  .filter({ hasText: target.wo }).filter({ hasText: target.die || '—' }).first();
+const chipBtn = row.locator('.chip').first();
+const before = (await chipBtn.textContent()).trim();
+await chipBtn.click();
+await page.waitForTimeout(250);
+const after = (await row.locator('.chip').first().textContent()).trim();
+step(`status cycled: "${before}" -> "${after}"`);
+if (before === after) throw new Error('status chip did not change on click');
+if (after !== 'In Progress') throw new Error(`expected "In Progress", got "${after}"`);
 
-// verify machine schedules against the daily schedule
-await page.click('nav.tabs button:has-text("Verify")');
-await page.waitForSelector('main .stat');
-const vstats = await page.$$eval('main .stat', (ns) =>
-  ns.map((n) => n.querySelector('.k').textContent + '=' + n.querySelector('.n').textContent));
-step('verify: ' + vstats.join(' '));
-await page.screenshot({ path: path.join(SHOT, '11-verify.png'), fullPage: true });
+const clicked = {
+  key: `roll-auto|${target.wo}|${target.die}`,
+  val: await page.evaluate((k) => import('/js/store.js').then((m) => m.state.taskStatus[k]),
+    `roll-auto|${target.wo}|${target.die}`),
+};
+step('stored status: ' + JSON.stringify(clicked));
+if (!clicked.val) throw new Error('no taskStatus was recorded for the clicked line');
 
-// materials
-await page.click('nav.tabs button:has-text("Materials")');
-await page.waitForSelector('main .panel');
-const matCards = await page.$$eval('main .panel header', (ns) => ns.map((n) => n.childNodes[0]?.textContent?.trim()).filter(Boolean));
-step('material profiles: ' + matCards.join(', '));
-await page.screenshot({ path: path.join(SHOT, '9-materials.png'), fullPage: true });
-
-// planner
-await page.click('nav.tabs button:has-text("Planner")');
-await page.waitForSelector('.panel');
-await page.click('button:has-text("Add work")');
-await page.waitForSelector('dialog .oprow input[type=checkbox]');
-await page.click('dialog .oprow input[type=checkbox]');
-await page.click('dialog footer button.primary');
-await page.waitForTimeout(300);
-step('planned an order');
-await page.screenshot({ path: path.join(SHOT, '5-planner.png'), fullPage: true });
-
-// shift log
-await page.click('nav.tabs button:has-text("Shift Update")');
-await page.waitForSelector('textarea');
-await page.fill('table tbody tr:first-child textarea', '1- Parcel 29 service order complete');
-await page.fill('.panel .body textarea', 'Blade change on Elumatec 2 at 11pm.');
-await page.click('button:has-text("Post update")');
-await page.waitForTimeout(300);
-const logs = await page.$$eval('.list li', (n) => n.length);
-step(`shift log entries: ${logs}`);
-await page.screenshot({ path: path.join(SHOT, '6-shift.png'), fullPage: true });
-
-// guide
-await page.click('nav.tabs button:has-text("Guide")');
-await page.waitForSelector('.doc');
-const docs = await page.$$eval('main .panel[id^="doc-"]', (n) => n.length);
-step(`guide sections: ${docs}`);
-await page.screenshot({ path: path.join(SHOT, '7-guide.png'), fullPage: true });
-
-// phone layout
-await page.setViewportSize({ width: 390, height: 844 });
-await page.click('nav.tabs button:has-text("Dashboard")');
-await page.waitForTimeout(300);
-await page.screenshot({ path: path.join(SHOT, '8-phone.png'), fullPage: true });
-step('phone layout captured');
-
-// reload -> data survives
-await page.setViewportSize({ width: 1440, height: 950 });
+// reload -> status survives
 await page.reload();
 await page.waitForSelector('header.top');
-const after = await page.evaluate(() => import('/js/store.js').then((m) => ({
-  orders: m.state.orders.length,
-  progress: Object.keys(m.state.progress).length,
-  logs: Object.keys(m.state.shiftLogs).length,
-  me: m.state.settings.me,
-})));
-step('after reload: ' + JSON.stringify(after));
+const afterReload = await page.evaluate((key) => import('/js/store.js').then((m) => m.state.taskStatus[key]), clicked.key);
+step('status after reload: ' + JSON.stringify(afterReload));
+if (!afterReload || afterReload.status !== clicked.val.status) throw new Error('status did not survive reload');
+
+// re-import Rolling -> status must survive (proves the stable key, not row number)
+await page.click('nav.tabs button:has-text("Setup")');
+await page.waitForSelector('.drop');
+const ch2 = page.waitForEvent('filechooser');
+await page.click('.drop:has-text("Rolling workbook") button');
+await (await ch2).setFiles(ROLLING);
+await page.waitForSelector('dialog .stat', { timeout: 120000 });
+await page.click('dialog header button');
+await page.waitForSelector('dialog', { state: 'detached' });
+
+const afterReimport = await page.evaluate((key) => import('/js/store.js').then((m) => m.state.taskStatus[key]), clicked.key);
+step('status after re-import: ' + JSON.stringify(afterReimport));
+if (!afterReimport || afterReimport.status !== clicked.val.status) {
+  throw new Error('status was lost on re-import — stable key is not working');
+}
+
+// phone layout
+await page.click('nav.tabs button:has-text("Tracker")');
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(200);
+await page.screenshot({ path: path.join(SHOT, 'tracker-phone.png'), fullPage: true });
+step('phone layout captured');
 
 console.log('\nERRORS:', errors.length ? '\n  ' + errors.join('\n  ') : 'none');
 await browser.close();

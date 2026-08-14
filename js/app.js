@@ -2,29 +2,21 @@
 
 import { el, clear, chip } from './ui.js';
 import { state, loadLocal, save, onChange, me, sharedFileName } from './store.js';
-import { renderDashboard } from './views/dashboard.js';
-import { renderBoard } from './views/board.js';
-import { renderMaterials } from './views/materials.js';
-import { renderVerify } from './views/verify.js';
-import { renderPlanner } from './views/planner.js';
-import { renderShift } from './views/shift.js';
-import { renderGuide } from './views/guide.js';
+import { renderTracker } from './views/tracker.js';
 import { renderData, initSharedFile, seedGuide } from './views/data.js';
 import { SHIFTS, shiftAt } from './schema.js';
 
+// Scaled back to just the tracker and setup while this piece gets built
+// right, machine group by machine group. Dashboard, Orders, Materials,
+// Planner, Shift Update, Verify and Guide still exist on disk — just not
+// wired into nav — and can come back once this is solid.
 const TABS = [
-  { key: 'dashboard', label: 'Dashboard', render: renderDashboard },
-  { key: 'board', label: 'Orders', render: renderBoard },
-  { key: 'materials', label: 'Materials', render: renderMaterials },
-  { key: 'planner', label: 'Planner', render: renderPlanner },
-  { key: 'shift', label: 'Shift Update', render: renderShift },
-  { key: 'verify', label: 'Verify', render: renderVerify },
-  { key: 'guide', label: 'Guide', render: renderGuide },
+  { key: 'tracker', label: 'Tracker', render: renderTracker },
   { key: 'setup', label: 'Setup', render: renderData },
 ];
 
-let current = location.hash.slice(1) || 'dashboard';
-if (!TABS.some((t) => t.key === current)) current = 'dashboard';
+let current = location.hash.slice(1) || 'tracker';
+if (!TABS.some((t) => t.key === current)) current = 'tracker';
 
 const root = document.getElementById('app');
 let scheduled = false;

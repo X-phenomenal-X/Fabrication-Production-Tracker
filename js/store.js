@@ -25,6 +25,7 @@ export const state = {
   manualOrders: {}, // id -> order added by hand, e.g. service orders
   tasks: [],        // machine-schedule rows: the base for scheduling
   machineMeta: {},  // kind -> { fileName, importedAt, count }
+  taskStatus: {},   // `${machine}|${wo}|${die}` -> { status, at, by }
   shiftLogs: {},  // id -> log
   plan: {},       // `${date}|${shift}` -> { ids, at, by }
   guide: {},      // id -> doc
@@ -96,6 +97,19 @@ export function setMaterial(orderId, profileKey, status, note) {
   state.material[key] = { status, note: note ?? null, at: now(), by: me() };
   log('material', `${orderId} ${profileKey} → ${status}`);
   trace(orderId, `material:${profileKey}`, prev?.status ?? null, status, note);
+  save();
+}
+
+/** Status of a single machine-schedule line, e.g. Not started / In Progress /
+    Done. Keyed by machine+wo+die rather than the task's own id, because the
+    id embeds a sheet row number that shifts on every re-import — keying on
+    the row would silently orphan an operator's update the next time the
+    Rolling or CNC workbook is reloaded. */
+export function setTaskStatus(key, status) {
+  const prev = state.taskStatus[key];
+  state.taskStatus[key] = { status, at: now(), by: me() };
+  log('task status', `${key} → ${status}`);
+  trace(key, 'task', prev?.status ?? null, status);
   save();
 }
 
@@ -203,6 +217,7 @@ function snapshot() {
     manualOrders: state.manualOrders,
     tasks: state.tasks,
     machineMeta: state.machineMeta,
+    taskStatus: state.taskStatus,
     shiftLogs: state.shiftLogs,
     plan: state.plan,
     guide: state.guide,
@@ -301,6 +316,7 @@ function mergeSnapshot(remote) {
   state.progress = mergeRecords(state.progress, remote.progress);
   state.material = mergeRecords(state.material, remote.material);
   state.manualOrders = mergeRecords(state.manualOrders, remote.manualOrders);
+  state.taskStatus = mergeRecords(state.taskStatus, remote.taskStatus);
 
   // History is append-only, so merge by id and re-sort newest first.
   const haveIds = new Set(state.history.map((h) => h.id));

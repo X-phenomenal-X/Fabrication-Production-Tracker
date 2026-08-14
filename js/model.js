@@ -446,3 +446,57 @@ export function tasksByDie(machineKey) {
   }
   return Array.from(groups.values()).sort((a, b) => b.pieces - a.pieces);
 }
+
+/* ---------- tracker: per-line status (Not started / In Progress / Done) ---------- */
+
+export const TRACK_STATUS = {
+  NOT_STARTED: { key: 'NOT_STARTED', label: 'Not started', tone: 'mute' },
+  IN_PROGRESS: { key: 'IN_PROGRESS', label: 'In Progress', tone: 'work' },
+  DONE: { key: 'DONE', label: 'Done', tone: 'ok' },
+};
+export const TRACK_STATUS_ORDER = ['NOT_STARTED', 'IN_PROGRESS', 'DONE'];
+
+export function nextTrackStatus(key) {
+  const i = TRACK_STATUS_ORDER.indexOf(key);
+  return TRACK_STATUS_ORDER[(i + 1) % TRACK_STATUS_ORDER.length];
+}
+
+/** Stable identity for a machine-schedule line. Deliberately excludes the
+    sheet row number that `task.id` carries — that number shifts on every
+    re-import, which would silently orphan an operator's status update the
+    next time the Rolling or CNC workbook is reloaded. */
+export function taskStatusKey(t) {
+  return `${t.machine}|${t.wo}|${t.die || ''}`;
+}
+
+/** What a line actually shows: an operator's own update always wins. Failing
+    that, the imported status collapses to the three tracked buckets. A back
+    order or hold from the sheet still buckets as Not started — there is
+    nothing to click into yet — but is flagged `blocked` so it is not drawn
+    identically to work nobody has looked at. */
+export function effectiveTaskStatus(t) {
+  const key = taskStatusKey(t);
+  const override = state.taskStatus[key];
+  if (override?.status && TRACK_STATUS[override.status]) {
+    return { ...TRACK_STATUS[override.status], by: override.by, at: override.at, overridden: true, blocked: false };
+  }
+  let bucket = 'NOT_STARTED';
+  if (t.status === 'DONE') bucket = 'DONE';
+  else if (t.status === 'IP') bucket = 'IN_PROGRESS';
+  return { ...TRACK_STATUS[bucket], overridden: false, blocked: t.status === 'BO' || t.status === 'HOLD' };
+}
+
+/** All machine-schedule lines, excluding the Rolling "Complete" archive
+    (finished by definition, not part of day-to-day tracking). */
+export function tasksInScope() {
+  return (state.tasks || []).filter((t) => !t.archived);
+}
+
+/** One machine's lines, each paired with its effective status, cutting date
+    ascending. The view decides whether to hide Done lines. */
+export function tasksForMachine(machineKey) {
+  return tasksInScope()
+    .filter((t) => t.machine === machineKey)
+    .map((task) => ({ task, status: effectiveTaskStatus(task) }))
+    .sort((a, b) => ((a.task.cuttingDate || '9999') < (b.task.cuttingDate || '9999') ? -1 : 1));
+}

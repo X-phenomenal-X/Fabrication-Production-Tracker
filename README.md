@@ -1,17 +1,23 @@
-# Cutting — BV Glazing Production Tracker
+# Cutting Tracker — Rolling, FOM, CNC, Multi Punch
 
-A single place for the Cutting department: the live cut board, the daily planner,
-the shift update, and the written process guide.
+A simple tracker for four work centres: **Rolling**, **FOMs**, **CNC**, and
+**Multi Punch**. It reads the department's own Rolling and CNC schedule
+workbooks — not the company Daily Schedule — and gives each machine a queue of
+open lines with a single click-through status.
 
-It does **not** replace the company Daily Schedule. That workbook keeps being
-issued as it always was; this app reads it and gives Cutting a working view on
-top, plus the tracking the spreadsheet never had.
+This is a deliberate reset. An earlier version of this app grew into a large,
+Daily-Schedule-driven system (dashboard, order-level material tracking,
+history, shift updates, verification against the company schedule). That
+scope is still on disk but disconnected from the nav — see "What's hidden,
+not deleted" below. This build starts over, smaller, grounded in direct
+answers about how the department actually works, with room to expand once
+this piece is right.
 
 ## Running it
 
 **The easy way — no install, no server.** Download `Cutting-Tracker.html` and
-double-click it. It is one self-contained file: put it on the shared drive and
-anyone can open it. Use Chrome or Edge.
+double-click it. It is one self-contained file: put it on the shared drive
+and anyone can open it. Use Chrome or Edge.
 
 **For development**, serve the unbundled source (browsers block JavaScript
 modules loaded over `file://`, so the split files need a server):
@@ -21,217 +27,81 @@ npm run serve       # http://localhost:8000
 npm run build       # regenerate Cutting-Tracker.html after changing source
 ```
 
-Rebuild and re-copy `Cutting-Tracker.html` whenever the source changes.
-
 ## First run
 
-1. **Add your name** — top right. Every update is stamped with who made it.
-2. **Data & Import** → drop in `Daily_Schedule_<date>_Rev_<x>.xlsx`.
-   Review what changed, then load it.
-3. **Shared file** (optional, Chrome/Edge) — point everyone at one JSON file on
-   the shared drive so the department sees the same board.
+1. **Setup** → import the Rolling workbook, then the CNC workbook.
+2. Switch to **Tracker** — four sections, in order: Rolling, FOM, CNC, Multi
+   Punch.
+3. Click a status chip to advance a line: Not started → In Progress → Done.
 
-## The tabs
+No Daily Schedule import is needed for the tracker to work — these two
+workbooks are the whole source of truth here.
 
-| Tab | What it is |
-|---|---|
-| **Dashboard** | One card per work centre, grouped by department — load, progress, blockers |
-| **Orders** | Every order, grouped by profile type, with piece counts and history |
-| **Materials** | Material status per profile type across the department |
-| **Planner** | Assign orders to a day and shift |
-| **Shift Update** | Laid out by machine, like the existing Shift Update sheet |
-| **Verify** | Checks the machine schedules against the Daily Schedule |
-| **Guide** | The department's written process — editable in place |
-| **Setup** | Load a revision, machine routing, shared file, backups |
+## What a line is
 
-## Work centres
+The Rolling and CNC workbooks already split a work order by die — e.g. W/O
+30983 has three separate lines (S80.104, S80.105, S80.125G), each with its
+own quantity and status. The tracker keeps that granularity: **one row per
+work order + die + machine**, not one row per work order. That is how the
+sheets already work, and it is the level the department confirmed it thinks
+in.
 
-Thirteen, in five departments:
+## The four groups
 
-| Department | Machines |
-|---|---|
-| Rolling | Rolling (Auto/Etas), Rolling (Manual/Iota) |
-| FOM | FOM 1 (8900 + screen), FOM 2 (widths), FOM 3 (vents + widths) |
-| CNC | CNC 1, CNC 2, CNC 3, CNC 140 |
-| Saw | Elumatec Saw #1, Elumatec Saw #2 |
-| Punch | Multi Punch |
-| Prep | Prep (BD Prep) |
-
-### Machine routing
-
-Each cutting operation is mapped to the work centre that runs it, which is what
-makes "what is on FOM 2 today" answerable. Some mappings are certain from the
-column names (`SLD ROLLING` → Rolling, `PUNCH` → Multi Punch, `BD Prep` → Prep);
-the rest are the app's best guess and are flagged **assumed** until a human
-confirms them.
-
-**Edit it in Setup → machine routing.** Edits are stored per-department and
-survive re-import. A machine with nothing routed to it says so rather than
-showing a zero, so an unconfigured machine never looks like an idle one.
-
-Prep is tracked by status rather than piece count, because `BD Prep` is a status
-column — its card shows orders outstanding.
-
-## The three workbooks
-
-The **Rolling** and **CNC** workbooks are the base for scheduling — they carry
-the per-machine detail the Daily Schedule does not have: die, quantity, status
-and cutting date per machine. The **Daily Schedule** is imported on top and used
-to verify that the base still agrees with what the company expects.
-
-Import them in that order on the Setup tab.
-
-### 1 & 2 — Rolling and CNC (the base)
-
-| Workbook | Sheet | Work centre |
+| Group | Machines | Source sheet |
 |---|---|---|
-| Rolling | `Auto` | Rolling (Auto) |
-| Rolling | `Manual` | Rolling (Manual) |
-| Rolling | `Complete` | archive, read as done |
-| CNC | `FOM1` | FOM 1 |
-| CNC | `FOM2` | FOM 2 — also carries the pin-hole / 8560 vent flag |
-| CNC | `FOM3` | FOM 3 |
-| CNC | `MultiPunch & SAW` | Multi Punch |
-| CNC | `CNC & FMC` | CNC |
+| Rolling | Rolling (Auto/Etas), Rolling (Manual/Iota) | Rolling workbook: `Auto`, `Manual` |
+| FOM | FOM 1, FOM 2, FOM 3 | CNC workbook: `FOM1`, `FOM2`, `FOM3` |
+| CNC | CNC 1 (CNC 2/3/140 exist as machines but currently receive no rows) | CNC workbook: `CNC & FMC` |
+| Punch | Multi Punch | CNC workbook: `MultiPunch & SAW` |
 
-Every one of these sheets shares the same shape — `WO# · PROJECT · FL · Product
-(die) · QTY · B/O · Cutting Date · Status` — so one parser with a per-sheet
-column map reads them all. A row is a **task**: this many pieces of this die, for
-this work order, on this machine.
+Every sheet shares the same shape — `WO# · PROJECT · FL · Product (die) · QTY
+· B/O · Cutting Date · Status` — so one parser (`js/import-machines.js`) reads
+them all into a flat list of **tasks**. From the sample workbooks: 3,917
+tasks, 738 still open.
 
-From the sample workbooks that is **3,917 tasks** across 7 work centres, 738 of
-them still open, covering 202 distinct dies.
+The four groups are treated as **independent queues** — Rolling finishing a
+die does not gate FOM or CNC starting it. That was a direct answer, not an
+assumption: the same die numbers appear on both the Rolling sheet and FOM2,
+and it was confirmed there is no real hand-off dependency to enforce today.
 
-### 3 — Daily Schedule (the check)
+## Status
 
-| Sheet | Used for |
-|---|---|
-| `Daily Sched` | Orders, dates, material status, and the cutting columns (27–41) |
-| `WIP` | ERP remaining quantities, joined onto each order |
-| `PREP Tracker` | Job-level status and project manager |
-| `screens sch` | Screens |
+Three states, one click cycles through them: **Not started → In Progress →
+Done**. This replaces editing the Status cell in the spreadsheet.
 
-### Verification
+A status you set is stored keyed by `machine|wo|die` — deliberately *not* the
+row number the sheet happened to put it on. Row numbers shift every time a
+new revision is imported; keying on them would silently lose an operator's
+update the next time the workbook is reloaded. This is tested directly:
+`test/app-check.mjs` sets a status, reloads, then **re-imports the same
+workbook** and confirms the status is still there.
 
-The **Verify** tab compares the two. It reports:
+A line imported as Back Order or On Hold still buckets as Not started (there
+is nothing to click into yet) but keeps a small ⚠ so it does not look
+identical to work nobody has looked at.
 
-- **Dates out of step** — a work order whose machine-sheet cutting or ship date
-  differs from the Daily Schedule by more than the tolerance (2 days by default,
-  adjustable). Only open work is checked, and results are grouped per work order
-  against the closest matching date, so multi-floor orders are not flagged
-  spuriously. On the sample data that is 42 work orders rather than the 1,888
-  raw per-task differences.
-- **Not on a machine** — work orders still open on the Daily Schedule that no
-  machine sheet covers. 225 in the sample data; some belong to other
-  departments, some are genuinely missed.
+Done lines are hidden by default (a checkbox reveals them), and each
+machine's table caps at 25 open lines, soonest cutting date first, with a
+"Show N more" button — Rolling (Auto) alone has 191 open lines, and an
+unbounded table is not something anyone can actually scan.
 
-The importer cleans up as it reads, and reports everything it did:
+## What's hidden, not deleted
 
-- Folds spelling variants together (`I.P` → `IP`, `Repull req` / `Repull Req`)
-- Treats `#REF!`, `#VALUE!` and `#N/A` cells as blank
-- Drops phantom dates such as `1899-12-16`
-- Reads banner rows (`IN CUTTING`, `MAT'L REQUIRED`, `WINDOW WALL`) as section
-  headings, and ignores repeated header rows and separators
-- Keeps non-numeric work orders — `MU2026-012`, `DAN 509`, `29038so`,
-  `PARCEL29-SWD` are all real orders
-- **Rejects date serials sitting in quantity columns.** A date typed into a
-  piece-count cell arrives as a number around 40000–60000 and would otherwise
-  destroy every total. These are listed in the import report so they can be
-  fixed at source.
-
-## Profile types
-
-An order is not one lump of aluminium. It is widths, heights, vents and louvers,
-and each can be pulled, on order or short independently. The Daily Schedule
-carries a single `purch` status for the whole order, which is why "the order says
-Pulled but we are still waiting on vents" was invisible.
-
-| Profile | Operations |
-|---|---|
-| Widths | `WIDTHS` |
-| Heights | `HTS` |
-| Vents | `VENT` |
-| Louvers | `LVRS/TC PAN` |
-| Service Orders | added by hand |
-| Hinges | automatic on 8560 jobs |
-| Extra Operations | `PUNCH`, `VYNL.S`, `SP.S`, `WW CNC`, `SLD ROLLING`, `SLD CUTTING`, `ADAPTORS CNC` |
-
-Each profile carries its own material state: Pulled, Stock OK, Part short, At
-paint, On order, Extrusion due, Short, TBD, Not required. Where nothing has been
-recorded the app seeds it from the order's `purch` column and marks it
-**from schedule**, so a real entry is always distinguishable from an inherited one.
-
-### Hinges and the 8560 rule
-
-8560 vents need hinges, but the vent system is not in the Daily Schedule — it is
-in the `Product` sheet of the CNC schedule, per job. That mapping is seeded in
-`js/products.js`, so the Hinges profile appears automatically on jobs running
-8560 or 8560 HT (currently jobs 1093, 1107, 1124 and 1131). Those rows are
-marked **8560** on the order so it is clear why they are there.
-
-### Orders added by hand
-
-Service orders and anything else off-schedule are added with **+ Add order** on
-the Orders tab. They are stored separately from imported rows, so re-importing a
-revision never removes them, and they are marked **by hand** on the board.
-
-## Traceability
-
-Every change is recorded against the order — what changed, from what to what, by
-whom, and when. Each order shows its own history, and it updates live as work is
-logged. The record is append-only and merges across the shared file by id, so no
-one's entries are lost when two people work at once.
-
-Order completion is the headline on every order: percent complete, pieces done
-against pieces required, and how many profiles are finished.
-
-## What the app owns
-
-The spreadsheet records the *target* — 80 pieces of `WIDTHS`. Nothing in it ever
-recorded how many were actually cut. That is what lives here:
-
-- Piece counts per operation, per order, stamped with who and when
-- Material status per profile type
-- The full change history per order
-- Shift updates by machine
-- Day/shift plans
-- The process guide
-
-Re-importing a new revision replaces the schedule and keeps all of the above.
-
-## Sharing
-
-Each person connects once to the same JSON file (Chrome/Edge, File System Access
-API). Saves merge **record by record** — two people editing different orders both
-keep their work; only the same field edited twice resolves to the most recent.
-
-Without a shared file the app still works fully, storing data in that browser.
-`Export everything` / `Import a backup` moves data between machines.
+Dashboard, Orders, Materials, Planner, Shift Update, Verify, and Guide are
+real, working views from the previous iteration — they still exist in
+`js/views/`, still have data behind them, and are not wired into navigation
+right now. `js/app.js`'s `TABS` array controls what's visible; adding one
+back is a one-line change once that piece is confirmed to fit how the
+department actually works.
 
 ## Tests
 
 ```
-npm install playwright        # once
-node test/import-check.mjs    # parse the workbook, print counts and rejects
-node test/app-check.mjs       # full walkthrough in Chromium, fails on any console error
+npm install                        # once — installs esbuild + playwright
+node test/machines-check.mjs       # parses Rolling + CNC, verifies against the Daily Schedule
+node test/app-check.mjs            # full walkthrough: import, click a status, reload, re-import
+node build.mjs && node test/standalone-check.mjs   # same, against the built single file, opened via file://
 ```
 
 `test/app-check.mjs` writes screenshots to `test/screens/`.
-
-Both accept a workbook path as the first argument, defaulting to the sample used
-during development.
-
-## Known gaps
-
-- Machine list, operator counts and targets in `js/machines.js` are seeded from
-  the Shift Assignment and TARGETS sheets (week of Aug 12). They are not yet
-  editable in the UI.
-- The Dashboard still derives machine load from the Daily Schedule's operation
-  columns rather than from the imported machine tasks. The tasks are loaded and
-  verified; wiring the Dashboard and Planner onto them is the next step.
-- The `Setup` column in the Rolling `Auto` sheet is empty in practice, so runs
-  are not yet grouped by setup number. Deriving it from the die via
-  `ROLLING SET UP CHART` would enable changeover batching.
-- `js/products.js` (job → vent system, for the 8560 hinge rule) is seeded from
-  the CNC workbook by hand rather than imported from its `Product` sheet.
-- Guide sections marked **TODO for the department** need a human to confirm.
