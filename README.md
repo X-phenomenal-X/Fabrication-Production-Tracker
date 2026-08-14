@@ -216,6 +216,12 @@ itself on: staging is done well when the next shift walks in to a job that is
 already there. Nothing tracked it before — it lived in a hidden `Rolling
 Staging` sheet and in people's heads.
 
+**A line that has already started is past staging.** Only rolling lines that
+have not been started appear — anything running or finished is on the machine
+already, and listing it as needing prep sends the stager after a job the roller
+is standing over. On the real Rolling schedule that is the difference between
+260 lines on the list and 183.
+
 It is an **overlay on the rolling lines**, not a queue of its own, so a line is
 the same line whether you are staging it or rolling it: same work order, same
 status, same notes and shortages. `state.staging[key]` holds

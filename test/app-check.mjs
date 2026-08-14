@@ -806,6 +806,32 @@ if (!/\|(DAY|AFT|NIGHT)$/.test(stagedRec.stageFor)) {
   throw new Error('stage-for should be a shift: ' + stagedRec.stageFor);
 }
 
+/* A line the roller has already started is past staging. Excluding only
+   finished lines left every in-progress one on the stager's list — twenty at
+   once on Rolling (Auto), for jobs already on the machine. */
+const stageCounts = await page.evaluate(() => import('/js/model.js').then((m) => {
+  const q = m.stagingQueue();
+  return { todo: q.todo.length, staged: q.staged.length };
+}));
+const startedKey = await page.evaluate(() => import('/js/model.js').then(async (m) => {
+  const s = await import('/js/store.js');
+  const row = m.stagingQueue().todo.find((r) => !r.staging);
+  s.setTaskStatus(row.key, 'IN_PROGRESS');
+  return row.key;
+}));
+const stageAfterStart = await page.evaluate(() => import('/js/model.js').then((m) => {
+  const q = m.stagingQueue();
+  return { todo: q.todo.length, staged: q.staged.length };
+}));
+step(`staging after a line started rolling: ${stageCounts.todo} -> ${stageAfterStart.todo} to stage`);
+if (stageAfterStart.todo !== stageCounts.todo - 1) {
+  throw new Error('a line that started rolling is still listed as needing staging');
+}
+const stillListed = await page.evaluate((k) => import('/js/model.js').then((m) =>
+  m.stagingQueue().todo.some((r) => r.key === k)
+  || m.stagingQueue().staged.some((r) => r.key === k)), startedKey);
+if (stillListed) throw new Error('a started line is still on the staging page');
+
 // It shows on the rolling queue, so the roller knows before starting.
 await gotoTab('Rolling');
 await page.fill('.centre-filters input[type="search"]', stageWo);

@@ -133,7 +133,10 @@ export function renderStaging(rerender, go) {
         el('span.centre-rail', { 'aria-hidden': 'true' }),
         el('div', {},
           el('h1.centre-title', {}, 'Staging'),
-          el('div.centre-sub', {}, 'Prepping for rolling — Auto and Manual'))),
+          el('div.centre-sub', {},
+            'Prepping for rolling — Auto and Manual',
+            el('span.dot-sep', {}, '·'),
+            'lines already running or finished are past staging'))),
       el('span.spacer'),
       el('div.centre-stats', {},
         el('div.cstat' + (todo.length ? '.warn' : ''), {},
@@ -177,10 +180,11 @@ export function renderStaging(rerender, go) {
         vs.showStaged ? section('Staged and ready', staged, 'mute') : null)
     : el('div.panel', {}, el('div.empty', {},
         el('div.empty-icon', {}, icon('check', { size: 28 })),
-        el('h3', {}, vs.q ? 'Nothing matches' : 'Everything is staged'),
+        el('h3', {}, vs.q ? 'Nothing matches' : 'Nothing waiting to be staged'),
         el('div', {}, vs.q
           ? 'Try clearing the search.'
-          : 'Every open rolling line has been prepped.')));
+          : 'Every rolling line that has not started yet has been prepped. '
+            + 'Anything already running or finished is past this point.')));
 
   return el('div.centre', {}, head, body);
 }

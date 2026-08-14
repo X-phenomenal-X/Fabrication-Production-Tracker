@@ -4089,7 +4089,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       if (MACHINE_GROUP[t.machine] !== "Rolling") continue;
       const task = resolveTask(t);
       const status = effectiveTaskStatus(task);
-      if (status.key === "DONE") continue;
+      if (status.key !== "NOT_STARTED") continue;
       if (term) {
         const hay = [task.wo, task.project, task.die, task.floor].join(" ").toLowerCase();
         if (!hay.includes(term)) continue;
@@ -6543,7 +6543,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
             "div",
             {},
             el("h1.centre-title", {}, "Staging"),
-            el("div.centre-sub", {}, "Prepping for rolling \u2014 Auto and Manual")
+            el(
+              "div.centre-sub",
+              {},
+              "Prepping for rolling \u2014 Auto and Manual",
+              el("span.dot-sep", {}, "\xB7"),
+              "lines already running or finished are past staging"
+            )
           )
         ),
         el("span.spacer"),
@@ -6625,8 +6631,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       "div.empty",
       {},
       el("div.empty-icon", {}, icon("check", { size: 28 })),
-      el("h3", {}, vs.q ? "Nothing matches" : "Everything is staged"),
-      el("div", {}, vs.q ? "Try clearing the search." : "Every open rolling line has been prepped.")
+      el("h3", {}, vs.q ? "Nothing matches" : "Nothing waiting to be staged"),
+      el("div", {}, vs.q ? "Try clearing the search." : "Every rolling line that has not started yet has been prepped. Anything already running or finished is past this point.")
     ));
     return el("div.centre", {}, head, body);
   }

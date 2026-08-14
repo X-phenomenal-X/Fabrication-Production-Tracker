@@ -667,7 +667,11 @@ export function stagingQueue({ q = '', ref = today() } = {}) {
     if (MACHINE_GROUP[t.machine] !== 'Rolling') continue;
     const task = resolveTask(t);
     const status = effectiveTaskStatus(task);
-    if (status.key === 'DONE') continue;
+    /* Anything already running or finished on rolling is past staging — the
+       material is on the machine. Excluding only DONE meant every in-progress
+       line still showed as needing prep, so a roller working through twenty
+       lines had all twenty of them on the stager's list at the same time. */
+    if (status.key !== 'NOT_STARTED') continue;
 
     if (term) {
       const hay = [task.wo, task.project, task.die, task.floor].join(' ').toLowerCase();
