@@ -18,7 +18,11 @@ export const MACHINES = [
      anyone stands at, so it is skipped on the shift update and in targets. */
   { key: 'cncfmc',     label: 'Unassigned',        group: 'CNC', queue: true,
     note: 'straight off the CNC & FMC sheet' },
-  { key: 'cnc1',       label: 'CNC 1',             group: 'CNC', ops: 1 },
+  /* One machine, two names: the shift-update sheet writes it as CNC-3 while
+     the floor calls it CNC 1. Both are mapped to this key in SU_MACHINE, so
+     its schedule and its shift-update entry land together. */
+  { key: 'cnc1',       label: 'CNC 1',             group: 'CNC', ops: 1,
+    note: 'CNC-3 on the shift update' },
   { key: 'fmc1',       label: 'FMC 1',             group: 'CNC', ops: 1 },
   { key: 'fmc2',       label: 'FMC 2',             group: 'CNC', ops: 1 },
 
@@ -42,11 +46,19 @@ export function assignableIn(group) {
   return MACHINES.filter((m) => m.group === group && !m.queue);
 }
 
-/** Whether this centre imports into a shared queue and therefore needs lines
-    put on machines by hand. Only CNC & FMC does: the Rolling and FOM sheets
-    already say which machine a line is on, so nothing there is ours to move. */
+/** Whether this centre imports into a shared queue. Only CNC & FMC does — its
+    sheet has no machine column at all, so every line there starts unassigned.
+    Used for wording, not for permission: see `canMoveIn`. */
 export function hasQueue(group) {
   return MACHINES.some((m) => m.group === group && m.queue);
+}
+
+/** Whether lines in this centre can be moved between machines. Anywhere with
+    more than one machine to choose from: the FOM sheets say which FOM a job is
+    on and the Rolling sheets say Auto or Manual, but the floor moves work
+    between them during a shift, and the tracker has to be able to follow. */
+export function canMoveIn(group) {
+  return assignableIn(group).length > 1;
 }
 
 export function machinesByGroup() {

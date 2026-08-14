@@ -273,9 +273,17 @@ export function setTaskMachine(key, machine, importedMachine) {
   save();
 }
 
-/** Assign a whole selection at once — one save, not one per line. */
+/** Assign a whole selection at once — one save, not one per line.
+
+    `importedMachine` may be a function of the key. It has to be, for "put
+    these back where the sheet had them" across a mixed selection: half the
+    lines might have come from FOM 1 and half from FOM 2, and one machine name
+    cannot stand for both. */
 export function setTaskMachineMany(keys, machine, importedMachine) {
-  for (const key of keys) assignOne(key, machine, importedMachine);
+  const originOf = typeof importedMachine === 'function'
+    ? importedMachine
+    : () => importedMachine;
+  for (const key of keys) assignOne(key, machine, originOf(key));
   save();
 }
 

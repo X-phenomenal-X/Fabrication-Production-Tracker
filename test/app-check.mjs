@@ -513,6 +513,60 @@ if (!moved.assigns[0].startsWith('cncfmc|')) {
 }
 await page.screenshot({ path: path.join(SHOT, 'centre-cnc-fmc.png'), fullPage: true });
 
+// ---------- moving a job between machines in the same centre ----------
+// The FOM sheets DO say which FOM a job is on, unlike CNC & FMC — but the
+// floor moves work between them mid-shift, so the tracker has to follow.
+await gotoTab('FOM');
+await page.waitForSelector('.subtabs button');
+const fomBefore = await page.evaluate(() => import('/js/model.js').then((m) => ({
+  fom1: m.openCountFor('fom1'), fom2: m.openCountFor('fom2'),
+})));
+const fomWo = await page.$eval('.line .mono.strong', (n) => n.textContent.trim());
+await page.locator('.line').filter({ hasText: fomWo }).first()
+  .locator('.line-iconbtn[title="Move this line to another machine"]').click();
+await page.waitForSelector('dialog .movebtn');
+const moveOpts = await page.$$eval('dialog .movebtn strong', (ns) => ns.map((n) => n.textContent.trim()));
+step('FOM move targets: ' + moveOpts.join(', '));
+if (moveOpts.join(',') !== 'FOM 1,FOM 2,FOM 3') throw new Error('unexpected FOM move targets');
+await page.locator('dialog .movebtn', { hasText: 'FOM 2' }).first().click();
+await page.waitForTimeout(300);
+
+const fomAfter = await page.evaluate(() => import('/js/model.js').then(async (m) => {
+  const s = await import('/js/store.js');
+  return {
+    fom1: m.openCountFor('fom1'), fom2: m.openCountFor('fom2'),
+    assigns: Object.entries(s.state.taskAssign)
+      .filter(([k]) => k.startsWith('fom1|')).map(([k, v]) => `${k} -> ${v.machine}`),
+  };
+}));
+step(`FOM 1 ${fomBefore.fom1} -> ${fomAfter.fom1}, FOM 2 ${fomBefore.fom2} -> ${fomAfter.fom2} | ${fomAfter.assigns.join(', ')}`);
+if (fomAfter.fom1 !== fomBefore.fom1 - 1) throw new Error('line did not leave FOM 1');
+if (fomAfter.fom2 !== fomBefore.fom2 + 1) throw new Error('line did not arrive on FOM 2');
+// The key must still carry the machine the sheet imported it under.
+if (!fomAfter.assigns.length || !fomAfter.assigns[0].startsWith('fom1|')) {
+  throw new Error('moving changed the line key: ' + JSON.stringify(fomAfter.assigns));
+}
+
+// It shows on FOM 2 badged with where the workbook has it, so the FOM 1
+// operator can see where the job went.
+await page.click('.subtabs button:has-text("FOM 2")');
+await page.waitForTimeout(250);
+const movedBadge = await page.locator('.line').filter({ hasText: fomWo }).first()
+  .locator('.badge-moved').first().textContent();
+step('moved badge on FOM 2: ' + movedBadge.trim());
+if (!movedBadge.includes('FOM 1')) throw new Error('moved line does not say where it came from');
+await page.screenshot({ path: path.join(SHOT, 'moved-line.png') });
+
+// and it goes back where the sheet has it
+await page.locator('.line').filter({ hasText: fomWo }).first()
+  .locator('.line-iconbtn[title="Move this line to another machine"]').click();
+await page.waitForSelector('dialog .movebtn');
+await page.click('dialog .body button.ghost');   // header has a ghost 'Close' too
+await page.waitForTimeout(300);
+const fomBack = await page.evaluate(() => import('/js/model.js').then((m) => m.openCountFor('fom1')));
+step('after putting it back, FOM 1 = ' + fomBack);
+if (fomBack !== fomBefore.fom1) throw new Error('putting the line back did not restore FOM 1');
+
 // ---------- cloud sync config ----------
 // No live Supabase here, so this covers the parts that must work without one:
 // the config round-trip, the split of the snapshot into base/work, and that a

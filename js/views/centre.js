@@ -24,7 +24,9 @@ import {
 } from '../model.js';
 import { backOrderDialog } from './backorders.js';
 import { rushDialog } from './rush.js';
-import { machinesByGroup, assignableIn, hasQueue } from '../machines.js';
+import {
+  machinesByGroup, assignableIn, hasQueue, canMoveIn, MACHINE_BY_KEY,
+} from '../machines.js';
 
 /* Per-centre view state, kept while the app is open. */
 const viewState = new Map();
@@ -114,7 +116,7 @@ function taskLine(row, vs, rerender, group) {
   // boStat already surfaces inside the back-order band when flagged.
   const sheetNote = t.comments || (bo.on ? null : t.boStat);
   const selected = vs.selected.has(key);
-  const canMove = hasQueue(group);
+  const canMove = canMoveIn(group);
 
   const node = el('div.line' + (selected ? '.sel' : '') + (rush.on ? '.rush' : ''), {},
     el('label.line-pick', {},
@@ -142,7 +144,15 @@ function taskLine(row, vs, rerender, group) {
           bo.qty != null ? `B/O ${fmtNum(bo.qty)}` : 'B/O') : null,
         t.editedAt ? el('span.badge-edited', {
           title: `Edited by ${t.editedBy} · ${fmtWhen(t.editedAt)}`,
-        }, 'edited') : null),
+        }, 'edited') : null,
+        // Without this a job that someone moved just appears on a machine the
+        // workbook never put it on, and the machine it left cannot tell where
+        // it went.
+        isAssigned(t) ? el('span.badge-moved', {
+          title: `Moved here by hand — the workbook has this on `
+            + `${machineConfig(MACHINE_BY_KEY[t.machine] || { key: t.machine, label: t.machine }).label}`,
+        }, icon('arrow', { size: 10 }),
+          machineConfig(MACHINE_BY_KEY[t.machine] || { key: t.machine, label: t.machine }).label) : null),
       el('div.line-where', {},
         el('span', {}, t.project || '—'),
         t.floor ? el('span.muted', {}, ' · ' + t.floor) : null),
@@ -173,7 +183,7 @@ function taskLine(row, vs, rerender, group) {
 
     el('div.line-tools', {},
       canMove ? el('button.line-iconbtn' + (isAssigned(t) ? '.moved' : ''), {
-        title: 'Put this line on a machine',
+        title: hasQueue(group) ? 'Put this line on a machine' : 'Move this line to another machine',
         onclick: () => moveDialog([key], group, rerender),
       }, icon('arrow', { size: 15 })) : null,
       el('button.line-iconbtn' + (rush.on ? '.rush' : ''), {
@@ -207,37 +217,60 @@ function taskLine(row, vs, rerender, group) {
 function moveDialog(keys, group, rerender) {
   const targets = assignableIn(group).map(machineConfig);
   const first = taskByKey(keys[0]);
-  const imported = first?.machine || null;
-  const cur = keys.length === 1 && first
-    ? (state.taskAssign?.[keys[0]]?.machine || imported)
-    : null;
+  const single = keys.length === 1 && first;
 
-  const title = keys.length === 1
-    ? `Put W/O ${first?.wo ?? ''} on a machine`
-    : `Put ${keys.length} lines on a machine`;
+  // Where each line came from, per key — a mixed selection can span several
+  // machines, so "put it back" cannot be one name.
+  const originOf = (k) => taskByKey(k)?.machine || null;
+  const imported = first?.machine || null;
+  const origins = new Set(keys.map(originOf).filter(Boolean));
+  const cur = single ? (state.taskAssign?.[keys[0]]?.machine || imported) : null;
+  const moved = keys.some((k) => state.taskAssign?.[k]?.machine);
+
+  const label = (k) => targets.find((m) => m.key === k)?.label
+    || machineConfig(MACHINE_BY_KEY[k] || { key: k, label: k }).label;
+  const queue = hasQueue(group);
+
+  const title = single
+    ? `Move W/O ${first.wo}${first.die ? ' · ' + first.die : ''}`
+    : `Move ${keys.length} lines`;
 
   const go = (dlg, machine) => {
-    setTaskMachineMany(keys, machine, imported);
+    setTaskMachineMany(keys, machine, machine ? imported : originOf);
     dlg.close();
-    toast(machine
-      ? `Moved to ${targets.find((m) => m.key === machine)?.label || machine}`
-      : 'Back in the queue');
+    toast(machine ? `Moved to ${label(machine)}`
+      : queue ? 'Back in the queue' : 'Put back where the sheet has it');
     rerender();
   };
 
+  // The CNC & FMC sheet genuinely does not say which machine runs a line; the
+  // FOM and Rolling sheets do, and moving one is an override of that.
+  const blurb = queue
+    ? 'The workbook does not say which machine these run on — that is decided here.'
+    : origins.size === 1 && imported
+      ? `The workbook has ${single ? 'this' : 'these'} on ${label(imported)}. Moving `
+        + `${single ? 'it' : 'them'} here overrides that until you put ${single ? 'it' : 'them'} back.`
+      : 'These came off more than one machine. Moving them overrides what the workbook says.';
+
   const body = el('div', {},
     el('p.small.muted', { style: { marginTop: 0 } },
-      'The workbook does not say which machine these run on — that is decided here. '
-      + 'Moving a line keeps its status, note, history and back order.'),
+      blurb + ' The line keeps its status, note, history, rush and back order, '
+      + 'and the move survives re-importing the workbook.'),
     el('div.movegrid', {}, ...targets.map((m) => el('button.movebtn' + (m.key === cur ? '.on' : ''), {
       onclick: (e) => go(e.target.closest('dialog'), m.key),
     },
       el('strong', {}, m.label),
-      m.note ? el('span.small.muted', {}, m.note) : null))),
-    imported && cur !== imported ? el('div', { style: { marginTop: '12px' } },
+      m.note ? el('span.small.muted', {}, m.note) : null,
+      m.key === cur ? el('span.small.muted', {}, 'currently here') : null))),
+
+    moved ? el('div', { style: { marginTop: '12px' } },
       el('button.ghost', {
         onclick: (e) => go(e.target.closest('dialog'), null),
-      }, icon('undo', { size: 13 }), ' Send back to the unassigned queue')) : null);
+      }, icon('undo', { size: 13 }),
+        queue ? ' Send back to the unassigned queue'
+          : origins.size === 1 && imported
+            ? ` Put back on ${label(imported)}, where the sheet has it`
+            : ' Put each one back where the sheet has it')) : null);
 
   modal(title, body, {});
 }
@@ -519,7 +552,7 @@ function bulkBar(vs, rerender, group) {
     rerender();
   };
 
-  const canMove = hasQueue(group);
+  const canMove = canMoveIn(group);
 
   return el('div.bulkbar', { role: 'status' },
     el('span.bulk-count', {}, `${keys.length} selected`),

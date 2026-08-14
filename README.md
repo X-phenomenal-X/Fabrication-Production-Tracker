@@ -47,24 +47,42 @@ To use it on a phone, set up **Sync across devices** in Setup once — see below
 Machines with no lines scheduled still appear — a machine that is idle should
 look different from one that does not exist.
 
-## CNC & FMC: one queue, split by hand
+## Moving jobs between machines
 
-CNC 2 and CNC 3 are gone; **FMC 1 and FMC 2** took their place. That changes
-more than a label, because the workbook's `CNC & FMC` sheet has **no machine
-column** — it is one flat list of `WO# · PROJECT · FL · Product · QTY · B/O ·
-B/O Stat · Cutting Date · Status`. There is no per-machine CNC schedule
-anywhere in either workbook. (`CNC Daily` has a Work Center column but is dated
-Sept 27th, and `Machine Schedule` is from Jan 29th — both long stale.)
+**Any centre with more than one machine lets you move a job to another one** —
+FOM 1 → FOM 2 → FOM 3, Rolling Auto ↔ Manual, and across CNC 1 / FMC 1 / FMC 2.
+Use the arrow button on a line, or select several and use **Move to** in the
+bulk bar. The floor moves work between machines mid-shift; the tracker follows.
 
-So the sheet imports into an **Unassigned** queue, which is the first sub-tab,
-and a line is put on CNC 1, FMC 1 or FMC 2 by hand — from the arrow button on
-the line, or by selecting several and using **Move to** in the bulk bar.
+A moved line carries a small **`→ FOM 1`** badge naming the machine the workbook
+has it on, so the operator whose machine it left can see where it went, and
+**Put back on FOM 1, where the sheet has it** undoes it. Across a mixed
+selection each line goes back to its own machine, not to one shared guess.
 
-Assignment is an *overlay*. The line's key stays built from the machine it was
-imported under, so moving a line keeps its status, note, history, rush and back
-order, and survives re-importing the workbook. `test/app-check.mjs` asserts the
-key still starts with `cncfmc|` after a move, because the alternative silently
-orphans everything attached to that line.
+The move is an *overlay*, like everything else the app records. The line's key
+stays built from the machine it was **imported** under, so moving it keeps its
+status, note, history, rush and back order, and survives re-importing the
+workbook. `test/app-check.mjs` asserts the key still starts with `fom1|` after a
+move to FOM 2, because the alternative silently orphans everything attached to
+that line.
+
+### CNC & FMC starts unassigned
+
+CNC 2 and CNC 3 are gone; **FMC 1 and FMC 2** took their place. That centre is
+different from the others, because the workbook's `CNC & FMC` sheet has **no
+machine column** — it is one flat list of `WO# · PROJECT · FL · Product · QTY ·
+B/O · B/O Stat · Cutting Date · Status`, and there is no per-machine CNC
+schedule anywhere in either workbook. (`CNC Daily` has a Work Center column but
+is dated Sept 27th, and `Machine Schedule` is from Jan 29th — both long stale.)
+
+So its lines import into an **Unassigned** queue, the first sub-tab, and are put
+on a machine by hand. Elsewhere the sheet already says which machine a job is
+on, and moving it is an override of that rather than a first assignment — the
+dialog says which of the two it is doing.
+
+**CNC 1 and CNC-3 are the same machine.** The shift-update sheet writes it as
+`CNC-3` while the floor calls it CNC 1; both names map to one work centre so its
+schedule and its shift-update entry land together.
 
 ## Running now
 

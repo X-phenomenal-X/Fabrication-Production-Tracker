@@ -1015,6 +1015,19 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
   .line { break-inside: avoid; }
 }
 
+/* A line someone moved off the machine the workbook put it on. Neutral rather
+   than alarming — it is a legitimate decision, just one worth being able to
+   see from the machine the job left. */
+.badge-moved {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+  background: var(--accent-soft); color: var(--accent);
+  padding: 2px 7px 2px 5px; border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.badge-moved svg { flex-shrink: 0; opacity: .7; }
+.movebtn .muted { line-height: 1.3; }
+
 </style>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#9986;</text></svg>">
 </head>
@@ -1632,7 +1645,8 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
     logChange(key, "machine", null, cur, next);
   }
   function setTaskMachineMany(keys, machine, importedMachine) {
-    for (const key of keys) assignOne(key, machine, importedMachine);
+    const originOf = typeof importedMachine === "function" ? importedMachine : () => importedMachine;
+    for (const key of keys) assignOne(key, machine, originOf(key));
     save();
   }
   function clearTaskEdits(key, sheet = {}) {
@@ -2252,7 +2266,16 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
       queue: true,
       note: "straight off the CNC & FMC sheet"
     },
-    { key: "cnc1", label: "CNC 1", group: "CNC", ops: 1 },
+    /* One machine, two names: the shift-update sheet writes it as CNC-3 while
+       the floor calls it CNC 1. Both are mapped to this key in SU_MACHINE, so
+       its schedule and its shift-update entry land together. */
+    {
+      key: "cnc1",
+      label: "CNC 1",
+      group: "CNC",
+      ops: 1,
+      note: "CNC-3 on the shift update"
+    },
     { key: "fmc1", label: "FMC 1", group: "CNC", ops: 1 },
     { key: "fmc2", label: "FMC 2", group: "CNC", ops: 1 },
     { key: "multipunch", label: "Multi Punch", group: "Punch", ops: 1, note: "pcs not frames" }
@@ -2270,6 +2293,9 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
   }
   function hasQueue(group) {
     return MACHINES.some((m) => m.group === group && m.queue);
+  }
+  function canMoveIn(group) {
+    return assignableIn(group).length > 1;
   }
   function machinesByGroup() {
     const groups = /* @__PURE__ */ new Map();
@@ -2976,7 +3002,7 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
     const rush = row.rush || resolveRush(t);
     const sheetNote = t.comments || (bo.on ? null : t.boStat);
     const selected = vs.selected.has(key);
-    const canMove = hasQueue(group);
+    const canMove = canMoveIn(group);
     const node = el(
       "div.line" + (selected ? ".sel" : "") + (rush.on ? ".rush" : ""),
       {},
@@ -3020,7 +3046,18 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
           ) : null,
           t.editedAt ? el("span.badge-edited", {
             title: `Edited by ${t.editedBy} \xB7 ${fmtWhen(t.editedAt)}`
-          }, "edited") : null
+          }, "edited") : null,
+          // Without this a job that someone moved just appears on a machine the
+          // workbook never put it on, and the machine it left cannot tell where
+          // it went.
+          isAssigned(t) ? el(
+            "span.badge-moved",
+            {
+              title: `Moved here by hand \u2014 the workbook has this on ${machineConfig(MACHINE_BY_KEY[t.machine] || { key: t.machine, label: t.machine }).label}`
+            },
+            icon("arrow", { size: 10 }),
+            machineConfig(MACHINE_BY_KEY[t.machine] || { key: t.machine, label: t.machine }).label
+          ) : null
         ),
         el(
           "div.line-where",
@@ -3071,7 +3108,7 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
         "div.line-tools",
         {},
         canMove ? el("button.line-iconbtn" + (isAssigned(t) ? ".moved" : ""), {
-          title: "Put this line on a machine",
+          title: hasQueue(group) ? "Put this line on a machine" : "Move this line to another machine",
           onclick: () => moveDialog([key], group, rerender)
         }, icon("arrow", { size: 15 })) : null,
         el("button.line-iconbtn" + (rush.on ? ".rush" : ""), {
@@ -3098,22 +3135,29 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
   function moveDialog(keys, group, rerender) {
     const targets = assignableIn(group).map(machineConfig);
     const first = taskByKey(keys[0]);
+    const single = keys.length === 1 && first;
+    const originOf = (k) => taskByKey(k)?.machine || null;
     const imported = first?.machine || null;
-    const cur = keys.length === 1 && first ? state.taskAssign?.[keys[0]]?.machine || imported : null;
-    const title = keys.length === 1 ? `Put W/O ${first?.wo ?? ""} on a machine` : `Put ${keys.length} lines on a machine`;
+    const origins = new Set(keys.map(originOf).filter(Boolean));
+    const cur = single ? state.taskAssign?.[keys[0]]?.machine || imported : null;
+    const moved = keys.some((k) => state.taskAssign?.[k]?.machine);
+    const label = (k) => targets.find((m) => m.key === k)?.label || machineConfig(MACHINE_BY_KEY[k] || { key: k, label: k }).label;
+    const queue = hasQueue(group);
+    const title = single ? `Move W/O ${first.wo}${first.die ? " \xB7 " + first.die : ""}` : `Move ${keys.length} lines`;
     const go2 = (dlg, machine) => {
-      setTaskMachineMany(keys, machine, imported);
+      setTaskMachineMany(keys, machine, machine ? imported : originOf);
       dlg.close();
-      toast(machine ? `Moved to ${targets.find((m) => m.key === machine)?.label || machine}` : "Back in the queue");
+      toast(machine ? `Moved to ${label(machine)}` : queue ? "Back in the queue" : "Put back where the sheet has it");
       rerender();
     };
+    const blurb = queue ? "The workbook does not say which machine these run on \u2014 that is decided here." : origins.size === 1 && imported ? `The workbook has ${single ? "this" : "these"} on ${label(imported)}. Moving ${single ? "it" : "them"} here overrides that until you put ${single ? "it" : "them"} back.` : "These came off more than one machine. Moving them overrides what the workbook says.";
     const body = el(
       "div",
       {},
       el(
         "p.small.muted",
         { style: { marginTop: 0 } },
-        "The workbook does not say which machine these run on \u2014 that is decided here. Moving a line keeps its status, note, history and back order."
+        blurb + " The line keeps its status, note, history, rush and back order, and the move survives re-importing the workbook."
       ),
       el("div.movegrid", {}, ...targets.map((m) => el(
         "button.movebtn" + (m.key === cur ? ".on" : ""),
@@ -3121,14 +3165,20 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
           onclick: (e) => go2(e.target.closest("dialog"), m.key)
         },
         el("strong", {}, m.label),
-        m.note ? el("span.small.muted", {}, m.note) : null
+        m.note ? el("span.small.muted", {}, m.note) : null,
+        m.key === cur ? el("span.small.muted", {}, "currently here") : null
       ))),
-      imported && cur !== imported ? el(
+      moved ? el(
         "div",
         { style: { marginTop: "12px" } },
-        el("button.ghost", {
-          onclick: (e) => go2(e.target.closest("dialog"), null)
-        }, icon("undo", { size: 13 }), " Send back to the unassigned queue")
+        el(
+          "button.ghost",
+          {
+            onclick: (e) => go2(e.target.closest("dialog"), null)
+          },
+          icon("undo", { size: 13 }),
+          queue ? " Send back to the unassigned queue" : origins.size === 1 && imported ? ` Put back on ${label(imported)}, where the sheet has it` : " Put each one back where the sheet has it"
+        )
       ) : null
     );
     modal(title, body, {});
@@ -3488,7 +3538,7 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
       });
       rerender();
     };
-    const canMove = hasQueue(group);
+    const canMove = canMoveIn(group);
     return el(
       "div.bulkbar",
       { role: "status" },

@@ -999,3 +999,16 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
   .panel, .dgroup-body, .nowrun, .su, .sucard { box-shadow: none; break-inside: avoid; }
   .line { break-inside: avoid; }
 }
+
+/* A line someone moved off the machine the workbook put it on. Neutral rather
+   than alarming — it is a legitimate decision, just one worth being able to
+   see from the machine the job left. */
+.badge-moved {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+  background: var(--accent-soft); color: var(--accent);
+  padding: 2px 7px 2px 5px; border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.badge-moved svg { flex-shrink: 0; opacity: .7; }
+.movebtn .muted { line-height: 1.3; }
