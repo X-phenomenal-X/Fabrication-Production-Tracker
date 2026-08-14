@@ -328,7 +328,8 @@ export function staleImports() {
 
 /** The latest word on a machine from the CNC workbook's Shift Update sheet:
     what ran, what is next, and whether the machine is down. */
-export function shiftUpdateFor(machineKey) {
+/** The machine's entry as the imported workbook has it. */
+function sheetShiftUpdateFor(machineKey) {
   const su = state.shiftUpdate;
   if (!su?.machines) return null;
   const entry = su.machines[machineKey];
@@ -336,6 +337,67 @@ export function shiftUpdateFor(machineKey) {
   // Entries carry their own date and shift: they no longer all come from one
   // block, since FMC 1 and FMC 2 only appear on a different one.
   return { date: su.date, shift: su.shift, ...entry };
+}
+
+/* Shift updates written on the Shift Update page are stored as one record per
+   (date, shift) with a text box per machine. This pulls one machine's entry
+   back out of the newest one that actually says something about it. */
+const SHIFT_RANK = { DAY: 0, AFT: 1, AFTERNOON: 1, NIGHT: 2, MIDNIGHT: 2 };
+
+function rank(date, shift) {
+  return `${date || ''}#${SHIFT_RANK[shift] ?? 0}`;
+}
+
+function lines(v) {
+  return String(v || '').split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
+function writtenShiftUpdateFor(machineKey) {
+  let best = null;
+  for (const log of Object.values(state.shiftLogs || {})) {
+    const row = log?.rows?.[machineKey];
+    if (!row) continue;
+    const done = lines(row.done);
+    const next = lines(row.next);
+    const notes = lines(row.notes);
+    if (!done.length && !next.length && !notes.length) continue;
+    if (best && rank(log.date, log.shift) <= rank(best.date, best.shift)) continue;
+    best = {
+      date: log.date, shift: log.shift,
+      ops: row.ops === '' || row.ops == null ? null : Number(row.ops),
+      done, next, notes, down: false,
+      by: log.by, at: log.at,
+    };
+  }
+  return best;
+}
+
+/** What to show as this machine's last shift update.
+
+    Two things can answer that and they are not the same thing. The workbook's
+    `Shift Update 2` sheet is a snapshot from whenever the file was last saved.
+    An update written on the Shift Update page is the department's own record,
+    typed during the shift it describes.
+
+    Whichever is more recent wins, and the result says which it was — a machine
+    page that keeps showing yesterday's workbook entry after today's update has
+    been written in the app is showing the wrong thing, however correctly it
+    parsed the sheet. */
+export function shiftUpdateFor(machineKey) {
+  const sheet = sheetShiftUpdateFor(machineKey);
+  const written = writtenShiftUpdateFor(machineKey);
+
+  if (written && (!sheet || rank(written.date, written.shift) > rank(sheet.date, sheet.shift))) {
+    return {
+      ...written,
+      source: 'written',
+      // The workbook is the only one of the two that records a machine as
+      // down, so a newer written update must not silently clear it. Carried
+      // across with its own date, for the panel to caveat.
+      staleDown: sheet?.down ? sheet.date : null,
+    };
+  }
+  return sheet ? { ...sheet, source: 'workbook' } : null;
 }
 
 /** How old the imported shift update is, in words. A shift update is only

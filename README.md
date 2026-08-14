@@ -249,6 +249,26 @@ labels.
 
 ## Shift update
 
+Two different things can answer "what is the last shift update for this
+machine", and they are not the same claim. The workbook's `Shift Update 2`
+sheet is a snapshot from whenever the file was last saved. An update written
+on the Shift Update page is the department's own record, typed during the
+shift it describes.
+
+**The newer of the two wins on the machine page, and the panel says which it
+is** — green and "written here", or neutral and "from the workbook". This was
+wrong until it was reported: a machine page kept showing the workbook's
+snapshot even after someone had written up today's shift in the app, so FOM
+and Rolling reported the previous day's work however correctly the sheet had
+been parsed. `shiftUpdateFor()` in `js/model.js` now merges both sources;
+`test/app-check.mjs` asserts a written update outranks the workbook and that a
+machine nobody wrote up still falls back to it.
+
+Only the workbook half can record a machine as **down**, so a newer written
+update never silently clears that flag — it is carried across with its own
+date and a line saying the newer update does not say either way.
+
+
 Its own page, laid out the way the department's sheet already is: one block per
 machine with **#Ops, Work done / in progress, Next in schedule and Notes**,
 grouped by centre so Rolling, FOM, CNC and Multi Punch are visually separate

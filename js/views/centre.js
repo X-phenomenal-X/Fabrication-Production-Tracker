@@ -486,15 +486,21 @@ function shiftUpdatePanel(machineKey) {
         el('ul.su-list', {}, ...items.map((t) => el('li', {}, t))))
     : null;
 
-  // The shift update is imported data: it only re-reads on the next import, so
-  // after a parsing fix it can still be showing what the old parser made of the
-  // sheet. Say so here rather than let it look like current truth.
-  const staleSu = staleImports().includes('cnc');
+  const written = su.source === 'written';
+  // Only the workbook half is imported data, and only it goes stale when the
+  // parser changes. An update someone typed here is never out of date in that
+  // sense, so the re-import warning must not appear over it.
+  const staleSu = !written && staleImports().includes('cnc');
   const age = shiftUpdateAge(su.date);
 
-  return el('div.su' + (su.down ? '.down' : ''), {},
+  return el('div.su' + (su.down ? '.down' : '') + (written ? '.written' : ''), {},
     el('div.su-head', {},
-      el('span.su-title', {}, 'Last shift update'),
+      // Where it came from, not just how old it is: "what the workbook said
+      // when it was last saved" and "what the afternoon shift wrote" are
+      // different claims, and the panel used to make them look identical.
+      el('span.su-title', {},
+        icon(written ? 'pencil' : 'note', { size: 12 }),
+        written ? 'Shift update — written here' : 'Shift update — from the workbook'),
       su.date ? chip(`${su.shift || ''} ${fmtDate(su.date)}`.trim(), 'mute') : null,
       // Age, not just the date: a reader should not have to work out what
       // "Aug 13" means relative to today before trusting what is under it.
@@ -502,7 +508,14 @@ function shiftUpdatePanel(machineKey) {
       staleSu ? chip('re-import to refresh', 'warn') : null,
       su.down ? el('span.badge-down', {}, icon('alert', { size: 12 }), 'Machine down') : null,
       el('span.spacer'),
+      written && su.by ? el('span.small.muted', {}, `by ${su.by}`) : null,
       su.ops != null ? el('span.small.muted', {}, `${su.ops} operator${su.ops === 1 ? '' : 's'}`) : null),
+    // A written update cannot record a machine as down — only the workbook
+    // does — so a newer one must not look like it cleared the flag.
+    su.staleDown ? el('div.su-staledown', {},
+      icon('alert', { size: 13 }),
+      el('span', {}, `The workbook had this machine down on ${fmtDate(su.staleDown)}. `
+        + 'The update above is newer and does not say either way.')) : null,
     el('div.su-body', {},
       list('Work done / in progress', su.done),
       list('Next in schedule', su.next),

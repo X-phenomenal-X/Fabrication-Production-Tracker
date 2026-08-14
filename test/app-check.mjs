@@ -704,6 +704,36 @@ const recent = await page.$$eval('.su-recentrow', (ns) => ns.map((n) => n.textCo
 step('recent updates: ' + recent.join(' | '));
 if (!recent.length) throw new Error('saved update missing from the recent list');
 
+/* The machine page must now show what was just written here, not the workbook
+   entry it outranks. This is the one that was wrong: an update typed in the app
+   for today sat behind the workbook's snapshot from yesterday, so FOM and
+   Rolling kept reporting the previous day's work. */
+await gotoTab('FOM');
+await page.waitForSelector('.su');
+const suWritten = await page.evaluate(() => {
+  const n = document.querySelector('.su');
+  return {
+    written: n.classList.contains('written'),
+    title: n.querySelector('.su-title')?.textContent.trim(),
+    body: n.querySelector('.su-body')?.textContent.trim(),
+  };
+});
+step(`FOM 1 panel: ${suWritten.title} | ${suWritten.body.slice(0, 90)}…`);
+if (!suWritten.written) {
+  throw new Error('the machine page still shows the workbook over an update written today');
+}
+if (!suWritten.body.includes('Blade change at 18:00')) {
+  throw new Error('the written update is labelled as such but is not what is shown');
+}
+
+// A machine nobody wrote up still falls back to the workbook.
+await gotoTab('Multi Punch');
+await page.waitForSelector('.su');
+const suFallback = await page.evaluate(() =>
+  document.querySelector('.su').classList.contains('written'));
+step('Multi Punch falls back to the workbook: ' + (!suFallback));
+if (suFallback) throw new Error('a machine with no written update claims to have one');
+
 // phone
 await page.click('nav.tabs button:has-text("Rolling")');
 await page.setViewportSize({ width: 390, height: 844 });

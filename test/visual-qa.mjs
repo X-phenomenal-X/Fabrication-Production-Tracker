@@ -206,6 +206,34 @@ for (const theme of ['light', 'dark']) {
     }
   }
 
+  // --- a machine page shows the newest shift update, not just the workbook ---
+  // The fixture writes an afternoon update for Rolling (Auto) and FOM 1 that is
+  // newer than the workbook's own entry; every other machine has only the
+  // workbook. Both must show, each labelled with where it came from.
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.goto(`${base}/#fom`);
+  await page.waitForSelector('.su');
+  const suSource = await page.evaluate(() => {
+    const n = document.querySelector('.su');
+    return { written: n.classList.contains('written'), title: n.querySelector('.su-title')?.textContent.trim() };
+  });
+  if (!suSource.written) {
+    fail(`FOM 1 shows "${suSource.title}" — the update written in the app is newer than the workbook`);
+  }
+  // A hash-only navigation re-renders on the next frame, so the old page's
+  // panel is still in the DOM when goto resolves — wait for the nav to agree.
+  await page.goto(`${base}/#punch`);
+  await page.waitForFunction(() =>
+    document.querySelector('nav.tabs button[aria-current="true"]')?.getAttribute('aria-label') === 'Multi Punch');
+  await page.waitForSelector('.su');
+  const suPunch = await page.evaluate(() => {
+    const n = document.querySelector('.su');
+    return { written: n.classList.contains('written'), title: n.querySelector('.su-title')?.textContent.trim() };
+  });
+  if (suPunch.written) {
+    fail(`Multi Punch shows "${suPunch.title}" but nothing was written for it — should be the workbook`);
+  }
+
   // --- status is never carried by colour alone ---
   // Every state indicator must also say what it is, in words or an icon.
   await page.setViewportSize({ width: 1440, height: 960 });

@@ -168,23 +168,10 @@ header.top {
 
 .hdr-id { display: flex; align-items: center; gap: var(--s2); min-width: 0; flex-shrink: 0; }
 
-/* The tagline is decoration and the nav is not, so the tagline goes first —
-   and it has to go well before the nav starts scrolling, or a 1280px
-   production monitor hides Setup behind an overflow nobody looks for. */
-@media (max-width: 1460px) {
-  .brand small { display: none; }
-  header.top { gap: var(--s3); padding-left: var(--s4); padding-right: var(--s4); }
-}
-/* At 1280 the eight spelled-out pages plus the brand, two chips and the name
-   picker no longer fit. The tools fall back to their short labels — the same
-   pair the phone uses — rather than letting Setup slide off the end. */
-@media (max-width: 1330px) {
-  nav.tabs button { padding: 6px 11px; }
-  nav.tabs { gap: var(--s2); }
-  .whopick { min-width: 120px; max-width: 150px; }
-  .has-short .tab-label { display: none; }
-  .has-short .tab-short { display: inline; }
-}
+/* The header's width-dependent rules are at the end of this sheet, with the
+   phone and focus blocks, for the same reason: `.whopick` and `nav.tabs button`
+   are declared below this point, and an equal-specificity rule that comes
+   first simply loses. */
 
 .brand {
   font-weight: 700; letter-spacing: -0.015em; font-size: var(--t-md);
@@ -1552,3 +1539,43 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .banner { line-height: 1.5; align-items: flex-start; }
 .banner strong { font-weight: 700; }
 .banner .small { opacity: .88; }
+
+/* An update typed on the Shift Update page, shown on a machine page. Green
+   spine because it is the department's own record of the shift, as against the
+   workbook snapshot it outranks. */
+.su.written { box-shadow: inset 4px 0 0 var(--ok), var(--shadow-1), var(--sheen); }
+.su.written .su-head { background: var(--ok-soft); }
+.su.written .su-title { color: var(--ok); }
+.su-title { display: inline-flex; align-items: center; gap: var(--s2); }
+.su-title svg { flex-shrink: 0; opacity: .8; }
+
+.su-staledown {
+  display: flex; align-items: flex-start; gap: var(--s2);
+  padding: var(--s2) var(--s4); font-size: var(--t-sm);
+  color: var(--warn); background: var(--warn-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+.su-staledown svg { flex-shrink: 0; margin-top: 2px; }
+
+/* ---------- header at narrower widths ----------
+
+   Ordered after the base header rules so these actually win. The tagline is
+   decoration and the nav is not, so the tagline goes first; below 1330 the
+   tools fall back to their short labels rather than letting Setup slide off
+   the end of a 1280px production monitor behind an overflow nobody looks for. */
+
+/* Bounded below at 721px on purpose: the phone has its own header rules
+   further up, and being the later block these would otherwise override them
+   and put the two-row header back over its 96px budget. */
+@media (min-width: 721px) and (max-width: 1460px) {
+  .brand small { display: none; }
+  header.top { gap: var(--s3); padding-left: var(--s4); padding-right: var(--s4); }
+}
+
+@media (min-width: 721px) and (max-width: 1330px) {
+  nav.tabs { gap: var(--s2); }
+  nav.tabs button { padding: 6px 11px; }
+  .whopick { min-width: 110px; max-width: 150px; }
+  .has-short .tab-label { display: none; }
+  .has-short .tab-short { display: inline; }
+}

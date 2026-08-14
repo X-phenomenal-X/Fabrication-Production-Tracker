@@ -264,15 +264,39 @@ export function makeFixture({ today = '2026-08-14', volume = 'heavy' } = {}) {
     taskAssign,
     taskHistory,
     machineConfig: {},
+    /* Two saved updates, deliberately straddling the workbook's own date.
+
+       The older one loses to the workbook everywhere. The newer one covers
+       only Rolling (Auto) and FOM 1, so those two machine pages must show what
+       was written here while every other machine still shows the workbook —
+       which is exactly the mix the department has after someone writes up a
+       shift on a workbook that has not been re-saved. */
     shiftLogs: {
-      [`${day(-1)}|AFTERNOON`]: {
-        date: day(-1), shift: 'AFTERNOON',
+      [`${day(-1)}|AFT`]: {
+        date: day(-1), shift: 'AFT',
         rows: {
           backorder: { notes: 'S80.234 still short.' },
-          'roll-auto': { ops: 4, done: 'Harbour Point 12A', next: 'Elm Court', notes: '' },
-          fom1: { ops: 1, done: 'Riverbend', next: '', notes: '' },
+          fom2: { ops: 1, done: 'Elm Court 3C', next: '', notes: '' },
         },
         notes: 'Quiet shift.', at: iso(base - 20 * 3600000), by: 'Marek',
+      },
+      [`${day(0)}|AFT`]: {
+        date: day(0), shift: 'AFT',
+        rows: {
+          'roll-auto': {
+            ops: 4,
+            done: 'Harbour Point 12A (S80.104) — 180 done\nElm Court 3C — finished',
+            next: 'Station Square PH-N\n61st Avenue Lv. 1/2',
+            notes: 'Coil change at 18:00.',
+          },
+          fom1: {
+            ops: 1,
+            done: 'Riverbend — 210 of 210, done',
+            next: 'The Foundry L2',
+            notes: '',
+          },
+        },
+        notes: 'Full crew on afternoons.', at: iso(base - 3600000), by: 'Sunil',
       },
     },
     people: PEOPLE,

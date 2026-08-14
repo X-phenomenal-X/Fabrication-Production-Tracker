@@ -183,23 +183,10 @@ header.top {
 
 .hdr-id { display: flex; align-items: center; gap: var(--s2); min-width: 0; flex-shrink: 0; }
 
-/* The tagline is decoration and the nav is not, so the tagline goes first —
-   and it has to go well before the nav starts scrolling, or a 1280px
-   production monitor hides Setup behind an overflow nobody looks for. */
-@media (max-width: 1460px) {
-  .brand small { display: none; }
-  header.top { gap: var(--s3); padding-left: var(--s4); padding-right: var(--s4); }
-}
-/* At 1280 the eight spelled-out pages plus the brand, two chips and the name
-   picker no longer fit. The tools fall back to their short labels — the same
-   pair the phone uses — rather than letting Setup slide off the end. */
-@media (max-width: 1330px) {
-  nav.tabs button { padding: 6px 11px; }
-  nav.tabs { gap: var(--s2); }
-  .whopick { min-width: 120px; max-width: 150px; }
-  .has-short .tab-label { display: none; }
-  .has-short .tab-short { display: inline; }
-}
+/* The header's width-dependent rules are at the end of this sheet, with the
+   phone and focus blocks, for the same reason: `.whopick` and `nav.tabs button`
+   are declared below this point, and an equal-specificity rule that comes
+   first simply loses. */
 
 .brand {
   font-weight: 700; letter-spacing: -0.015em; font-size: var(--t-md);
@@ -1568,6 +1555,46 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .banner strong { font-weight: 700; }
 .banner .small { opacity: .88; }
 
+/* An update typed on the Shift Update page, shown on a machine page. Green
+   spine because it is the department's own record of the shift, as against the
+   workbook snapshot it outranks. */
+.su.written { box-shadow: inset 4px 0 0 var(--ok), var(--shadow-1), var(--sheen); }
+.su.written .su-head { background: var(--ok-soft); }
+.su.written .su-title { color: var(--ok); }
+.su-title { display: inline-flex; align-items: center; gap: var(--s2); }
+.su-title svg { flex-shrink: 0; opacity: .8; }
+
+.su-staledown {
+  display: flex; align-items: flex-start; gap: var(--s2);
+  padding: var(--s2) var(--s4); font-size: var(--t-sm);
+  color: var(--warn); background: var(--warn-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+.su-staledown svg { flex-shrink: 0; margin-top: 2px; }
+
+/* ---------- header at narrower widths ----------
+
+   Ordered after the base header rules so these actually win. The tagline is
+   decoration and the nav is not, so the tagline goes first; below 1330 the
+   tools fall back to their short labels rather than letting Setup slide off
+   the end of a 1280px production monitor behind an overflow nobody looks for. */
+
+/* Bounded below at 721px on purpose: the phone has its own header rules
+   further up, and being the later block these would otherwise override them
+   and put the two-row header back over its 96px budget. */
+@media (min-width: 721px) and (max-width: 1460px) {
+  .brand small { display: none; }
+  header.top { gap: var(--s3); padding-left: var(--s4); padding-right: var(--s4); }
+}
+
+@media (min-width: 721px) and (max-width: 1330px) {
+  nav.tabs { gap: var(--s2); }
+  nav.tabs button { padding: 6px 11px; }
+  .whopick { min-width: 110px; max-width: 150px; }
+  .has-short .tab-label { display: none; }
+  .has-short .tab-short { display: inline; }
+}
+
 </style>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#9986;</text></svg>">
 </head>
@@ -1720,7 +1747,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
   function renderDoc(text) {
     const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
-    const lines = String(text || "").split("\n");
+    const lines2 = String(text || "").split("\n");
     let out = "";
     let list = null;
     const closeList = () => {
@@ -1729,7 +1756,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         list = null;
       }
     };
-    for (const raw of lines) {
+    for (const raw of lines2) {
       const line = raw.trimEnd();
       let m;
       if (m = line.match(/^###\s+(.*)/)) {
@@ -3004,8 +3031,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
   function suWhen(date2, shift) {
     if (!date2) return "";
-    const rank = SU_SHIFT_RANK[suKey(shift)] ?? 0;
-    return `${date2}#${rank}`;
+    const rank2 = SU_SHIFT_RANK[suKey(shift)] ?? 0;
+    return `${date2}#${rank2}`;
   }
   function suBlockStarts(rows, off) {
     const starts = [];
@@ -3356,12 +3383,58 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       return meta && (meta.parser ?? 1) < PARSER_VERSION;
     });
   }
-  function shiftUpdateFor(machineKey) {
+  function sheetShiftUpdateFor(machineKey) {
     const su = state.shiftUpdate;
     if (!su?.machines) return null;
     const entry = su.machines[machineKey];
     if (!entry) return null;
     return { date: su.date, shift: su.shift, ...entry };
+  }
+  var SHIFT_RANK = { DAY: 0, AFT: 1, AFTERNOON: 1, NIGHT: 2, MIDNIGHT: 2 };
+  function rank(date2, shift) {
+    return `${date2 || ""}#${SHIFT_RANK[shift] ?? 0}`;
+  }
+  function lines(v) {
+    return String(v || "").split("\n").map((s) => s.trim()).filter(Boolean);
+  }
+  function writtenShiftUpdateFor(machineKey) {
+    let best = null;
+    for (const log of Object.values(state.shiftLogs || {})) {
+      const row = log?.rows?.[machineKey];
+      if (!row) continue;
+      const done = lines(row.done);
+      const next = lines(row.next);
+      const notes = lines(row.notes);
+      if (!done.length && !next.length && !notes.length) continue;
+      if (best && rank(log.date, log.shift) <= rank(best.date, best.shift)) continue;
+      best = {
+        date: log.date,
+        shift: log.shift,
+        ops: row.ops === "" || row.ops == null ? null : Number(row.ops),
+        done,
+        next,
+        notes,
+        down: false,
+        by: log.by,
+        at: log.at
+      };
+    }
+    return best;
+  }
+  function shiftUpdateFor(machineKey) {
+    const sheet = sheetShiftUpdateFor(machineKey);
+    const written = writtenShiftUpdateFor(machineKey);
+    if (written && (!sheet || rank(written.date, written.shift) > rank(sheet.date, sheet.shift))) {
+      return {
+        ...written,
+        source: "written",
+        // The workbook is the only one of the two that records a machine as
+        // down, so a newer written update must not silently clear it. Carried
+        // across with its own date, for the panel to caveat.
+        staleDown: sheet?.down ? sheet.date : null
+      };
+    }
+    return sheet ? { ...sheet, source: "workbook" } : null;
   }
   function shiftUpdateAge(date2, ref = today()) {
     if (!date2) return null;
@@ -4647,15 +4720,24 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       el("div.su-label", {}, label),
       el("ul.su-list", {}, ...items.map((t) => el("li", {}, t)))
     ) : null;
-    const staleSu = staleImports().includes("cnc");
+    const written = su.source === "written";
+    const staleSu = !written && staleImports().includes("cnc");
     const age = shiftUpdateAge(su.date);
     return el(
-      "div.su" + (su.down ? ".down" : ""),
+      "div.su" + (su.down ? ".down" : "") + (written ? ".written" : ""),
       {},
       el(
         "div.su-head",
         {},
-        el("span.su-title", {}, "Last shift update"),
+        // Where it came from, not just how old it is: "what the workbook said
+        // when it was last saved" and "what the afternoon shift wrote" are
+        // different claims, and the panel used to make them look identical.
+        el(
+          "span.su-title",
+          {},
+          icon(written ? "pencil" : "note", { size: 12 }),
+          written ? "Shift update \u2014 written here" : "Shift update \u2014 from the workbook"
+        ),
         su.date ? chip(`${su.shift || ""} ${fmtDate(su.date)}`.trim(), "mute") : null,
         // Age, not just the date: a reader should not have to work out what
         // "Aug 13" means relative to today before trusting what is under it.
@@ -4663,8 +4745,17 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         staleSu ? chip("re-import to refresh", "warn") : null,
         su.down ? el("span.badge-down", {}, icon("alert", { size: 12 }), "Machine down") : null,
         el("span.spacer"),
+        written && su.by ? el("span.small.muted", {}, `by ${su.by}`) : null,
         su.ops != null ? el("span.small.muted", {}, `${su.ops} operator${su.ops === 1 ? "" : "s"}`) : null
       ),
+      // A written update cannot record a machine as down — only the workbook
+      // does — so a newer one must not look like it cleared the flag.
+      su.staleDown ? el(
+        "div.su-staledown",
+        {},
+        icon("alert", { size: 13 }),
+        el("span", {}, `The workbook had this machine down on ${fmtDate(su.staleDown)}. The update above is newer and does not say either way.`)
+      ) : null,
       el(
         "div.su-body",
         {},
@@ -5088,14 +5179,14 @@ ${text}` : text;
     const sheet = machine.standing ? null : shiftUpdateFor(machine.key);
     const tracked = machine.standing ? [] : trackedLines(machine.key);
     const filled = hasContent(row);
-    const box = (field, label, placeholder, lines) => el(
+    const box = (field, label, placeholder, lines2) => el(
       "label.field",
       {},
       el("span", {}, label),
       el("textarea", {
         value: row[field] || "",
         placeholder,
-        rows: lines,
+        rows: lines2,
         oninput: (e) => {
           row[field] = e.target.value;
         }
