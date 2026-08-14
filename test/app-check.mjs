@@ -125,6 +125,26 @@ const persisted = await page.evaluate(() => import('/js/store.js').then((m) => {
 }));
 step('persisted progress: ' + JSON.stringify(persisted));
 
+// manual (service) order
+await page.click('button:has-text("+ Add order")');
+await page.waitForSelector('dialog input');
+await page.fill('dialog input', 'SO-2026-014');
+await page.click('dialog footer button.primary');
+await page.waitForTimeout(300);
+const manual = await page.evaluate(() => import('/js/store.js').then((m) =>
+  Object.values(m.state.manualOrders).filter((o) => !o.deleted).map((o) => o.wo)));
+step('manual orders: ' + JSON.stringify(manual));
+
+// an 8560 job should pick up Hinges automatically
+const hinge = await page.evaluate(() => Promise.all([import('/js/model.js'), import('/js/store.js')])
+  .then(([mm, st]) => {
+    const o = st.state.orders.find((x) => ['1107', '1093', '1131', '1124'].includes(String(x.job)));
+    if (!o) return 'no 8560 job found';
+    return { wo: o.wo, job: o.job, hinges: mm.hingesApply(o),
+             profiles: mm.profileRollup(o).map((r) => r.profile.label) };
+  }));
+step('8560 hinge rule: ' + JSON.stringify(hinge));
+
 // materials
 await page.click('nav.tabs button:has-text("Materials")');
 await page.waitForSelector('main .panel');

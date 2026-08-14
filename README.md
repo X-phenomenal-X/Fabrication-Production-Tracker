@@ -107,14 +107,28 @@ Pulled but we are still waiting on vents" was invisible.
 | Heights | `HTS` |
 | Vents | `VENT` |
 | Louvers | `LVRS/TC PAN` |
-| Service Orders | tracked by material only |
-| Hinges | tracked by material only |
+| Service Orders | added by hand |
+| Hinges | automatic on 8560 jobs |
 | Extra Operations | `PUNCH`, `VYNL.S`, `SP.S`, `WW CNC`, `SLD ROLLING`, `SLD CUTTING`, `ADAPTORS CNC` |
 
 Each profile carries its own material state: Pulled, Stock OK, Part short, At
 paint, On order, Extrusion due, Short, TBD, Not required. Where nothing has been
 recorded the app seeds it from the order's `purch` column and marks it
 **from schedule**, so a real entry is always distinguishable from an inherited one.
+
+### Hinges and the 8560 rule
+
+8560 vents need hinges, but the vent system is not in the Daily Schedule — it is
+in the `Product` sheet of the CNC schedule, per job. That mapping is seeded in
+`js/products.js`, so the Hinges profile appears automatically on jobs running
+8560 or 8560 HT (currently jobs 1093, 1107, 1124 and 1131). Those rows are
+marked **8560** on the order so it is clear why they are there.
+
+### Orders added by hand
+
+Service orders and anything else off-schedule are added with **+ Add order** on
+the Orders tab. They are stored separately from imported rows, so re-importing a
+revision never removes them, and they are marked **by hand** on the board.
 
 ## Traceability
 

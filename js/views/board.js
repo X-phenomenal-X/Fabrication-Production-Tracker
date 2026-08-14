@@ -2,13 +2,14 @@
    progress entry. This is the screen that replaces squinting at 148 columns. */
 
 import { el, clear, chip, bar, fmtDate, fmtNum, fmtWhen, modal, toast } from '../ui.js';
-import { state, setProgress, clearProgress, setMaterial, historyFor, me } from '../store.js';
+import { state, setProgress, clearProgress, setMaterial, saveManualOrder, deleteManualOrder, historyFor, me } from '../store.js';
 import {
   activeOrders, rollup, riskOf, reasonFor, RISK, cutTone, purchTone, today, progressFor,
-  profileRollup, completion, materialState,
+  profileRollup, completion, materialState, productOf, hingesApply,
 } from '../model.js';
 import { CUT_STATUS } from '../schema.js';
-import { MATERIAL, MATERIAL_ORDER } from '../profiles.js';
+import { MATERIAL, MATERIAL_ORDER, PROFILES } from '../profiles.js';
+import { needsHinges } from '../products.js';
 
 const filters = {
   q: '',
@@ -142,7 +143,8 @@ export function openOrder(order, rerender) {
           : null,
         row.material.status
           ? chip(MATERIAL[row.material.status].label, MATERIAL[row.material.status].tone)
-          : null);
+          : null,
+        row.auto ? chip('8560', 'work', 'Shown because this job runs 8560 vents') : null);
 
       const opRows = row.ops.map((op) => {
         const pr = progressFor(order.id, op.key);
@@ -220,6 +222,17 @@ export function openOrder(order, rerender) {
       order.warehouse ? chip('WH: ' + order.warehouse, 'mute') : null,
       order.reason ? chip(order.reason, 'warn') : null,
     ),
+
+    (() => {
+      const prod = productOf(order);
+      if (!prod) return null;
+      return el('div.row.small', { style: { marginBottom: '14px', gap: '8px' } },
+        el('span.muted', {}, 'Vent system'),
+        chip(prod.vent || '—', needsHinges(prod.vent) ? 'work' : 'mute'),
+        prod.doors ? el('span.muted', {}, `doors ${prod.doors}`) : null,
+        prod.ventType ? el('span.muted', {}, prod.ventType) : null,
+        needsHinges(prod.vent) ? chip('needs hinges', 'work', '8560 vents require hinges') : null);
+    })(),
 
     order.wip ? el('div.row.small.muted', { style: { marginBottom: '14px' } },
       `ERP remaining — assembly ${fmtNum(order.wip.remAssy)}, glazing ${fmtNum(order.wip.remGlaz)}, ship ${fmtNum(order.wip.shpRem)}`) : null,
@@ -304,6 +317,7 @@ export function renderBoard(rerender) {
       ),
       el('div.row.small.muted', { style: { marginTop: '10px' } },
         `${fmtNum(list.length)} of ${fmtNum(all.length)} orders`,
+        el('button.sm', { onclick: () => newManualOrder(rerender) }, '+ Add order'),
         el('span.spacer'),
         el('label.row.small', { style: { gap: '6px' } },
           el('input', {
@@ -336,7 +350,8 @@ export function renderBoard(rerender) {
     )),
     el('tbody', {}, ...list.map(({ order, risk, roll }) => {
       const tr = el('tr', { style: { cursor: 'pointer' }, onclick: () => openOrder(order, rerender) },
-        el('td', {}, el('span.mono.strong', {}, order.wo)),
+        el('td', {}, el('span.mono.strong', {}, order.wo),
+          order.manual ? el('div', {}, chip('by hand', 'work')) : null),
         el('td', {}, order.project || '—',
           order.job ? el('div.small.muted', {}, 'Job ' + order.job) : null),
         el('td', {}, order.floor || '—'),
@@ -358,4 +373,71 @@ export function renderBoard(rerender) {
   );
 
   return el('div', {}, head, el('div.panel', {}, el('div.body.flush', {}, el('div.tbl-wrap', {}, table))));
+}
+
+/* ---------- manual orders ---------- */
+
+/** Add a service order, or any job that is not on the Daily Schedule. */
+export function newManualOrder(rerender, preset = {}) {
+  const f = {};
+  const field = (key, label, attrs = {}) => {
+    const input = el('input', { value: preset[key] || '', ...attrs });
+    f[key] = input;
+    return el('label.field', {}, el('span', {}, label), input);
+  };
+
+  const profileBox = el('div');
+  const picked = new Set(preset.profiles || ['service']);
+  for (const p of PROFILES) {
+    profileBox.append(el('label.oprow', { style: { cursor: 'pointer' } },
+      el('input', {
+        type: 'checkbox', checked: picked.has(p.key), style: { width: 'auto' },
+        onchange: (e) => { e.target.checked ? picked.add(p.key) : picked.delete(p.key); },
+      }),
+      el('span', { style: { flex: '1' } }, p.label)));
+  }
+
+  const qty = el('input', { type: 'number', min: '0', inputmode: 'numeric', value: preset.qty || '' });
+  const notes = el('textarea', { value: preset.notes || '', placeholder: 'What is it, who asked for it, anything the shop needs to know' });
+
+  const body = el('div', {},
+    el('p.small.muted', { style: { marginTop: 0 } },
+      'For service orders and anything else not on the Daily Schedule. These are kept separate from the imported rows, so re-importing a revision never removes them.'),
+    el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', marginBottom: '12px' } },
+      field('wo', 'Reference / W/O', { placeholder: 'e.g. SO-2026-014' }),
+      field('job', 'Job #', { placeholder: 'optional' }),
+      field('project', 'Project'),
+      field('floor', 'Floor / Tag'),
+      el('label.field', {}, el('span', {}, 'Qty'), qty),
+      field('cuttingDate', 'Cut by', { type: 'date' }),
+      field('shipDate', 'Ship date', { type: 'date' })),
+    el('label.field', { style: { marginBottom: '12px' } }, el('span', {}, 'Notes'), notes),
+    el('div.small.muted', { style: { marginBottom: '4px' } }, 'Profiles this covers'),
+    profileBox);
+
+  modal('Add an order by hand', body, {
+    wide: true,
+    actions: [{
+      label: 'Add order', class: 'primary', onClick: (dlg) => {
+        const wo = f.wo.value.trim();
+        if (!wo) { toast('Give it a reference so people can find it.'); return; }
+        saveManualOrder({
+          wo,
+          job: f.job.value.trim() || null,
+          project: f.project.value.trim() || null,
+          floor: f.floor.value.trim() || null,
+          qty: qty.value ? Number(qty.value) : null,
+          cuttingDate: f.cuttingDate.value || null,
+          shipDate: f.shipDate.value || null,
+          notes: notes.value.trim() || null,
+          profiles: Array.from(picked),
+          section: 'ADDED BY HAND',
+          ops: {},
+        });
+        toast(`${wo} added`);
+        dlg.close();
+        rerender();
+      },
+    }],
+  });
 }

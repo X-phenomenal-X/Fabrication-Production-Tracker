@@ -22,6 +22,7 @@ export const state = {
   progress: {},   // `${orderId}|${opKey}` -> { done, at, by, note }
   material: {},   // `${orderId}|${profileKey}` -> { status, note, at, by }
   history: [],    // every change, newest first — the traceability record
+  manualOrders: {}, // id -> order added by hand, e.g. service orders
   shiftLogs: {},  // id -> log
   plan: {},       // `${date}|${shift}` -> { ids, at, by }
   guide: {},      // id -> doc
@@ -135,6 +136,24 @@ export function deleteGuideDoc(id) {
   save();
 }
 
+/** Orders added by hand — service orders and anything not on the schedule.
+    Kept separate from imported rows so a re-import never wipes them. */
+export function saveManualOrder(o) {
+  const id = o.id || `manual:${uid()}`;
+  state.manualOrders[id] = { ...o, id, manual: true, at: now(), by: o.by || me() };
+  log('manual order', `${o.wo || id}`);
+  trace(id, 'order', null, o.wo || 'created', o.notes);
+  save();
+  return id;
+}
+
+export function deleteManualOrder(id) {
+  if (state.manualOrders[id]) {
+    state.manualOrders[id] = { id, at: now(), by: me(), deleted: true };
+  }
+  save();
+}
+
 export function setImport({ orders, wip, prep, screens, report }) {
   state.orders = orders;
   state.wip = wip;
@@ -163,6 +182,7 @@ function snapshot() {
     progress: state.progress,
     material: state.material,
     history: state.history,
+    manualOrders: state.manualOrders,
     shiftLogs: state.shiftLogs,
     plan: state.plan,
     guide: state.guide,
@@ -260,6 +280,7 @@ function mergeSnapshot(remote) {
   if (!remote) return;
   state.progress = mergeRecords(state.progress, remote.progress);
   state.material = mergeRecords(state.material, remote.material);
+  state.manualOrders = mergeRecords(state.manualOrders, remote.manualOrders);
 
   // History is append-only, so merge by id and re-sort newest first.
   const haveIds = new Set(state.history.map((h) => h.id));

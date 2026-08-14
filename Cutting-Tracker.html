@@ -270,6 +270,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     clearProgress: () => clearProgress,
     connectSharedFile: () => connectSharedFile,
     deleteGuideDoc: () => deleteGuideDoc,
+    deleteManualOrder: () => deleteManualOrder,
     deleteShiftLog: () => deleteShiftLog,
     disconnectSharedFile: () => disconnectSharedFile,
     exportJson: () => exportJson,
@@ -286,6 +287,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     resetAll: () => resetAll,
     save: () => save,
     saveGuideDoc: () => saveGuideDoc,
+    saveManualOrder: () => saveManualOrder,
     saveShiftLog: () => saveShiftLog,
     setImport: () => setImport,
     setMaterial: () => setMaterial,
@@ -381,6 +383,20 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     if (state.guide[id]) state.guide[id] = { id, at: now(), by: me(), deleted: true };
     save();
   }
+  function saveManualOrder(o) {
+    const id = o.id || `manual:${uid()}`;
+    state.manualOrders[id] = { ...o, id, manual: true, at: now(), by: o.by || me() };
+    log("manual order", `${o.wo || id}`);
+    trace(id, "order", null, o.wo || "created", o.notes);
+    save();
+    return id;
+  }
+  function deleteManualOrder(id) {
+    if (state.manualOrders[id]) {
+      state.manualOrders[id] = { id, at: now(), by: me(), deleted: true };
+    }
+    save();
+  }
   function setImport({ orders, wip, prep, screens, report }) {
     state.orders = orders;
     state.wip = wip;
@@ -406,6 +422,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       progress: state.progress,
       material: state.material,
       history: state.history,
+      manualOrders: state.manualOrders,
       shiftLogs: state.shiftLogs,
       plan: state.plan,
       guide: state.guide,
@@ -487,6 +504,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     if (!remote) return;
     state.progress = mergeRecords(state.progress, remote.progress);
     state.material = mergeRecords(state.material, remote.material);
+    state.manualOrders = mergeRecords(state.manualOrders, remote.manualOrders);
     const haveIds = new Set(state.history.map((h) => h.id));
     for (const h of remote.history || []) if (!haveIds.has(h.id)) state.history.push(h);
     state.history.sort((a, b) => a.at < b.at ? 1 : -1);
@@ -619,6 +637,8 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         // `${orderId}|${profileKey}` -> { status, note, at, by }
         history: [],
         // every change, newest first — the traceability record
+        manualOrders: {},
+        // id -> order added by hand, e.g. service orders
         shiftLogs: {},
         // id -> log
         plan: {},
@@ -1118,6 +1138,39 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     }
   }
 
+  // js/products.js
+  var PRODUCT_SEED = {
+    "937": { project: "One Yonge PH2", vent: "8550", doors: "8950", ventType: "Awning" },
+    "996": { project: "Notting Hill", vent: "8550", doors: "8750", ventType: "Awning" },
+    "1086": { project: "Stella", vent: "8550", doors: "8750", ventType: "Awning" },
+    "1124": { project: "5207 Dundas", vent: "8560 HT", doors: "8760HT", ventType: "Awning" },
+    "1044": { project: "Alt Jackson", vent: "8550", doors: "8950", ventType: "Awning" },
+    "5033": { project: "The Groove", vent: "8550", doors: "8760" },
+    "1093": { project: "Town & Center", vent: "8560", doors: "8760", ventType: "Casement/Awning" },
+    "1113": { project: "South Yards", vent: "8550", doors: "8760", ventType: "Awning/Casement" },
+    "1132": { project: "South of Quinpool", vent: "8550", doors: "8950", ventType: "Awning" },
+    "1084": { project: "Sovereign W", vent: "8550", doors: "8760", ventType: "Casement" },
+    "1040": { project: "810 Agnes W", vent: "8550", doors: "8760", ventType: "Awning" },
+    "1074": { project: "Millennium Springer", vent: "8500R", doors: "8950", ventType: "Awning" },
+    "1128": { project: "Fundy Quay", vent: "8550", doors: "8760", ventType: "Awning" },
+    "1046": { project: "Capstan K", vent: "8550", doors: "8750", ventType: "Awning/Casement" },
+    "1107": { project: "Lakeside", vent: "8560", doors: "8760", ventType: "Awning" },
+    "1131": { project: "Wall Centre Surrey", vent: "8560", doors: "8760", ventType: "Awning" },
+    "1144": { project: "The New Merchant", vent: "8550", doors: "NA", ventType: "Awning" },
+    "1122": { project: "GEC Oakridge", vent: "8550HT", doors: "8760HT", ventType: "Awning" },
+    "1145": { project: "Richmond Yard", vent: "8550", doors: "8760", ventType: "Awning" }
+  };
+  function needsHinges(ventSystem) {
+    return /^8560/i.test(String(ventSystem || "").trim());
+  }
+  function productFor(job, overrides) {
+    if (!job) return null;
+    const key = String(job).trim();
+    const o = overrides?.[key];
+    if (o) return o;
+    return PRODUCT_SEED[key] || null;
+  }
+
   // js/model.js
   function today() {
     return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -1173,8 +1226,13 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     if (!dates.length) return cut !== "OK" && cut !== "DONE";
     return dates.some((d) => d >= horizonPast);
   }
+  function allOrders() {
+    const manual = Object.values(state.manualOrders || {}).filter((o) => o && !o.deleted);
+    return state.orders.concat(manual);
+  }
   function activeOrders() {
-    return state.settings.activeOnly ? state.orders.filter((o) => isActive(o)) : state.orders;
+    const all = allOrders();
+    return state.settings.activeOnly ? all.filter((o) => o.manual || isActive(o)) : all;
   }
   var RISK = {
     BLOCKED: { key: "BLOCKED", label: "Blocked", tone: "bad", rank: 0 },
@@ -1230,7 +1288,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     return state.plan[`${date}|${shift}`]?.ids || [];
   }
   function orderById(id) {
-    return state.orders.find((o) => o.id === id) || null;
+    return allOrders().find((o) => o.id === id) || null;
   }
   function summary(ref = today()) {
     const rows2 = activeOrders();
@@ -1358,20 +1416,30 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     const seeded = materialFromPurch(order.purch);
     return seeded ? { status: seeded, explicit: false } : { status: null, explicit: false };
   }
+  function productOf(order) {
+    return productFor(order.job, state.settings.products);
+  }
+  function hingesApply(order) {
+    const prod = productOf(order);
+    return !!prod && needsHinges(prod.vent);
+  }
   function profileRollup(order) {
     const roll = rollup(order);
+    const hinges = hingesApply(order);
     const out = [];
     for (const p of PROFILES) {
       const ops = roll.ops.filter((o) => o.kind === "qty" && profileForOp(o.key) === p.key && o.target);
       const target = ops.reduce((a, o) => a + o.target, 0);
       const done = ops.reduce((a, o) => a + o.done, 0);
       const mat = materialState(order, p.key);
-      if (!target && !mat.explicit) continue;
+      const autoShow = p.key === "hinges" && hinges || Array.isArray(order.profiles) && order.profiles.includes(p.key);
+      if (!target && !mat.explicit && !autoShow) continue;
       out.push({
         profile: p,
         ops,
         target,
         done,
+        auto: autoShow,
         remaining: Math.max(0, target - done),
         pct: target ? Math.round(done / target * 100) : null,
         complete: target > 0 && done >= target,
@@ -1558,7 +1626,8 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
           el("span.small.muted.hide-sm", {}, "Material"),
           matSelect,
           row.material.status && !row.material.explicit ? chip("from schedule", "mute", "Taken from the order-level material column; set it here to override") : null,
-          row.material.status ? chip(MATERIAL[row.material.status].label, MATERIAL[row.material.status].tone) : null
+          row.material.status ? chip(MATERIAL[row.material.status].label, MATERIAL[row.material.status].tone) : null,
+          row.auto ? chip("8560", "work", "Shown because this job runs 8560 vents") : null
         );
         const opRows = row.ops.map((op) => {
           const pr = progressFor(order.id, op.key);
@@ -1655,6 +1724,19 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         order.warehouse ? chip("WH: " + order.warehouse, "mute") : null,
         order.reason ? chip(order.reason, "warn") : null
       ),
+      (() => {
+        const prod = productOf(order);
+        if (!prod) return null;
+        return el(
+          "div.row.small",
+          { style: { marginBottom: "14px", gap: "8px" } },
+          el("span.muted", {}, "Vent system"),
+          chip(prod.vent || "\u2014", needsHinges(prod.vent) ? "work" : "mute"),
+          prod.doors ? el("span.muted", {}, `doors ${prod.doors}`) : null,
+          prod.ventType ? el("span.muted", {}, prod.ventType) : null,
+          needsHinges(prod.vent) ? chip("needs hinges", "work", "8560 vents require hinges") : null
+        );
+      })(),
       order.wip ? el(
         "div.row.small.muted",
         { style: { marginBottom: "14px" } },
@@ -1756,6 +1838,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
           "div.row.small.muted",
           { style: { marginTop: "10px" } },
           `${fmtNum(list.length)} of ${fmtNum(all.length)} orders`,
+          el("button.sm", { onclick: () => newManualOrder(rerender) }, "+ Add order"),
           el("span.spacer"),
           el(
             "label.row.small",
@@ -1806,7 +1889,12 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         const tr = el(
           "tr",
           { style: { cursor: "pointer" }, onclick: () => openOrder(order, rerender) },
-          el("td", {}, el("span.mono.strong", {}, order.wo)),
+          el(
+            "td",
+            {},
+            el("span.mono.strong", {}, order.wo),
+            order.manual ? el("div", {}, chip("by hand", "work")) : null
+          ),
           el(
             "td",
             {},
@@ -1838,6 +1926,86 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       }))
     );
     return el("div", {}, head, el("div.panel", {}, el("div.body.flush", {}, el("div.tbl-wrap", {}, table))));
+  }
+  function newManualOrder(rerender, preset = {}) {
+    const f = {};
+    const field = (key, label, attrs = {}) => {
+      const input = el("input", { value: preset[key] || "", ...attrs });
+      f[key] = input;
+      return el("label.field", {}, el("span", {}, label), input);
+    };
+    const profileBox = el("div");
+    const picked = new Set(preset.profiles || ["service"]);
+    for (const p of PROFILES) {
+      profileBox.append(el(
+        "label.oprow",
+        { style: { cursor: "pointer" } },
+        el("input", {
+          type: "checkbox",
+          checked: picked.has(p.key),
+          style: { width: "auto" },
+          onchange: (e) => {
+            e.target.checked ? picked.add(p.key) : picked.delete(p.key);
+          }
+        }),
+        el("span", { style: { flex: "1" } }, p.label)
+      ));
+    }
+    const qty = el("input", { type: "number", min: "0", inputmode: "numeric", value: preset.qty || "" });
+    const notes = el("textarea", { value: preset.notes || "", placeholder: "What is it, who asked for it, anything the shop needs to know" });
+    const body = el(
+      "div",
+      {},
+      el(
+        "p.small.muted",
+        { style: { marginTop: 0 } },
+        "For service orders and anything else not on the Daily Schedule. These are kept separate from the imported rows, so re-importing a revision never removes them."
+      ),
+      el(
+        "div.grid",
+        { style: { gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", marginBottom: "12px" } },
+        field("wo", "Reference / W/O", { placeholder: "e.g. SO-2026-014" }),
+        field("job", "Job #", { placeholder: "optional" }),
+        field("project", "Project"),
+        field("floor", "Floor / Tag"),
+        el("label.field", {}, el("span", {}, "Qty"), qty),
+        field("cuttingDate", "Cut by", { type: "date" }),
+        field("shipDate", "Ship date", { type: "date" })
+      ),
+      el("label.field", { style: { marginBottom: "12px" } }, el("span", {}, "Notes"), notes),
+      el("div.small.muted", { style: { marginBottom: "4px" } }, "Profiles this covers"),
+      profileBox
+    );
+    modal("Add an order by hand", body, {
+      wide: true,
+      actions: [{
+        label: "Add order",
+        class: "primary",
+        onClick: (dlg) => {
+          const wo = f.wo.value.trim();
+          if (!wo) {
+            toast("Give it a reference so people can find it.");
+            return;
+          }
+          saveManualOrder({
+            wo,
+            job: f.job.value.trim() || null,
+            project: f.project.value.trim() || null,
+            floor: f.floor.value.trim() || null,
+            qty: qty.value ? Number(qty.value) : null,
+            cuttingDate: f.cuttingDate.value || null,
+            shipDate: f.shipDate.value || null,
+            notes: notes.value.trim() || null,
+            profiles: Array.from(picked),
+            section: "ADDED BY HAND",
+            ops: {}
+          });
+          toast(`${wo} added`);
+          dlg.close();
+          rerender();
+        }
+      }]
+    });
   }
 
   // js/views/dashboard.js

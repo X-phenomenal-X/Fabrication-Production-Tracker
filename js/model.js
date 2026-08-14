@@ -5,6 +5,7 @@ import { state } from './store.js';
 import { OPS, QTY_OPS, OP_BY_KEY, CUT_STATUS, PURCH_TONE } from './schema.js';
 import { machineForOp } from './machines.js';
 import { PROFILES, profileForOp, MATERIAL, materialFromPurch } from './profiles.js';
+import { productFor, needsHinges } from './products.js';
 
 export function today() {
   return new Date().toISOString().slice(0, 10);
@@ -71,8 +72,17 @@ export function isActive(order, ref = today()) {
   return dates.some((d) => d >= horizonPast);
 }
 
+/** Imported schedule rows plus anything added by hand. */
+export function allOrders() {
+  const manual = Object.values(state.manualOrders || {})
+    .filter((o) => o && !o.deleted);
+  return state.orders.concat(manual);
+}
+
 export function activeOrders() {
-  return state.settings.activeOnly ? state.orders.filter((o) => isActive(o)) : state.orders;
+  const all = allOrders();
+  // Hand-added orders are always current — nobody types in history.
+  return state.settings.activeOnly ? all.filter((o) => o.manual || isActive(o)) : all;
 }
 
 export const RISK = {
@@ -151,7 +161,7 @@ export function planFor(date, shift) {
 }
 
 export function orderById(id) {
-  return state.orders.find((o) => o.id === id) || null;
+  return allOrders().find((o) => o.id === id) || null;
 }
 
 /** Totals for the header strip. */
@@ -312,8 +322,20 @@ export function materialState(order, profileKey) {
 
 /** An order broken down the way the shop thinks about it: by profile type,
     each with its own piece counts and its own material state. */
+export function productOf(order) {
+  return productFor(order.job, state.settings.products);
+}
+
+/** 8560 vents need hinges — the vent system lives in the CNC schedule's Product
+    sheet, not the Daily Schedule, so it is looked up by job number. */
+export function hingesApply(order) {
+  const prod = productOf(order);
+  return !!prod && needsHinges(prod.vent);
+}
+
 export function profileRollup(order) {
   const roll = rollup(order);
+  const hinges = hingesApply(order);
   const out = [];
   for (const p of PROFILES) {
     const ops = roll.ops.filter((o) => o.kind === 'qty' && profileForOp(o.key) === p.key && o.target);
@@ -322,9 +344,13 @@ export function profileRollup(order) {
     const mat = materialState(order, p.key);
     // Profiles with no pieces are still shown if someone has recorded material
     // against them — that is how Service Orders and Hinges get tracked at all.
-    if (!target && !mat.explicit) continue;
+    // Hinges show up on their own for 8560 jobs; other pieceless profiles only
+    // appear once someone has recorded material against them.
+    const autoShow = (p.key === 'hinges' && hinges)
+      || (Array.isArray(order.profiles) && order.profiles.includes(p.key));
+    if (!target && !mat.explicit && !autoShow) continue;
     out.push({
-      profile: p, ops, target, done,
+      profile: p, ops, target, done, auto: autoShow,
       remaining: Math.max(0, target - done),
       pct: target ? Math.round((done / target) * 100) : null,
       complete: target > 0 && done >= target,
