@@ -296,6 +296,74 @@ its lines are put on it by hand — which is exactly what the learned routing
 above then picks up. Both columns are now read into the task instead of being
 declared and discarded.
 
+## Routing — the SOP first, habit second
+
+The department has a written standard for how window wall and vents move:
+**SOP-WW-CUT-008 v8.0**, *Window Wall & Vents Material Flow*, effective August
+2026. It is a flowchart with five leaves, and `js/routing.js` is that flowchart.
+A written rule outranks a counted habit, so where the SOP covers a line its
+answer wins; everything else falls back to [learned routing](#learned-routing).
+
+Two tracks that never mix:
+
+```
+WINDOW WALL   raw stock ─ Auto Rolling ─┬─ widths  ─ …
+                                        └─ heights ─ Elumatec Saw ─ Multi Punch ─ (FMC)
+VENTS         separate entity ─ Manual Rolling ─ FOM 3 ─ Vent Assembly
+```
+
+On the **widths** line the order of the questions is the whole rule:
+
+| | |
+|---|---|
+| die ends `HT` / `HTX` | **FOM 2 only** — skips the saw and the widths punch |
+| `SA80-104/105/255/256/261` | Elumatec Saw → Widths Punch |
+| anything else | FOM 2, skipping the saw and the punch |
+
+**Heights** go saw → punch, and on to an **FMC** only for pin holes, ISV, or die
+`SA80.235`/`236`.
+
+### What the app cannot know, and says so
+
+The schedules carry no column for widths, heights or vents, so the track is read
+off the machine the workbook already has the line on. Where that is a guess the
+line says which guess and why — *"the section book calls this die vertical"* —
+so it can be overruled by moving the line.
+
+**High thermal is a widths question, and only a widths question.** Asking it too
+early is the mistake this code made first: `SA80-106HT` is a *vertical* male
+frame, so it is a height and belongs to the saw, and treating every HT die as a
+width sent a third of auto rolling to FOM 2. The flowchart only asks about high
+thermal once material is already on the widths line, and so does the app.
+
+**The SOP is window wall and vents, and nothing else.** The same rolling
+machines also run sliding door, flashing and door sash, and FOM 1 is the
+8900-and-screen machine. Window wall is the 8000 series and the vent line is the
+8500s; outside that, `routeFor()` returns null rather than inventing a route —
+696 of the 3,917 scheduled lines, and they keep the learned suggestion.
+
+### What it shows
+
+Every line has a **routing** button: the stations it passes through in order,
+which one it is standing at now, and against each the **paperwork that has to
+travel with it** and whose office to get it from — *Heights cutsheets (set 2 of
+2) — Firas's office, if not already at the saw*. That half of the SOP is why
+this is a page and not a badge: knowing a height goes to the saw is no use if
+the cutsheets are still in an office.
+
+Where the SOP decides the machine, the line's route badge reads **`SOP: FOM 2`**
+and is solid rather than dashed — a rule, not a tally. It is still only ever
+offered, never applied on its own.
+
+A line standing at a machine that is **not on its own route** says so in red.
+That is not a rendering gap: it means the schedule and the standard disagree
+about that job. Right now 300 lines are in that state — all five-saw-die lines
+scheduled on FOM 2.
+
+`test/routing-check.mjs` walks every leaf of the flowchart, then the real
+workbooks: 472 lines through the widths saw, 696 outside the SOP, 300 off their
+route.
+
 ## Learned routing
 
 The CNC & FMC sheet says nothing about which machine runs a line, so all of it

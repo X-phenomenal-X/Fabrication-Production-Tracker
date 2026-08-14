@@ -5,6 +5,7 @@
 import { state, EDITABLE_FIELDS } from './store.js';
 import { PARSER_VERSION } from './import-machines.js';
 import { MACHINES } from './machines.js';
+import { sopMachine } from './routing.js';
 
 /* machineKey -> centre, for keeping a learned route inside its own centre. */
 const MACHINE_GROUP = Object.fromEntries(MACHINES.map((m) => [m.key, m.group]));
@@ -592,6 +593,15 @@ export function suggestedMachine(task, { minSeen = 2 } = {}) {
   // the badge on rows nobody is deciding about.
   if (effectiveTaskStatus(task).key === 'DONE') return null;
 
+  const group = MACHINE_GROUP[task.machine];
+
+  /* The department's own written routing comes first. SOP-WW-CUT-008 states
+     where window wall and vents go and why; counting what people did is how
+     the app coped before there was a rule to read, and it stays for the work
+     the SOP does not cover — which is the whole CNC sheet. */
+  const sop = sopMachine(task, group);
+  if (sop) return sop;
+
   const die = (task.origin || task).die;
   if (!die) return null;
 
@@ -600,7 +610,6 @@ export function suggestedMachine(task, { minSeen = 2 } = {}) {
 
   // Only machines in this line's own centre: a die seen on FOM 2 says nothing
   // about which CNC should take it.
-  const group = MACHINE_GROUP[task.machine];
   const options = [...counts.entries()]
     .filter(([m]) => MACHINE_GROUP[m] === group && m !== task.machine)
     .sort((a, b) => b[1] - a[1]);

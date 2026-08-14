@@ -910,6 +910,24 @@ dialog footer button { min-height: var(--ctl-lg); }
   .seg-btn.on .seg-label { display: none; }
 }
 
+/* A row becomes three bands: what the job is, then the numbers and the tools,
+   then the status control across the full width — the one thing on the row an
+   operator actually presses, given the whole edge to land on rather than a
+   corner shared with the icon buttons.
+
+   This was a phone-only layout until the tool rail grew to six buttons. Flat,
+   the fixed columns come to about 640px before the job itself gets a pixel, so
+   at a tablet's 768 the project and note were squeezed into 56px while the
+   tools held 260 — the page's own content losing five to one to its furniture.
+   The band layout is just what fits below roughly 930px, so that is where it
+   starts rather than at some idea of "phone". */
+@media (max-width: 1000px) {
+  .line { flex-wrap: wrap; }
+  .line-main { flex-basis: calc(100% - var(--tap) - var(--s3)); }
+  .line-tools { margin-left: auto; }
+  .line-status { flex-basis: 100%; margin-left: 0; }
+}
+
 @media (max-width: 720px) {
   .centre-head { position: static; margin: calc(var(--s3) * -1) 0 var(--s1); }
   .centre-title { font-size: 23px; }
@@ -920,15 +938,8 @@ dialog footer button { min-height: var(--ctl-lg); }
   .searchwrap { flex: 1; }
   .searchwrap input { width: 100%; }
 
-  /* A row becomes three bands on a phone: what the job is, then the numbers
-     and the tools, then the status control across the full width — the one
-     thing on the row an operator actually presses, given the whole edge to
-     land on rather than a corner shared with five icon buttons. */
-  .line { flex-wrap: wrap; gap: var(--s2); padding: var(--s3) var(--s3) var(--s3) var(--s4); }
-  .line-main { flex-basis: calc(100% - var(--tap) - var(--s3)); }
+  .line { gap: var(--s2); padding: var(--s3) var(--s3) var(--s3) var(--s4); }
   .line-qty { min-width: 0; }
-  .line-tools { margin-left: auto; }
-  .line-status { flex-basis: 100%; margin-left: 0; }
   .seg { width: 100%; }
   .seg-btn { flex: 1; min-height: var(--tap); padding: 6px var(--s2); }
   .seg-btn.on .seg-label { display: inline; }
@@ -1460,6 +1471,62 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
   background: var(--accent-soft); border-style: solid; border-color: var(--accent);
 }
 .badge-route svg { flex-shrink: 0; opacity: .8; }
+/* A rule, not a tally. Solid rather than dashed because the SOP is not
+   guessing — the dashed one means "this is usually where it goes", this one
+   means "this is where it goes". */
+.badge-route.sop {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--accent-soft);
+}
+
+/* ---------- the routing SOP, for one line ---------- */
+
+.routedlg .route-head {
+  display: flex; align-items: center; gap: var(--s2);
+  padding-bottom: var(--s3); border-bottom: 1px solid var(--line); margin-bottom: var(--s3);
+}
+.route-rule {
+  display: flex; gap: var(--s2); align-items: flex-start;
+  margin: var(--s3) 0; padding: var(--s3);
+  background: var(--panel-2); border-radius: var(--r-sm);
+  font-size: var(--t-sm); color: var(--ink-2);
+}
+.route-rule svg { flex-shrink: 0; margin-top: 2px; color: var(--ink-3); }
+
+/* The stations in order, down a rail. The rail is what makes it a route
+   rather than a list of places. */
+.routesteps { display: flex; flex-direction: column; }
+.route-step {
+  display: flex; gap: var(--s3); align-items: flex-start;
+  padding: var(--s3) 0 var(--s3) 2px; position: relative;
+}
+.route-step + .route-step { border-top: 1px dashed var(--line-soft); }
+.route-mark {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: var(--r-pill);
+  display: grid; place-items: center;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-3);
+}
+.route-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); opacity: .5; }
+.route-step.here .route-mark { background: var(--accent); border-color: transparent; color: var(--on-fill); }
+.route-step.past .route-mark { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+/* Stations already behind it are still worth showing — someone checking a job
+   wants the whole path — but they are not what to read first. */
+.route-step.past .route-body { opacity: .62; }
+.route-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.route-station { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.route-station strong { font-size: var(--t-md); }
+.route-paper { display: flex; gap: var(--s2); align-items: flex-start; font-size: var(--t-sm); }
+.route-paper svg { flex-shrink: 0; margin-top: 3px; color: var(--warn); }
+.route-who { font-size: var(--t-xs); }
+.route-src { margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line); }
+
+/* The rules themselves. */
+.sopr { padding: var(--s3) 0; border-top: 1px solid var(--line); }
+.sopr-head { font-weight: 700; font-size: var(--t-sm); margin-bottom: 4px; }
+.sopr-body { color: var(--ink-2); font-size: var(--t-sm); }
+.sopr-body p { margin: 0 0 var(--s2); }
+.sopdies { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s2); }
 
 /* Routing the whole queue at once. Sits above the machine's work because it is
    about the queue rather than any one line in it. */
@@ -3735,881 +3802,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     return groups;
   }
 
-  // js/model.js
-  var MACHINE_GROUP = Object.fromEntries(MACHINES.map((m) => [m.key, m.group]));
-  function today() {
-    return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  }
-  function addDays(iso, n) {
-    const d = /* @__PURE__ */ new Date(iso + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + n);
-    return d.toISOString().slice(0, 10);
-  }
-  var TRACK_STATUS = {
-    NOT_STARTED: { key: "NOT_STARTED", label: "Not started", tone: "mute" },
-    IN_PROGRESS: { key: "IN_PROGRESS", label: "In Progress", tone: "work" },
-    DONE: { key: "DONE", label: "Done", tone: "ok" }
-  };
-  var TRACK_STATUS_ORDER = ["NOT_STARTED", "IN_PROGRESS", "DONE"];
-  function taskStatusKey(t) {
-    const src = t.origin || t;
-    return `${t.machine}|${src.wo}|${src.die || ""}`;
-  }
-  function resolveTask(task) {
-    const key = taskStatusKey(task);
-    const override = state.taskEdit?.[key];
-    if (!override?.fields || !Object.keys(override.fields).length) return task;
-    const out = { ...task, origin: task.origin || { ...task }, edited: {} };
-    for (const { key: f } of EDITABLE_FIELDS) {
-      if (f in override.fields) {
-        out[f] = override.fields[f];
-        out.edited[f] = true;
-      }
-    }
-    out.editedAt = override.at;
-    out.editedBy = override.by;
-    return out;
-  }
-  function effectiveTaskStatus(t) {
-    const override = state.taskStatus[taskStatusKey(t)];
-    if (override?.status && TRACK_STATUS[override.status]) {
-      return { ...TRACK_STATUS[override.status], by: override.by, at: override.at, overridden: true };
-    }
-    let bucket = "NOT_STARTED";
-    if (t.status === "DONE") bucket = "DONE";
-    else if (t.status === "IP") bucket = "IN_PROGRESS";
-    return { ...TRACK_STATUS[bucket], overridden: false };
-  }
-  function tasksInScope() {
-    const imported = (state.tasks || []).filter((t) => !t.archived);
-    const manual = Object.values(state.manualTasks || {});
-    if (!manual.length) return imported;
-    const have = new Set(imported.map(taskStatusKey));
-    return imported.concat(manual.filter((t) => !t.archived && !have.has(taskStatusKey(t))));
-  }
-  function manualIdFor(task) {
-    if (!task?.manual) return null;
-    return String(task.id).replace(/^manual:/, "");
-  }
-  function hasTasks() {
-    return tasksInScope().length > 0;
-  }
-  function assignedMachine(task) {
-    return state.taskAssign?.[taskStatusKey(task)]?.machine || task.machine;
-  }
-  function isAssigned(task) {
-    return !!state.taskAssign?.[taskStatusKey(task)]?.machine;
-  }
-  function tasksForMachine(machineKey) {
-    return tasksInScope().filter((t) => assignedMachine(t) === machineKey).map((t) => resolveTask(t)).map((task) => ({ task, status: effectiveTaskStatus(task), rush: resolveRush(task) })).sort((a, b) => {
-      if (a.rush.on !== b.rush.on) return a.rush.on ? -1 : 1;
-      return (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1;
-    });
-  }
-  function openCountFor(machineKey) {
-    return tasksForMachine(machineKey).filter((r) => r.status.key !== "DONE").length;
-  }
-  function runningNow(machineKey) {
-    return tasksForMachine(machineKey).filter((r) => r.status.key === "IN_PROGRESS");
-  }
-  var DATE_GROUPS = [
-    { key: "OVERDUE", label: "Overdue", tone: "bad", open: true, cap: 25 },
-    { key: "TODAY", label: "Today", tone: "warn", open: true, cap: 25 },
-    { key: "WEEK", label: "This week", tone: "mute", open: true, cap: 25 },
-    { key: "LATER", label: "Later", tone: "mute", open: false, cap: 25 },
-    { key: "NODATE", label: "No date", tone: "mute", open: false, cap: 25 }
-  ];
-  function dateGroupOf(task, ref = today()) {
-    const d = task.cuttingDate;
-    if (!d) return "NODATE";
-    if (d < ref) return "OVERDUE";
-    if (d === ref) return "TODAY";
-    return d <= addDays(ref, 7) ? "WEEK" : "LATER";
-  }
-  function groupedQueue(machineKey, { showDone = false, q = "", filter = "ALL", ref = today() } = {}) {
-    const term = q.trim().toLowerCase();
-    const rows = tasksForMachine(machineKey).filter((r) => showDone || r.status.key !== "DONE").filter((r) => {
-      if (filter === "ALL") return true;
-      if (filter === "BO") return resolveBackOrder(r.task).on;
-      if (filter === "RUSH") return r.rush.on;
-      return r.status.key === filter;
-    }).filter((r) => {
-      if (!term) return true;
-      const note = taskNoteFor(taskStatusKey(r.task))?.text || "";
-      const hay = [r.task.wo, r.task.project, r.task.floor, r.task.die, r.task.comments, note].filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(term);
-    });
-    const byKey = new Map(DATE_GROUPS.map((g) => [g.key, []]));
-    for (const r of rows) byKey.get(dateGroupOf(r.task, ref)).push(r);
-    return DATE_GROUPS.map((g) => ({ ...g, rows: byKey.get(g.key) })).filter((g) => g.rows.length);
-  }
-  function machineSummary(machineKey, ref = today()) {
-    const all = tasksForMachine(machineKey);
-    const open = all.filter((r) => r.status.key !== "DONE");
-    return {
-      total: all.length,
-      open: open.length,
-      inProgress: open.filter((r) => r.status.key === "IN_PROGRESS").length,
-      overdue: open.filter((r) => dateGroupOf(r.task, ref) === "OVERDUE").length,
-      backOrder: open.filter((r) => resolveBackOrder(r.task).on).length,
-      rush: open.filter((r) => r.rush.on).length,
-      done: all.length - open.length
-    };
-  }
-  function rushFor(key) {
-    return state.rush?.[key] || null;
-  }
-  function resolveRush(task, ref = today()) {
-    const rec = rushFor(taskStatusKey(task));
-    if (!rec?.on) return { on: false };
-    const needBy = rec.needBy || null;
-    return {
-      on: true,
-      needBy,
-      late: !!needBy && needBy < ref,
-      soon: !!needBy && needBy >= ref && needBy <= addDays(ref, 2),
-      assignee: rec.assignee || null,
-      reason: rec.reason || null,
-      at: rec.at || null,
-      by: rec.by || null
-    };
-  }
-  function allRush(ref = today()) {
-    const rows = [];
-    for (const t of tasksInScope()) {
-      const task = resolveTask(t);
-      const rush = resolveRush(task, ref);
-      if (!rush.on) continue;
-      if (effectiveTaskStatus(task).key === "DONE") continue;
-      rows.push({ task, rush, machine: assignedMachine(task) });
-    }
-    return rows.sort((a, b) => (a.rush.needBy || a.task.cuttingDate || "9999") < (b.rush.needBy || b.task.cuttingDate || "9999") ? -1 : 1);
-  }
-  function backOrderFor(key) {
-    return state.backOrder?.[key] || null;
-  }
-  function resolveBackOrder(task) {
-    const rec = backOrderFor(taskStatusKey(task)) || {};
-    const fromSheet = !!task.backOrder;
-    const on = rec.flagged == null ? fromSheet : !!rec.flagged;
-    return {
-      on,
-      fromSheet,
-      // Only a recorded count is trustworthy as "pieces short": the sheet's B/O
-      // column counts BARS, and on FOM2/FOM3 writes them as text ("3 BARS").
-      // That is kept separately as context rather than shown as a piece count.
-      qty: rec.qty ?? null,
-      sheetShort: task.boRaw || task.boStat || null,
-      assignee: rec.assignee || null,
-      note: rec.note || null,
-      recorded: !!rec.at,
-      at: rec.at || null,
-      by: rec.by || null
-    };
-  }
-  function allBackOrders() {
-    const rows = [];
-    for (const t of tasksInScope()) {
-      const task = resolveTask(t);
-      const bo = resolveBackOrder(task);
-      if (!bo.on) continue;
-      if (effectiveTaskStatus(task).key === "DONE") continue;
-      rows.push({ task, bo, machine: assignedMachine(task) });
-    }
-    const groups = /* @__PURE__ */ new Map();
-    for (const r of rows) {
-      const who = r.bo.assignee || "";
-      if (!groups.has(who)) groups.set(who, []);
-      groups.get(who).push(r);
-    }
-    for (const list of groups.values()) {
-      list.sort((a, b) => (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1);
-    }
-    return Array.from(groups.entries()).map(([assignee, list]) => ({ assignee, rows: list })).sort((a, b) => {
-      if (!a.assignee) return 1;
-      if (!b.assignee) return -1;
-      return a.assignee.localeCompare(b.assignee);
-    });
-  }
-  function taskNoteFor(key) {
-    return state.taskNote?.[key] || null;
-  }
-  function machineConfig(machine) {
-    const cfg = state.machineConfig?.[machine.key] || {};
-    return {
-      ...machine,
-      label: cfg.label || machine.label,
-      note: cfg.note !== void 0 ? cfg.note : machine.note,
-      ops: cfg.ops !== void 0 && cfg.ops !== null ? cfg.ops : machine.ops,
-      hidden: !!cfg.hidden,
-      customised: !!(cfg.label || cfg.note !== void 0 || cfg.ops != null)
-    };
-  }
-  function staleImports() {
-    return ["rolling", "cnc"].filter((kind) => {
-      const meta = state.machineMeta?.[kind];
-      return meta && (meta.parser ?? 1) < PARSER_VERSION;
-    });
-  }
-  function sheetShiftUpdateFor(machineKey) {
-    const su = state.shiftUpdate;
-    if (!su?.machines) return null;
-    const entry = su.machines[machineKey];
-    if (!entry) return null;
-    return { date: su.date, shift: su.shift, ...entry };
-  }
-  var SHIFT_RANK = { DAY: 0, AFT: 1, AFTERNOON: 1, NIGHT: 2, MIDNIGHT: 2 };
-  function rank(date2, shift) {
-    return `${date2 || ""}#${SHIFT_RANK[shift] ?? 0}`;
-  }
-  function lines(v) {
-    return String(v || "").split("\n").map((s) => s.trim()).filter(Boolean);
-  }
-  function writtenShiftUpdateFor(machineKey) {
-    let best = null;
-    for (const log of Object.values(state.shiftLogs || {})) {
-      const row = log?.rows?.[machineKey];
-      if (!row) continue;
-      const done = lines(row.done);
-      const next = lines(row.next);
-      const notes = lines(row.notes);
-      if (!done.length && !next.length && !notes.length) continue;
-      if (best && rank(log.date, log.shift) <= rank(best.date, best.shift)) continue;
-      best = {
-        date: log.date,
-        shift: log.shift,
-        ops: row.ops === "" || row.ops == null ? null : Number(row.ops),
-        done,
-        next,
-        notes,
-        down: false,
-        by: log.by,
-        at: log.at
-      };
-    }
-    return best;
-  }
-  function shiftUpdateFor(machineKey) {
-    const sheet = sheetShiftUpdateFor(machineKey);
-    const written = writtenShiftUpdateFor(machineKey);
-    if (written && (!sheet || rank(written.date, written.shift) > rank(sheet.date, sheet.shift))) {
-      return {
-        ...written,
-        source: "written",
-        // The workbook is the only one of the two that records a machine as
-        // down, so a newer written update must not silently clear it. Carried
-        // across with its own date, for the panel to caveat.
-        staleDown: sheet?.down ? sheet.date : null
-      };
-    }
-    return sheet ? { ...sheet, source: "workbook" } : null;
-  }
-  function shiftUpdateAge(date2, ref = today()) {
-    if (!date2) return null;
-    const days = Math.round((Date.parse(ref) - Date.parse(date2)) / 864e5);
-    if (days <= 0) return { days: 0, label: "today", tone: "ok" };
-    if (days === 1) return { days, label: "yesterday", tone: "warn" };
-    return { days, label: `${days} days old`, tone: "bad" };
-  }
-  function shiftWindow(date2, shift) {
-    const mk = (d, h) => {
-      const x = /* @__PURE__ */ new Date(d + "T00:00:00");
-      x.setHours(h, 0, 0, 0);
-      return x.getTime();
-    };
-    if (shift === "DAY") return [mk(date2, 7), mk(date2, 15)];
-    if (shift === "AFT") return [mk(date2, 15), mk(date2, 23)];
-    return [mk(date2, 23), mk(addDays(date2, 1), 7)];
-  }
-  function taskByKey(key) {
-    for (const t of tasksInScope()) {
-      if (taskStatusKey(t) === key) return resolveTask(t);
-    }
-    return null;
-  }
-  function workInShift(machineKey, date2, shift) {
-    const [from, to] = shiftWindow(date2, shift);
-    const seen = /* @__PURE__ */ new Map();
-    for (const h of state.taskHistory || []) {
-      if (h.kind !== "status") continue;
-      const t = Date.parse(h.at);
-      if (!(t >= from && t < to)) continue;
-      if (!seen.has(h.key)) seen.set(h.key, h);
-    }
-    const out = [];
-    for (const [key, h] of seen) {
-      const task = taskByKey(key);
-      if (!task || assignedMachine(task) !== machineKey) continue;
-      out.push({ task, to: h.to, by: h.by, at: h.at });
-    }
-    return out.sort((a, b) => a.at < b.at ? -1 : 1);
-  }
-  function openTodos(ref = today()) {
-    const all = Object.values(state.todos || {});
-    const mine = all.filter((t) => t.date <= ref);
-    const open = mine.filter((t) => !t.done).sort((a, b) => a.date === b.date ? a.at < b.at ? -1 : 1 : a.date < b.date ? -1 : 1);
-    const done = all.filter((t) => t.done && t.date === ref).sort((a, b) => (a.doneAt || "") < (b.doneAt || "") ? 1 : -1);
-    return { open, done, carried: open.filter((t) => t.date < ref).length };
-  }
-  function todayBoard(ref = today()) {
-    const rows = tasksInScope().map((t) => {
-      const task = resolveTask(t);
-      return {
-        task,
-        machine: assignedMachine(task),
-        status: effectiveTaskStatus(task),
-        rush: resolveRush(task, ref),
-        bo: resolveBackOrder(task)
-      };
-    });
-    const open = rows.filter((r) => r.status.key !== "DONE");
-    return {
-      running: open.filter((r) => r.status.key === "IN_PROGRESS"),
-      dueToday: open.filter((r) => r.task.cuttingDate === ref),
-      overdue: open.filter((r) => r.task.cuttingDate && r.task.cuttingDate < ref),
-      rushNow: open.filter((r) => r.rush.on && (!r.rush.needBy || r.rush.needBy <= ref)),
-      backOrders: open.filter((r) => r.bo.on),
-      finishedToday: rows.filter((r) => r.status.key === "DONE" && String(r.status.at || "").slice(0, 10) === ref)
-    };
-  }
-  function shiftWritten(date2, shift) {
-    const log = state.shiftLogs?.[`${date2}|${shift}`];
-    return !!(log && (Object.keys(log.rows || {}).length || (log.notes || "").trim()));
-  }
-  function routeTable() {
-    const byDie = /* @__PURE__ */ new Map();
-    for (const t of tasksInScope()) {
-      const key = taskStatusKey(t);
-      const assigned = state.taskAssign?.[key]?.machine;
-      if (!assigned) continue;
-      const die = (t.origin || t).die;
-      if (!die) continue;
-      if (!byDie.has(die)) byDie.set(die, /* @__PURE__ */ new Map());
-      const counts = byDie.get(die);
-      counts.set(assigned, (counts.get(assigned) || 0) + 1);
-    }
-    return byDie;
-  }
-  var routeCache = null;
-  var routeCacheAt = null;
-  function routes() {
-    const stamp = Object.keys(state.taskAssign || {}).length + ":" + (state.tasks?.length || 0);
-    if (routeCache && routeCacheAt === stamp) return routeCache;
-    routeCache = routeTable();
-    routeCacheAt = stamp;
-    return routeCache;
-  }
-  function suggestedMachine(task, { minSeen = 2 } = {}) {
-    if (isAssigned(task)) return null;
-    if (effectiveTaskStatus(task).key === "DONE") return null;
-    const die = (task.origin || task).die;
-    if (!die) return null;
-    const counts = routes().get(die);
-    if (!counts) return null;
-    const group = MACHINE_GROUP[task.machine];
-    const options = [...counts.entries()].filter(([m]) => MACHINE_GROUP[m] === group && m !== task.machine).sort((a, b) => b[1] - a[1]);
-    if (!options.length) return null;
-    const [machine, seen] = options[0];
-    const total = options.reduce((a, [, n]) => a + n, 0);
-    if (seen < minSeen) return null;
-    return { machine, seen, total, die, sure: seen === total };
-  }
-  function suggestionsIn(group) {
-    const out = [];
-    for (const t of tasksInScope()) {
-      const task = resolveTask(t);
-      if (MACHINE_GROUP[task.machine] !== group) continue;
-      const s = suggestedMachine(task);
-      if (s) out.push({ task, ...s });
-    }
-    return out;
-  }
-  function inProgressLines(machineKey) {
-    return runningNow(machineKey).map(({ task }) => {
-      const what = task.project || task.wo;
-      const where = task.floor ? ` ${task.floor}` : "";
-      const die = task.die ? ` (${task.die})` : "";
-      return `${what}${where}${die}-I.P`;
-    });
-  }
-  function stagingFor(key) {
-    return state.staging?.[key] || null;
-  }
-  function isStaged(task) {
-    return !!stagingFor(taskStatusKey(task))?.staged;
-  }
-  function stagingQueue({ q = "", ref = today() } = {}) {
-    const term = q.trim().toLowerCase();
-    const rows = [];
-    for (const t of tasksInScope()) {
-      if (MACHINE_GROUP[t.machine] !== "Rolling") continue;
-      const task = resolveTask(t);
-      const status = effectiveTaskStatus(task);
-      if (status.key !== "NOT_STARTED") continue;
-      if (term) {
-        const hay = [task.wo, task.project, task.die, task.floor].join(" ").toLowerCase();
-        if (!hay.includes(term)) continue;
-      }
-      const key = taskStatusKey(task);
-      rows.push({
-        task,
-        key,
-        status,
-        machine: assignedMachine(task),
-        staging: stagingFor(key),
-        rush: resolveRush(task, ref)
-      });
-    }
-    rows.sort((a, b) => {
-      if (a.rush.on !== b.rush.on) return a.rush.on ? -1 : 1;
-      return (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1;
-    });
-    return {
-      todo: rows.filter((r) => !r.staging?.staged),
-      staged: rows.filter((r) => r.staging?.staged)
-    };
-  }
-
-  // js/views/centre.js
-  init_ui();
-
-  // js/views/backorders.js
-  init_ui();
-  function machineLabel(key) {
-    const m = MACHINE_BY_KEY[key];
-    return m ? machineConfig(m).label : key;
-  }
-  var TYPE_A_NAME = "__type__";
-  function backOrderDialog(task, rerender) {
-    const key = taskStatusKey(task);
-    const cur = backOrderFor(key) || {};
-    const resolved = resolveBackOrder(task);
-    const max = task.qty ?? null;
-    const flag = el("input", { type: "checkbox", checked: resolved.on });
-    const qty = el("input", {
-      type: "number",
-      min: "0",
-      inputmode: "numeric",
-      max: max == null ? void 0 : String(max),
-      value: cur.qty ?? "",
-      placeholder: "0"
-    });
-    const people = state.people || [];
-    const known = cur.assignee && !people.includes(cur.assignee) ? [cur.assignee] : [];
-    const nameInput = el("input", {
-      value: cur.assignee || "",
-      placeholder: "Name",
-      style: { display: "none", marginTop: "8px" }
-    });
-    const who = el(
-      "select",
-      {
-        onchange: (e) => {
-          const typing = e.target.value === TYPE_A_NAME;
-          nameInput.style.display = typing ? "" : "none";
-          if (typing) nameInput.focus();
-        }
-      },
-      el("option", { value: "", selected: !cur.assignee }, "Unassigned"),
-      ...[...people, ...known].map((p) => el("option", {
-        value: p,
-        selected: cur.assignee === p
-      }, p)),
-      el("option", { value: TYPE_A_NAME }, "\u2014 type a name \u2014")
-    );
-    const note = el("textarea", {
-      value: cur.note || "",
-      placeholder: "What is short, who was chased, expected date\u2026",
-      style: { minHeight: "90px" }
-    });
-    const body = el(
-      "div",
-      {},
-      el(
-        "div.bo-dialoghead",
-        {},
-        el("span.mono.strong", {}, `W/O ${task.wo}`),
-        task.die ? el("span.die", {}, task.die) : null,
-        el(
-          "span.small.muted",
-          {},
-          `${task.project || ""}${task.floor ? " \xB7 " + task.floor : ""}`.trim()
-        )
-      ),
-      el(
-        "label.row.bo-flagrow",
-        {},
-        flag,
-        el(
-          "span",
-          {},
-          el("strong", {}, "Short of material"),
-          // The flag has three states and only two of them are obvious. Said in
-          // full here, because "unticking a box the workbook ticked" is the one
-          // that gets misread — it records a resolution, it does not erase one.
-          el(
-            "div.small.bo-tristate",
-            {},
-            resolved.fromSheet ? "The workbook reports this line short. Leave it ticked while it still is; untick it once the material has landed, and the tracker will keep showing it as resolved even though the sheet still says B/O." : "The workbook does not report this line short. Ticking it flags a shortage found on the floor, and it stays flagged through the next import."
-          )
-        )
-      ),
-      el(
-        "div.grid",
-        { style: { gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: "12px", marginTop: "14px" } },
-        el(
-          "label.field",
-          {},
-          el("span", {}, "Pieces short", max != null ? el("em.of-total", {}, `of ${fmtNum(max)} on the line`) : null),
-          qty
-        ),
-        el(
-          "label.field",
-          {},
-          el("span", {}, "Assigned to"),
-          who,
-          nameInput
-        )
-      ),
-      // Two different units, and mixing them up changes what gets ordered — so
-      // they are shown side by side and labelled, never merged into one number.
-      resolved.sheetShort ? el(
-        "div.bo-sheetnote",
-        {},
-        icon("alert", { size: 14 }),
-        el(
-          "span",
-          {},
-          el("strong", {}, "The workbook counts bars, this form counts pieces."),
-          el("div", {}, `Sheet says: ${resolved.sheetShort}`)
-        )
-      ) : null,
-      el("label.field", { style: { marginTop: "12px" } }, el("span", {}, "Back order note"), note),
-      cur.at ? el(
-        "div.small.muted",
-        { style: { marginTop: "10px" } },
-        `Last updated by ${cur.by} \xB7 ${fmtWhen(cur.at)}`
-      ) : null
-    );
-    modal(`Back order \u2014 ${task.wo}`, body, {
-      actions: [
-        cur.at ? {
-          label: "Clear",
-          class: "danger",
-          onClick: (dlg) => {
-            clearBackOrder(key);
-            dlg.close();
-            toast("Back order cleared");
-            rerender();
-          }
-        } : null,
-        {
-          label: "Save",
-          class: "primary",
-          onClick: (dlg) => {
-            const assignee = who.value === TYPE_A_NAME ? nameInput.value : who.value;
-            let pieces = qty.value === "" ? null : Number(qty.value);
-            if (pieces != null && max != null) pieces = Math.min(pieces, max);
-            setBackOrder(key, {
-              // Record the flag explicitly, so unticking a sheet-reported
-              // shortage is stored as "resolved" rather than read as "unset".
-              flagged: flag.checked,
-              qty: pieces,
-              assignee,
-              note: note.value
-            });
-            dlg.close();
-            toast("Back order saved");
-            rerender();
-          }
-        }
-      ].filter(Boolean)
-    });
-  }
-  var mineOnly = false;
-  function renderBackOrders(rerender, go2) {
-    if (!hasTasks()) {
-      return el(
-        "div.panel",
-        {},
-        el(
-          "div.empty",
-          {},
-          el("div.empty-icon", {}, icon("upload", { size: 28 })),
-          el("h3", {}, "No schedule loaded yet"),
-          el("p", {}, "Import the Rolling and CNC workbooks to get started."),
-          el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
-        )
-      );
-    }
-    let groups = allBackOrders();
-    if (mineOnly) groups = groups.filter((g) => g.assignee === me());
-    const total = groups.reduce((a, g) => a + g.rows.length, 0);
-    const pieces = groups.reduce((a, g) => a + g.rows.reduce((b, r) => b + (r.bo.qty || 0), 0), 0);
-    const unassigned = allBackOrders().find((g) => !g.assignee)?.rows.length || 0;
-    const head = el(
-      "div.centre-head",
-      {},
-      el(
-        "div.row.centre-title-row",
-        {},
-        el(
-          "div.centre-ident",
-          {},
-          el("span.centre-rail", { "aria-hidden": "true" }),
-          el(
-            "div",
-            {},
-            el("h1.centre-title", {}, "Back orders"),
-            el("div.centre-sub", {}, "Lines short of material, across every centre")
-          )
-        ),
-        el("span.spacer"),
-        el(
-          "div.centre-stats",
-          {},
-          el("div.cstat" + (total ? ".bad" : ""), {}, el("b", {}, fmtNum(total)), el("i", {}, "lines")),
-          el("div.cstat", {}, el("b", {}, fmtNum(pieces)), el("i", {}, "pcs short")),
-          el("div.cstat" + (unassigned ? ".warn" : ""), {}, el("b", {}, fmtNum(unassigned)), el("i", {}, "unassigned"))
-        )
-      ),
-      el(
-        "div.centre-filters",
-        {},
-        el(
-          "label.row.small.donetoggle",
-          {},
-          el("input", {
-            type: "checkbox",
-            checked: mineOnly,
-            onchange: (e) => {
-              mineOnly = e.target.checked;
-              rerender();
-            }
-          }),
-          `Only mine (${me()})`
-        )
-      )
-    );
-    if (!groups.length) {
-      return el(
-        "div.centre",
-        {},
-        head,
-        el("div.panel", {}, el(
-          "div.empty",
-          {},
-          el("div.empty-icon", {}, icon("check", { size: 28 })),
-          el("h3", {}, mineOnly ? "Nothing assigned to you" : "No back orders"),
-          el("div", {}, mineOnly ? "Nothing is waiting on you right now." : "Nothing is flagged short of material.")
-        ))
-      );
-    }
-    const sections2 = groups.map((g) => {
-      const short = g.rows.reduce((a, r) => a + (r.bo.qty || 0), 0);
-      return el(
-        "section.dgroup.bo-group",
-        {},
-        el(
-          "div.bo-grouphead" + (g.assignee ? "" : ".none"),
-          {},
-          el(
-            "span.bo-avatar",
-            { "aria-hidden": "true" },
-            g.assignee ? g.assignee.slice(0, 1).toUpperCase() : "?"
-          ),
-          el("span.bo-who", {}, g.assignee || "Nobody is chasing these"),
-          el("span.dgroup-count", {}, String(g.rows.length)),
-          el("span.spacer"),
-          short ? el("span.small.muted", {}, `${fmtNum(short)} pcs short`) : null
-        ),
-        el("div.dgroup-body", {}, ...g.rows.map(({ task, bo, machine }) => el(
-          "div.line.bo-line.is-bo",
-          {
-            style: { cursor: "pointer" },
-            onclick: () => backOrderDialog(task, rerender)
-          },
-          el(
-            "div.line-main",
-            {},
-            el(
-              "div.line-id",
-              {},
-              el("span.mono.strong", {}, task.wo),
-              task.die ? el("span.die", {}, task.die) : null,
-              chip(machineLabel(machine), "mute")
-            ),
-            el(
-              "div.line-where",
-              {},
-              el("span", {}, task.project || "\u2014"),
-              task.floor ? el("span.muted", {}, " \xB7 " + task.floor) : null
-            ),
-            bo.note ? el(
-              "div.line-bonote",
-              {},
-              icon("note", { size: 13 }),
-              el("span", {}, bo.note)
-            ) : null,
-            // Bars, kept visibly separate from the pieces count beside it.
-            bo.sheetShort ? el(
-              "div.line-bonote.from-sheet",
-              {},
-              icon("alert", { size: 13 }),
-              el("span", {}, el("span.muted", {}, "workbook: "), bo.sheetShort)
-            ) : null
-          ),
-          el(
-            "div.line-qty.bo-qty",
-            {},
-            bo.qty != null ? el("span.mono.bo-short", {}, fmtNum(bo.qty)) : el("span.mono.muted", {}, "\u2014"),
-            el("span.small.muted", {}, bo.qty != null ? "pcs short" : "not counted")
-          ),
-          el("div.line-date.hide-sm", {}, fmtDate(task.cuttingDate))
-        )))
-      );
-    });
-    return el("div.centre", {}, head, ...sections2);
-  }
-
-  // js/views/manual.js
-  init_ui();
-  var FIELDS = [
-    {
-      key: "wo",
-      label: "Work order",
-      type: "text",
-      required: true,
-      placeholder: "31942",
-      hint: "What the job is called on the floor"
-    },
-    { key: "die", label: "Die", type: "text", placeholder: "S80.104" },
-    { key: "project", label: "Project", type: "text", placeholder: "Harbour Point" },
-    { key: "floor", label: "Floor / Tag", type: "text", placeholder: "12A" },
-    { key: "qty", label: "Quantity", type: "number", placeholder: "0" },
-    { key: "cuttingDate", label: "Cutting date", type: "date" }
-  ];
-  function manualJobDialog({ machine, task = null, rerender }) {
-    const editing = !!task;
-    const id = editing ? manualIdFor(task) : null;
-    const inputs = {};
-    const field = (f) => {
-      const val = editing ? task[f.key] ?? "" : f.key === "cuttingDate" ? today() : "";
-      const input = el("input", {
-        type: f.type === "number" ? "number" : f.type === "date" ? "date" : "text",
-        value: val === null ? "" : String(val),
-        placeholder: f.placeholder || "",
-        ...f.type === "number" ? { min: "0", inputmode: "decimal" } : {}
-      });
-      inputs[f.key] = input;
-      return el(
-        "label.field",
-        {},
-        el("span", {}, f.label, f.required ? el("em.of-total", {}, "required") : null),
-        input,
-        f.hint ? el("div.small.muted", { style: { marginTop: "4px" } }, f.hint) : null
-      );
-    };
-    const group = MACHINE_BY_KEY[machine]?.group;
-    const choices = group ? MACHINES.filter((m) => m.group === group) : MACHINES;
-    const machineSel = el(
-      "select",
-      {},
-      ...choices.map((m) => el("option", {
-        value: m.key,
-        selected: m.key === machine
-      }, machineConfig(m).label))
-    );
-    const comments = el("textarea", {
-      value: editing ? task.comments || "" : "",
-      placeholder: "Why it is being run, who asked for it, anything the next shift needs",
-      style: { minHeight: "76px" }
-    });
-    const body = el(
-      "div",
-      {},
-      el(
-        "p.small.muted",
-        { style: { marginTop: 0 } },
-        editing ? "This job was added by hand, so it is not in either workbook. Everything recorded against it behaves exactly like a scheduled line." : "For work the schedules do not have yet \u2014 a remake, a service order, anything phoned in. It survives re-importing the workbooks, and steps aside on its own if the same work order and die later arrive in one."
-      ),
-      el(
-        "label.field",
-        { style: { marginBottom: "12px" } },
-        el("span", {}, "Machine"),
-        machineSel
-      ),
-      el("div.grid", {
-        style: { gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: "12px" }
-      }, ...FIELDS.map(field)),
-      el(
-        "label.field",
-        { style: { marginTop: "12px" } },
-        el("span", {}, "Notes"),
-        comments
-      ),
-      editing && task.at ? el(
-        "div.small.muted",
-        { style: { marginTop: "10px" } },
-        `Added by ${task.by} \xB7 ${fmtWhen(task.at)}`
-      ) : null
-    );
-    const read = () => {
-      const out = { machine: machineSel.value, comments: comments.value };
-      for (const f of FIELDS) {
-        const raw = inputs[f.key].value.trim();
-        out[f.key] = raw === "" ? null : f.type === "number" ? Number(raw) : raw;
-      }
-      return out;
-    };
-    const dlg = modal(editing ? `Edit job \u2014 ${task.wo}` : "Add a job", body, {
-      actions: [
-        editing ? {
-          label: "Delete",
-          class: "danger",
-          onClick: async (d) => {
-            const ok = await confirmDialog(
-              "Delete this job?",
-              `W/O ${task.wo} was added by hand. Deleting it also drops the status, notes and history recorded against it.`,
-              { confirmLabel: "Delete", danger: true }
-            );
-            if (!ok) return;
-            deleteManualTask(id);
-            d.close();
-            toast("Job deleted");
-            rerender();
-          }
-        } : null,
-        {
-          label: editing ? "Save" : "Add job",
-          class: "primary",
-          onClick: (d) => {
-            const fields = read();
-            if (!fields.wo) {
-              toast("A work order is needed \u2014 it is how the line is identified");
-              inputs.wo.focus();
-              return;
-            }
-            if (editing) {
-              updateManualTask(id, fields);
-              toast("Saved");
-            } else {
-              addManualTask(fields);
-              toast(`Added W/O ${fields.wo} to ${machineConfig(MACHINE_BY_KEY[fields.machine]).label}`);
-            }
-            d.close();
-            rerender();
-          }
-        }
-      ].filter(Boolean)
-    });
-    inputs.wo.focus();
-    return dlg;
-  }
-
-  // js/views/dies.js
-  init_ui();
-
   // js/subassemblies.js
   var ROWS = [["SA80-101", "Typical Horizontal Perimeter Frame", "80-001", "84-901", "84-901", "80-101", "Discontinued - Use SA80-251", "8000"], ["SA80-102", "Typical Horizontal Perimeter Frame", "80-003", "84-901", "84-901", "80-102", "Discontinued - Use SA80-252", "8000"], ["SA80-103", "Typical Horizontal Perimeter Frame", "80-005", "84-901", "84-901", "80-103", "Discontinued - Use SA80-335", "8000"], ["SA80-104", "Flat Horizontal Transom Frame", "80-007", "84-901", "84-901", "80-104", "", "8000"], ["SA80-104HT", "Flat Horizontal Transom Frame", "80-007", "84-910", "84-910", "80-104", "", "8000HT"], ["SA80-104HTX", "1.000 Flat Horizontal Frame_HT w/Foam", "80-007", "84-916", "84-916", "80-104", "", "8000HTX"], ["SA80-105", "Sloped Horizontal Transom Frame", "80-008", "84-901", "84-901", "80-104", "", "8000"], ["SA80-105HT", "Sloped Horizontal Transom Frame", "80-008", "84-910", "84-910", "80-104", "", "8000HT"], ["SA80-105HTX", "1.000 Sloped Horizontal Frame_HT w/Foam", "80-008", "84-916", "84-916", "80-104", "", "8000HTX"], ["SA80-106", "Typical Vertical Male Frame", "80-113", "84-901", "84-901", "80-105", "", "8000"], ["SA80-106HT", "Typical Vertical Male Frame", "80-113", "84-910", "84-910", "80-105", "", "8000HT"], ["SA80-106HTX", '1" Vert. Male Split Mullion Frame_HT w/Foam', "80-113", "84-916", "84-916", "80-105", "", "8000HTX"], ["SA80-107", "Typical Vertical Female Frame 180\xB0 +/-1\xB0 = 181\xB0 - 179\xB0", "80-012", "84-901", "84-901", "80-106", "", "8000"], ["SA80-107HT", "Typical Vertical Female Frame 180\xB0 +/-1\xB0 = 181\xB0 - 179\xB0_HT", "80-012", "84-910", "84-910", "80-106", "", "8000HT"], ["SA80-107HTX", '2" Vert. Female Split Mullion Frame_HT w/Foam', "80-012", "84-916", "84-916", "80-106", "", "8000HTX"], ["SA80-108", "Typical Vertical Corner Frame", "80-112", "84-901", "84-901", "80-107", "", "8000"], ["SA80-108HT", "Typical Vertical Corner Frame", "80-112", "84-910", "84-910", "80-107", "", "8000HT"], ["SA80-108HTX", "1.000 Vert. Corner Mullion Frame_HT w/Foam", "80-112", "84-916", "84-916", "80-107", "", "8000HTX"], ["SA80-109", "Seismic Vertical Receptor Frame", "80-049", "84-901", "84-901", "80-109", "", "8000"], ["SA80-109HT", "Seismic Vertical Receptor Frame_HT", "80-049", "84-910", "84-910", "80-109", "", "8000HT"], ["SA80-109HTX", "Vert. Seismic Receptor Jamb Frame_HT w/Foam", "80-049", "84-916", "84-916", "80-109", "", "8000HTX"], ["SA80-110", "Special Vertical Door Adaptor Frame", "80-012", "84-901", "84-901", "80-108", "", "8000"], ["SA80-110HT", "Special Vertical Door Adaptor", "80-012", "84-910", "84-910", "80-108", "", "8000HT"], ["SA80-110HTX", "Vert. Female Adaptor Mullion Frame_HT w/Foam", "80-012", "84-916", "84-916", "80-109", "", "8000HTX"], ["SA80-111", 'Offset Horizontal Sill Frame Flat 1"', "80-007", "84-901", "84-901", "80-102", "Discontinued - Use SA80-255", "8000"], ["SA80-112", "Offset Horizontal Sill Frame Sloped", "80-008", "84-901", "84-901", "80-102", "Discontinued - Use SA80-256", "8000"], ["SA80-113", "Corner Vertical Frame", "", "84-901", "84-901", "80-105", "", "8000"], ["SA80-113HT", "Corner Vertical Frame_HT", "", "84-910", "84-910", "80-105", "", "8000HT"], ["SA80-113HTX", "Vertical Corner Mullion Frame_HT w/Foam", "80-112", "84-916", "84-916", "80-105", "", "8000HTX"], ["SA80-114", "Special Horizontal Door Adaptor Door Frames", "80-029", "84-901", "84-901", "80-118", "Discontinued - Not Replaced", "8000"], ["SA80-115", 'Jamb Receptor 2" Vertical Frame', "80-035", "84-901", "84-901", "80-111", "Discontinued - Use SA80-317", "8000"], ["SA80-116", 'Typical Receptor 2" Head Frame', "80-005", "84-901", "84-901", "80-115", "Discontinued - Use SA80-335", "8000"], ["SA80-117", '2" to 1" Head Frame', "", "84-901", "84-901", "80-104", "Discontinued - Not Replaced", "8000"], ["SA80-118", '2" to 1 1/2" Sill', "", "84-901", "84-901", "80-102", "Discontinued - Use SA80-257", "8000"], ["SA80-119", '1" to 1" Sill Frame', "", "84-901", "84-901", "80-101", "Discontinued - Use SA80-258", "8000"], ["SA80-120", '1" to 1" Sill', "", "84-901", "84-901", "80-101", "Discontinued - Use SA80-259", "8000"], ["SA80-121", "Vision By-Pass Horizontal Sill Frame", "80-008", "84-901", "84-901", "80-101", "Discontinued - Use SA80-260", "8000"], ["SA80-122", "Balcony Horizontal Sill Frame", "80-045", "84-901", "84-901", "80-102", "Discontinued - Use SA80-261", "8000"], ["SA80-123", "Balcony Offset Horizontal Sill Frame", "80-045", "84-901", "84-901", "80-101", "Discontinued - Use SA80-262", "8000"], ["SA80-124", "Typical Vertical Jamb Only Frame", "80-113", "84-901", "84-901", "80-114", "", "8000"], ["SA80-124HT", "Typical Vertical Jamb Only Frame", "80-113", "84-910", "84-910", "80-114", "", "8000HT"], ["SA80-124HTX", "Typical Vert. Jamb Only Frame_HT w/Foam", "80-113", "84-916", "84-916", "80-114", "", "8000HTX"], ["SA80-125", "Typical Lower By-Pass Sill Frame Upper T-Break Lower T-Break Interior", "80-110", "", "", "", "", "8000"], ["SA80-126", '4" Curb Sill Frame 80-119', "80-043", "84-901", "84-901", "80-119", "Discontinued - Use SA80-258", "8000"], ["SA80-127", "JAY STREET PROJECT PANEL FRAMES", "80-056", "84-901", "84-901", "80-055", "Discontinued - Use SA80-335", "8000"], ["SA80-128", "JAY STREET PROJECT PANEL FRAMES", "80-007", "84-901", "84-901", "80-063", "Discontinued - Use SA80-259", "8000"], ["SA80-129", "JAY STREET PROJECT MALE", "80-058", "84-901", "84-901", "80-057", "Discontinued - Use SA80-206", "8000"], ["SA80-130", "JAY STREET PROJECT FEMALE 180\xB0 +/-1\xB0 = 181\xB0 - 179\xB0", "80-060", "84-901", "84-901", "80-059", "Discontinued - Use SA80-207", "8000"], ["SA80-132", "JAY STREET PROJECT VERTICAL", "80-060", "84-901", "84-901", "80-108", "Discontinued - Use SA80-210", "8000"], ["SA80-133", "ELLIPSE PROJECT HORIZONTAL FRAMES", "80-123", "84-901", "84-901", "80-104", "", "8000"], ["SA80-133HT", "ELLIPSE PROJECT HORIZONTAL FRAMES_HT", "80-123", "84-910", "84-910", "80-104", "", "8000HT"], ["SA80-133HTX", "Ellipse Pro Hori Accent Cap Vision Glass Frames_HT w/Foam", "80-123", "84-916", "84-916", "80-104", "", "8000HTX"], ["SA80-134", "ELLIPSE PROJECT VERTICAL 3\xB0 177\xB0 +/- 1\xB0 = 178\xB0 - 176\xB0", "80-122", "84-901", "84-901", "80-121", "", "8000"], ["SA80-134HT", "ELLIPSE PROJECT VERTICAL 3\xB0 177\xB0 +/- 1\xB0 = 178\xB0 - 176\xB0_HT", "80-122", "84-910", "84-910", "80-121", "", "8000HT"], ["SA80-134HTX", "Ellipse Pro Vert 3 deg Splayed Female Mullions_HT w/Foam", "80-122", "84-916", "84-916", "80-121", "", "8000HTX"], ["SA80-135", "ELLIPSE PROJECT FLAT", "80-007", "84-901", "84-901", "80-119", "Discontinued - Use SA80-259", "8000"], ["SA80-136", "ELLIPSE PROJECT SLOPING", "80-008", "84-901", "84-901", "80-119", "Discontinued - Use SA80-260", "8000"], ["SA80-137", "ELLIPSE PROJECT SLOPING", "80-048", "84-901", "84-901", "80-115", "Discontinued - Use SA80-335", "8000"], ["SA80-138", "21 AVENUE RD. PROJECT 90\xB0 MULLION", "80-129", "84-901", "84-901", "80-128", "Discontinued - Use SA80-349", "8000"], ["SA80-139", "_ 132 21 AVENUE RD. PROJECT 90\xB0 MULLION", "80-131", "84-901", "84-901", "80-130", "Discontinued - Use SA80-348", "8000"], ["SA80-140", "RECEPTOR SILL PANEL FRAMES", "80-008", "84-901", "84-901", "80-063", "Discontinued - Use SA80-256", "8000"], ["SA80-141", '1" EXT. 1 1/2" INT. RECEPTOR SILL', "80-043", "84-901", "84-901", "80-063", "Discontinued - Use SA80-257", "8000"], ["SA80-142", '1 1/2" EXT. INT RECEPTOR SILL', "80-045", "84-901", "84-901", "80-063", "Discontinued - Use SA80-261", "8000"], ["SA80-143", '2" / 1" Vertical Female-Male Split', "80-012", "84-901", "84-901", "80-105", "", "8000"], ["SA80-143HT", '2" / 1" Vertical Female-Male Split', "80-012", "84-910", "84-910", "80-105", "", "8000HT"], ["SA80-143HTX", '2" / 1" Vertical Female-Male Split Frame_HT w/Foam', "80-012", "84-916", "84-916", "80-105", "", "8000HTX"], ["SA80-144", '1" / 2" Vertical Male-Female Split', "80-113", "84-901", "84-901", "80-106", "", "8000"], ["SA80-144HT", '1" / 2" Vertical Male-Female Split', "80-113", "84-910", "84-910", "80-106", "", "8000HT"], ["SA80-144HTX", '1" / 2" Vertical Male-Female Split Frame_HT w/Foam', "80-013", "84-916", "84-916", "80-106", "", "8000HTX"], ["SA80-145", '2" Vertical Dedicated Jamb Frame', "80-117", "84-901", "84-901", "80-111", "Discontinued - Use SA80-317", "8000"], ["SA80-146", '1" Vertical Dedicated Jamb Frame', "80-113", "84-901", "84-901", "80-114", "Discontinued - Use SA80-124", "8000"], ["SA80-147", '82-114 2" Receptor Head Frame for Exterior Glass PVC Spacer on', "80-125", "84-901", "", "", "", "8000"], ["SA80-148", '1" Horizontal Transom for Exterior Glass', "80-126", "84-901", "84-901", "80-104", "Discontinued - Not Replaced", "8000"], ["SA80-149", '1" Horizontal Transom for Exterior Glass above Spandrels', "80-124", "84-901", "84-901", "80-104", "Discontinued - Use SA80-333", "8000"], ["SA80-150", '1" Horizontal Transom for Exterior Glass below Spandrels', "80-124", "84-901", "84-901", "80-104", "Discontinued - Use SA80-328", "8000"], ["SA80-151", '1" Ext. 1 1/2" Int. Receptor Sill for Aluminum Panels', "80-124", "84-901", "84-901", "80-102", "Discontinued - Use SA80-332", "8000"], ["SA80-152", '1" Ext. 1 1/2" Int. Receptor Sill for', "80-126", "84-901", "84-901", "80-102", "Discontinued - Not Replaced", "8000"], ["SA80-153", '1" Aluminum Curb Sill Vision over', "80-124", "84-901", "84-901", "80-119", "Discontinued - Not Replaced", "8000"], ["SA80-154", '1" Aluminum Curb Sill Vision over', "80-126", "84-901", "84-901", "80-119", "Discontinued - Not Replaced", "8000"], ["SA80-155", '1" Aluminum Curb Sill Above Slab', "", "", "", "80-119", "Discontinued - Use SA80-279", "8000"], ["SA80-156", '1" Vertical Male Split Mullion Frame', "80-127", "84-901", "84-901", "80-105", "Discontinued - Use SA80-206", "8000"], ["SA80-157", 'Glazed and 2" Int. Offset Mullion', "", "84-901", "84-901", "80-106", "Discontinued - Use SA80-322", "8000"], ["SA80-158", '1" Vertical Dedicated Jamb for', "80-127", "84-901", "", "", "", "8000"], ["SA80-159", '1" Vertical with Corner Frame', "80-127", "84-901", "", "", "", "8000"], ["SA80-160", '1" Vertical with Special Hoist Frame', "80-127", "84-901", "", "", "", "8000"], ["SA80-161", '1" Balcony Sill With Tube Interior', "80-043", "84-901", "84-901", "80-104", "", "8000"], ["SA80-161HT", '1" Balcony Sill With Tube Interior', "80-043", "84-910", "84-910", "80-104", "", "8000HT"], ["SA80-161HTX", "Balcony Frame-Built Up Curb at Shear Wall_HT w/Foam", "80-113", "84-916", "84-916", "80-104", "", "8000HTX"], ["SA80-162", '2" Heavy Duty Receptor Head Frame', "80-134", "84-901", "84-901", "80-135", "Discontinued - Use SA80-335", "8000"], ["SA80-163", "Female Split Mullion Removable", "80-136", "84-901", "", "", "", "8000"], ["SA80-164", "Female Split Hi-Brid Mullion", "80-136", "84-901", "", "", "", "8000"], ["SA80-165", "Female / Male Split Mullion", "80-136", "84-901", "", "", "", "8000"], ["SA80-166", "82-114 Frame Head for Shadow Box", "80-125", "84-901", "84-901", "80-055", "Discontinued - Use SA80-336", "8000"], ["SA80-167", "Balcony Sill Frame Exterior", "80-137", "84-901", "84-901", "80-102", "Discontinued - Use SA80-327", "8000"], ["SA80-168", "Balcony Sill Frame Exterior", "80-137", "84-901", "84-901", "80-104", "Discontinued - Not Replaced", "8000"], ["SA80-169", "Balcony Sill Frame Exterior", "80-137", "84-901", "84-901", "80-119", "Discontinued - Use SA80-278", "8000"], ["SA80-170", "Vision", "", "84-901", "84-901", "80-102", "Discontinued - Not Replaced", "8000"], ["SA80-171", 'Tube Balcony Sill for 1 1/2"', "", "84-901", "", "", "", "8000"], ["SA80-172", '1" to 1 1/2" Sill Panel Frame for and Below in By-Pass', "80-126", "84-901", "84-901", "80-063", "Discontinued - Not Replaced", "8000"], ["SA80-173", "Male Split Mullion Panel Frame", "80-127", "84-901", "", "", "", "8000"], ["SA80-174", "Female Split Panel Mullion", "80-136", "84-901", "", "", "", "8000"], ["SA80-175", "Female / Male Split Mullion", "80-136", "84-901", "", "", "", "8000"], ["SA80-176", "Head Frame for", "", "84-901", "", "", "", "8000"], ["SA80-177", "Vertical Corner / Hi-Brid Mullion", "80-122", "84-901", "", "", "", "8000"], ["SA80-178", "Head Frame for", "", "84-901", "", "", "", "8000"], ["SA80-179", "Full Receptor Sill", "", "84-901", "84-901", "80-104", "", "8000"], ["SA80-179HT", "Full Receptor Sill_HT", "", "84-910", "84-910", "80-104", "", "8000HT"], ["SA80-179HTX", "1.000 FULL FRAME BY-PASS SILL_HT w/Foam", "80-133", "84-916", "84-916", "80-104", "", "8000HTX"], ["SA80-180", '1 1/2" Ext. Balcony Sill Frame Spandrel Back pan No Int. Glass Stop Grooves', "80-137", "84-901", "84-901", "80-063", "Discontinued - Use SA80-327", "8000"], ["SA80-181", "By-Pass Tube for Spandrel Head.", "", "", "", "", "Discontinued - Not Replaced", "8000"], ["SA80-182", '1" Horizontal Transom for Vision or applied Glazing Stop', "80-139", "84-901", "84-901", "80-104", "Discontinued - Use SA80-321", "8000"], ["SA80-183", '1" - 1 1/2" Horizontal Split By-Pass for', "80-139", "84-901", "", "", "", "8000"], ["SA80-184", '1" Horizontal Split By-Pass for Vision', "80-139", "84-901", "", "", "", "8000"], ["SA80-185", '1" Horizontal Split By-Pass for Vision', "80-139", "84-901", "", "", "", "8000"], ["SA80-186", '1" Balcony Sill Anchor Base for Applied Glazing Stop', "80-140", "84-901", "84-901", "80-101", "Discontinued - Use SA80-277", "8000"], ["SA80-187", '1" Balcony Sill 1 1/2" Anchor Base for Applied Glazing Stop', "80-140", "84-901", "84-901", "80-063", "Discontinued - Use SA80-274", "8000"], ["SA80-188", '1" Balcony and Built up Curb for Applied Stop', "80-140", "84-901", "84-901", "80-135", "Discontinued - Use SA80-277", "8000"], ["SA80-189", '2" H/Duty Head Frame for Spandrel Alloy', "80-141", "84-901", "84-901", "80-135", "Discontinued - Use SA80-335", "8000"], ["SA80-190", '2" H/Duty Head Frame for Spandrel or Alloy', "80-142", "84-901", "84-901", "80-135", "Discontinued - Use SA80-336", "8000"], ["SA80-191", '2" S/Duty Head Frame for Vision & 82-114 6063-T6 Alloy', "80-048", "84-901", "84-901", "80-103", "Discontinued - Use SA80-335", "8000"], ["SA80-193", '2"/1" S/Duty Head Frame for Vision & 6063-T6 Alloy', "80-005", "84-901", "84-901", "80-101", "Discontinued - Not Replaced", "8000"], ["SA80-194", '1"/1" S/Duty Head Frame for Vision & 6063-T6 Alloy', "80-007", "84-901", "84-901", "80-101", "Discontinued - Not Replaced", "8000"], ["SA80-195", '1" Transom Frame for Panels & Bar 6063-T6 Alloy', "80-007", "84-901", "84-901", "80-143", "", "8000"], ["SA80-195HT", '1" Transom Frame for Panels & Bar 6063-T6 Alloy_HT', "80-007", "84-910", "84-910", "80-143", "", "8000HT"], ["SA80-195HTX", "Horiz. Divider - Back Pan Above/Below_HT w/Foam", "80-007", "84-916", "84-916", "80-143", "", "8000HTX"], ["SA80-196", '2" S/Duty Head Frame for Panels & 6063-T6 Alloy', "80-007", "84-901", "84-901", "80-143", "Discontinued - Use SA80-335", "8000"], ["SA80-197", '2" S/Duty Head Frame for Vision', "80-048", "84-901", "84-901", "80-103", "Discontinued - Use SA80-335", "8000"], ["SA80-198", "94 Cumberland Project 173\xB0 Outside Structural Alloy 173\xB0+/-1\xB0 = 174\xB0-172\xB0", "80-147", "84-901", "84-901", "80-146", "", "8000"], ["SA80-198HT", "94 Cumberland Project 173\xB0 Outside Structural Alloy 173\xB0+/-1\xB0 = 174\xB0-172\xB0_HT", "80-147", "84-910", "84-910", "80-146", "", "8000HT"], ["SA80-198HTX", "Inside 173\xB0 Splayed Female Corner_HT w/Foam", "80-147", "84-916", "84-916", "80-146", "", "8000HTX"], ["SA80-199", "94 Cumberland Project 170\xB0 Outside Structural Alloy 170\xB0+/-1\xB0 = 171\xB0-169\xB0", "80-149", "84-901", "84-901", "80-148", "", "8000"], ["SA80-199HT", "94 Cumberland Project 170\xB0 Outside Structural Alloy 170\xB0+/-1\xB0 = 171\xB0-169\xB0_HT", "80-149", "84-910", "84-910", "80-148", "", "8000HT"], ["SA80-199HTX", "Outside 170\xB0 Splayed Female Corner_HT w/Foam", "80-149", "84-916", "84-916", "80-148", "", "8000HTX"], ["SA80-200", "Block 13 Townhouse Project Bi-Pass", "80-007", "84-901", "84-901", "80-103", "Discontinued - Not Replaced", "8000"], ["SA80-201", "8600 Door Head Transom No Glazing Above", "80-025", "84-901", "84-901", "80-104", "Discontinued - Use SA80-328", "8000"], ["SA80-202", "8600 & 8700 Door Header Receptor Frame Adaptors", "80-151", "84-901", "84-901", "80-135", "Discontinued - Use SA80-336", "8000"], ["SA80-203", "8600 Door Receptor Head Frame for", "80-151", "84-901", "84-901", "80-145", "Discontinued - Use SA80-336", "8000"], ["SA80-204", "8600 Door Head Flat Transom Frame Spandrel Infill", "80-156", "84-901", "84-901", "80-154", "Discontinued - Use SA80-328", "8000"], ["SA80-205", "8600 Door Head Sloping Transom Spandrel Infill", "80-139", "84-901", "84-901", "80-154", "Discontinued - Use SA80-321", "8000"], ["SA80-206", "8600 & 8700 Door Vertical Male 81-128", "80-157", "84-901", "84-901", "80-105", "", "8000"], ["SA80-206HT", "8600 & 8700 Door Vertical Male Transom_HT", "80-157", "84-910", "84-910", "80-105", "", "8000HT"], ["SA80-206HTX", "Door Vert. Male - Vision Above Transom_HT w/Foam", "80-157", "84-916", "84-916", "80-105", "", "8000HTX"], ["SA80-207", "8600 & 8700 Door Vertical Female 180\xB0 +/- 1\xB0 = 181\xB0 - 179\xB0", "80-158", "84-901", "84-901", "80-106", "", "8000"], ["SA80-207HT", "8600 & 8700 Door Vertical Female 180\xB0 +/- 1\xB0 = 181\xB0 - 179\xB0_HT", "80-158", "84-910", "84-910", "80-106", "", "8000HT"], ["SA80-207HTX", "8600 & 8700 Door Vert. Female Mullion_HT w/Foam", "80-158", "84-916", "84-916", "80-106", "", "8000HTX"], ["SA80-208", "8600 & 8700 Door Vertical Corner", "80-152", "84-901", "84-901", "80-107", "", "8000"], ["SA80-208HT", "8600 & 8700 Door Vertical Corner", "80-152", "84-910", "84-910", "80-107", "", "8000HT"], ["SA80-208HTX", "Vert. Door Corner Frame - Vision Above_HT w/Foam", "80-152", "84-916", "84-916", "80-107", "", "8000HTX"], ["SA80-209", "8600 & 8700 Door Vertical Seismic", "80-150", "84-901", "84-901", "80-109", "Discontinued - Use SA80-230", "8000"], ["SA80-210", "8600 & 8700 Door Vertical Hybrid", "80-158", "84-901", "84-901", "80-108", "", "8000"], ["SA80-210HT", "8600 & 8700 Door Vertical Hybrid Transom_HT", "80-158", "84-910", "84-910", "80-108", "", "8000HT"], ["SA80-210HTX", "HI- Brid Vert. Female Vision Above_HT w/Foam", "80-158", "84-916", "84-916", "80-108", "", "8000HTX"], ["SA80-211", '8600 Terrace Door 1 1/2" Balcony Sill', "80-155", "84-901", "84-901", "80-063", "Discontinued - Use SA80-327", "8000"], ["SA80-212", '8600 Terrace Door 1"/ 1 1/2" Stepped Grooves', "80-153", "84-901", "84-901", "80-063", "Discontinued - Use SA80-274", "8000"], ["SA80-213", '8600 Terrace Door 1" Vertical Corner Spandrel In-Fill Above Transom', "80-152", "84-901", "84-901", "80-057", "Discontinued - Use SA80-226", "8000"], ["SA80-214", '8600 Terrace Door 1" Balcony Sill Glazing Leg', "80-153", "84-901", "84-901", "80-119", "Discontinued - Use SA80-277", "8000"], ["SA80-215", '8600 Terrace Door 1 1/2" Balcony Sill Glazing Leg', "80-155", "84-901", "84-901", "80-119", "Discontinued - Use SA80-278", "8000"], ["SA80-216", '8600 Terrace Door 1" Vertical Male Spandrel In-Fill Above Transom', "80-157", "84-901", "84-901", "80-057", "Discontinued - Use SA80-206", "8000"], ["SA80-217", '8600 Terrace Door 2" Vertical Female Spandrel in-Fill Above Transom', "80-158", "84-901", "84-901", "80-059", "Discontinued - Use SA80-207", "8000"], ["SA80-218", '8000 Window Wall 4" Built Up Curb', "83-101", "", "", "83-103", "Discontinued - Use SA80-281", "8000"], ["SA80-219", '8000 Window Wall 4 5/8" Built Up', "83-109", "", "", "83-106", "Discontinued - Use SA80-282", "8000"], ["SA80-220", '8000 Window Wall 4 7/8" Built Up Curb', "83-111", "", "", "83-110", "Discontinued - Use SA80-283", "8000"], ["SA80-221", '8000 Window Wall 4" Built Up Curb', "", "", "", "83-103", "Discontinued - Use SA80-284", "8000"], ["SA80-222", '8000 Window Wall 4 5/8" Built Up Curb', "", "", "", "83-106", "Discontinued - Use SA80-285", "8000"], ["SA80-223", '8000 Window Wall 4 7/8" Built Up Curb', "", "", "", "83-110", "Discontinued - Use SA80-286", "8000"], ["SA80-225", "8000 Window Wall Top BI-Pass Header", "80-008", "84-901", "", "", "", "8000"], ["SA80-226", "8000 Window Wall Inside Corner Male", "80-152", "84-901", "84-901", "80-105", "", "8000"], ["SA80-226HT", "8000 Window Wall Inside Corner Male", "80-152", "84-910", "84-910", "80-105", "", "8000HT"], ["SA80-226HTX", "Inside Corner Male Mullion_HT w/Foam", "80-152", "84-916", "84-916", "80-105", "", "8000HTX"], ["SA80-227", "8000 Window Wall Jay Street Style Flashing & Strap Anchor Application", "80-056", "84-901", "84-901", "80-165", "Discontinued - Not Replaced", "8000"], ["SA80-228", "8000 Window Wall Vision above Panel Area", "80-008", "84-901", "84-901", "80-154", "Discontinued - Use SA80-105", "8000"], ["SA80-229", "82-114 8000 Window Wall Heavy Duty Style Receptor with HD Anchor Application", "80-134", "84-901", "84-901", "80-145", "Discontinued - Use SA80-335", "8000"], ["SA80-230", "8000 Window Wall SEISMIC 2 PC FRAME 6063-T6 Alloy", "80-186", "84-901", "84-901", "80-186", "", "8000"], ["SA80-230HT", "8000 Window Wall SEISMIC 2 PC FRAME 6063-T6 Alloy_HT", "80-186", "84-910", "84-910", "80-186", "", "8000HT"], ["SA80-230HTX", "FEMALE SEISMIC MULLION_HT w/Foam", "80-186", "84-916", "84-916", "80-186", "", "8000HTX"], ["SA80-231", "82-114 8000 Window Wall SPECIAL 81-120 SHADOW BOX APPLICATIONS", "80-125", "84-901", "84-901", "80-154", "Discontinued - Not Replaced", "8000"], ["SA80-233", '2" Vertical Female Split', "80-012", "84-911", "84-911", "80-142", "", "8000"], ["SA80-234", '1" Vertical Female Split', "80-113", "84-911", "84-911", "80-144", "", "8000"], ["SA80-235", "Vertical Female Adaptor", "80-012", "84-911", "84-911", "80-168", "", "8000"], ["SA80-236", '2" Vertical Female Split', "80-158", "84-911", "84-911", "80-142", "", "8000"], ["SA80-237", '1" Vertical Female Split', "80-157", "84-911", "84-911", "80-144", "", "8000"], ["SA80-238", "Vertical Female Adaptor", "80-158", "84-911", "84-911", "80-168", "", "8000"], ["SA80-239", "177\xB0 Female Mullion", "80-221", "84-901", "84-901", "80-222", "", "8000"], ["SA80-240", "", "", "", "", "", "", "8000"], ["SA80-241", "", "", "", "", "", "", "8000HT"], ["SA80-242", "", "", "", "", "", "", "8000HT"], ["SA80-243", "", "", "", "", "", "", "8000HT"], ["SA80-244", "", "", "", "", "", "", "8000HT"], ["SA80-245", "", "", "", "", "", "", "8000HT"], ["SA80-246", "", "", "", "", "", "", "8000HT"], ["SA80-247", "", "", "", "", "", "", "8000HT"], ["SA80-248", "", "", "", "", "", "", "8000HT"], ["SA80-249", "", "", "", "", "", "", "8000HT"], ["SA80-250", "", "", "", "", "", "", "8000HT"], ["SA80-251", '8000 Window Wall 1" Head & Sill', "80-001", "84-901", "84-901", "80-161", "", "8000"], ["SA80-251HT", '8000 Window Wall 1" Head & Sill', "80-001", "84-910", "84-910", "80-161", "", "8000HT"], ["SA80-251HTX", '1" Vision Sill & Curb Frame_HT w/Foam', "80-001", "84-916", "84-916", "80-161", "", "8000HTX"], ["SA80-252", '8000 Window Wall 1 1/2" Head & Sill', "80-003", "84-901", "84-901", "80-162", "", "8000"], ["SA80-252HT", '8000 Window Wall 1 1/2" Head & Sill', "80-003", "84-910", "84-910", "80-162", "", "8000HT"], ["SA80-252HTX", '1 1/2" Panel Sill & Curb Frame_HT w/Foam', "80-003", "84-916", "84-916", "80-162", "", "8000HTX"], ["SA80-253", '8000 Window Wall 2" Head Receptor', "80-034", "84-901", "84-901", "80-164", "Discontinued - Use SA80-335", "8000"], ["SA80-254", '8000 Window Wall 1" 90\xB0 Corner 81-129 Glass', "80-169", "84-901", "84-901", "80-107", "", "8000"], ["SA80-254HT", '8000 Window Wall 1" 90\xB0 Corner Glass_HT', "80-169", "84-910", "84-910", "80-107", "", "8000HT"], ["SA80-254HTX", '1" Corner Snap on Vertical Frame_HT w/Foam', "80-169", "84-916", "84-916", "80-107", "", "8000HTX"], ["SA80-255", 'Straight TOS Frame 1.5"', "80-007", "84-901", "84-901", "80-162", "", "8000"], ["SA80-255HT", 'Straight TOS Frame 1.5"', "80-007", "84-910", "84-910", "80-162", "", "8000HT"], ["SA80-255HTX", 'Straight TOS Frame 1.5" Backsection_HT w/Foam', "80-007", "84-916", "84-916", "80-162", "", "8000HTX"], ["SA80-256", '8000 Window Wall 1" Sloping Split over Spandrel & Panels', "80-008", "84-901", "84-901", "80-162", "", "8000"], ["SA80-256HT", '8000 Window Wall 1" Sloping Split over Spandrel & Panels_HT', "80-008", "84-910", "84-910", "80-162", "", "8000HT"], ["SA80-256HTX", "Sloped By-Pass Sill Vision Frame_HT w/Foam", "80-008", "84-916", "84-916", "80-162", "", "8000HTX"], ["SA80-257", '8000 Window Wall Offset 1" Balcony to', "80-043", "84-901", "84-901", "80-162", "", "8000"], ["SA80-257HT", '8000 Window Wall Offset 1" Balcony to above_HT', "80-043", "84-910", "84-910", "80-162", "", "8000HT"], ["SA80-257HTX", 'Offset 1" Balcony Sill to 1 1/2" Int_HT w/Foam', "80-043", "84-916", "84-916", "80-162", "", "8000HTX"], ["SA80-258", '8000 Window Wall 1" Balcony Anchor', "80-043", "84-901", "84-901", "80-161", "", "8000"], ["SA80-258HT", '8000 Window Wall 1" Balcony Anchor', "80-043", "84-910", "84-910", "80-161", "", "8000HT"], ["SA80-258HTX", '1" Balcony Sill Frame_HT w/Foam', "80-043", "84-916", "84-916", "80-161", "", "8000HTX"], ["SA80-259", '8000 Window Wall 1" Split BI-Pass Spandrel & Panels', "80-007", "84-901", "84-901", "80-161", "", "8000"], ["SA80-259HT", '8000 Window Wall 1" Split BI-Pass Spandrel & Panels_HT', "80-007", "84-910", "84-910", "80-161", "", "8000HT"], ["SA80-259HTX", '1" Sill Flat By-Pass Vision Curb Frame_HT w/Foam', "80-007", "84-916", "84-916", "80-161", "", "8000HTX"], ["SA80-260", '8000 Window Wall 1" Sloping Split Spandrel & Panels', "80-008", "84-901", "84-901", "80-161", "", "8000"], ["SA80-260HT", '8000 Window Wall 1" Sloping Split Spandrel & Panels_HT', "80-008", "84-910", "84-910", "80-161", "", "8000HT"], ["SA80-260HTX", '1" Sill Sloped By-Pass Vision Curb Frame_HT w/Foam', "80-008", "84-916", "84-916", "80-161", "", "8000HTX"], ["SA80-261", '8000 Window Wall 1 1/2" Balcony Sill', "80-045", "84-901", "84-901", "80-162", "", "8000"], ["SA80-261HT", '8000 Window Wall 1 1/2" Balcony Sill', "80-045", "84-910", "84-910", "80-162", "", "8000HT"], ["SA80-261HTX", '1 1/2 " Balcony Curb Sill_HT w/Foam', "80-045", "84-916", "84-916", "80-162", "", "8000HTX"], ["SA80-262", "8000 Window Wall Offset Balcony Sill", "80-045", "84-901", "84-901", "80-161", "", "8000"], ["SA80-262HT", "8000 Window Wall Offset Balcony Sill", "80-045", "84-910", "84-910", "80-161", "", "8000HT"], ["SA80-262HTX", 'OFFSET 1 1/2 " Balcony Curb to 1" Int Sill_HT w/Foam', "80-045", "84-916", "84-916", "80-161", "", "8000HTX"], ["SA80-263", "8000 Window Wall Split BI-Pass Sill", "80-007", "84-901", "84-901", "80-163", "Discontinued - Use SA80-255", "8000"], ["SA80-264", "8000 Window Wall Full BI-Pass Sill Panels", "", "", "", "80-163", "Discontinued - Use SA80-280", "8000"], ["SA80-265", '8000 Window Wall 1" Perimeter Head', "80-001", "84-901", "84-901", "80-159", "Discontinued - Use SA80-251", "8000"], ["SA80-266", "8000 Window Wall Offset Balcony Sill", "80-043", "84-901", "84-901", "80-163", "Discontinued - Use SA80-257", "8000"], ["SA80-267", '8000 Window Wall 1 1/2" Balcony Sill', "80-045", "84-901", "84-901", "80-163", "Discontinued - Use SA80-261", "8000"], ["SA80-268", "8000 Window Wall Split BI-Pass Sill", "80-008", "84-901", "84-901", "80-163", "Discontinued - Use SA80-256", "8000"], ["SA80-269", '8000 Window Wall Full BI-Pass Sill 1"', "", "", "", "80-159", "Discontinued - Use SA80-279", "8000"], ["SA80-270", "8000 Window Wall Receptor Head Ext. 82-114 Screw Port Adaptor", "80-134", "84-901", "84-901", "80-165", "Discontinued - Use SA80-335", "8000"], ["SA80-271", '8000 Window Wall 1" Balcony Sill Panels', "80-043", "84-901", "84-901", "80-159", "Discontinued - Use SA80-258", "8000"], ["SA80-272", '8000 Window Wall 2" Receptor Head Vision Glass', "80-151", "84-901", "84-901", "80-164", "Discontinued - Use SA80-336", "8000"], ["SA80-273", '8000 Window Wall 2" Receptor Head Spandrel & Panels', "80-151", "84-901", "84-901", "80-165", "Discontinued - Use SA80-336", "8000"], ["SA80-274", '8000 Window Wall Off Set 1" Balcony Stop for Vision & Built up Curb', "80-043", "84-901", "84-901", "80-162", "", "8000"], ["SA80-274HT", '8000 Window Wall Off Set 1" Balcony Stop for Vision & Built up Curb_HT', "80-043", "84-910", "84-910", "80-162", "", "8000HT"], ["SA80-274HTX", 'Door Offset 1" - 1 1/2" Balcony Vision Sill_HT w/Foam', "80-153", "84-916", "84-916", "80-162", "", "8000HTX"], ["SA80-275", '8000 Window Wall 1 1/2" Balcony Sill Spandrels & Built up Curb', "80-155", "84-901", "84-901", "80-163", "Discontinued - Use SA80-327", "8000"], ["SA80-276", '8000 Window Wall Off Set 1" Balcony Stop for Spandrels & Built up Curb', "80-153", "84-901", "84-901", "80-163", "Discontinued - Use SA80-274", "8000"], ["SA80-277", '8000 Window Wall 1" Balcony Sill Vision & Built up Curb', "80-153", "84-901", "84-901", "80-161", "", "8000"], ["SA80-277HT", '8000 Window Wall 1" Balcony Sill Vision & Built up Curb_HT', "80-153", "84-910", "84-910", "80-161", "", "8000HT"], ["SA80-277HTX", 'Vision 1" Balcony Vision Sill_HT w/Foam', "80-153", "84-916", "84-916", "80-161", "", "8000HTX"], ["SA80-278", '8000 Window Wall Off Set 1 1/2" Glass Stop for Vision & Built up Curb', "80-155", "84-901", "84-901", "80-161", "", "8000"], ["SA80-278HT", '8000 Window Wall Off Set 1 1/2" Glass Stop for Vision & Built up Curb_HT', "80-155", "84-910", "84-910", "80-161", "", "8000HT"], ["SA80-278HTX", 'Door Offset 1 1/2" - 1" Balcony Vision Sill_HT w/Foam', "80-155", "84-916", "84-916", "80-161", "", "8000HTX"], ["SA80-280", '8000 Window Wall 1 1/2" Int. Anchor', "", "", "", "80-162", "", "8000"], ["SA80-281", '8000 Window Wall Built up 4" Curb', "83-131", "", "", "83-132", "", "8000"], ["SA80-281HT", "8000 Window Wall Built up", "83-131", "", "", "83-132", "", "8000HT"], ["SA80-282", '8000 Window Wall Built Up 4 5/8" Curb', "83-133", "", "", "83-109", "", "8000"], ["SA80-282HT", "8000 Window Wall Built", "83-133", "", "", "83-109", "", "8000HT"], ["SA80-283", '8000 Window Wall Built up 4 7/8" Curb', "83-134", "", "", "83-111", "", "8000"], ["SA80-283HT", "8000 Window Wall Built up", "83-134", "", "", "83-111", "", "8000HT"], ["SA80-284", "8000 Window Wall", "", "", "", "83-132", "", "8000"], ["SA80-285", "8000 Window Wall", "", "", "", "83-109", "", "8000"], ["SA80-286", "8000 Window Wall", "", "", "", "83-111", "", "8000"], ["SA80-287", "8000 Window Wall 90\xB0 Corner Mullion", "80-169", "84-901", "84-901", "80-178", "", "8000"], ["SA80-288", "8000 Window Wall 90\xB0 Corner HI-Brid for", "80-169", "84-901", "", "", "", "8000"], ["SA80-288HTX", "8000 90\xB0 HI-BRID CORNER ASSEMBLY_HT w/Foam", "80-169", "84-916", "84-916", "80-108", "", "8000HTX"], ["SA80-289", '8000 Window Wall 1" Flat Split Sill', "80-007", "84-901", "84-901", "80-159", "Discontinued - Use SA80-255", "8000"], ["SA80-290", '8000 Window Wall 1" Sloped Split Sill', "80-008", "84-901", "84-901", "80-159", "Discontinued - Use SA80-260", "8000"], ["SA80-291", "8000 Window Wall Dedicated Full Frames", "80-113", "84-901", "84-901", "80-057", "Discontinued - Use SA80-106", "8000"], ["SA80-292", "8000 Window Wall Dedicated Full Louvre Frames", "80-012", "84-901", "84-901", "80-059", "Discontinued - Use SA80-107", "8000"], ["SA80-293", '8000 Window Wall 1" - 1 1/2" Offset Panels', "80-156", "84-901", "84-901", "80-163", "Discontinued - Not Replaced", "8000"], ["SA80-294", '8000 Window Wall 1" - 1 1/2" Offset Panels', "80-160", "84-901", "84-901", "80-162", "Discontinued - Not Replaced", "8000"], ["SA80-295", '8000 Window Wall Offset 1" - 1 1/2"', "80-124", "84-901", "", "", "", "8000"], ["SA80-296", '8000 Window Wall Offset 1" - 1 1/2"', "80-126", "84-901", "", "", "", "8000"], ["SA80-297", "Glazed Ave. Road 90\xB0 corner frame", "", "84-901", "84-901", "80-161", "Discontinued - Use SA80-333", "8000"], ["SA80-298", "Glazed 21 Ave. Road 90\xB0 corner frame", "", "84-901", "84-901", "80-161", "Discontinued - Not Replaced", "8000"], ["SA80-299", "Glazed 21 Ave. Road 90\xB0 corner frame", "", "84-901", "84-901", "80-161", "Discontinued - Use SA80-277", "8000"], ["SA80-300", '8000 Window Wall 1 1/2" Exterior frames 21 Ave. Road 90\xB0 corner frame', "80-137", "84-901", "84-901", "80-162", "Discontinued - Use SA80-327", "8000"], ["SA80-301", '8000 Window Wall 1 1/2" - 1" Offset 21 Ave. Road 90\xB0 corner frame', "80-137", "84-901", "84-901", "80-161", "Discontinued - Use SA80-278", "8000"], ["SA80-302", '8000 Window Wall 1" - 1 1/2" Offset 21 Ave. Road 90\xB0 corner frame', "80-124", "84-901", "84-901", "80-162", "Discontinued - Not Replaced", "8000"], ["SA80-303", '8000 Window Wall 1" - 1 1/2" Offset Panels', "80-139", "84-901", "84-901", "80-162", "Discontinued - Not Replaced", "8000"], ["SA80-304", '8000 Window Wall 1" Sloping Panels', "80-139", "84-901", "84-901", "80-161", "Discontinued - Not Replaced", "8000"], ["SA80-305", '8000 Window Wall Offset 1" - 1 1/2"', "80-124", "84-901", "", "", "", "8000"], ["SA80-306", '8000 Window Wall Offset 1" - 1 1/2"', "80-126", "84-901", "", "", "", "8000"], ["SA80-307", '8000 Window Wall 1" - 1 1/2" Exterior Aluminum 21 Ave. Road 90\xB0 corner', "80-140", "84-901", "84-901", "80-163", "Discontinued - Use SA80-274 frame", "8000"], ["SA80-308", '8000 Window Wall 1 1/2" Exterior Spandrel Panels 21 Ave. Road', "80-137", "84-901", "84-901", "80-163", "Discontinued - Not Replaced", "8000"], ["SA80-309", '8000 Window Wall 2" - 1" Offset Head', "80-134", "84-901", "84-901", "80-161", "Discontinued - Not Replaced", "8000"], ["SA80-310", '8000 Window Wall 1 1/2" Exterior frames 21 Ave. Road 90\xB0 corner frame', "80-007", "84-901", "84-901", "80-161", "Discontinued - Not Replaced", "8000"], ["SA80-311", '8000 Window Wall 1" Horizontal frames Flat underside no glazing', "80-007", "84-901", "84-901", "80-154", "Discontinued - Use SA80-278grooves", "8000"], ["SA80-312", "8000 Window Wall PROPOSED NEW", "80-169", "84-901", "", "", "", "8000"], ["SA80-313", '8000 Window Wall 1" Horizontal Top', "80-160", "84-901", "84-901", "80-161", "Discontinued - Not Replaced", "8000"], ["SA80-314", '8000 Window Wall 1" Horizontal Head', "80-124", "84-901", "84-901", "80-161", "Discontinued - Not Replaced", "8000"], ["SA80-315", "8000 Window Wall 175\xB0 OUTSIDE POSSIBLE FIRST USED ON 600 WALL PROJECT 175\xB0+/- 1\xB0=176\xB0-174\xB0", "80-171", "84-901", "84-901", "80-170", "", "8000"], ["SA80-315HT", "8000 Window Wall 175\xB0 OUTSIDE POSSIBLE 175\xB0+/- 1\xB0=176\xB0-174\xB0_HT", "80-171", "84-910", "84-910", "80-170", "", "8000HT"], ["SA80-315HTX", "175\xB0 Outside Splayed Female Mullion_HT w/Foam", "80-171", "84-916", "84-916", "80-170", "", "8000HTX"], ["SA80-316", "8000 Window Wall 173\xB0 OUTSIDE POSSIBLE FIRST USED ON KODA PROJECT 173\xB0 +/- 1\xB0 = 174\xB0 - 172\xB0", "80-188", "84-901", "84-901", "80-187", "", "8000"], ["SA80-316HT", "8000 Window Wall 173\xB0 OUTSIDE POSSIBLE 173\xB0 +/- 1\xB0 = 174\xB0 - 172\xB0_HT", "80-188", "84-910", "84-910", "80-187", "", "8000HT"], ["SA80-316HTX", "173\xB0 Outside Splayed Female Mullion_HT w/Foam", "80-188", "84-916", "84-916", "80-187", "", "8000HTX"], ["SA80-317", '8000 Window Wall 2" VERTICAL OPEN INSTALLATION FIRST USED ON PJ CONDOS ANGLED WINDOW WALL', "80-196", "84-901", "84-901", "80-195", "", "8000"], ["SA80-317HT", '8000 Window Wall 2" VERTICAL OPEN INSTALLATION USED ON PJ CONDO ANGLED WINDOW WALL_HT', "80-196", "84-910", "84-910", "80-195", "", "8000HT"], ["SA80-317HTX", '2" OPEN BACK PRECAST JAMB FRAME_HT w/Foam', "80-196", "84-918", "84-918", "80-195", "", "8000HTX"], ["SA80-318", "8000 Window Wall 150.3\xB0 VERTICAL PJ CONDOS ANGLED BALCONY WINDOW WALL", "80-190", "84-901", "84-901", "80-189", "", "8000"], ["SA80-318HT", "8000 Window Wall 150.3\xB0 VERTICAL PJ CONDOS ANGLED BALCONY WINDOW WALL_HT", "80-190", "84-910", "84-910", "80-189", "", "8000HT"], ["SA80-319", "8000 Window Wall 165.65\xB0 Sloping USED ON PJ CONDOS ANGLED WINDOW WALL", "80-192", "84-901", "84-901", "80-191", "", "8000"], ["SA80-319HT", "8000 Window Wall 165.65\xB0 Sloping USED ON PJ CONDOS ANGLED WINDOW WALL_HT", "80-192", "84-910", "84-910", "80-191", "", "8000HT"], ["SA80-320", '8000 Window Wall 2" CLOSED HEAD INSTALLATION FIRST USED ON PJ CONDOS PUNCHED WINDOWS', "80-198", "84-901", "84-901", "80-197", "", "8000"], ["SA80-320HT", '8000 Window Wall 2" CLOSED HEAD INSTALLATION FIRST USED ON PJ CONDOS PUNCHED WINDOWS_HT', "80-198", "84-910", "84-910", "80-197", "", "8000HT"], ["SA80-320HTX", '2" CLOSED PRECAST HEADER FRAME_HT w/Foam', "80-198", "84-918", "84-918", "80-197", "", "8000HTX"], ["SA80-321", "Sloped Horizontal Mullion No Glazing", "80-160", "84-901", "84-901", "80-104", "", "8000"], ["SA80-321HT", "Sloped Horizontal Mullion No Glazing", "80-160", "84-910", "84-910", "80-104", "", "8000HT"], ["SA80-321HTX", "Sloped Transom Vision / Insert Frame_HT w/Foam", "80-160", "84-916", "84-916", "80-104", "", "8000HTX"], ["SA80-322", "Split Vertical Male / Female Mullion No", "80-157", "84-901", "84-901", "80-106", "", "8000"], ["SA80-322HT", "Split Vertical Male / Female Mullion No", "80-157", "84-910", "84-910", "80-106", "", "8000HT"], ["SA80-322HTX", '1" Vertical Offset Split Mullion Male/Female_HT w/Foam', "80-157", "84-916", "84-916", "80-106", "", "8000HTX"], ["SA80-323", "Split Vertical Female / Male Mullion No", "80-158", "84-901", "84-901", "80-105", "", "8000"], ["SA80-323HT", "Split Vertical Female / Male Mullion No", "80-158", "84-910", "84-910", "80-105", "", "8000HT"], ["SA80-323HTX", '1" Vert. Offset Split Mullion Female/Male_HT w/Foam', "80-158", "84-916", "84-916", "80-105", "", "8000HTX"], ["SA80-324", 'Straight TOS Frame with 1.00" Interior', "80-160", "84-901", "84-901", "80-161", "Discontinued - Not Replaced", "8000"], ["SA80-325", 'Straight TOS Frame with 1.50" Interior 80-162', "80-007", "84-901", "84-901", "80-162", "Discontinued - use SA80-255", "8000"], ["SA80-326", 'Straight TOS Frame with 1.50" Int No 80-162', "80-156", "84-901", "84-901", "80-162", "Discontinued - Not Replaced", "8000"], ["SA80-327", 'Balcony Sill Frame 1.500" No Glazing 80-162', "80-155", "84-901", "84-901", "80-162", "", "8000"], ["SA80-327HT", 'Balcony Sill Frame 1.500" No Glazing', "80-155", "84-910", "84-910", "80-162", "", "8000HT"], ["SA80-327HTX", 'No Leg Door 1 1/2" Balcony Sill_HT w/Foam', "80-155", "84-916", "84-916", "80-162", "", "8000HTX"], ["SA80-328", "Straight Horizontal Mullion No Glazing", "80-156", "84-901", "84-901", "80-104", "", "8000"], ["SA80-328HT", "Straight Horizontal Mullion No Glazing", "80-156", "84-910", "84-910", "80-104", "", "8000HT"], ["SA80-328HTX", "Straight Transom Vision / Insert Frame_HT w/Foam", "80-156", "84-916", "84-916", "80-104", "", "8000HTX"], ["SA80-331", "Straight No Top Leg TOS Frame", "80-167", "84-901", "84-901", "80-161", "", "8000"], ["SA80-331HT", "Straight No Top Leg TOS Frame", "80-167", "84-910", "84-910", "80-161", "", "8000HT"], ["SA80-331HTX", 'Straight No Top Leg TOS Frame with 1.00" Int_HT w/Foam', "80-167", "84-916", "84-916", "80-161", "", "8000HTX"], ["SA80-332", "Straight No Top Leg TOS Frame", "80-167", "84-901", "84-901", "80-162", "", "8000"], ["SA80-332HT", "Straight No Top Leg TOS Frame", "80-167", "84-910", "84-910", "80-162", "", "8000HT"], ["SA80-332HTX", 'Straight No Top Leg TOS Frame with 1.50" Int_HT w/Foam', "80-167", "84-916", "84-916", "80-162", "", "8000HTX"], ["SA80-333", "Straight Horizontal Mullion No Top Leg", "80-167", "84-901", "84-901", "80-104", "", "8000"], ["SA80-333HT", "Straight Horizontal Mullion No Top", "80-167", "84-910", "84-910", "80-104", "", "8000HT"], ["SA80-333HTX", "Straight Horizontal Mullion No Top Leg_HT w/Foam", "80-167", "84-916", "84-916", "80-104", "", "8000HTX"], ["SA80-334", '3" I-Mullion Vertical for 10" Accent Cap', "80-200", "84-901", "84-901", "80-199", "", "8000"], ["SA80-334HT", '3" I-Mullion Vertical for 10" Accent', "80-200", "84-910", "84-910", "80-199", "", "8000HT"], ["SA80-334HTX", '3" I-Mullion Vertical for 10" Accent Cap_HT w/Foam', "80-200", "84-916", "84-916", "80-199", "", "8000HTX"], ["SA80-335", '2" Precast Header Frame With Leg', "80-193", "84-901", "84-901", "80-197", "", "8000"], ["SA80-335HT", '2" Precast Header Frame With', "80-193", "84-910", "84-910", "80-197", "", "8000HT"], ["SA80-335HTX", '2" Standard Header Frame with Leg_HT w/Foam', "80-193", "84-918", "84-918", "80-197", "", "8000HTX"], ["SA80-336", '2" Precast Header Frame No Leg', "80-194", "84-901", "84-901", "80-197", "", "8000"], ["SA80-336HT", '2" Precast Header Frame No', "80-194", "84-910", "84-910", "80-197", "", "8000HT"], ["SA80-336HTX", '2" Standard Header Frame No Leg_HT w/Foam', "80-194", "84-918", "84-918", "80-197", "", "8000HTX"], ["SA80-337", "Special Sill at Shear Wall Base", "80-133", "84-901", "84-901", "80-162", "", "8000"], ["SA80-337HTX", "Special Sill at Shear Wall Base_HT w/Foam", "80-133", "84-916", "84-916", "80-162", "", "8000HTX"], ["SA80-338", "Reverse Bypass Head Frame", "80-007", "84-901", "84-901", "80-205", "", "8000"], ["SA80-338HTX", 'Reverse Bypass Head Frame 2" Header_HT w/Foam', "80-007", "84-916", "84-916", "80-205", "", "8000HTX"], ["SA80-339", 'Precast Head Frame 1.5" Exterior', "80-003", "84-901", "84-901", "80-205", "", "8000"], ["SA80-339HT", 'Precast Head Frame 1.5" Exterior', "80-003", "84-910", "84-910", "80-205", "", "8000HT"], ["SA80-339HTX", 'Precast Head Frame 1.5" Ext / 2" Int_HT w/Foam', "80-003", "84-916", "84-916", "80-205", "", "8000HTX"], ["SA80-340", '1" Horizontal Mullion With No Exterior', "", "", "", "80-104", "", "8000"], ["SA80-341", "Straight NO Top Leg TOS Frame with", "80-167", "84-901", "84-901", "80-205", "", "8000"], ["SA80-341HT", "Straight NO Top Leg TOS Frame with", "80-167", "84-910", "84-910", "80-205", "", "8000HT"], ["SA80-341HTX", 'Straight No Top Leg TOS Frame with 2.00" Int_HT w/Foam', "80-167", "84-916", "84-916", "80-205", "", "8000HTX"], ["SA80-343", '1" Sill Frame, for HDuty sill anchor and', "80-133", "84-901", "84-901", "80-161", "", "8000"], ["SA80-343HT", '1" Sill Frame, for HDuty sill anchor exterior_HT', "80-133", "84-910", "84-910", "80-161", "", "8000HT"], ["SA80-343HTX", '1" H/DUTY SILL ANCHOR FRAME_HT w/Foam', "80-133", "84-916", "84-916", "80-161", "", "8000HTX"], ["SA80-344", '6 1/4" (159mm) Full built up curb sill of extrusion, not including clearance to slab or horizontal member above.', "83-148", "", "", "83-147", "", "8000"], ["SA80-346", 'Precast Head Frame 1.5" Closed', "80-211", "84-901", "84-901", "80-212", "", "8000"], ["SA80-346HT", 'Precast Head Frame 1.5"', "80-211", "84-910", "84-910", "80-212", "", "8000HT"], ["SA80-346HTX", 'Precast Head Frame 1.5" Closed_HT w/Foam', "80-211", "84-916", "84-916", "80-212", "", "8000HTX"], ["SA80-347", 'Precast Head Frame 1.5" Ext Closed', "80-211", "84-901", "84-901", "80-213", "", "8000"], ["SA80-347HT", 'Precast Head Frame 1.5" Ext Closed', "80-211", "84-910", "84-910", "80-213", "", "8000HT"], ["SA80-347HTX", 'Precast Head Frame 1.5" Ext Closed / 2" Int Closed_HT w/Foam', "80-211", "84-916", "84-916", "80-213", "", "8000HTX"], ["SA80-348", "Slim Line 90\xB0 Corner Female Assembly", "80-174", "84-901", "84-901", "80-175", "", "8000"], ["SA80-348HT", "Slim Line 90\xB0 Corner Female", "80-174", "84-910", "84-910", "80-219", "", "8000HT"], ["SA80-349", "Slim Line 90\xB0 Corner Male Assembly", "80-176", "84-901", "84-901", "80-177", "", "8000"], ["SA80-349HT", "Slim Line 90\xB0 Corner Male", "80-176", "84-910", "84-910", "80-218", "", "8000HT"], ["SA80-350", "", "80-158", "84-901", "84-901", "80-141", "", "8000"], ["SA80-351", "Ext Closed Bottom Door Offset", "80-180", "84-901", "84-901", "80-162", "", "8000"], ["SA80-351HT", "Ext Closed Bottom Door Offset", "80-180", "84-910", "84-910", "80-162", "", "8000HT"], ["SA80-351HTX", "Ext Clsd Bttm Door Off 1\u201D-1.5\u201D Bal Visi Sill_HT w/Foam", "80-180", "84-916", "84-916", "80-162", "", "8000HTX"], ["SA80-352", "Ext Vision 1\u201D Closed Bottom", "80-180", "84-901", "84-901", "80-161", "", "8000"], ["SA80-352HT", "Ext Vision 1\u201D Closed Bottom", "80-180", "84-910", "84-910", "80-161", "", "8000HT"], ["SA80-352HTX", "Ext Vision 1\u201D Closed Bttm Balcony Visn Sill_HT w/Foam", "80-180", "84-916", "84-916", "80-161", "", "8000HTX"], ["SA80-353", "Ext Closed Bottom Door Offset", "80-181", "84-901", "84-901", "80-161", "", "8000"], ["SA80-353HT", "Ext Closed Bottom Door Offset", "80-181", "84-910", "84-910", "80-161", "", "8000HT"], ["SA80-353HTX", "Ext Clsd Bttm Door Off 1.5\u201D-1\u201D Bal Visn Sill_HT w/Foam", "80-181", "84-916", "84-916", "80-161", "", "8000HTX"], ["SA80-354", "Ext Closed bottom no leg Door", "80-181", "84-901", "84-901", "80-162", "", "8000"], ["SA80-354HT", "Ext Closed bottom no leg Door", "80-181", "84-910", "84-910", "80-162", "", "8000HT"], ["SA80-354HTX", "Ext Clsd Bttm no leg Door 1-1/2\u201D Blcny Sill_HT w/Foam", "80-181", "84-916", "84-916", "80-162", "", "8000HTX"], ["SA80-355", '1" Balcony Sill for gasket or caulking', "80-180", "", "", "", "", "8000"], ["SA80-355HT", "177\xB0 Female Mullion", "80-221", "84-910", "84-910", "80-222", "", "8000HT"], ["SA80-355HTX", "177\xB0 Female Mullion w/Foam", "80-221", "84-916", "84-916", "80-222", "", "8000HTX"], ["SA80-356", '1.5" Balcony Sill for gasket or caulking', "80-181", "", "", "", "", "8000"], ["SA80-356HT", "Female for CW/ WW Transistion", "80-158", "84-910", "84-910", "80-141", "", "8000HT"], ["SA80-357", "Ext Parapet Female Split Million", "80-201", "", "", "", "", "8000"], ["SA80-358", "Ext Parapet Male Split Mullion", "80-202", "", "", "", "", "8000"], ["SA80-359", "Parapet Ext Mullion", "80-203", "", "", "", "", "8000"], ["SA80-360", "Parapet Ext Adaptor Mullion", "80-204", "", "", "", "", "8000"], ["SA80-361", "I-Mullion Frame for Fins", "80-207", "84-901", "84-901", "80-206", "", "8000"], ["SA80-362", "6mm Monolithic Spandrel ISV Glazing", "80-182", "", "", "", "", "8000"], ["SA80-363", "ISV In-Slab Vent Bypass Sill Frame", "80-183", "", "", "", "", "8000"], ["SA80-364", "IGU Spandrel ISV Glazing Stop Base", "80-184", "", "", "", "", "8000"], ["SA80-366", "173\xB0 Hybrid Male Vertical Mullion", "80-188", "84-901", "84-901", "80-105", "", "8000"], ["SA80-367", "173\xB0 Hybrid Female Vertical Mullion", "80-113", "84-901", "84-901", "80-187", "", "8000"], ["SA80-368", "175\xB0 Hybrid Male Vertical Mullion", "80-171", "84-901", "84-901", "80-105", "", "8000"], ["SA80-369", "175\xB0 Hybrid Female Vertical Mullion", "80-113", "84-901", "84-901", "80-170", "", "8000"], ["SA80-370", "170\xB0 Hybrid Male Vertical Mullion", "80-149", "84-901", "84-901", "80-105", "", "8000"], ["SA80-371", "170\xB0 Hybrid Female Vertical Mullion", "80-113", "84-901", "84-901", "80-148", "", "8000"], ["SA80-372", "In slab vent Upper Horizontal Frame 80-216 Upper T-Break Lower T-Break Interior", "80-216", "", "", "", "", "8000"], ["SA80-373", "8000 series Lower ISV Frame 80-217 Upper T-Break Lower T-Break Interior", "80-217", "", "", "", "", "8000"], ["SA82-101", "Standard Duty Head Receptor Frame", "82-021", "84-901", "84-901", "82-039", "Discontinued - Use SA82-105", "8200"], ["SA82-102", "Heavy Duty Head Receptor Frame", "82-021", "84-901", "84-901", "82-037", "Discontinued - Use SA82-106", "8200"], ["SA82-103", "Ellipse Standard Duty Head Receptor", "82-021", "84-901", "84-901", "82-045", "Discontinued - Not Replaced", "8200"], ["SA82-104", "Reverse Standard Duty Head Receptor applications", "82-043", "84-901", "84-901", "82-044", "", "8200"], ["SA82-104HT", "S/Duty Reverse Receptor", "82-043", "84-910", "94-910", "82-044", "", "8200HT"], ["SA82-104HTX", "S/Duty Reverse Receptor", "82-043", "84-916", "94-910", "82-044", "", "8200HTX"], ["SA82-105", "Standard Duty Hammer In", "82-116", "84-901", "84-901", "82-117", "", "8200"], ["SA82-105HT", "Standard Duty Hammer In", "82-116", "84-910", "84-910", "82-117", "", "8200HT"], ["SA82-105HTX", "Standard Duty Hammer In", "82-116", "84-916", "84-910", "82-117", "", "8200HTX"], ["SA82-106", "Heavy Duty Hammer In", "82-116", "84-901", "84-901", "82-119", "", "8200"], ["SA82-106HT", "Heavy Duty Hammer In", "82-116", "84-910", "84-910", "82-119", "", "8200HT"], ["SA82-106HTX", "Heavy Duty Hammer In", "82-116", "84-916", "84-910", "82-119", "", "8200HTX"], ["SA82-107", "Standard Duty Hammer In Seismic", "82-019", "", "84-902", "82-051", "Discontinued - Use SA82-109", "8200"], ["SA82-108", "Standard Duty Hammer In", "82-003", "84-901", "84-901", "82-004", "", "8200"], ["SA82-108HT", "Typical Hammer In Jamb", "82-003", "84-910", "84-910", "82-004", "", "8200HT"], ["SA82-108HTX", "Typical Hammer In Jamb", "82-003", "84-916", "84-910", "82-004", "", "8200HTX"], ["SA82-109", "PROPOSED NEW Standard Duty", "82-129", "84-901", "84-901", "82-130", "", "8200"], ["SA82-109HT", "NEW Seismic Hammer In Jamb", "82-129", "84-910", "84-910", "82-130", "", "8200HT"], ["SA82-109HTX", "NEW Seismic Hammer In Jamb", "82-129", "84-916", "84-910", "82-130", "", "8200HTX"], ["SA82-110", "Head Receptor", "82-181", "84-901", "84-901", "82-182", "", "8200"], ["SA82-110HTX", "Head Receptor", "82-181", "84-916", "84-910", "82-182", "", "8200HTX"], ["SA83-001", '3" Built Up Curb Assembly', "83-165", "", "", "83-165", "", "8300"], ["SA83-001HT", '3" Built Up Curb Assembly', "83-165", "", "", "83-165", "", "8300HT"], ["SA83-002", '3" Split Built Up Curb Assembly', "", "", "", "83-165", "", "8300"], ["SA83-002HT", '3" Split Built Up Curb Assembly', "", "", "", "83-165", "", "8300HT"], ["SA83-003", '4" Built Up Curb Assembly', "83-166", "", "", "83-166", "", "8300"], ["SA83-003HT", '4" Built Up Curb Assembly', "83-166", "", "", "83-166", "", "8300HT"], ["SA83-004", '4" Split Built Up Curb Assembly', "", "", "", "83-166", "", "8300"], ["SA83-004HT", '4" Split Built Up Curb Assembly', "", "", "", "83-166", "", "8300HT"], ["SA83-005", '5" Built Up Curb Assembly', "83-167", "", "", "83-167", "", "8300"], ["SA83-005HT", '5" Built Up Curb Assembly', "83-167", "", "", "83-167", "", "8300HT"], ["SA83-006", '5" Split Built Up Curb Assembly', "", "", "", "83-167", "", "8300"], ["SA83-006HT", '5" Split Built Up Curb Assembly', "", "", "", "83-167", "", "8300HT"], ["SA83-007", '4" Ext 3" Int Split Built Up Curb', "83-166", "", "", "83-165", "", "8300"], ["SA83-007HT", '4" Ext 3" Int Split Built Up Curb', "83-166", "", "", "83-165", "", "8300HT"], ["SA83-108HT", "", "", "", "", "", "", "8300HT"], ["SA83-109HT", "", "", "", "", "", "", "8300HT"], ["SA83-110HT", "", "", "", "", "", "", "8300HT"], ["SA85-101", "8500 Series Out Swing Vent Frame", "85-101", "84-905", "84-905", "85-102", "Discontinued - Use SA85-108", "8500"], ["SA85-102", "8500 Series Out Swing Vent Sash", "85-103", "84-902", "", "85-104", "", "8500"], ["SA85-103", "8500 Series Out Swing Vent Sash", "85-105", "84-902", "", "85-104", "", "8500"], ["SA85-104", "8500 Series Out Swing Vent Frame", "85-101", "84-905", "84-905", "85-106", "Discontinued - Use SA85-109", "8500"], ["SA85-105", "8500 Series In Swing Vent Frame", "85-107", "84-905", "84-905", "85-108", "", "8500"], ["SA85-106", "8500 Series In Swing Vent Frame", "85-107", "84-905", "84-905", "85-109", "", "8500"], ["SA85-107", "8500 Series In Swing Vent Sash", "85-010", "", "", "", "", "8500"], ["SA85-108", "8500 Series Out Swing Vent Frame", "85-113", "84-905", "84-905", "85-115", "", "8500"], ["SA85-109", "8500 Series Out Swing Vent Sash", "85-113", "84-905", "84-905", "85-114", "", "8500"], ["SA85-110", "8500 Series Out Swing Vent Sash", "85-116", "84-902", "", "85-104", "", "8500"], ["SA85-151", "All New 8500 Series Standard for Fapim Hardware", "85-151", "84-904", "84-904", "85-152", "Discontinued - Use SA85-166", "8500"], ["SA85-152", "All New 8500 Series Standard for Fapim Hardware", "85-153", "84-904", "84-904", "85-154", "Discontinued - Use SA85-167", "8500"], ["SA85-153", "All New 8500 Series Standard for Fapim Hardware", "85-155", "84-904", "84-904", "85-154", "Discontinued - Use SA85-168", "8500"], ["SA85-154", "Frame for Fapim Hardware", "85-151", "84-904", "84-904", "85-156", "Discontinued - Use SA85-161", "8500"], ["SA85-155", 'Sash for 0.94" IGU for Fapim Hardware', "85-153", "84-904", "84-904", "85-157", "Discontinued - Use SA85-162", "8500"], ["SA85-156", 'Sash for 1.4" IGU for Fapim Hardware', "85-155", "84-904", "84-904", "85-157", "Discontinued - Use SA85-163", "8500"], ["SA85-157", "", "85-177", "84-904", "84-904", "85-175", "", "8500"], ["SA85-158", "", "85-178", "84-904", "84-904", "85-175", "", "8500"], ["SA85-159", "", "", "", "", "", "", "8500"], ["SA85-160", "", "", "", "", "", "", "8500"], ["SA85-161", "All New 8500 Series Standard for Fapim Hardware", "85-160", "84-904", "84-904", "85-161", "", "8500"], ["SA85-161HT", "All New 8500 Series Standard for Fapim Hardware_HT", "85-160", "84-911", "84-911", "85-161", "", "8500HT"], ["SA85-162", "All New 8500 Series Standard for Fapim Hardware", "85-162", "84-904", "84-904", "85-164", "", "8500"], ["SA85-162HT", "All New 8500 Series Standard for Fapim Hardware_HT", "85-162", "84-911", "84-911", "85-164", "", "8500HT"], ["SA85-163", "All New 8500 Series Standard for Fapim Hardware", "85-163", "84-904", "84-904", "85-164", "", "8500"], ["SA85-163HT", "All New 8500 Series Standard for Fapim Hardware_HT", "85-163", "84-911", "84-911", "85-164", "", "8500HT"], ["SA85-164", "Fapim Standard Open Out Vent with", "85-160", "84-904", "84-904", "85-166", "", "8500"], ["SA85-164HT", "Fapim Standard Open Out Vent with", "85-160", "84-911", "84-911", "85-166", "", "8500HT"], ["SA85-165", "", "85-160", "84-904", "84-904", "85-165", "", "8500"], ["SA85-165HT", "", "85-160", "84-904", "84-904", "85-165", "", "8500HT"], ["SA85-166", "", "85-160", "84-904", "84-904", "85-168", "", "8500"], ["SA85-166HT", "Non-Fapim Out swing Vent Frame_HT", "85-160", "84-911", "84-911", "85-168", "", "8500HT"], ["SA85-167", "0.94 IGU", "85-162", "84-904", "84-904", "85-169", "", "8500"], ["SA85-167HT", "Fapim Out swing Vent Sash .", "85-162", "84-911", "84-911", "85-169", "", "8500HT"], ["SA85-168", "1.4 IGU", "85-163", "84-904", "84-904", "85-169", "", "8500"], ["SA85-168HT", "Non-Fapim Out swing Vent Sash", "85-163", "84-911", "84-911", "85-169", "", "8500HT"], ["SA85-169", "Fapim vent Frame", "85-170", "84-904", "84-904", "85-171", "", "8500"], ["SA85-169HT", "", "", "", "", "", "", "8500HT"], ["SA85-170", "High Thermal OUT Perimeter Frame", "85-170", "84-911", "84-911", "85-171", "", "8500"], ["SA85-170HT", "", "", "", "", "", "", "8500HT"], ["SA85-171", "High Thermal Roto Perimeter Frame", "85-170", "84-911", "94-911", "85-172", "", "8500"], ["SA85-172", "High Thermal OUT TG Sash Frame", "85-173", "84-911", "84-911", "85-175", "", "8500"], ["SA85-173", "High Thermal OUT DG Sash Frame", "85-174", "84-911", "84-911", "85-175", "", "8500"], ["SA85-174", "High Thermal Roto TG Sash Frame", "85-173", "84-911", "84-911", "85-176", "", "8500"], ["SA85-175", "High Thermal Roto DG Sash Frame", "85-174", "84-911", "84-911", "85-176", "", "8500"], ["SA85-176", "Roto Perimeter Frame DIES IN PROGRESS - DO NOT USE", "85-170", "84-904", "84-904", "85-172", "", "8500"], ["SA85-177", "Roto Sash 0.94 IGU DIES IN PROGRESS - DO NOT USE", "85-177", "84-904", "84-904", "85-176", "", "8500"], ["SA85-178", "385-178 Roto Sash 1.4 IGU DIES IN PROGRESS - DO NOT USE", "", "84-904", "84-904", "85-176", "", "8500"], ["SA85-179", "OUT Perimeter Frame DIES IN PROGRESS - DO NOT USE", "85-170", "84-904", "84-904", "85-171", "", "8500"], ["SA85-180", 'OUT Sash 0.94" IGU DIES IN PROGRESS - DO NOT USE', "85-177", "84-904", "84-904", "85-175", "", "8500"], ["SA85-181", 'OUT Sash 1.40" IGU DIES IN PROGRESS - DO NOT USE', "85-178", "84-904", "84-904", "85-175", "", "8500"], ["SA85-182", "OUT Perimeter Frame HD DIES IN PROGRESS - DO NOT USE", "85-179", "84-904", "84-904", "85-161", "", "8500"], ["SA85-183", "Roto Perimeter Frame HD DIES IN PROGRESS - DO NOT USE", "85-179", "84-904", "84-904", "85-168", "", "8500"], ["SA85-184", "Vent Sash for 0.94' IGU for", "85-182", "84-904", "84-904", "85-169", "", "8500"], ["SA85-185", 'Vent Sash for 1.40" IGU for', "85-183", "84-904", "84-904", "85-169", "", "8500"], ["SA85-186", "8550 Sash for 43 mm Glazing", "85-184", "84-904", "84-904", "85-164", "", "8500"], ["SA85-187", "", "", "", "", "", "", "8500"], ["SA85-188", "", "", "", "", "", "", "8500"], ["SA85-189", "", "", "", "", "", "", "8500"], ["SA85-190", "", "", "", "", "", "", "8500"], ["SA85-201", "All New 8500 Series In Swing Vent", "85-203", "84-905", "84-905", "85-204", "", "8500"], ["SA85-201HT", "All New 8500 Series In Swing Vent", "85-203", "84-905", "84-905", "85-204", "", "8500HT"], ["SA85-202", "All New 8500 Series In Swing Vent", "85-201", "84-905", "84-905", "85-202", "", "8500"], ["SA85-202HT", "All New 8500 Series In Swing Vent", "85-201", "84-905", "84-905", "85-202", "", "8500HT"], ["SA85-203", "All New 8500 Series In Swing Vent", "85-205", "84-905", "84-905", "85-202", "", "8500"], ["SA85-203HT", "All New 8500 Series In Swing Vent", "85-205", "84-905", "84-905", "85-202", "", "8500HT"], ["SA85-204", "F97 Perimeter Vent Frame", "", "", "", "85-220", "", "8500"], ["SA85-204HT", "", "", "", "", "", "", "8500HT"], ["SA85-205", "F97 Sash Sill and Jamb Member", "85-221", "84-912", "84-912", "85-223", "", "8500"], ["SA85-205HT", "", "", "", "", "", "", "8500HT"], ["SA85-206", "F97 Sash Head Member", "85-222", "84-912", "84-912", "85-223", "", "8500"], ["SA85-206HT", "", "", "", "", "", "", "8500HT"], ["SA85-207HT", "F97 High Thermal", "85-221", "84-911", "84-911", "85-223", "", "8500HT"], ["SA85-208HT", "F97 High Thermal Sash Head Member", "85-222", "84-911", "84-911", "85-223", "", "8500HT"], ["SA85-209", "", "", "", "", "", "", "8500"], ["SA85-209HT", "", "", "", "", "", "", "8500HT"], ["SA85-210", "", "", "", "", "", "", "8500"], ["SA85-210HT", "", "", "", "", "", "", "8500HT"], ["SA86-051", "Door Perimeter Frame Short Standard", "86-051", "84-904", "84-904", "86-052", "", "8600"], ["SA86-052", "ADA Sill Frame Straight Both Sides", "86-053", "84-904", "", "86-053", "", "8600"], ["SA86-053", "Door Perimeter Frame Long Extended", "86-055", "84-904", "84-904", "86-056", "", "8600"], ["SA86-054", "ADA Sill Frame Sloped Interior", "86-053", "84-904", "", "86-054", "", "8600"], ["SA86-055", "", "", "", "", "", "", "8600"], ["SA86-056", "ADA Sill Frame Sloped Both Sides", "86-054", "84-904", "", "86-054", "", "8600"], ["SA86-057", "ADA Sill Corner Keyed", "86-051", "84-904", "84-904", "86-051", "", "8600"], ["SA86-058", "ADA Sill Frame Sloped Exterior", "86-054", "84-904", "", "86-053", "", "8600"], ["SA86-059", "Door Perimeter Frame Short Standard", "86-052", "84-904", "84-904", "86-051", "", "8600"], ["SA86-060", "Door Perimeter Frame Long Extended", "86-056", "84-904", "84-904", "86-055", "", "8600"], ["SA86-061", "", "", "", "", "", "", "8600"], ["SA86-062", "", "", "", "", "", "", "8600"], ["SA86-063", "", "", "", "", "", "", "8600"], ["SA86-064", "", "", "", "", "", "", "8600"], ["SA86-065", "", "", "", "", "", "", "8600"], ["SA86-066", "", "", "", "", "", "", "8600"], ["SA86-067", "", "", "", "", "", "", "8600"], ["SA86-068", "", "", "", "", "", "", "8600"], ["SA86-069", "", "", "", "", "", "", "8600"], ["SA86-070", "", "", "", "", "", "", "8600"], ["SA86-071", "ADA Sill Frame", "86-060", "84-904", "", "86-060", "", "8600"], ["SA86-072", "", "", "", "", "", "", "8600"], ["SA86-073", "", "", "", "", "", "", "8600"], ["SA86-074", "", "", "", "", "", "", "8600"], ["SA86-075", "", "", "", "", "", "", "8600"], ["SA86-076", "", "", "", "", "", "", "8600"], ["SA86-077", "", "", "", "", "", "", "8600"], ["SA86-078", "", "", "", "", "", "", "8600"], ["SA86-079", "", "", "", "", "", "", "8600"], ["SA86-080", "", "", "", "", "", "", "8600"], ["SA86-101", "Terrace Door Perimeter Frame", "86-011", "84-904", "84-904", "86-010", "", "8600"], ["SA86-102", "Terrace Door Perimeter Frame", "86-015", "84-904", "84-904", "86-016", "", "8600"], ["SA86-103", "Terrace Door ADA Sill Frame", "86-011", "84-904", "84-904", "86-011", "", "8600"], ["SA86-104", "Terrace Door ADA Sill Frame", "86-017", "84-904", "", "86-018", "", "8600"], ["SA86-105", "Terrace Door ADA Sill Frame", "86-017", "84-904", "", "86-017", "", "8600"], ["SA86-106", "Terrace Door ADA Sill Frame", "86-018", "84-904", "", "86-018", "", "8600"], ["SA86-107", "", "", "", "", "", "", "8600"], ["SA86-108", "", "", "", "", "", "", "8600"], ["SA86-109", "", "", "", "", "", "", "8600"], ["SA86-110", "", "", "", "", "", "", "8600"], ["SA86-201", 'Terrace Door Sash Open Out 1.100"', "86-201", "84-906", "84-907", "86-202", "", "8600"], ["SA86-202", 'Terrace Door Sash Open In 1.100" IGU', "86-203", "84-906", "84-907", "86-204", "", "8600"], ["SA86-203", 'Terrace Door Sash Open Out 1.400"', "86-205", "84-906", "84-907", "86-202", "", "8600"], ["SA86-204", 'Terrace Door Sash Open In 1.400" IGU', "86-206", "84-906", "84-907", "86-204", "", "8600"], ["SA86-205", "Terrace Door ADA Bottom Sash Open", "86-208", "84-906", "84-906", "86-207", "", "8600"], ["SA86-206", "Terrace Door ADA Sill Sash Open Out", "86-210", "84-906", "84-907", "86-209", "", "8600"], ["SA86-207", "Terrace Door ADA Sill Sash Open In", "86-209", "84-906", "84-907", "86-210", "", "8600"], ["SA86-208", "Terrace Door ADA Sill Sash Open In or Out Aluminum 84-906 Panel In-Fill for 1 Upper T-Break", "86-211", "", "84-906", "86-207", "", "8600"], ["SA86-209", "", "", "", "", "", "", "8600"], ["SA86-210", "", "", "", "", "", "", "8600"], ["SA86-251", "Outswing Door Sash With Center Seal", "86-251", "84-907", "84-906", "86-252", "", "8600"], ["SA86-252", "Outswing ADA Door Sash with Center", "86-255", "84-907", "84-906", "86-252", "", "8600"], ["SA86-253", "Outswing Door Sash with Center Seal", "86-254", "84-907", "84-906", "86-252", "", "8600"], ["SA86-254", "Outswing ADA Door Sash with Center", "86-256", "84-907", "84-906", "86-252", "", "8600"], ["SA86-255", 'Outswing Door Sash 0.94" IGU', "86-251", "84-907", "84-907", "86-253", "", "8600"], ["SA86-256", 'Outswing Door Sash 1.400" IGU', "86-254", "84-907", "84-907", "86-253", "", "8600"], ["SA86-257", "", "86-255", "84-907", "84-907", "86-264", "", "8600"], ["SA86-258", "", "86-256", "84-907", "84-907", "86-264", "", "8600"], ["SA86-259", "No Centresea", "86-254", "84-907", "84-907", "86-264", "", "8600"], ["SA86-260", "ADA Outswing Door Panel 0.94\u201D", "86-251", "84-907", "84-907", "86-264", "", "8600"], ["SA86-261", "Inswing Door Sash with Center Seal", "86-260", "84-907", "84-906", "86-261", "", "8600"], ["SA86-262", "Inswing ADA Door Sash with Center", "86-260", "84-907", "84-906", "86-262", "", "8600"], ["SA86-263", "Inswing Door Sash with Center Seal", "86-263", "84-907", "84-906", "86-261", "", "8600"], ["SA86-264", "Inswing ADA Door Sash with Center", "86-263", "84-907", "86-906", "86-262", "", "8600"], ["SA86-271", "Outswing High Thermal Door Sash", "86-251", "84-910", "84-910", "86-253", "", "8600"], ["SA86-272", "Outswing High Thermal Door Sash", "86-254", "84-910", "84-910", "86-253", "", "8600"], ["SA86-273", 'ADA Kickplate Add-on 0.94"', "86-257", "84-907", "84-907", "86-258", "", "8600"], ["SA86-274", 'ADA Kickplate Add-on 1.400"', "86-259", "84-907", "84-907", "86-258", "", "8600"], ["SA87-001", "L ED ------------------------ CA", "", "", "", "", "", "8700"], ["SA87-002", "B5 - 10lb Horizontal Door Sill Frame", "87-007", "84-904", "84-904", "87-008", "Discontinued - Use SA87-040", "8700"], ["SA87-003", "B7 - 15lb Horizontal Door Sill Frame", "87-005", "84-904", "84-904", "87-006", "Discontinued - Not Replaced", "8700"], ["SA87-004", "Tube Horizontal Door Transom up to Panels Above", "87-018", "84-904", "84-904", "87-002", "Discontinued - Use SA87-024", "8700"], ["SA87-005", "- 026 Split BI-Pass Door Sill With Spandrel", "87-007", "84-904", "84-904", "87-008", "", "8700"], ["SA87-006", "Male Split Mullion Door Jamb Frame", "87-013", "84-904", "84-904", "87-014", "Discontinued - Use SA87-026", "8700"], ["SA87-007", "Female Split Mullion Door Frame", "87-011", "84-904", "84-904", "87-012", "Discontinued - Use SA87-027", "8700"], ["SA87-008", '1" Vertical Corner Frame Both Doors,', "87-022", "84-904", "84-904", "87-023", "Discontinued - Use SA87-028", "8700"], ["SA87-009", "Female/Male Split Mullion Door Frame", "87-011", "84-904", "84-904", "87-014", "Discontinued - Use SA87-029", "8700"], ["SA87-010", "Male/Female Split Mullion Door Frame", "87-013", "84-904", "84-904", "87-012", "Discontinued - Use SA87-030", "8700"], ["SA87-011", "", "", "", "", "", "", "8700"], ["SA87-012", "", "", "", "", "", "", "8700"], ["SA87-013", "", "87-022", "84-904", "", "", "", "8700"], ["SA87-014", "", "", "", "", "", "", "8700"], ["SA87-015", "BVG COMMERCIAL 2 - 1 OFFSET INTO SSG CURTAINWALL FRAMES", "87-029", "84-904", "84-904", "87-002", "Discontinued - Use SA87-035", "8700"], ["SA87-017", "", "87-009", "84-904", "84-904", "87-002", "Discontinued - Use SA87-037", "8700"], ["SA87-018", 'Offset 1" Ext. 2" Int. Door Header', "87-018", "84-904", "84-904", "87-010", "Discontinued - Use SA87-038", "8700"], ["SA87-019", "", "87-027", "84-904", "84-904", "87-028", "Discontinued - Use SA87-039", "8700"], ["SA87-020", "", "", "", "", "", "", "8700"], ["SA87-021", "", "", "", "", "", "", "8700"], ["SA87-022", "", "", "", "", "", "", "8700"], ["SA87-024", "8000 Window Wall 8700 Double", "80-001", "84-901", "84-901", "80-154", "Discontinued - Not Replaced", "8000"], ["SA87-025", "", "", "", "", "", "", "8700"], ["SA87-031", "", "", "", "", "", "", "8700"], ["SA87-032", "", "", "", "", "", "", "8700"], ["SA87-033", "", "", "", "", "", "", "8700"], ["SA87-034", "", "", "", "", "", "", "8700"], ["SA87-036", "", "87-009", "", "", "", "", "8700"], ["SA87-038", "Transom Stepped Head Frame", "87-046", "84-904", "84-904", "87-030", "", "8700"], ["SA87-040", "Horizontal Door Sill Perimeter Frame", "87-037", "84-904", "84-904", "87-008", "", "8700"], ["SA87-041", "Sill Top Plate", "87-040", "84-905", "84-905", "87-041", "", "8700"], ["SA87-042", "Male Jamb Perimeter Frame", "87-038", "84-904", "84-904", "87-039", "", "8700"], ["SA87-043", "Standard Female Mullion", "87-050", "84-904", "84-904", "87-051", "", "8700"], ["SA87-044", "Horizontal Door Head Perimeter Frame", "87-046", "84-904", "84-904", "87-032", "", "8700"], ["SA87-045", '2" Transom Intermediate Vertical', "87-047", "84-901", "84-901", "87-048", "", "8700"], ["SA87-045HT", '2" Transom Intermediate Vertical', "87-047", "84-910", "84-910", "87-048", "", "8700HT"], ["SA87-046", "Offset Female Male Mullion", "87-050", "84-904", "84-904", "87-039", "", "8700"], ["SA87-047", "Offset Male Female Mullion", "87-038", "84-904", "84-904", "87-051", "", "8700"], ["SA87-048", '2" Door Head Frame', "87-052", "84-904", "84-904", "87-030", "", "8700"], ["SA87-049", 'Ext 2" Int 1" Door Head Frame', "87-052", "84-904", "84-904", "87-032", "", "8700"], ["SA87-050", "Horizontal Sill Frame Adaptor", "87-055", "84-904", "84-904", "87-054", "", "8700"], ["SA87-051", ", 87-055", "87-037", "84-904", "84-904", "87-008", "", "8700"], ["SA87-052", ", 87-058 New Sliding door sill bypass , 84-901 , 84-901", "87-060", "84-904", "84-904", "87-061", "", "8700"], ["SA87-053", "New Sill Top Plate", "87-060", "84-904", "84-904", "87-061", "", "8700"], ["SA87-054", "New Horizontal Door Sill Perimeter", "87-058", "84-901", "84-901", "87-059", "", "8700"], ["SA87-055", "Horizontal Sill For Juliet Frame", "87-062", "87-901", "94-901", "87-063", "", "8700"], ["SA87-056", "Horizontal Sill Tube For Juliet Frame", "87-062", "84-901", "94-901", "87-064", "", "8700"], ["SA87-057", "Ext Closed Bttom Hori Door Sill", "87-065", "84-904", "84-904", "87-008", "", "8700"], ["SA87-058", "Ext Clsd Bttm New Hori Door Sill", "87-065", "84-901", "84-901", "87-059", "", "8700"], ["SA87-059", "", "", "", "", "", "", "8700"], ["SA87-060", "", "", "", "", "", "", "8700"], ["SA87-061", "Thermal break 84-901", "", "", "", "", "", "8700"], ["SA87-062", "Thermal break 84-901", "", "", "", "", "", "8700"], ["SA87-063", "Thermal break 84-901", "", "", "", "", "", "8700"], ["SA87-064", "Thermal break 84-901", "", "", "", "", "", "8700"], ["SA87-064HT", "Thermal break 84-909", "", "", "", "", "", "8700HT"], ["SA87-065", "Thermal break 84-901", "", "", "", "", "", "8700"], ["SA87-065HT", "Thermal break 84-909", "", "", "", "", "", "8700HT"], ["SA87-066", "Thermal break 84-901", "", "", "", "", "", "8700"], ["SA87-066HT", "Thermal break 84-909", "", "", "", "", "", "8700HT"], ["SA87-067", "Thermal break 84-901", "", "", "", "", "", "8700"], ["SA87-067HT", "Thermal break 84-909", "", "", "", "", "", "8700HT"], ["SA87-068", "", "", "", "", "", "", "8700"], ["SA87-068HT", "Thermal break 84-909", "", "", "", "", "", "8700HT"], ["SA87-069", "Thermal break 84-901", "", "", "", "", "", "8700"], ["SA87-069HT", "Thermal break 84-909", "", "", "", "", "", "8700HT"], ["SA87-070", "Thermal break 84-901", "", "", "", "", "", "8700"], ["SA87-071HT", "Thermal break 84-909", "", "", "", "", "", "8700HT"], ["SA87-072HT", "Thermal break 84-909", "", "", "", "", "", "8700HT"], ["SA87-073", "", "", "", "", "", "", "8700HT"], ["SA87-074", "", "", "", "", "", "", "8700HT"], ["SA87-075", "", "", "", "", "", "", "8700HT"], ["SA87-076", "", "", "", "", "", "", "8700HT"], ["SA87-077", "", "", "", "", "", "", "8700HT"], ["SA87-078", "", "", "", "", "", "", "8700HT"], ["SA87-079", "", "", "", "", "", "", "8700HT"], ["SA87-080", "", "", "", "", "", "", "8700HT"], ["SA87-101", "Operable Jamb Sash", "87-103", "84-902", "", "87-104", "Discontinued - Not Replaced", "8700"], ["SA87-102", "Operable Head & Sill Sash", "87-121", "84-902", "", "87-102", "Discontinued - Not Replaced", "8700"], ["SA87-103", 'Operable 1 1/2" IGU Adaptor CANCELED ASSEMBLY NO REPLACEMENT', "87-116", "84-902", "", "87-117", "Discontinued - Not Replaced", "8700"], ["SA87-104", "Fixed Jamb Sash", "87-104", "84-902", "", "87-103", "Discontinued - Not Replaced", "8700"], ["SA87-105", "Fixed Head & Sill Sash", "87-102", "84-902", "", "87-121", "", "8700"], ["SA87-106", 'Fixed 1 1/2" IGU Adaptor CANCELED ASSEMBLY NO REPLACEMENT', "87-102", "84-902", "", "87-121", "Discontinued - Not Replaced", "8700"], ["SA87-107", "Operable Sash Jamb", "87-132", "84-905", "84-905", "87-131", "", "8700"], ["SA87-108", "Operable Sash Head / Sill", "87-135", "84-905", "84-905", "87-136", "", "8700"], ["SA87-109", "Operable Sash Interlock", "", "", "", "87-133", "", "8700"], ["SA87-110", "Fixed Sash Interlock", "87-134", "", "", "", "", "8700"], ["SA87-111", "Fixed Sash Jamb", "87-131", "84-905", "84-905", "87-132", "", "8700"], ["SA87-112", "Fixed Sash Head / Sill", "87-136", "84-905", "84-905", "87-135", "", "8700"], ["SA87-113", "New Heavy Duty roller Operable", "87-137", "84-905", "84-905", "87-138", "", "8700"], ["SA87-114", "Section changed from 87-018", "", "", "", "", "", "8700"], ["SA87-115", "", "", "", "", "", "", "8700"], ["SA87-116", "", "", "", "", "", "", "8700"], ["SA87-117", "", "", "", "", "", "", "8700"], ["SA87-118", "", "", "", "", "", "", "8700"], ["SA87-119", "", "", "", "", "", "", "8700"], ["SA87-120", "", "", "", "", "", "", "8700"], ["SA87-121", "Operating Sash Jamb", "87-142", "84-901", "84-901", "87-141", "", "8700"], ["SA87-122", "Operating Interlock", "", "", "", "87-143", "", "8700"], ["SA87-123", "Fixed Interlock", "87-145", "84-904", "84-904", "87-144", "", "8700"], ["SA87-124", "Operating Horizontal Sash", "87-135", "84-901", "84-901", "87-136", "", "8700"], ["SA87-125", "Active By-Parting Sash", "87-147", "84-901", "84-901", "87-146", "", "8700"], ["SA87-126", "Inactive By-parting Sash", "87-149", "84-904", "84-904", "87-148", "", "8700"], ["SA87-127", "HD Horizontal Sash Sill", "87-137", "84-901", "84-901", "87-138", "", "8700"], ["SA87-128HT", "High Thermal Door Operating Jamb", "87-142", "89-901", "89-901", "87-152", "", "8700HT"], ["SA87-129", "Twenty Sash", "87-162", "84-904", "84-904", "87-161", "", "8700"], ["SA87-129HT", "High Thermal Door Operating", "87-135", "89-901", "89-901", "87-153", "", "8700HT"], ["SA87-130HT", "High Thermal Interlock for 8760", "87-150", "89-901", "89-901", "87-151", "", "8700HT"], ["SA87-131HT", "Operating HT Interlock Frame", "", "", "", "87-154", "", "8700HT"], ["SA88-001", "Typical Horizontal Perimeter Frame", "88-001", "84-904", "84-904", "88-002", "", "8800"], ["SA88-001HT", "Typical Horizontal Perimeter Frame", "88-001", "84-911", "84-911", "88-002", "", "8800HT"], ["SA88-002", "Typical Horizontal Perimeter Frame Just Proposed.", "88-003", "84-904", "84-904", "88-004", "", "8800"], ["SA88-002HT", "", "", "", "", "", "", "8800HT"], ["SA88-004", "Flat Horizontal Transom Frame", "88-007", "84-904", "84-904", "88-009", "", "8800"], ["SA88-004HT", "Flat Horizontal Transom Frame", "88-007", "84-911", "84-911", "88-009", "", "8800HT"], ["SA88-005", "Sloped Horizontal Transom Frame", "88-008", "84-904", "84-904", "88-009", "", "8800"], ["SA88-005HT", "Sloped Horizontal Transom Frame", "88-008", "84-911", "84-911", "88-009", "", "8800HT"], ["SA88-006", "Typical Vertical Male Frame", "88-010", "84-904", "84-904", "88-011", "", "8800"], ["SA88-006HT", "Typical Vertical Male Frame", "88-010", "84-911", "84-911", "88-011", "", "8800HT"], ["SA88-007", "Typical Vertical Female Frame", "88-012", "84-904", "84-904", "88-013", "", "8800"], ["SA88-007HT", "Typical Vertical Female Frame", "88-012", "84-911", "84-911", "88-013", "", "8800HT"], ["SA88-008", "Typical Vertical Corner Frame", "88-014", "84-904", "84-904", "88-015", "", "8800"], ["SA88-008HT", "Typical Vertical Corner Frame", "88-014", "84-911", "84-911", "88-015", "", "8800HT"], ["SA88-009", "Seismic Vertical Receptor Frame", "88-018", "84-904", "84-904", "88-019", "", "8800"], ["SA88-009HT", "Seismic Vertical Receptor Frame_HT", "88-018", "84-911", "84-911", "88-019", "", "8800HT"], ["SA88-010", "Special Vertical Hi-Brid Door Hoist Bay", "88-012", "84-904", "84-904", "88-020", "", "8800"], ["SA88-010HT", "Special Vertical Hi-Brid Door Hoist Bay", "88-012", "84-911", "84-911", "88-020", "", "8800HT"], ["SA88-011", "Typical Flat Horizontal Sill Frame 1.000", "88-007", "84-904", "", "", "", "8800"], ["SA88-011HT", "", "", "", "", "", "", "8800HT"], ["SA88-012", "Typical Sloping Horizontal Sill Frame", "88-008", "84-904", "", "", "", "8800"], ["SA88-012HT", "", "", "", "", "", "", "8800HT"], ["SA88-013", "Typical Vertical Corner / Male Mullion", "88-014", "84-904", "84-904", "88-011", "", "8800"], ["SA88-013HT", "Typical Vertical Corner / Male Mullion", "88-014", "84-911", "84-911", "88-011", "", "8800HT"], ["SA88-014", "Typical Sloping Horizontal Transom Back section", "88-025", "84-904", "84-904", "88-009", "", "8800"], ["SA88-014HT", "Typical Sloping Horizontal Transom Back section_HT", "88-025", "84-911", "84-911", "88-009", "", "8800HT"], ["SA88-015", "Typical Vertical Perimeter Frame", "88-016", "84-904", "84-904", "88-017", "", "8800"], ["SA88-015HT", "Typical Vertical Perimeter Frame", "88-016", "84-911", "84-911", "88-017", "", "8800HT"], ["SA88-016", "Horizontal Sloping Transom Frame removable below", "88-024", "84-904", "84-904", "88-009", "", "8800"], ["SA88-016HT", "Horizontal Sloping Transom Frame removable below_HT", "88-024", "84-911", "84-911", "88-009", "", "8800HT"], ["SA88-017", "Horizontal Sloping Sill Frame 1.000 / removable below", "88-024", "84-904", "84-904", "88-004", "", "8800"], ["SA88-017HT", "", "", "", "", "", "", "8800HT"], ["SA88-018", "Horizontal Balcony Sill Frame 1.000 / removable on top", "88-021", "84-904", "84-904", "88-004", "", "8800"], ["SA88-018HT", "", "", "", "", "", "", "8800HT"], ["SA88-019", "Horizontal Balcony Sill Frame 1.000 / removable on top", "88-021", "84-904", "84-904", "88-002", "", "8800"], ["SA88-019HT", "", "", "", "", "", "", "8800HT"], ["SA88-020", "Typical Flat Horizontal Sill Frame", "88-007", "84-904", "", "", "", "8800"], ["SA88-020HT", "", "", "", "", "", "", "8800HT"], ["SA88-021", "Typical Sloping Horizontal Sill Frame", "88-008", "84-904", "", "", "", "8800"], ["SA88-022", "Typical Balcony Horizontal Sill Frame", "88-022", "84-904", "", "", "", "8800"], ["SA88-023", "Typical Horizontal By-Pass Sill Frame", "88-023", "", "", "", "", "8800"], ["SA88-025", "Typical Sloping Horizontal Sill Frame", "88-025", "84-904", "", "", "", "8800"], ["SA88-026", "", "", "", "", "", "", "8800"], ["SA88-027", "Horizontal Sloping Sill Frame 1.000 / on top removable below", "88-024", "84-904", "84-904", "88-002", "", "8800"], ["SA88-028", "Sloping Horizontal Sill Frame 1.000 / Fixed", "88-025", "84-904", "84-904", "88-002", "", "8800"], ["SA88-029", "", "", "", "", "", "", "8800"], ["SA88-030", "Typical Balcony Sill Frame 1.000 Stop", "88-037", "84-904", "84-904", "88-004", "", "8800"], ["SA88-031", "Typical Balcony Horizontal Sill Frame", "88-037", "84-904", "", "", "", "8800"], ["SA88-031HT", "", "", "", "", "", "", "8800HT"], ["SA88-032", "", "", "", "", "", "", "8800"], ["SA88-032HT", "", "", "", "", "", "", "8800HT"], ["SA88-033", "Typical Balcony Horizontal Sill Frame Fixed", "88-038", "84-904", "", "", "", "8800"], ["SA88-033HT", "", "", "", "", "", "", "8800HT"], ["SA88-034", "", "", "", "", "", "", "8800"], ["SA88-035HT", "", "", "", "", "", "", "8800HT"], ["SA88-036", "", "", "", "", "", "", "8800"], ["SA88-036HT", "", "", "", "", "", "", "8800HT"], ["SA88-037", "Typical Vertical Male Perimeter Frame leg", "88-029", "84-904", "84-904", "88-030", "", "8800"], ["SA88-038", "", "", "", "", "", "", "8800"], ["SA88-038HT", "", "", "", "", "", "", "8800HT"], ["SA88-039", "", "", "", "", "", "", "8800"], ["SA88-039HT", "", "", "", "", "", "", "8800HT"], ["SA88-040", "Typical 90\xB0 Corner Male Frame 1.000", "88-031", "84-904", "", "", "", "8800"], ["SA88-040HT", "Typical 90\xB0 Corner Male Frame 1.000 Stop_HT", "88-031", "84-911", "84-911", "88-083", "", "8800HT"], ["SA88-041", "90\xB0 Corner Post Female Frame", "88-033", "84-904", "84-904", "88-034", "", "8800"], ["SA88-041HT", "90\xB0 Corner Post Female Frame_HT", "88-033", "84-911", "84-911", "88-084", "", "8800HT"], ["SA88-042", '2" Head Receptor Frame Spandrel', "88-005", "84-904", "84-904", "88-046", "", "8800"], ["SA88-042HT", "", "", "", "", "", "", "8800HT"], ["SA88-043", '1" Transom Horizontal Frame Spandrel', "88-027", "84-904", "84-904", "88-051", "", "8800"], ["SA88-043HT", '1" Transom Horizontal Frame Spandrel', "88-027", "84-911", "84-911", "88-051", "", "8800HT"], ["SA88-044", '1" Transom Horizontal Frame Vision', "88-024", "84-904", "84-904", "88-051", "", "8800"], ["SA88-044HT", '1" Transom Horizontal Frame Vision', "88-024", "84-911", "84-911", "88-051", "", "8800HT"], ["SA88-045", '1" Transom Horizontal Frame Spandrel', "88-008", "84-904", "84-904", "88-049", "", "8800"], ["SA88-045HT", '1" Transom Horizontal Frame Spandrel', "88-008", "84-911", "84-911", "88-049", "", "8800HT"], ["SA88-046", '1" Transom 1 1/2" Sill Frame Spandrel', "88-027", "84-904", "84-904", "88-050", "", "8800"], ["SA88-046HT", "", "", "", "", "", "", "8800HT"], ["SA88-047", '1" Sloping Transom 1 1/2" Sill Frame Panel', "88-008", "84-904", "84-904", "88-050", "", "8800"], ["SA88-047HT", "", "", "", "", "", "", "8800HT"], ["SA88-048", '1" BI-Pass Sill Horizontal for Aluminum', "88-035", "", "", "", "", "8800"], ["SA88-049", '1" Flat Transom 1 1/2" Sill Frame Panel', "88-007", "84-904", "84-904", "88-050", "", "8800"], ["SA88-049HT", "", "", "", "", "", "", "8800HT"], ["SA88-050", '1" Flat Transom Horizontal Frame', "88-007", "84-904", "84-904", "88-051", "", "8800"], ["SA88-050HT", '1" Flat Transom Horizontal Frame', "88-007", "84-911", "84-911", "88-051", "", "8800HT"], ["SA88-051", '1" Balcony Sill 1 1/2" Sill Frame Concrete Slab or Curb', "88-021", "84-904", "84-904", "88-050", "", "8800"], ["SA88-051HT", "", "", "", "", "", "", "8800HT"], ["SA88-052", '1 1/2" Full Balcony Sill Frame Concrete Slab or Curb', "88-022", "84-904", "84-904", "88-050", "", "8800"], ["SA88-052HT", "", "", "", "", "", "", "8800HT"], ["SA88-053", '1" Flat Transom Horizontal Frame', "88-007", "84-904", "84-904", "88-049", "", "8800"], ["SA88-053HT", '1" Flat Transom Horizontal Frame Spandrels_HT', "88-007", "84-911", "84-911", "88-049", "", "8800HT"], ["SA88-054", '1" Perimeter Horizontal Frame', "88-001", "84-904", "84-904", "88-051", "", "8800"], ["SA88-054HT", '1" Perimeter Horizontal Frame', "88-001", "84-911", "84-911", "88-051", "", "8800HT"], ["SA88-055", '1" Flat Transom Horizontal Frame', "88-007", "84-904", "84-904", "88-051", "", "8800"], ["SA88-055HT", '1" Flat Transom Horizontal Frame Panels_HT', "88-007", "84-911", "84-911", "88-051", "", "8800HT"], ["SA88-056", '1" Sloped Transom Horizontal Frame', "88-027", "84-904", "84-904", "88-009", "", "8800"], ["SA88-056HT", '1" Sloped Transom Horizontal Frame', "88-027", "84-911", "84-911", "88-009", "", "8800HT"], ["SA88-057", '1" Sloped Transom Horizontal Frame', "88-008", "84-904", "84-904", "88-051", "", "8800"], ["SA88-057HT", '1" Sloped Transom Horizontal Frame', "88-008", "84-911", "84-911", "88-051", "", "8800HT"], ["SA88-058", '1" Sloped Transom Horizontal Frame', "88-008", "84-904", "84-904", "88-051", "", "8800"], ["SA88-058HT", '1" Sloped Transom Horizontal Frame', "88-008", "84-911", "84-911", "88-051", "", "8800HT"], ["SA88-059", "Male to Female Vertical Split", "", "84-904", "84-904", "88-013", "", "8800"], ["SA88-059HT", "Male to Female Vertical Split", "", "84-911", "84-911", "88-013", "", "8800HT"], ["SA88-060", "Female to Male Vertical Split", "", "84-904", "84-904", "88-011", "", "8800"], ["SA88-060HT", "Female to Male Vertical Split", "", "84-911", "84-911", "88-011", "", "8800HT"], ["SA88-061", "Typical Horizontal Head Frame SA8-003 2.000 Back section", "88-005", "84-904", "84-904", "88-006", "", "8800"], ["SA88-061HT", "2.000 Horizontal Frame_HT", "88-069", "84-911", "84-911", "88-072", "", "8800HT"], ["SA88-062", "2.000 Horizontal Panel Frame", "88-069", "84-904", "84-904", "88-070", "", "8800"], ["SA88-062HT", "2.000 Horizontal Panel Frame_HT", "88-069", "84-911", "84-911", "88-070", "", "8800HT"], ["SA88-063", "2.000 Horizontal Frame with Leg", "88-071", "84-904", "84-904", "88-072", "", "8800"], ["SA88-063HT", "2.000 Horizontal Frame with Leg_HT", "88-071", "84-911", "84-911", "88-072", "", "8800HT"], ["SA88-064", "Transom Intermediate Vertical", "88-073", "84-904", "84-904", "88-074", "", "8800"], ["SA88-064HT", "Transom Intermediate Vertical_HT", "88-073", "84-911", "84-911", "88-074", "", "8800HT"], ["SA88-065", "8900 Transom Sill Horizontal", "88-078", "84-904", "84-904", "88-079", "", "8800"], ["SA88-065HT", "8800 Transom Sill Horizontal_HT", "88-078", "84-911", "84-911", "88-079", "", "8800HT"], ["SA88-066", "8900 Transom Sill Horizontal", "88-078", "84-904", "84-904", "88-081", "", "8800"], ["SA88-066HT", "8800 Transom Sill Horizontal_HT", "88-078", "84-911", "84-911", "88-081", "", "8800HT"], ["SA88-067", "", "88-064", "84-904", "84-904", "86-063", "", "8800"], ["SA88-067HT", '8800 I mullion for 19" Fin_HT', "88-064", "84-911", "94-911", "88-063", "", "8800HT"], ["SA88-068", "", "88-044", "84-904", "84-904", "88-015", "", "8800"], ["SA88-068HT", "8800 Vertical Corner", "88-044", "88-911", "84-911", "88-015", "", "8800HT"], ["SA88-069", "", "", "", "", "", "", "8800"], ["SA88-070", "", "", "", "", "", "", "8800"], ["SA88-071", "Stops", "", "", "84-904", "88-004", "", "8800"], ["SA88-071HT", "Flat Horizontal Sill Frame 1.000", "88-007", "84-911", "", "", "", "8800HT"], ["SA88-072", "Stops", "", "", "84-904", "88-004", "", "8800"], ["SA88-072HT", "Sloping Horizontal Sill Frame", "88-008", "84-911", "", "", "", "8800HT"], ["SA88-073", "Horizontal Sloping Sill Frame 1.000 / removable below", "88-024", "84-904", "84-904", "88-054", "", "8800"], ["SA88-073HT", "Horizontal Sloping Sill Frame 1.000 / removable below_HT", "88-024", "84-911", "84-911", "88-054", "", "8800HT"], ["SA88-074", "Horizontal Balcony Sill Frame 1.000 / removable on top", "88-021", "84-904", "84-904", "88-054", "", "8800"], ["SA88-074HT", "Horizontal Balcony Sill Frame 1.000 / removable on top_HT", "88-021", "84-911", "84-911", "88-054", "", "8800HT"], ["SA88-075", "Stops Both Sides", "", "", "84-904", "88-004", "", "8800"], ["SA88-075HT", "Sloping Horizontal Sill Frame", "88-025", "84-911", "", "", "", "8800HT"], ["SA88-076", "Stop", "", "", "84-904", "88-004", "", "8800"], ["SA88-076HT", "Balcony Horizontal Sill Frame", "88-022", "84-911", "", "", "", "8800HT"], ["SA88-077", "Typical Balcony Horizontal Sill Frame Fixed", "88-038", "84-904", "", "", "", "8800"], ["SA88-077HT", "Typical Balcony Horizontal Sill Frame Fixed", "88-038", "84-911", "", "", "", "8800HT"], ["SA88-078", "Balcony Sill Frame 1.000 Stop", "88-037", "84-904", "84-904", "88-054", "", "8800"], ["SA88-078HT", "Balcony Sill Frame 1.000 Stop_HT", "88-037", "84-911", "84-911", "88-054", "", "8800HT"], ["SA88-079", '1" Transom 1 1/2" Sill Frame Spandrel', "88-027", "84-904", "84-904", "88-057", "", "8800"], ["SA88-079HT", '1" Transom 1 1/2" Sill Frame Spandrel Panel_HT', "88-027", "84-911", "84-911", "88-057", "", "8800HT"], ["SA88-080", '1" Sloping Transom 1 1/2" Sill Frame Panel', "88-008", "84-904", "84-904", "88-057", "", "8800"], ["SA88-080HT", '1" Sloping Transom 1 1/2" Sill Frame Panel_HT', "88-008", "84-911", "84-911", "88-057", "", "8800HT"], ["SA88-081", '1" Balcony Sill 1 1/2" Sill Frame Concrete Slab or Curb', "88-021", "84-904", "84-904", "88-057", "", "8800"], ["SA88-081HT", '1" Balcony Sill 1 1/2" Sill Frame Concrete Slab or Curb_HT', "88-021", "84-911", "84-911", "88-057", "", "8800HT"], ["SA88-082", '1 1/2" Full Balcony Sill Frame Concrete Slab or Curb', "88-022", "84-904", "84-904", "88-057", "", "8800"], ["SA88-082HT", '1 1/2" Full Balcony Sill Frame Concrete Slab or Curb_HT', "88-022", "84-911", "84-911", "88-057", "", "8800HT"], ["SA88-083", '1" Flat Transom 1 1/2" Sill Frame Panel', "88-007", "84-904", "84-904", "88-057", "", "8800"], ["SA88-083HT", '1" Flat Transom 1 1/2" Sill Frame Panel_HT', "88-007", "84-911", "84-911", "88-057", "", "8800HT"], ["SA88-084", "Horizontal Balcony Sill Frame 1.000 / removable on top", "88-021", "84-904", "84-904", "88-002", "", "8800"], ["SA88-084HT", "Horizontal Balcony Sill Frame 1.000 / removable on top_HT", "88-021", "84-911", "84-911", "88-002", "", "8800HT"], ["SA88-085", "Stops both sides", "", "", "84-904", "88-002", "", "8800"], ["SA88-085HT", "Typical Flat Horizontal Sill Frame", "88-007", "84-911", "", "", "", "8800HT"], ["SA88-086", "Horizontal Sloping Sill Frame 1.000 / on top removable below", "88-024", "84-904", "84-904", "88-002", "", "8800"], ["SA88-086HT", "Horizontal Sloping Sill Frame 1.000 / on top removable below_HT", "88-024", "84-911", "84-911", "88-002", "", "8800HT"], ["SA88-087", "Sloping Horizontal Sill Frame 1.000 / Fixed", "88-025", "84-904", "84-904", "88-002", "", "8800"], ["SA88-087HT", "Sloping Horizontal Sill Frame 1.000 / Fixed_HT", "88-025", "84-911", "84-911", "88-002", "", "8800HT"], ["SA88-088", "Stops", "", "", "84-904", "88-002", "", "8800"], ["SA88-088HT", "Typical Balcony Horizontal Sill Frame", "88-037", "84-911", "", "", "", "8800HT"], ["SA88-089", "Stops Both Sides", "", "", "84-904", "88-002", "", "8800"], ["SA88-089HT", "Typical Sloping Horizontal Sill Frame", "88-008", "84-911", "", "", "", "8800HT"], ["SA88-090", "Sloped TOS Frame - 1.000 Interior", "88-008", "84-904", "84-904", "88-058", "", "8800"], ["SA88-090HT", "Sloped TOS Frame - 1.000 Interior", "88-008", "84-911", "84-911", "88-058", "", "8800HT"], ["SA88-091", "1.000 Balcony Frame - 1.000 Interior", "88-021", "84-904", "84-904", "88-058", "", "8800"], ["SA88-091HT", "1.000 Balcony Frame - 1.000 Interior", "88-021", "84-911", "84-911", "88-058", "", "8800HT"], ["SA88-092", '1.500" exterior and 1" interior Balcony', "88-022", "84-904", "84-904", "88-058", "", "8800"], ["SA88-092HT", '1.500" exterior and 1" interior Balcony', "88-022", "84-911", "84-911", "88-058", "", "8800HT"], ["SA88-093", "Straight TOS Frame - 1.000 Interior", "88-007", "84-904", "84-904", "88-058", "", "8800"], ["SA88-093HT", "Straight TOS Frame - 1.000 Interior", "88-007", "84-911", "84-911", "88-058", "", "8800HT"], ["SA88-094", '1" Sloped By-Pass Spandrel Sill Frame', "88-027", "84-904", "84-904", "88-058", "", "8800"], ["SA88-094HT", '1" Sloped By-Pass Spandrel Sill', "88-027", "84-911", "84-911", "88-058", "", "8800HT"], ["SA88-096", "", "88-044", "84-904", "", "", "", "8800"], ["SA88-097", "", "88-039", "", "", "", "", "8800"], ["SA88-098", "", "88-065", "", "", "", "", "8800"], ["SA88-099", "", "88-066", "", "", "", "", "8800"], ["SA88-100", "", "88-067", "", "", "", "", "8800"], ["SA88-101", "for 194", "88-309", "", "", "", "", "8800"], ["SA88-101HT", "Balcony Sill", "88-038", "84-911", "84-911", "88-002", "", "8800HT"], ["SA88-102", '1.5" / 1" Balcony Sill with ext 88-002 88-038', "88-038", "84-904", "84-904", "88-002", "", "8800"], ["SA88-102HT", "Balcony Sill", "88-022", "84-911", "84-911", "88-002", "", "8800HT"], ["SA88-103", '1.5" / 1" Balcony Sill', "88-022", "84-904", "84-904", "88-002", "", "8800"], ["SA88-103HT", "Balcony Sill", "88-022", "84-911", "84-911", "88-002", "", "8800HT"], ["SA88-104", "Ext Closed Bottom 1\u201D Balcony Sill-1.5\u201D", "88-087", "84-904", "", "", "", "8800"], ["SA88-104HT", "Ext Closed Bottom 1\u201D B.Sill-1.5\u201D", "88-087", "84-911", "84-911", "88-054", "", "8800HT"], ["SA88-105", "Ext Closed Bottom 1.5\u201D Blcny Sill - 1.5\u201D", "88-088", "84-904", "84-904", "88-054", "", "8800"], ["SA88-105HT", "Ext Closed Bottom 1.5\u201D B.Sill - 1.5\u201D", "88-088", "84-911", "84-911", "88-054", "", "8800HT"], ["SA88-106", "Ext Closed Bottom 1\u201D/1.5\u201D- Balcny Sill", "88-087", "84-904", "84-904", "88-057", "", "8800"], ["SA88-106HT", "Ext Closed Bttm 1\u201D/1.5\u201D- B.Sill Louv", "88-087", "84-911", "84-911", "88-057", "", "8800HT"], ["SA88-107", "Ext Closed Bttm 1.5\u201D Balcny Sill", "88-088", "84-904", "84-904", "88-057", "", "8800"], ["SA88-107HT", "Ext Clsd Bttm 1.5\u201D B.Sill Louvre", "88-088", "84-911", "84-911", "88-057", "", "8800HT"], ["SA88-108", "Ext Closed Bottom 1\u201D Balcony Sill", "88-087", "84-904", "84-904", "88-002", "", "8800"], ["SA88-108HT", "Ext Closed Bottom 1\u201D B.Sill Frame", "88-087", "84-911", "84-911", "88-002", "", "8800HT"], ["SA88-109", "Ext Closed Bottom 1\u201D Balcony Frame", "88-087", "84-904", "84-904", "88-058", "", "8800"], ["SA88-109HT", "-Ext Clsd Bottom 1\u201D", "88-087", "84-911", "84-911", "88-058", "", "8800HT"], ["SA88-110", "Ext Closed Bttm 1.5\u201D B.Frame/1\u201D Int", "88-088", "84-904", "84-904", "88-058", "", "8800"], ["SA88-110HT", "Ext Clsd Bttm 1.5\u201D B.Frame/1\u201D", "88-088", "84-911", "84-911", "88-058", "", "8800HT"], ["SA88-111", "Ext Closed Bottom 1.5\u201D Balcony", "88-088", "84-904", "84-904", "88-002", "", "8800"], ["SA88-111HT", "-Ext Clsd Bottom 1.5\u201D B.Sill with", "88-088", "84-911", "84-911", "88-002", "", "8800HT"], ["SA88-112", 'Ext 1" Sill Frame for Caulking and', "88-087", "", "", "", "", "8800"], ["SA88-113", 'Ext 1.5" Sill Frame for gasket and', "88-088", "", "", "", "", "8800"], ["SA88-114", "", "", "", "", "", "", "8800"], ["SA88-115", "", "", "", "", "", "", "8800"], ["SA88-116", "", "", "", "", "", "", "8800"], ["SA88-117", "", "", "", "", "", "", "8800"], ["SA88-118", "", "", "", "", "", "", "8800"], ["SA88-119", "", "", "", "", "", "", "8800"], ["SA88-120", "", "", "", "", "", "", "8800"], ["SA89-001", "THREE TRACK FIXED PANEL HEAD", "89-001", "84-904", "84-904", "89-020", "", "8900"], ["SA89-002", "THREE TRACK MIDDLE PANEL", "89-003", "84-904", "84-904", "89-019", "", "8900"], ["SA89-003", "THREE TRACK OPERATING PANEL", "89-004", "84-904", "84-904", "89-001", "", "8900"], ["SA89-004", "THREE TRACK FIXED PANEL", "89-005", "84-904", "89-907", "89-022", "", "8900"], ["SA89-005", "THREE TRACK MIDDLE PANEL SILL", "89-007", "84-904", "89-907", "89-021", "", "8900"], ["SA89-006", "THREE TRACK OPERATING PANEL", "89-008", "84-904", "89-907", "89-023", "", "8900"], ["SA89-007", "FIXED JAMB FRAME THREE TRACK", "89-009", "84-904", "84-904", "89-033", "", "8900"], ["SA89-008", "OPERATING JAMB FRAME THREE", "89-033", "84-904", "84-904", "89-009", "", "8900"], ["SA89-009", "FIXED FEMALE JAMB FRAME", "89-024", "84-904", "84-904", "89-025", "", "8900"], ["SA89-010", "OPERATING FEMALE JAMB FRAME", "89-025", "84-904", "84-904", "89-024", "", "8900"], ["SA89-011", "TWO TRACK FIXED PANEL HEAD", "89-001", "84-904", "84-904", "89-019", "", "8900"], ["SA89-012", "TWO TRACK OPERATING PANEL", "89-003", "84-904", "84-904", "89-001", "", "8900"], ["SA89-013", "TWO TRACK FIXED PANEL SILL", "89-005", "84-904", "89-907", "89-021", "", "8900"], ["SA89-014", "TWO TRACK OPERATING PANEL", "89-007", "84-904", "89-907", "89-023", "", "8900"], ["SA89-015", "TWO TRACK FIXED PANEL JAMB", "89-009", "84-904", "84-904", "89-010", "", "8900"], ["SA89-016", "TWO TRACK OPERATING PANEL", "89-010", "84-904", "84-904", "89-009", "", "8900"], ["SA89-017", "TWO TRACK FIXED PANEL JAMB", "89-024", "84-904", "84-904", "89-026", "", "8900"], ["SA89-018", "TWO TRACK OPERATING PANEL", "89-026", "84-904", "84-904", "89-024", "", "8900"], ["SA89-019", "VERTICAL 7.813 TO 5.000", "89-027", "84-901", "84-901", "89-029", "", "8900"], ["SA89-020", "VERTICAL 5.000 TO 5.000", "89-027", "84-901", "84-901", "89-028", "", "8900"], ["SA89-021", "VERTICAL 7.750 FIXED JAMB ONLY", "89-030", "84-904", "84-904", "89-031", "", "8900"], ["SA89-022", "VERTICAL 7.750 OPERABLE JAMB", "89-031", "84-904", "84-904", "89-030", "", "8900"], ["SA89-023", "Thermal break 84-904", "", "", "", "", "", "8900"], ["SA89-024", "Thermal break 84-904", "", "", "", "", "", "8900"], ["SA89-025", "Thermal break 84-904", "", "", "", "", "", "8900"], ["SA89-026", "Thermal break 84-904", "", "", "", "", "", "8900"], ["SA89-027", "Vertical 7.813 to 5.000 Hybrid", "89-040", "84-901", "84-901", "89-039", "", "8900"], ["SA89-051", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-052", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-053", "Thermal break -", "", "", "", "", "", "8950"], ["SA89-054", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-055", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-056", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-057", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-058", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-059", "Door Vertical Transom", "89-070", "84-901", "84-901", "89-069", "", "8950"], ["SA89-061", "Door Fixed Transom", "89-060", "84-901", "84-901", "89-062", "", "8950"], ["SA89-062", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-064", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-066", "Door Transom Panel above Panel", "89-060", "84-901", "84-901", "89-086", "", "8950"], ["SA89-067", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-068", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-069", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-070", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-071", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-072", "Ext Sill closed bottom, no screen", "89-056", "", "", "", "", "8950"], ["SA89-073", "Lower Bypass Panel Frame", "89-080", "", "", "", "", "8950"], ["SA89-074HT", "Fixed Head Frame", "89-051", "84-909", "84-909", "89-074", "", "8950HT"], ["SA89-075", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-075HT", "Fixed Transom", "89-060", "84-909", "84-909", "89-076", "", "8950HT"], ["SA89-076", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-076HT", "Transom Panel Above Vision", "89-060", "84-909", "84-909", "89-079", "", "8950HT"], ["SA89-077HT", "Transom Panel Above Panel", "89-060", "84-909", "84-909", "89-087", "", "8950HT"], ["SA89-078", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-078HT", "Transom Vertical", "89-070", "84-909", "84-909", "89-088", "", "8950HT"], ["SA89-079", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-079HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-080", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-080HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-081", "Thermal break 84-901", "", "", "", "", "", "8950"], ["SA89-081HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-082HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-083HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-084HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-085HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-086HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-087HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-088HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-089HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-090HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-091HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-092HT", "Thermal break 84-909", "", "", "", "", "", "8950HT"], ["SA89-101", "DOOR PANEL ASSEMBLY", "89-101", "89-902", "89-901", "89-102", "", "8900"], ["SA89-102", "90\xB0 DOOR ACTIVE DOOR FRAME", "89-105", "84-901", "84-901", "89-106", "", "8900"], ["SA89-103", "90\xB0 DOOR IN ACTIVE DOOR FRAME", "89-107", "84-901", "84-901", "89-108", "", "8900"], ["SA89-104", "90\xB0 DOOR IN ACTIVE DOOR", "89-112", "89-902", "89-901", "89-112", "", "8900"], ["SA89-105", "BY PARTING DOOR PANEL", "89-111", "89-906", "", "89-111", "", "8900"], ["SA89-106", "HEAVY DUTY DOOR PANEL", "89-114", "89-902", "89-901", "89-102", "", "8900"], ["SA89-107", "DOOR PANEL ASSEMBLY", "", "89-901", "89-902", "89-102", "", "8900"], ["SA89-108", "HEAVY DUTY DOOR PANEL", "89-118", "89-901", "89-902", "89-102", "", "8900"], ["SA89-109", "Sash for 8900R", "89-120", "89-901", "89-902", "89-121", "", "8900"], ["SA89-251", "Door Operating Panel", "89-251", "89-901", "89-908", "89-252", "", "8950"], ["SA89-252", "Door Fixed Interlock", "89-253", "84-904", "84-904", "89-254", "", "8950"], ["SA89-253", "Door Operating Adaptor", "89-255", "89-908", "89-901", "89-256", "", "8950"], ["SA89-254", "Heavy Duty Door Operating Sash", "89-251", "89-901", "89-908", "89-258", "", "8950"], ["SA89-255", "Byparting Sash Vertical", "89-262", "89-901", "89-908", "89-252", "", "8950"], ["SA89-256", "In-Active Sash Vertical Adaptor", "89-261", "89-901", "89-908", "89-260", "", "8950"], ["SA89-257", "Active Sash Vertical Adaptor", "89-255", "89-908", "89-901", "89-263", "", "8950"], ["SA89-258", "", "89-118", "89-901", "89-902", "89-102", "", "8950"], ["SA89-258HT", "Double Glazed Operating Panel", "89-264", "89-901", "89-908", "89-252", "", "8950HT"], ["SA89-259HT", "Triple Glazed Operating Panel", "89-265", "89-901", "89-908", "89-252", "", "8950HT"], ["SA89-260HT", "Operating Panel Adaptor", "89-266", "89-901", "89-908", "89-256", "", "8950HT"], ["SA89-261HT", "Fixed Interlock Rail", "89-254", "89-901", "89-901", "89-253", "", "8950HT"], ["SA89-262HT", "In-Active Sash Vertical Adaptor", "89-269", "89-908", "89-901", "89-260", "", "8950HT"], ["SA89-263HT", "Active sash vertical adaptor", "89-266", "89-908", "89-901", "89-263", "", "8950HT"], ["SA89-264HT", "Byparting Sash Vertical", "89-268", "89-901", "89-908", "89-252", "", "8950HT"], ["SA89-265HT", "Heavy Duty Door Operating Sash", "89-265", "89-901", "89-908", "89-258", "", "8950HT"], ["SA89-266HT", "Double Glazed Operating Panel", "89-267", "89-901", "89-908", "89-252", "", "8950HT"]];
   var SUBASSEMBLIES = ROWS.map(([sa, desc, exterior, upperTB, lowerTB, interior, note, series]) => ({
@@ -5846,7 +5038,1126 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     return { src: DRAWING_PREFIX + body, source: DRAWING_SOURCE[key] || "sheet" };
   }
 
+  // js/routing.js
+  var SOP = {
+    id: "SOP-WW-CUT-008",
+    version: "8.0",
+    title: "Window Wall & Vents Material Flow",
+    effective: "August 2026"
+  };
+  var SAW_WIDTH_DIES = ["SA80-104", "SA80-105", "SA80-255", "SA80-256", "SA80-261"];
+  var SAW_SET = new Set(SAW_WIDTH_DIES);
+  var FMC_DIES = /* @__PURE__ */ new Set(["SA80-235", "SA80-236"]);
+  var STEP = {
+    rollAuto: {
+      machine: "roll-auto",
+      station: "Auto Rolling",
+      paper: "Rolling sheets only",
+      where: "Floor staging / job traveller",
+      who: "Material handler"
+    },
+    rollManual: {
+      machine: "roll-man",
+      station: "Manual Rolling",
+      paper: "Rolling sheets only",
+      where: "Vent staging rack / job traveller",
+      who: "Material coordinator"
+    },
+    fom2: {
+      machine: "fom2",
+      station: "FOM 2",
+      paper: "FOM width report",
+      where: "FOM workstation console",
+      who: "CNC programmer"
+    },
+    sawWidths: {
+      machine: "saw",
+      station: "Elumatec Saw (widths)",
+      paper: "Manual cutsheets + barcode labels",
+      where: "Station staging rack",
+      who: "Saw operator / CAD team"
+    },
+    /* The SOP draws Widths Punch and Multi Punch as two boxes with their own
+       paperwork; the department's schedules only ever name one punch, so the app
+       has only one machine. Left unmapped rather than pointed at Multi Punch:
+       showing the station on the route is right either way, but assigning a
+       widths line to the heights punch would not be. */
+    widthsPunch: {
+      machine: null,
+      station: "Widths Punch",
+      paper: "Punch sheet",
+      where: "Widths punch workstation",
+      who: "Punch operator"
+    },
+    sawHeights: {
+      machine: "saw",
+      station: "Elumatec Saw (heights)",
+      paper: "Heights cutsheets (set 2 of 2)",
+      where: "Firas's office, if not already at the saw",
+      who: "Firas / scheduling"
+    },
+    multiPunch: {
+      machine: "multipunch",
+      station: "Multi Punch",
+      paper: "Breakdown package (window info) + labels",
+      where: "Aisle 2 of the office",
+      who: "Dimble / Smit"
+    },
+    /* "FMC-1 / FMC-2" — the SOP says a height with pin holes needs an FMC, not
+       which one. That second half is a capacity call, and the learned routing
+       already answers it from what the floor actually does, so this step names
+       no machine and leaves the choice where it belongs. */
+    fmc: {
+      machine: null,
+      station: "FMC 1 / FMC 2",
+      paper: "Program paper",
+      where: "Aisle 2 of the office",
+      who: "Neel (programmer)"
+    },
+    fom3: {
+      machine: "fom3",
+      station: "FOM 3",
+      paper: "Vent cutsheet (set 2 of 2)",
+      where: "FOM 3 station workstation",
+      who: "CAD / scheduling team"
+    },
+    assembly: {
+      machine: null,
+      station: "Main assembly / prep (station 4)",
+      paper: null,
+      where: "Window wall frames",
+      who: "Assembly"
+    },
+    ventAssembly: {
+      machine: null,
+      station: "Vent assembly",
+      paper: "Master vent kit traveller",
+      where: "Vent line cart rack",
+      who: "Vent assembly team"
+    }
+  };
+  function isHighThermal(die) {
+    const { sa } = dieForms(die);
+    return !!sa && /(HT|HTX)$/.test(sa);
+  }
+  function isSawWidthDie(die) {
+    const { sa } = dieForms(die);
+    return !!sa && SAW_SET.has(sa);
+  }
+  function seriesOf(die) {
+    const { sa } = dieForms(die);
+    return sa ? sa.slice(2, 4) : null;
+  }
+  function orientationOf(die) {
+    const desc = lookupDie(die).assembly?.desc || "";
+    if (/vert/i.test(desc)) return "height";
+    if (/horiz/i.test(desc)) return "width";
+    return null;
+  }
+  function classify(task) {
+    const m = task.machine;
+    const series = seriesOf(task.die);
+    if (m === "fom1") return { track: null };
+    if (series && series !== "80" && series !== "85") return { track: null };
+    if (m === "fom3") {
+      return { track: "vents", at: "fom3", sure: true, why: "on FOM 3, the vent cut line" };
+    }
+    if (m === "roll-man") {
+      if (series === "85") {
+        return {
+          track: "vents",
+          at: "rollManual",
+          sure: false,
+          why: "an 8500 die on Manual Rolling, which is where vent stock starts"
+        };
+      }
+      return { track: null };
+    }
+    if (m === "fom2") {
+      return { track: "widths", at: "fom2", sure: true, why: "on FOM 2, the widths machine" };
+    }
+    if (m === "saw") {
+      return { track: "heights", at: "sawHeights", sure: true, why: "on the Elumatec saw" };
+    }
+    if (m === "multipunch") {
+      return { track: "heights", at: "multiPunch", sure: true, why: "on the Multi Punch" };
+    }
+    if (m === "roll-auto") {
+      if (isSawWidthDie(task.die)) {
+        return {
+          track: "widths",
+          at: "rollAuto",
+          sure: true,
+          why: "the SOP names this die on the widths line"
+        };
+      }
+      const o = orientationOf(task.die);
+      if (o) {
+        return {
+          track: o === "width" ? "widths" : "heights",
+          at: "rollAuto",
+          sure: false,
+          why: `the section book calls this die ${o === "width" ? "horizontal" : "vertical"}`
+        };
+      }
+      return {
+        track: "ww",
+        at: "rollAuto",
+        sure: false,
+        why: "on Auto Rolling \u2014 widths and heights split after this"
+      };
+    }
+    return { track: null, at: null, sure: false, why: null };
+  }
+  function routeFor(task) {
+    if (!task) return null;
+    const c = classify(task);
+    if (!c.track) return null;
+    let steps;
+    let rule;
+    if (c.track === "vents") {
+      steps = ["rollManual", "fom3", "ventAssembly"];
+      rule = "Vents run as a separate entity: manual rolling, then FOM 3, then straight to vent assembly.";
+    } else if (c.track === "heights") {
+      const fmc = needsFmc(task);
+      steps = ["rollAuto", "sawHeights", "multiPunch", ...fmc ? ["fmc"] : [], "assembly"];
+      rule = fmc ? `Heights: saw, punch, then FMC \u2014 ${fmc}.` : "Heights: Elumatec saw, then Multi Punch. No pin holes, ISV or SA80.235/236, so no FMC.";
+    } else if (c.track === "widths") {
+      if (isHighThermal(task.die)) {
+        steps = ["rollAuto", "fom2", "assembly"];
+        rule = "High thermal goes only to FOM 2 \u2014 it skips the saw and the widths punch.";
+      } else if (isSawWidthDie(task.die)) {
+        steps = ["rollAuto", "sawWidths", "widthsPunch", "assembly"];
+        rule = `${dieForms(task.die).sa} is one of the five dies that do go through the saw and the widths punch.`;
+      } else {
+        steps = ["rollAuto", "fom2", "assembly"];
+        rule = "Not high thermal and not one of the five saw dies, so it goes straight to FOM 2 \u2014 skipping the saw and the widths punch.";
+      }
+    } else {
+      steps = ["rollAuto"];
+      rule = "Auto rolling first. Which way it goes after that depends on whether it is cut as a width or a height.";
+    }
+    const at = steps.indexOf(c.at);
+    return {
+      track: c.track,
+      sure: c.sure,
+      why: c.why,
+      rule,
+      steps: steps.map((k) => ({ ...STEP[k], key: k })),
+      at,
+      // -1 when the line is not on a step of its own route
+      next: at >= 0 && at + 1 < steps.length ? { ...STEP[steps[at + 1]], key: steps[at + 1] } : null
+    };
+  }
+  function needsFmc(task) {
+    const pin = String(task.pinHole || "").toUpperCase();
+    if (pin === "P:Y" || pin === "Y" || pin === "YES") return "pin holes";
+    const { sa } = dieForms(task.die);
+    if (sa && FMC_DIES.has(sa)) return `die ${sa}`;
+    if (/\bISV\b/i.test([task.comments, task.setup, task.material].filter(Boolean).join(" "))) return "ISV";
+    return null;
+  }
+  function sopMachine(task, group) {
+    const r = routeFor(task);
+    if (!r) return null;
+    const candidates = r.steps.filter((s) => s.machine && s.machine !== task.machine);
+    for (const s of candidates) {
+      if (MACHINE_CENTRE[s.machine] !== group) continue;
+      if (r.at >= 0 && r.steps.indexOf(s) < r.at) continue;
+      return { machine: s.machine, station: s.station, rule: r.rule, sure: r.sure, sop: true };
+    }
+    return null;
+  }
+  var MACHINE_CENTRE = {
+    "roll-auto": "Rolling",
+    "roll-man": "Rolling",
+    fom1: "FOM",
+    fom2: "FOM",
+    fom3: "FOM",
+    cncfmc: "CNC",
+    cnc1: "CNC",
+    fmc1: "CNC",
+    fmc2: "CNC",
+    multipunch: "Punch",
+    saw: "Punch"
+  };
+
+  // js/model.js
+  var MACHINE_GROUP = Object.fromEntries(MACHINES.map((m) => [m.key, m.group]));
+  function today() {
+    return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  }
+  function addDays(iso, n) {
+    const d = /* @__PURE__ */ new Date(iso + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  var TRACK_STATUS = {
+    NOT_STARTED: { key: "NOT_STARTED", label: "Not started", tone: "mute" },
+    IN_PROGRESS: { key: "IN_PROGRESS", label: "In Progress", tone: "work" },
+    DONE: { key: "DONE", label: "Done", tone: "ok" }
+  };
+  var TRACK_STATUS_ORDER = ["NOT_STARTED", "IN_PROGRESS", "DONE"];
+  function taskStatusKey(t) {
+    const src = t.origin || t;
+    return `${t.machine}|${src.wo}|${src.die || ""}`;
+  }
+  function resolveTask(task) {
+    const key = taskStatusKey(task);
+    const override = state.taskEdit?.[key];
+    if (!override?.fields || !Object.keys(override.fields).length) return task;
+    const out = { ...task, origin: task.origin || { ...task }, edited: {} };
+    for (const { key: f } of EDITABLE_FIELDS) {
+      if (f in override.fields) {
+        out[f] = override.fields[f];
+        out.edited[f] = true;
+      }
+    }
+    out.editedAt = override.at;
+    out.editedBy = override.by;
+    return out;
+  }
+  function effectiveTaskStatus(t) {
+    const override = state.taskStatus[taskStatusKey(t)];
+    if (override?.status && TRACK_STATUS[override.status]) {
+      return { ...TRACK_STATUS[override.status], by: override.by, at: override.at, overridden: true };
+    }
+    let bucket = "NOT_STARTED";
+    if (t.status === "DONE") bucket = "DONE";
+    else if (t.status === "IP") bucket = "IN_PROGRESS";
+    return { ...TRACK_STATUS[bucket], overridden: false };
+  }
+  function tasksInScope() {
+    const imported = (state.tasks || []).filter((t) => !t.archived);
+    const manual = Object.values(state.manualTasks || {});
+    if (!manual.length) return imported;
+    const have = new Set(imported.map(taskStatusKey));
+    return imported.concat(manual.filter((t) => !t.archived && !have.has(taskStatusKey(t))));
+  }
+  function manualIdFor(task) {
+    if (!task?.manual) return null;
+    return String(task.id).replace(/^manual:/, "");
+  }
+  function hasTasks() {
+    return tasksInScope().length > 0;
+  }
+  function assignedMachine(task) {
+    return state.taskAssign?.[taskStatusKey(task)]?.machine || task.machine;
+  }
+  function isAssigned(task) {
+    return !!state.taskAssign?.[taskStatusKey(task)]?.machine;
+  }
+  function tasksForMachine(machineKey) {
+    return tasksInScope().filter((t) => assignedMachine(t) === machineKey).map((t) => resolveTask(t)).map((task) => ({ task, status: effectiveTaskStatus(task), rush: resolveRush(task) })).sort((a, b) => {
+      if (a.rush.on !== b.rush.on) return a.rush.on ? -1 : 1;
+      return (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1;
+    });
+  }
+  function openCountFor(machineKey) {
+    return tasksForMachine(machineKey).filter((r) => r.status.key !== "DONE").length;
+  }
+  function runningNow(machineKey) {
+    return tasksForMachine(machineKey).filter((r) => r.status.key === "IN_PROGRESS");
+  }
+  var DATE_GROUPS = [
+    { key: "OVERDUE", label: "Overdue", tone: "bad", open: true, cap: 25 },
+    { key: "TODAY", label: "Today", tone: "warn", open: true, cap: 25 },
+    { key: "WEEK", label: "This week", tone: "mute", open: true, cap: 25 },
+    { key: "LATER", label: "Later", tone: "mute", open: false, cap: 25 },
+    { key: "NODATE", label: "No date", tone: "mute", open: false, cap: 25 }
+  ];
+  function dateGroupOf(task, ref = today()) {
+    const d = task.cuttingDate;
+    if (!d) return "NODATE";
+    if (d < ref) return "OVERDUE";
+    if (d === ref) return "TODAY";
+    return d <= addDays(ref, 7) ? "WEEK" : "LATER";
+  }
+  function groupedQueue(machineKey, { showDone = false, q = "", filter = "ALL", ref = today() } = {}) {
+    const term = q.trim().toLowerCase();
+    const rows = tasksForMachine(machineKey).filter((r) => showDone || r.status.key !== "DONE").filter((r) => {
+      if (filter === "ALL") return true;
+      if (filter === "BO") return resolveBackOrder(r.task).on;
+      if (filter === "RUSH") return r.rush.on;
+      return r.status.key === filter;
+    }).filter((r) => {
+      if (!term) return true;
+      const note = taskNoteFor(taskStatusKey(r.task))?.text || "";
+      const hay = [r.task.wo, r.task.project, r.task.floor, r.task.die, r.task.comments, note].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(term);
+    });
+    const byKey = new Map(DATE_GROUPS.map((g) => [g.key, []]));
+    for (const r of rows) byKey.get(dateGroupOf(r.task, ref)).push(r);
+    return DATE_GROUPS.map((g) => ({ ...g, rows: byKey.get(g.key) })).filter((g) => g.rows.length);
+  }
+  function machineSummary(machineKey, ref = today()) {
+    const all = tasksForMachine(machineKey);
+    const open = all.filter((r) => r.status.key !== "DONE");
+    return {
+      total: all.length,
+      open: open.length,
+      inProgress: open.filter((r) => r.status.key === "IN_PROGRESS").length,
+      overdue: open.filter((r) => dateGroupOf(r.task, ref) === "OVERDUE").length,
+      backOrder: open.filter((r) => resolveBackOrder(r.task).on).length,
+      rush: open.filter((r) => r.rush.on).length,
+      done: all.length - open.length
+    };
+  }
+  function rushFor(key) {
+    return state.rush?.[key] || null;
+  }
+  function resolveRush(task, ref = today()) {
+    const rec = rushFor(taskStatusKey(task));
+    if (!rec?.on) return { on: false };
+    const needBy = rec.needBy || null;
+    return {
+      on: true,
+      needBy,
+      late: !!needBy && needBy < ref,
+      soon: !!needBy && needBy >= ref && needBy <= addDays(ref, 2),
+      assignee: rec.assignee || null,
+      reason: rec.reason || null,
+      at: rec.at || null,
+      by: rec.by || null
+    };
+  }
+  function allRush(ref = today()) {
+    const rows = [];
+    for (const t of tasksInScope()) {
+      const task = resolveTask(t);
+      const rush = resolveRush(task, ref);
+      if (!rush.on) continue;
+      if (effectiveTaskStatus(task).key === "DONE") continue;
+      rows.push({ task, rush, machine: assignedMachine(task) });
+    }
+    return rows.sort((a, b) => (a.rush.needBy || a.task.cuttingDate || "9999") < (b.rush.needBy || b.task.cuttingDate || "9999") ? -1 : 1);
+  }
+  function backOrderFor(key) {
+    return state.backOrder?.[key] || null;
+  }
+  function resolveBackOrder(task) {
+    const rec = backOrderFor(taskStatusKey(task)) || {};
+    const fromSheet = !!task.backOrder;
+    const on = rec.flagged == null ? fromSheet : !!rec.flagged;
+    return {
+      on,
+      fromSheet,
+      // Only a recorded count is trustworthy as "pieces short": the sheet's B/O
+      // column counts BARS, and on FOM2/FOM3 writes them as text ("3 BARS").
+      // That is kept separately as context rather than shown as a piece count.
+      qty: rec.qty ?? null,
+      sheetShort: task.boRaw || task.boStat || null,
+      assignee: rec.assignee || null,
+      note: rec.note || null,
+      recorded: !!rec.at,
+      at: rec.at || null,
+      by: rec.by || null
+    };
+  }
+  function allBackOrders() {
+    const rows = [];
+    for (const t of tasksInScope()) {
+      const task = resolveTask(t);
+      const bo = resolveBackOrder(task);
+      if (!bo.on) continue;
+      if (effectiveTaskStatus(task).key === "DONE") continue;
+      rows.push({ task, bo, machine: assignedMachine(task) });
+    }
+    const groups = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      const who = r.bo.assignee || "";
+      if (!groups.has(who)) groups.set(who, []);
+      groups.get(who).push(r);
+    }
+    for (const list of groups.values()) {
+      list.sort((a, b) => (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1);
+    }
+    return Array.from(groups.entries()).map(([assignee, list]) => ({ assignee, rows: list })).sort((a, b) => {
+      if (!a.assignee) return 1;
+      if (!b.assignee) return -1;
+      return a.assignee.localeCompare(b.assignee);
+    });
+  }
+  function taskNoteFor(key) {
+    return state.taskNote?.[key] || null;
+  }
+  function machineConfig(machine) {
+    const cfg = state.machineConfig?.[machine.key] || {};
+    return {
+      ...machine,
+      label: cfg.label || machine.label,
+      note: cfg.note !== void 0 ? cfg.note : machine.note,
+      ops: cfg.ops !== void 0 && cfg.ops !== null ? cfg.ops : machine.ops,
+      hidden: !!cfg.hidden,
+      customised: !!(cfg.label || cfg.note !== void 0 || cfg.ops != null)
+    };
+  }
+  function staleImports() {
+    return ["rolling", "cnc"].filter((kind) => {
+      const meta = state.machineMeta?.[kind];
+      return meta && (meta.parser ?? 1) < PARSER_VERSION;
+    });
+  }
+  function sheetShiftUpdateFor(machineKey) {
+    const su = state.shiftUpdate;
+    if (!su?.machines) return null;
+    const entry = su.machines[machineKey];
+    if (!entry) return null;
+    return { date: su.date, shift: su.shift, ...entry };
+  }
+  var SHIFT_RANK = { DAY: 0, AFT: 1, AFTERNOON: 1, NIGHT: 2, MIDNIGHT: 2 };
+  function rank(date2, shift) {
+    return `${date2 || ""}#${SHIFT_RANK[shift] ?? 0}`;
+  }
+  function lines(v) {
+    return String(v || "").split("\n").map((s) => s.trim()).filter(Boolean);
+  }
+  function writtenShiftUpdateFor(machineKey) {
+    let best = null;
+    for (const log of Object.values(state.shiftLogs || {})) {
+      const row = log?.rows?.[machineKey];
+      if (!row) continue;
+      const done = lines(row.done);
+      const next = lines(row.next);
+      const notes = lines(row.notes);
+      if (!done.length && !next.length && !notes.length) continue;
+      if (best && rank(log.date, log.shift) <= rank(best.date, best.shift)) continue;
+      best = {
+        date: log.date,
+        shift: log.shift,
+        ops: row.ops === "" || row.ops == null ? null : Number(row.ops),
+        done,
+        next,
+        notes,
+        down: false,
+        by: log.by,
+        at: log.at
+      };
+    }
+    return best;
+  }
+  function shiftUpdateFor(machineKey) {
+    const sheet = sheetShiftUpdateFor(machineKey);
+    const written = writtenShiftUpdateFor(machineKey);
+    if (written && (!sheet || rank(written.date, written.shift) > rank(sheet.date, sheet.shift))) {
+      return {
+        ...written,
+        source: "written",
+        // The workbook is the only one of the two that records a machine as
+        // down, so a newer written update must not silently clear it. Carried
+        // across with its own date, for the panel to caveat.
+        staleDown: sheet?.down ? sheet.date : null
+      };
+    }
+    return sheet ? { ...sheet, source: "workbook" } : null;
+  }
+  function shiftUpdateAge(date2, ref = today()) {
+    if (!date2) return null;
+    const days = Math.round((Date.parse(ref) - Date.parse(date2)) / 864e5);
+    if (days <= 0) return { days: 0, label: "today", tone: "ok" };
+    if (days === 1) return { days, label: "yesterday", tone: "warn" };
+    return { days, label: `${days} days old`, tone: "bad" };
+  }
+  function shiftWindow(date2, shift) {
+    const mk = (d, h) => {
+      const x = /* @__PURE__ */ new Date(d + "T00:00:00");
+      x.setHours(h, 0, 0, 0);
+      return x.getTime();
+    };
+    if (shift === "DAY") return [mk(date2, 7), mk(date2, 15)];
+    if (shift === "AFT") return [mk(date2, 15), mk(date2, 23)];
+    return [mk(date2, 23), mk(addDays(date2, 1), 7)];
+  }
+  function taskByKey(key) {
+    for (const t of tasksInScope()) {
+      if (taskStatusKey(t) === key) return resolveTask(t);
+    }
+    return null;
+  }
+  function workInShift(machineKey, date2, shift) {
+    const [from, to] = shiftWindow(date2, shift);
+    const seen = /* @__PURE__ */ new Map();
+    for (const h of state.taskHistory || []) {
+      if (h.kind !== "status") continue;
+      const t = Date.parse(h.at);
+      if (!(t >= from && t < to)) continue;
+      if (!seen.has(h.key)) seen.set(h.key, h);
+    }
+    const out = [];
+    for (const [key, h] of seen) {
+      const task = taskByKey(key);
+      if (!task || assignedMachine(task) !== machineKey) continue;
+      out.push({ task, to: h.to, by: h.by, at: h.at });
+    }
+    return out.sort((a, b) => a.at < b.at ? -1 : 1);
+  }
+  function openTodos(ref = today()) {
+    const all = Object.values(state.todos || {});
+    const mine = all.filter((t) => t.date <= ref);
+    const open = mine.filter((t) => !t.done).sort((a, b) => a.date === b.date ? a.at < b.at ? -1 : 1 : a.date < b.date ? -1 : 1);
+    const done = all.filter((t) => t.done && t.date === ref).sort((a, b) => (a.doneAt || "") < (b.doneAt || "") ? 1 : -1);
+    return { open, done, carried: open.filter((t) => t.date < ref).length };
+  }
+  function todayBoard(ref = today()) {
+    const rows = tasksInScope().map((t) => {
+      const task = resolveTask(t);
+      return {
+        task,
+        machine: assignedMachine(task),
+        status: effectiveTaskStatus(task),
+        rush: resolveRush(task, ref),
+        bo: resolveBackOrder(task)
+      };
+    });
+    const open = rows.filter((r) => r.status.key !== "DONE");
+    return {
+      running: open.filter((r) => r.status.key === "IN_PROGRESS"),
+      dueToday: open.filter((r) => r.task.cuttingDate === ref),
+      overdue: open.filter((r) => r.task.cuttingDate && r.task.cuttingDate < ref),
+      rushNow: open.filter((r) => r.rush.on && (!r.rush.needBy || r.rush.needBy <= ref)),
+      backOrders: open.filter((r) => r.bo.on),
+      finishedToday: rows.filter((r) => r.status.key === "DONE" && String(r.status.at || "").slice(0, 10) === ref)
+    };
+  }
+  function shiftWritten(date2, shift) {
+    const log = state.shiftLogs?.[`${date2}|${shift}`];
+    return !!(log && (Object.keys(log.rows || {}).length || (log.notes || "").trim()));
+  }
+  function routeTable() {
+    const byDie = /* @__PURE__ */ new Map();
+    for (const t of tasksInScope()) {
+      const key = taskStatusKey(t);
+      const assigned = state.taskAssign?.[key]?.machine;
+      if (!assigned) continue;
+      const die = (t.origin || t).die;
+      if (!die) continue;
+      if (!byDie.has(die)) byDie.set(die, /* @__PURE__ */ new Map());
+      const counts = byDie.get(die);
+      counts.set(assigned, (counts.get(assigned) || 0) + 1);
+    }
+    return byDie;
+  }
+  var routeCache = null;
+  var routeCacheAt = null;
+  function routes() {
+    const stamp = Object.keys(state.taskAssign || {}).length + ":" + (state.tasks?.length || 0);
+    if (routeCache && routeCacheAt === stamp) return routeCache;
+    routeCache = routeTable();
+    routeCacheAt = stamp;
+    return routeCache;
+  }
+  function suggestedMachine(task, { minSeen = 2 } = {}) {
+    if (isAssigned(task)) return null;
+    if (effectiveTaskStatus(task).key === "DONE") return null;
+    const group = MACHINE_GROUP[task.machine];
+    const sop = sopMachine(task, group);
+    if (sop) return sop;
+    const die = (task.origin || task).die;
+    if (!die) return null;
+    const counts = routes().get(die);
+    if (!counts) return null;
+    const options = [...counts.entries()].filter(([m]) => MACHINE_GROUP[m] === group && m !== task.machine).sort((a, b) => b[1] - a[1]);
+    if (!options.length) return null;
+    const [machine, seen] = options[0];
+    const total = options.reduce((a, [, n]) => a + n, 0);
+    if (seen < minSeen) return null;
+    return { machine, seen, total, die, sure: seen === total };
+  }
+  function suggestionsIn(group) {
+    const out = [];
+    for (const t of tasksInScope()) {
+      const task = resolveTask(t);
+      if (MACHINE_GROUP[task.machine] !== group) continue;
+      const s = suggestedMachine(task);
+      if (s) out.push({ task, ...s });
+    }
+    return out;
+  }
+  function inProgressLines(machineKey) {
+    return runningNow(machineKey).map(({ task }) => {
+      const what = task.project || task.wo;
+      const where = task.floor ? ` ${task.floor}` : "";
+      const die = task.die ? ` (${task.die})` : "";
+      return `${what}${where}${die}-I.P`;
+    });
+  }
+  function stagingFor(key) {
+    return state.staging?.[key] || null;
+  }
+  function isStaged(task) {
+    return !!stagingFor(taskStatusKey(task))?.staged;
+  }
+  function stagingQueue({ q = "", ref = today() } = {}) {
+    const term = q.trim().toLowerCase();
+    const rows = [];
+    for (const t of tasksInScope()) {
+      if (MACHINE_GROUP[t.machine] !== "Rolling") continue;
+      const task = resolveTask(t);
+      const status = effectiveTaskStatus(task);
+      if (status.key !== "NOT_STARTED") continue;
+      if (term) {
+        const hay = [task.wo, task.project, task.die, task.floor].join(" ").toLowerCase();
+        if (!hay.includes(term)) continue;
+      }
+      const key = taskStatusKey(task);
+      rows.push({
+        task,
+        key,
+        status,
+        machine: assignedMachine(task),
+        staging: stagingFor(key),
+        rush: resolveRush(task, ref)
+      });
+    }
+    rows.sort((a, b) => {
+      if (a.rush.on !== b.rush.on) return a.rush.on ? -1 : 1;
+      return (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1;
+    });
+    return {
+      todo: rows.filter((r) => !r.staging?.staged),
+      staged: rows.filter((r) => r.staging?.staged)
+    };
+  }
+
+  // js/views/centre.js
+  init_ui();
+
+  // js/views/backorders.js
+  init_ui();
+  function machineLabel(key) {
+    const m = MACHINE_BY_KEY[key];
+    return m ? machineConfig(m).label : key;
+  }
+  var TYPE_A_NAME = "__type__";
+  function backOrderDialog(task, rerender) {
+    const key = taskStatusKey(task);
+    const cur = backOrderFor(key) || {};
+    const resolved = resolveBackOrder(task);
+    const max = task.qty ?? null;
+    const flag = el("input", { type: "checkbox", checked: resolved.on });
+    const qty = el("input", {
+      type: "number",
+      min: "0",
+      inputmode: "numeric",
+      max: max == null ? void 0 : String(max),
+      value: cur.qty ?? "",
+      placeholder: "0"
+    });
+    const people = state.people || [];
+    const known = cur.assignee && !people.includes(cur.assignee) ? [cur.assignee] : [];
+    const nameInput = el("input", {
+      value: cur.assignee || "",
+      placeholder: "Name",
+      style: { display: "none", marginTop: "8px" }
+    });
+    const who = el(
+      "select",
+      {
+        onchange: (e) => {
+          const typing = e.target.value === TYPE_A_NAME;
+          nameInput.style.display = typing ? "" : "none";
+          if (typing) nameInput.focus();
+        }
+      },
+      el("option", { value: "", selected: !cur.assignee }, "Unassigned"),
+      ...[...people, ...known].map((p) => el("option", {
+        value: p,
+        selected: cur.assignee === p
+      }, p)),
+      el("option", { value: TYPE_A_NAME }, "\u2014 type a name \u2014")
+    );
+    const note = el("textarea", {
+      value: cur.note || "",
+      placeholder: "What is short, who was chased, expected date\u2026",
+      style: { minHeight: "90px" }
+    });
+    const body = el(
+      "div",
+      {},
+      el(
+        "div.bo-dialoghead",
+        {},
+        el("span.mono.strong", {}, `W/O ${task.wo}`),
+        task.die ? el("span.die", {}, task.die) : null,
+        el(
+          "span.small.muted",
+          {},
+          `${task.project || ""}${task.floor ? " \xB7 " + task.floor : ""}`.trim()
+        )
+      ),
+      el(
+        "label.row.bo-flagrow",
+        {},
+        flag,
+        el(
+          "span",
+          {},
+          el("strong", {}, "Short of material"),
+          // The flag has three states and only two of them are obvious. Said in
+          // full here, because "unticking a box the workbook ticked" is the one
+          // that gets misread — it records a resolution, it does not erase one.
+          el(
+            "div.small.bo-tristate",
+            {},
+            resolved.fromSheet ? "The workbook reports this line short. Leave it ticked while it still is; untick it once the material has landed, and the tracker will keep showing it as resolved even though the sheet still says B/O." : "The workbook does not report this line short. Ticking it flags a shortage found on the floor, and it stays flagged through the next import."
+          )
+        )
+      ),
+      el(
+        "div.grid",
+        { style: { gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: "12px", marginTop: "14px" } },
+        el(
+          "label.field",
+          {},
+          el("span", {}, "Pieces short", max != null ? el("em.of-total", {}, `of ${fmtNum(max)} on the line`) : null),
+          qty
+        ),
+        el(
+          "label.field",
+          {},
+          el("span", {}, "Assigned to"),
+          who,
+          nameInput
+        )
+      ),
+      // Two different units, and mixing them up changes what gets ordered — so
+      // they are shown side by side and labelled, never merged into one number.
+      resolved.sheetShort ? el(
+        "div.bo-sheetnote",
+        {},
+        icon("alert", { size: 14 }),
+        el(
+          "span",
+          {},
+          el("strong", {}, "The workbook counts bars, this form counts pieces."),
+          el("div", {}, `Sheet says: ${resolved.sheetShort}`)
+        )
+      ) : null,
+      el("label.field", { style: { marginTop: "12px" } }, el("span", {}, "Back order note"), note),
+      cur.at ? el(
+        "div.small.muted",
+        { style: { marginTop: "10px" } },
+        `Last updated by ${cur.by} \xB7 ${fmtWhen(cur.at)}`
+      ) : null
+    );
+    modal(`Back order \u2014 ${task.wo}`, body, {
+      actions: [
+        cur.at ? {
+          label: "Clear",
+          class: "danger",
+          onClick: (dlg) => {
+            clearBackOrder(key);
+            dlg.close();
+            toast("Back order cleared");
+            rerender();
+          }
+        } : null,
+        {
+          label: "Save",
+          class: "primary",
+          onClick: (dlg) => {
+            const assignee = who.value === TYPE_A_NAME ? nameInput.value : who.value;
+            let pieces = qty.value === "" ? null : Number(qty.value);
+            if (pieces != null && max != null) pieces = Math.min(pieces, max);
+            setBackOrder(key, {
+              // Record the flag explicitly, so unticking a sheet-reported
+              // shortage is stored as "resolved" rather than read as "unset".
+              flagged: flag.checked,
+              qty: pieces,
+              assignee,
+              note: note.value
+            });
+            dlg.close();
+            toast("Back order saved");
+            rerender();
+          }
+        }
+      ].filter(Boolean)
+    });
+  }
+  var mineOnly = false;
+  function renderBackOrders(rerender, go2) {
+    if (!hasTasks()) {
+      return el(
+        "div.panel",
+        {},
+        el(
+          "div.empty",
+          {},
+          el("div.empty-icon", {}, icon("upload", { size: 28 })),
+          el("h3", {}, "No schedule loaded yet"),
+          el("p", {}, "Import the Rolling and CNC workbooks to get started."),
+          el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
+        )
+      );
+    }
+    let groups = allBackOrders();
+    if (mineOnly) groups = groups.filter((g) => g.assignee === me());
+    const total = groups.reduce((a, g) => a + g.rows.length, 0);
+    const pieces = groups.reduce((a, g) => a + g.rows.reduce((b, r) => b + (r.bo.qty || 0), 0), 0);
+    const unassigned = allBackOrders().find((g) => !g.assignee)?.rows.length || 0;
+    const head = el(
+      "div.centre-head",
+      {},
+      el(
+        "div.row.centre-title-row",
+        {},
+        el(
+          "div.centre-ident",
+          {},
+          el("span.centre-rail", { "aria-hidden": "true" }),
+          el(
+            "div",
+            {},
+            el("h1.centre-title", {}, "Back orders"),
+            el("div.centre-sub", {}, "Lines short of material, across every centre")
+          )
+        ),
+        el("span.spacer"),
+        el(
+          "div.centre-stats",
+          {},
+          el("div.cstat" + (total ? ".bad" : ""), {}, el("b", {}, fmtNum(total)), el("i", {}, "lines")),
+          el("div.cstat", {}, el("b", {}, fmtNum(pieces)), el("i", {}, "pcs short")),
+          el("div.cstat" + (unassigned ? ".warn" : ""), {}, el("b", {}, fmtNum(unassigned)), el("i", {}, "unassigned"))
+        )
+      ),
+      el(
+        "div.centre-filters",
+        {},
+        el(
+          "label.row.small.donetoggle",
+          {},
+          el("input", {
+            type: "checkbox",
+            checked: mineOnly,
+            onchange: (e) => {
+              mineOnly = e.target.checked;
+              rerender();
+            }
+          }),
+          `Only mine (${me()})`
+        )
+      )
+    );
+    if (!groups.length) {
+      return el(
+        "div.centre",
+        {},
+        head,
+        el("div.panel", {}, el(
+          "div.empty",
+          {},
+          el("div.empty-icon", {}, icon("check", { size: 28 })),
+          el("h3", {}, mineOnly ? "Nothing assigned to you" : "No back orders"),
+          el("div", {}, mineOnly ? "Nothing is waiting on you right now." : "Nothing is flagged short of material.")
+        ))
+      );
+    }
+    const sections2 = groups.map((g) => {
+      const short = g.rows.reduce((a, r) => a + (r.bo.qty || 0), 0);
+      return el(
+        "section.dgroup.bo-group",
+        {},
+        el(
+          "div.bo-grouphead" + (g.assignee ? "" : ".none"),
+          {},
+          el(
+            "span.bo-avatar",
+            { "aria-hidden": "true" },
+            g.assignee ? g.assignee.slice(0, 1).toUpperCase() : "?"
+          ),
+          el("span.bo-who", {}, g.assignee || "Nobody is chasing these"),
+          el("span.dgroup-count", {}, String(g.rows.length)),
+          el("span.spacer"),
+          short ? el("span.small.muted", {}, `${fmtNum(short)} pcs short`) : null
+        ),
+        el("div.dgroup-body", {}, ...g.rows.map(({ task, bo, machine }) => el(
+          "div.line.bo-line.is-bo",
+          {
+            style: { cursor: "pointer" },
+            onclick: () => backOrderDialog(task, rerender)
+          },
+          el(
+            "div.line-main",
+            {},
+            el(
+              "div.line-id",
+              {},
+              el("span.mono.strong", {}, task.wo),
+              task.die ? el("span.die", {}, task.die) : null,
+              chip(machineLabel(machine), "mute")
+            ),
+            el(
+              "div.line-where",
+              {},
+              el("span", {}, task.project || "\u2014"),
+              task.floor ? el("span.muted", {}, " \xB7 " + task.floor) : null
+            ),
+            bo.note ? el(
+              "div.line-bonote",
+              {},
+              icon("note", { size: 13 }),
+              el("span", {}, bo.note)
+            ) : null,
+            // Bars, kept visibly separate from the pieces count beside it.
+            bo.sheetShort ? el(
+              "div.line-bonote.from-sheet",
+              {},
+              icon("alert", { size: 13 }),
+              el("span", {}, el("span.muted", {}, "workbook: "), bo.sheetShort)
+            ) : null
+          ),
+          el(
+            "div.line-qty.bo-qty",
+            {},
+            bo.qty != null ? el("span.mono.bo-short", {}, fmtNum(bo.qty)) : el("span.mono.muted", {}, "\u2014"),
+            el("span.small.muted", {}, bo.qty != null ? "pcs short" : "not counted")
+          ),
+          el("div.line-date.hide-sm", {}, fmtDate(task.cuttingDate))
+        )))
+      );
+    });
+    return el("div.centre", {}, head, ...sections2);
+  }
+
+  // js/views/manual.js
+  init_ui();
+  var FIELDS = [
+    {
+      key: "wo",
+      label: "Work order",
+      type: "text",
+      required: true,
+      placeholder: "31942",
+      hint: "What the job is called on the floor"
+    },
+    { key: "die", label: "Die", type: "text", placeholder: "S80.104" },
+    { key: "project", label: "Project", type: "text", placeholder: "Harbour Point" },
+    { key: "floor", label: "Floor / Tag", type: "text", placeholder: "12A" },
+    { key: "qty", label: "Quantity", type: "number", placeholder: "0" },
+    { key: "cuttingDate", label: "Cutting date", type: "date" }
+  ];
+  function manualJobDialog({ machine, task = null, rerender }) {
+    const editing = !!task;
+    const id = editing ? manualIdFor(task) : null;
+    const inputs = {};
+    const field = (f) => {
+      const val = editing ? task[f.key] ?? "" : f.key === "cuttingDate" ? today() : "";
+      const input = el("input", {
+        type: f.type === "number" ? "number" : f.type === "date" ? "date" : "text",
+        value: val === null ? "" : String(val),
+        placeholder: f.placeholder || "",
+        ...f.type === "number" ? { min: "0", inputmode: "decimal" } : {}
+      });
+      inputs[f.key] = input;
+      return el(
+        "label.field",
+        {},
+        el("span", {}, f.label, f.required ? el("em.of-total", {}, "required") : null),
+        input,
+        f.hint ? el("div.small.muted", { style: { marginTop: "4px" } }, f.hint) : null
+      );
+    };
+    const group = MACHINE_BY_KEY[machine]?.group;
+    const choices = group ? MACHINES.filter((m) => m.group === group) : MACHINES;
+    const machineSel = el(
+      "select",
+      {},
+      ...choices.map((m) => el("option", {
+        value: m.key,
+        selected: m.key === machine
+      }, machineConfig(m).label))
+    );
+    const comments = el("textarea", {
+      value: editing ? task.comments || "" : "",
+      placeholder: "Why it is being run, who asked for it, anything the next shift needs",
+      style: { minHeight: "76px" }
+    });
+    const body = el(
+      "div",
+      {},
+      el(
+        "p.small.muted",
+        { style: { marginTop: 0 } },
+        editing ? "This job was added by hand, so it is not in either workbook. Everything recorded against it behaves exactly like a scheduled line." : "For work the schedules do not have yet \u2014 a remake, a service order, anything phoned in. It survives re-importing the workbooks, and steps aside on its own if the same work order and die later arrive in one."
+      ),
+      el(
+        "label.field",
+        { style: { marginBottom: "12px" } },
+        el("span", {}, "Machine"),
+        machineSel
+      ),
+      el("div.grid", {
+        style: { gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: "12px" }
+      }, ...FIELDS.map(field)),
+      el(
+        "label.field",
+        { style: { marginTop: "12px" } },
+        el("span", {}, "Notes"),
+        comments
+      ),
+      editing && task.at ? el(
+        "div.small.muted",
+        { style: { marginTop: "10px" } },
+        `Added by ${task.by} \xB7 ${fmtWhen(task.at)}`
+      ) : null
+    );
+    const read = () => {
+      const out = { machine: machineSel.value, comments: comments.value };
+      for (const f of FIELDS) {
+        const raw = inputs[f.key].value.trim();
+        out[f.key] = raw === "" ? null : f.type === "number" ? Number(raw) : raw;
+      }
+      return out;
+    };
+    const dlg = modal(editing ? `Edit job \u2014 ${task.wo}` : "Add a job", body, {
+      actions: [
+        editing ? {
+          label: "Delete",
+          class: "danger",
+          onClick: async (d) => {
+            const ok = await confirmDialog(
+              "Delete this job?",
+              `W/O ${task.wo} was added by hand. Deleting it also drops the status, notes and history recorded against it.`,
+              { confirmLabel: "Delete", danger: true }
+            );
+            if (!ok) return;
+            deleteManualTask(id);
+            d.close();
+            toast("Job deleted");
+            rerender();
+          }
+        } : null,
+        {
+          label: editing ? "Save" : "Add job",
+          class: "primary",
+          onClick: (d) => {
+            const fields = read();
+            if (!fields.wo) {
+              toast("A work order is needed \u2014 it is how the line is identified");
+              inputs.wo.focus();
+              return;
+            }
+            if (editing) {
+              updateManualTask(id, fields);
+              toast("Saved");
+            } else {
+              addManualTask(fields);
+              toast(`Added W/O ${fields.wo} to ${machineConfig(MACHINE_BY_KEY[fields.machine]).label}`);
+            }
+            d.close();
+            rerender();
+          }
+        }
+      ].filter(Boolean)
+    });
+    inputs.wo.focus();
+    return dlg;
+  }
+
   // js/views/dies.js
+  init_ui();
   function componentRow(c, open) {
     return el(
       "button.diepart",
@@ -6349,6 +6660,118 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     return el("div.centre", {}, head, ...sections2);
   }
 
+  // js/views/routing.js
+  init_ui();
+  var TRACK = {
+    vents: { label: "Vents", tone: "work", note: "a separate entity from window wall" },
+    widths: { label: "Window wall \u2014 widths", tone: "ok", note: null },
+    heights: { label: "Window wall \u2014 heights", tone: "ok", note: null },
+    ww: { label: "Window wall", tone: "ok", note: "not split into widths or heights yet" }
+  };
+  function stepRow(step, i, at) {
+    const done = at >= 0 && i < at;
+    const here = i === at;
+    const label = step.machine ? machineConfig(MACHINE_BY_KEY[step.machine] || { key: step.machine, label: step.station }).label : null;
+    return el(
+      "div.route-step" + (here ? ".here" : "") + (done ? ".past" : ""),
+      {},
+      el(
+        "div.route-mark",
+        { "aria-hidden": "true" },
+        here ? icon("arrow", { size: 13 }) : done ? icon("check", { size: 12 }) : el("span.route-dot", {})
+      ),
+      el(
+        "div.route-body",
+        {},
+        el(
+          "div.route-station",
+          {},
+          el("strong", {}, step.station),
+          here ? chip("here now", "ok") : null,
+          // The station's own name on the flowchart and the machine's name in
+          // the app are not always the same word; say both once rather than
+          // leave someone matching them up.
+          label && label !== step.station ? el("span.small.muted", {}, label) : null
+        ),
+        step.paper ? el(
+          "div.route-paper",
+          {},
+          icon("note", { size: 12 }),
+          el(
+            "span",
+            {},
+            el("strong", {}, step.paper),
+            step.where ? el("span.muted", {}, " \u2014 " + step.where) : null
+          )
+        ) : null,
+        step.who ? el("div.small.muted.route-who", {}, step.who) : null
+      )
+    );
+  }
+  function routeDialog(task) {
+    const r = routeFor(task);
+    const body = el(
+      "div.routedlg",
+      {},
+      el(
+        "div.route-head",
+        {},
+        el("span.mono.strong", {}, task.wo || "\u2014"),
+        task.die ? el("span.mono.die", {}, task.die) : null,
+        el("span.spacer"),
+        r ? chip(TRACK[r.track].label, TRACK[r.track].tone) : null
+      )
+    );
+    if (!r) {
+      body.append(el(
+        "div.empty",
+        {},
+        el("div.empty-icon", {}, icon("alert", { size: 26 })),
+        el("h3", {}, "Not covered by the routing SOP"),
+        el("div", {}, `${SOP.id} covers window wall and vents. This line is on ${machineConfig(MACHINE_BY_KEY[task.machine] || { label: task.machine }).label}, which it does not route \u2014 the app falls back to what this component usually gets put on.`)
+      ));
+      return modal("Routing", body, { wide: true });
+    }
+    body.append(
+      // Why the app thinks this is the track it is, said plainly, because the
+      // schedules carry no column for it and this is read off the machine.
+      el(
+        "div.banner" + (r.sure ? "" : ".warn"),
+        {},
+        el(
+          "div",
+          {},
+          el("strong", {}, r.sure ? "Routed as " : "Read as "),
+          TRACK[r.track].label.toLowerCase(),
+          r.why ? ` \u2014 ${r.why}` : "",
+          r.sure ? "." : ". Change the machine if that is wrong and the route follows."
+        )
+      ),
+      el("div.route-rule", {}, icon("list", { size: 13 }), el("span", {}, r.rule)),
+      /* The line is standing at a station that is not on its own route. That is
+         not a rendering gap to paper over — it means the schedule and the SOP
+         disagree about this job, and the person looking at the row is the one
+         who can say which is right. */
+      r.at < 0 && r.steps.some((s) => s.machine) ? el(
+        "div.banner.bad",
+        {},
+        el(
+          "div",
+          {},
+          el("strong", {}, "Not on its route. "),
+          `The schedule has this on ${machineConfig(MACHINE_BY_KEY[task.machine] || { label: task.machine }).label}, which is not a station on the ${SOP.id} path below.`
+        )
+      ) : null,
+      el("div.routesteps", {}, ...r.steps.map((s, i) => stepRow(s, i, r.at))),
+      el(
+        "div.small.muted.route-src",
+        {},
+        `${SOP.id} v${SOP.version} \u2014 ${SOP.title}, effective ${SOP.effective}.`
+      )
+    );
+    return modal("Routing", body, { wide: true });
+  }
+
   // js/views/centre.js
   var viewState = /* @__PURE__ */ new Map();
   function stateFor(group) {
@@ -6520,10 +6943,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           // its own: routing a line to the wrong machine is a real cost, and the
           // person reading the row is the one who knows whether this time is
           // different.
+          // A rule and a habit are not the same claim, so they do not wear the
+          // same badge: the SOP says where this goes, the counts say where it
+          // has been going. Both are still offered rather than applied.
           suggestion ? el(
-            "button.badge-route",
+            "button.badge-route" + (suggestion.sop ? ".sop" : ""),
             {
-              title: `${suggestion.die} has been put on ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label} ${suggestion.seen} of ${suggestion.total} times. Click to put this one there.`,
+              title: suggestion.sop ? `${suggestion.rule} Click to put this one on ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label}.` : `${suggestion.die} has been put on ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label} ${suggestion.seen} of ${suggestion.total} times. Click to put this one there.`,
               onclick: (e) => {
                 e.stopPropagation();
                 setTaskMachine(key, suggestion.machine, t.machine);
@@ -6532,7 +6958,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
               }
             },
             icon("arrow", { size: 10 }),
-            `usually ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label}`
+            suggestion.sop ? `SOP: ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label}` : `usually ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label}`
           ) : null,
           // Without this a job that someone moved just appears on a machine the
           // workbook never put it on, and the machine it left cannot tell where
@@ -6598,6 +7024,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           title: hasQueue(group) ? "Put this line on a machine" : "Move this line to another machine",
           onclick: () => moveDialog([key], group, rerender)
         }, icon("arrow", { size: 15 })) : null,
+        // Where it goes after here, and what paperwork has to go with it.
+        el("button.line-iconbtn", {
+          title: "Where this goes next, and the paperwork it needs",
+          onclick: () => routeDialog(t)
+        }, icon("list", { size: 15 })),
         el("button.line-iconbtn" + (rush.on ? ".rush" : ""), {
           title: rush.on ? "Edit the rush" : "Mark as rush",
           onclick: () => rushDialog(t, rerender)

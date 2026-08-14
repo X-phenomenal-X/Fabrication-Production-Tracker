@@ -895,6 +895,24 @@ dialog footer button { min-height: var(--ctl-lg); }
   .seg-btn.on .seg-label { display: none; }
 }
 
+/* A row becomes three bands: what the job is, then the numbers and the tools,
+   then the status control across the full width — the one thing on the row an
+   operator actually presses, given the whole edge to land on rather than a
+   corner shared with the icon buttons.
+
+   This was a phone-only layout until the tool rail grew to six buttons. Flat,
+   the fixed columns come to about 640px before the job itself gets a pixel, so
+   at a tablet's 768 the project and note were squeezed into 56px while the
+   tools held 260 — the page's own content losing five to one to its furniture.
+   The band layout is just what fits below roughly 930px, so that is where it
+   starts rather than at some idea of "phone". */
+@media (max-width: 1000px) {
+  .line { flex-wrap: wrap; }
+  .line-main { flex-basis: calc(100% - var(--tap) - var(--s3)); }
+  .line-tools { margin-left: auto; }
+  .line-status { flex-basis: 100%; margin-left: 0; }
+}
+
 @media (max-width: 720px) {
   .centre-head { position: static; margin: calc(var(--s3) * -1) 0 var(--s1); }
   .centre-title { font-size: 23px; }
@@ -905,15 +923,8 @@ dialog footer button { min-height: var(--ctl-lg); }
   .searchwrap { flex: 1; }
   .searchwrap input { width: 100%; }
 
-  /* A row becomes three bands on a phone: what the job is, then the numbers
-     and the tools, then the status control across the full width — the one
-     thing on the row an operator actually presses, given the whole edge to
-     land on rather than a corner shared with five icon buttons. */
-  .line { flex-wrap: wrap; gap: var(--s2); padding: var(--s3) var(--s3) var(--s3) var(--s4); }
-  .line-main { flex-basis: calc(100% - var(--tap) - var(--s3)); }
+  .line { gap: var(--s2); padding: var(--s3) var(--s3) var(--s3) var(--s4); }
   .line-qty { min-width: 0; }
-  .line-tools { margin-left: auto; }
-  .line-status { flex-basis: 100%; margin-left: 0; }
   .seg { width: 100%; }
   .seg-btn { flex: 1; min-height: var(--tap); padding: 6px var(--s2); }
   .seg-btn.on .seg-label { display: inline; }
@@ -1445,6 +1456,62 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
   background: var(--accent-soft); border-style: solid; border-color: var(--accent);
 }
 .badge-route svg { flex-shrink: 0; opacity: .8; }
+/* A rule, not a tally. Solid rather than dashed because the SOP is not
+   guessing — the dashed one means "this is usually where it goes", this one
+   means "this is where it goes". */
+.badge-route.sop {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--accent-soft);
+}
+
+/* ---------- the routing SOP, for one line ---------- */
+
+.routedlg .route-head {
+  display: flex; align-items: center; gap: var(--s2);
+  padding-bottom: var(--s3); border-bottom: 1px solid var(--line); margin-bottom: var(--s3);
+}
+.route-rule {
+  display: flex; gap: var(--s2); align-items: flex-start;
+  margin: var(--s3) 0; padding: var(--s3);
+  background: var(--panel-2); border-radius: var(--r-sm);
+  font-size: var(--t-sm); color: var(--ink-2);
+}
+.route-rule svg { flex-shrink: 0; margin-top: 2px; color: var(--ink-3); }
+
+/* The stations in order, down a rail. The rail is what makes it a route
+   rather than a list of places. */
+.routesteps { display: flex; flex-direction: column; }
+.route-step {
+  display: flex; gap: var(--s3); align-items: flex-start;
+  padding: var(--s3) 0 var(--s3) 2px; position: relative;
+}
+.route-step + .route-step { border-top: 1px dashed var(--line-soft); }
+.route-mark {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: var(--r-pill);
+  display: grid; place-items: center;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-3);
+}
+.route-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); opacity: .5; }
+.route-step.here .route-mark { background: var(--accent); border-color: transparent; color: var(--on-fill); }
+.route-step.past .route-mark { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+/* Stations already behind it are still worth showing — someone checking a job
+   wants the whole path — but they are not what to read first. */
+.route-step.past .route-body { opacity: .62; }
+.route-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.route-station { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.route-station strong { font-size: var(--t-md); }
+.route-paper { display: flex; gap: var(--s2); align-items: flex-start; font-size: var(--t-sm); }
+.route-paper svg { flex-shrink: 0; margin-top: 3px; color: var(--warn); }
+.route-who { font-size: var(--t-xs); }
+.route-src { margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line); }
+
+/* The rules themselves. */
+.sopr { padding: var(--s3) 0; border-top: 1px solid var(--line); }
+.sopr-head { font-weight: 700; font-size: var(--t-sm); margin-bottom: 4px; }
+.sopr-body { color: var(--ink-2); font-size: var(--t-sm); }
+.sopr-body p { margin: 0 0 var(--s2); }
+.sopdies { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s2); }
 
 /* Routing the whole queue at once. Sits above the machine's work because it is
    about the queue rather than any one line in it. */

@@ -27,6 +27,7 @@ import { backOrderDialog } from './backorders.js';
 import { manualJobDialog } from './manual.js';
 import { dieDialog } from './dies.js';
 import { rushDialog } from './rush.js';
+import { routeDialog } from './routing.js';
 import {
   machinesByGroup, assignableIn, hasQueue, canMoveIn, MACHINE_BY_KEY,
 } from '../machines.js';
@@ -174,10 +175,16 @@ function taskLine(row, vs, rerender, group) {
         // its own: routing a line to the wrong machine is a real cost, and the
         // person reading the row is the one who knows whether this time is
         // different.
-        suggestion ? el('button.badge-route', {
-          title: `${suggestion.die} has been put on `
-            + `${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label} `
-            + `${suggestion.seen} of ${suggestion.total} times. Click to put this one there.`,
+        // A rule and a habit are not the same claim, so they do not wear the
+        // same badge: the SOP says where this goes, the counts say where it
+        // has been going. Both are still offered rather than applied.
+        suggestion ? el('button.badge-route' + (suggestion.sop ? '.sop' : ''), {
+          title: suggestion.sop
+            ? `${suggestion.rule} Click to put this one on `
+              + `${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label}.`
+            : `${suggestion.die} has been put on `
+              + `${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label} `
+              + `${suggestion.seen} of ${suggestion.total} times. Click to put this one there.`,
           onclick: (e) => {
             e.stopPropagation();
             setTaskMachine(key, suggestion.machine, t.machine);
@@ -185,7 +192,9 @@ function taskLine(row, vs, rerender, group) {
             rerender();
           },
         }, icon('arrow', { size: 10 }),
-          `usually ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label}`) : null,
+          suggestion.sop
+            ? `SOP: ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label}`
+            : `usually ${machineConfig(MACHINE_BY_KEY[suggestion.machine]).label}`) : null,
         // Without this a job that someone moved just appears on a machine the
         // workbook never put it on, and the machine it left cannot tell where
         // it went.
@@ -227,6 +236,11 @@ function taskLine(row, vs, rerender, group) {
         title: hasQueue(group) ? 'Put this line on a machine' : 'Move this line to another machine',
         onclick: () => moveDialog([key], group, rerender),
       }, icon('arrow', { size: 15 })) : null,
+      // Where it goes after here, and what paperwork has to go with it.
+      el('button.line-iconbtn', {
+        title: 'Where this goes next, and the paperwork it needs',
+        onclick: () => routeDialog(t),
+      }, icon('list', { size: 15 })),
       el('button.line-iconbtn' + (rush.on ? '.rush' : ''), {
         title: rush.on ? 'Edit the rush' : 'Mark as rush',
         onclick: () => rushDialog(t, rerender),
