@@ -38,7 +38,7 @@ step('File System Access available: ' + await page.evaluate(() => 'showOpenFileP
 await page.click('nav.tabs button:has-text("Setup")');
 await page.waitForSelector('.drop');
 const chooser = page.waitForEvent('filechooser');
-await page.click('.drop button:has-text("Choose file")');
+await page.click('.drop:has-text("Daily Schedule") button');
 await (await chooser).setFiles(XLSX);
 await page.waitForSelector('dialog .stat', { timeout: 90000 });
 const orders = await page.$eval('dialog .stat .n', (n) => n.textContent);
