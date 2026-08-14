@@ -53,12 +53,23 @@ export function normTaskStatus(raw) {
   const s = txt(raw);
   if (!s) return 'OPEN';
   const u = s.toUpperCase();
-  if (/^DONE|COMPLETE/.test(u)) return 'DONE';
+  if (/^(DONE|COMPLETE)/.test(u)) return 'DONE';
   if (/^(I\.?P|IN PROGRESS|RUNNING)/.test(u)) return 'IP';
   if (/^(B\/?O|BACK ?ORDER)/.test(u)) return 'BO';
   if (/HOLD/.test(u)) return 'HOLD';
   if (/READY|STOCK OK/.test(u)) return 'READY';
   return 'OPEN';
+}
+
+/** Back order is orthogonal to progress: the sheets write "IP BO" for a line
+    that is running but short of material. `normTaskStatus` matches IP first
+    and would drop the BO half entirely, so it is captured separately here and
+    shown as its own badge. */
+export function readsBackOrder(statusRaw, boStat, bo) {
+  const u = (txt(statusRaw) || '').toUpperCase();
+  if (/\bB\/?O\b|BACK ?ORDER/.test(u)) return true;
+  if (txt(boStat)) return true;
+  return typeof bo === 'number' && bo > 0;
 }
 
 /* Which sheet feeds which work centre, and where its columns sit (1-based).
@@ -122,7 +133,10 @@ function parseMachineSheet(sheet, spec, report) {
     if (!isWo(wo)) continue;
 
     const qty = num(get(row.cells, 'qty'));
-    const status = spec.complete ? 'DONE' : normTaskStatus(get(row.cells, 'status'));
+    const statusRaw = get(row.cells, 'status');
+    const status = spec.complete ? 'DONE' : normTaskStatus(statusRaw);
+    const boQty = num(get(row.cells, 'bo')) ?? num(get(row.cells, 'boInt'));
+    const boStat = txt(get(row.cells, 'boStat'));
 
     out.push({
       id: `${spec.machine}:${String(wo).trim()}:${txt(get(row.cells, 'die')) || 'x'}:${row.r}`,
@@ -144,14 +158,114 @@ function parseMachineSheet(sheet, spec, report) {
       dayShift: txt(get(row.cells, 'dayShift')),
       shifts: num(get(row.cells, 'shifts')),
       pinHole: txt(get(row.cells, 'pinHole')),
-      bo: num(get(row.cells, 'bo')) ?? num(get(row.cells, 'boInt')),
-      boStat: txt(get(row.cells, 'boStat')),
+      bo: boQty,
+      boStat,
+      backOrder: spec.complete ? false : readsBackOrder(statusRaw, boStat, boQty),
       archived: !!spec.complete,
     });
   }
 
   report.sheets.push({ sheet: spec.sheet, machine: spec.machine, rows: out.length });
   return out;
+}
+
+/* ---------- shift update ---------- */
+
+/* The CNC workbook's "Shift Update" sheet carries the latest word on most
+   machines — what ran, what is next, and whether a machine is down. It is
+   laid out as two side-by-side blocks so it prints on one page: the left
+   block occupies columns 1-7, the right one columns 9-15, each with its own
+   Date/Shift header on row 2 and this column layout:
+
+     Machine | #Ops | (bullet) | Work Done / In Progress | (bullet) | Next in Schedule | Notes
+
+   A machine's entry runs from its name row until the next name row. */
+const SU_SHEET = 'Shift Update';
+
+/* Sheet labels -> machine keys. Anything not listed (Proline, Notching, the
+   Saws, the standing SERVICE ORDERS / K1285 / BACK ORDER rows) is outside the
+   four centres this app tracks and is skipped. */
+const SU_MACHINE = {
+  'ROLLINGETASAUTO': 'roll-auto',
+  'ROLLINGIOTAMANUAL': 'roll-man',
+  'FOM1': 'fom1',
+  'FOM2': 'fom2',
+  'FOM3': 'fom3',
+  'CNC1': 'cnc1',
+  'CNC2': 'cnc2',
+  'CNC3': 'cnc3',
+  'CNCSBZ140': 'cnc140',
+  'MULTIPUNCH': 'multipunch',
+};
+
+function suKey(label) {
+  return String(label || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function parseShiftUpdateBlock(rows, off) {
+  const g = (row, col) => row.cells[off + col - 1];
+  const header = rows[1];
+  const date = header ? date_(g(header, 2)) : null;
+  const shift = header ? txt(g(header, 6)) : null;
+
+  const out = {};
+  let cur = null;
+  for (const row of rows.slice(3)) {
+    const name = txt(g(row, 1));
+    if (name) {
+      const key = SU_MACHINE[suKey(name)];
+      cur = key || null;                   // rows for untracked machines are skipped
+      if (cur && !out[cur]) {
+        const opsRaw = g(row, 2);
+        const opsTxt = txt(opsRaw);
+        out[cur] = {
+          machine: cur,
+          label: name,
+          // "#Ops" is normally a headcount but is sometimes the word DOWN.
+          ops: typeof opsRaw === 'number' ? opsRaw : null,
+          down: /DOWN/i.test(opsTxt || ''),
+          done: [],
+          next: [],
+          notes: [],
+        };
+      }
+    }
+    if (!cur || !out[cur]) continue;
+    const d = txt(g(row, 4));
+    const n = txt(g(row, 6));
+    const note = txt(g(row, 7));
+    if (d) out[cur].done.push(d);
+    if (n) out[cur].next.push(n);
+    if (note) out[cur].notes.push(note);
+    // A machine flagged Down carries the word in its work column, not #Ops.
+    if (d && /^down$/i.test(d)) out[cur].down = true;
+  }
+  return { date, shift, machines: out };
+}
+
+function date_(v) {
+  return date(v);
+}
+
+/** Parse the Shift Update sheet into { date, shift, machines: {key: entry} }. */
+export function parseShiftUpdate(sheet) {
+  if (!sheet) return null;
+  const left = parseShiftUpdateBlock(sheet.rows, 0);
+  const right = parseShiftUpdateBlock(sheet.rows, 8);
+
+  // A machine can appear in both blocks. Both carry the same date and shift,
+  // so prefer whichever entry actually says something.
+  const weight = (e) => (e ? e.done.length + e.next.length + (e.ops ? 1 : 0) : -1);
+  const machines = { ...left.machines };
+  for (const [k, e] of Object.entries(right.machines)) {
+    if (weight(e) > weight(machines[k])) machines[k] = e;
+  }
+
+  return {
+    date: left.date || right.date,
+    shift: left.shift || right.shift,
+    machines,
+  };
 }
 
 /**
@@ -164,13 +278,27 @@ export async function importMachineWorkbook(arrayBuffer, { kind, fileName = 'sch
 
   const report = { kind, fileName, importedAt: new Date().toISOString(), sheets: [], missing: [] };
 
-  const wb = await readXlsx(arrayBuffer, { only: specs.map((s) => s.sheet) });
+  const wanted = specs.map((s) => s.sheet);
+  if (kind === 'cnc') wanted.push(SU_SHEET);
+  const wb = await readXlsx(arrayBuffer, { only: wanted });
 
   let tasks = [];
   for (const spec of specs) {
     const sheet = wb.sheets[spec.sheet];
     if (!sheet) { report.missing.push(spec.sheet); continue; }
     tasks = tasks.concat(parseMachineSheet(sheet, spec, report));
+  }
+
+  // The CNC workbook also carries the shift update — the latest word on most
+  // machines, and finer than the per-line Status columns.
+  let shiftUpdate = null;
+  if (kind === 'cnc') {
+    shiftUpdate = parseShiftUpdate(wb.sheets[SU_SHEET]);
+    if (!shiftUpdate) report.missing.push(SU_SHEET);
+    else report.shiftUpdate = {
+      date: shiftUpdate.date, shift: shiftUpdate.shift,
+      machines: Object.keys(shiftUpdate.machines).length,
+    };
   }
 
   if (!tasks.length) {
@@ -181,99 +309,5 @@ export async function importMachineWorkbook(arrayBuffer, { kind, fileName = 'sch
   }
 
   report.count = tasks.length;
-  return { tasks, report };
-}
-
-/* ---------- verification against the Daily Schedule ---------- */
-
-/**
- * Check the machine schedules against the company Daily Schedule.
- * The machine schedules drive the work; the Daily Schedule is the check that
- * dates and quantities still agree with what the company expects.
- */
-export function verifyAgainstDaily(tasks, orders, { toleranceDays = 2 } = {}) {
-  const byWo = new Map();
-  for (const o of orders) {
-    if (!byWo.has(o.wo)) byWo.set(o.wo, []);
-    byWo.get(o.wo).push(o);
-  }
-
-  // Only work still to be done is worth checking. Finished tasks drift out of
-  // step with the schedule as a matter of course and would drown the signal.
-  const grouped = new Map();
-  for (const t of tasks) {
-    if (t.archived || t.status === 'DONE') continue;
-    if (!grouped.has(t.wo)) grouped.set(t.wo, []);
-    grouped.get(t.wo).push(t);
-  }
-
-  const dayDiff = (a, b) =>
-    Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / 86400000);
-
-  const issues = [];
-  let matched = 0;
-
-  for (const [wo, list] of grouped) {
-    const orderRows = byWo.get(wo);
-    if (!orderRows) {
-      issues.push({
-        kind: 'missing-from-daily', wo,
-        project: list[0].project, machines: [...new Set(list.map((t) => t.machine))],
-        pieces: list.reduce((a, t) => a + (t.qty || 0), 0),
-        detail: 'Scheduled on a machine but not on the Daily Schedule',
-      });
-      continue;
-    }
-    matched++;
-
-    // Report one row per work order, not per task, using the closest Daily
-    // Schedule date so multi-floor orders are not flagged spuriously.
-    const check = (field, label) => {
-      const dailyDates = [...new Set(orderRows.map((o) => o[field]).filter(Boolean))];
-      if (!dailyDates.length) return;
-      const withDate = list.filter((t) => t[field]);
-      if (!withDate.length) return;
-
-      let worst = null;
-      for (const t of withDate) {
-        const best = dailyDates
-          .map((d) => ({ d, diff: dayDiff(t[field], d) }))
-          .sort((a, b) => Math.abs(a.diff) - Math.abs(b.diff))[0];
-        if (!worst || Math.abs(best.diff) > Math.abs(worst.diff)) {
-          worst = { ...best, task: t };
-        }
-      }
-      if (!worst || Math.abs(worst.diff) <= toleranceDays) return;
-
-      issues.push({
-        kind: field === 'cuttingDate' ? 'date-mismatch' : 'ship-mismatch',
-        wo, project: worst.task.project,
-        machines: [...new Set(list.map((t) => t.machine))],
-        days: worst.diff,
-        detail: `${label}: machine sheet ${worst.task[field]}, Daily Schedule ${worst.d} ` +
-                `(${worst.diff > 0 ? worst.diff + ' days later' : Math.abs(worst.diff) + ' days earlier'})`,
-      });
-    };
-
-    check('cuttingDate', 'Cut date');
-    check('shipDate', 'Ship date');
-  }
-
-  // Orders the company expects that no machine schedule covers.
-  const notScheduled = [];
-  for (const [wo, rows] of byWo) {
-    if (grouped.has(wo)) continue;
-    const live = rows.filter((o) => {
-      const cut = o.ops?.cut?.status;
-      return cut !== 'OK' && cut !== 'DONE';
-    });
-    if (live.length) notScheduled.push({ wo, orders: live, project: live[0].project });
-  }
-
-  issues.sort((a, b) => Math.abs(b.days || 999) - Math.abs(a.days || 999));
-
-  return {
-    matched, machineWos: grouped.size, dailyWos: byWo.size,
-    issues, notScheduled, toleranceDays,
-  };
+  return { tasks, shiftUpdate, report };
 }

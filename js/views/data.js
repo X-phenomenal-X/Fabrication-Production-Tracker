@@ -1,15 +1,14 @@
-/* Data & Import: load a schedule revision, see exactly what changed and what
-   was rejected, and manage the shared file everyone syncs through. */
+/* Setup: load the Rolling and CNC schedules, manage the shared file everyone
+   syncs through, and keep the list of who is using it. */
 
-import { el, chip, fmtDate, fmtNum, fmtWhen, toast, modal, download, confirmDialog } from '../ui.js';
+import { el, chip, fmtNum, fmtWhen, toast, modal, download, confirmDialog } from '../ui.js';
 import {
-  state, setImport, setMachineImport, save, exportJson, importJson, resetAll, saveGuideDoc,
+  state, setMachineImport, save, exportJson, importJson, resetAll,
   connectSharedFile, reconnectSharedFile, grantSharedFile, pullSharedFile,
   supportsSharedFile, sharedFileName, disconnectSharedFile, me,
 } from '../store.js';
-import { importWorkbook, diffRevisions } from '../import.js';
 import { importMachineWorkbook } from '../import-machines.js';
-import { SEED_DOCS } from './guide.js';
+import { MACHINE_BY_KEY } from '../machines.js';
 
 let pendingHandle = null;
 
@@ -22,114 +21,7 @@ export async function initSharedFile(rerender) {
   } catch { /* nothing stored yet */ }
 }
 
-export function seedGuide() {
-  for (const d of SEED_DOCS) {
-    if (!state.guide[d.id]) state.guide[d.id] = { ...d, at: new Date(0).toISOString(), by: 'starter' };
-  }
-  save();
-}
-
 /* ---------- import ---------- */
-
-function changeReport(diff, report) {
-  const section = (title, nodes, tone) => nodes.length
-    ? el('div', { style: { marginBottom: '16px' } },
-        el('div.row', { style: { marginBottom: '6px' } }, el('strong', {}, title), chip(String(nodes.length), tone)),
-        el('ul.list', { style: { border: '1px solid var(--line-soft)', borderRadius: '8px' } }, ...nodes))
-    : null;
-
-  const added = diff.added.slice(0, 40).map((o) => el('li', {},
-    el('span.mono.strong', {}, o.wo), ' ',
-    el('span', {}, `${o.project || '—'} · ${o.floor || '—'}`),
-    o.cuttingDate ? el('span.small.muted', {}, ` cut ${fmtDate(o.cuttingDate)}`) : null));
-
-  const changed = diff.changed.slice(0, 60).map(({ order, fields }) => el('li', {},
-    el('div.row', {}, el('span.mono.strong', {}, order.wo),
-      el('span.small.muted', {}, `${order.project || '—'} · ${order.floor || '—'}`)),
-    el('div.small', { style: { marginTop: '3px' } }, ...fields.map((f) =>
-      el('div', {}, `${f.label}: `,
-        el('span.muted', {}, String(f.from ?? '—')), ' → ',
-        el('strong', {}, String(f.to ?? '—')))))));
-
-  const removed = diff.removed.slice(0, 40).map((o) => el('li', {},
-    el('span.mono.strong', {}, o.wo), ' ',
-    el('span.muted', {}, `${o.project || '—'} · ${o.floor || '—'}`)));
-
-  const quality = [];
-  if (report.duplicates.length) {
-    quality.push(el('li', {}, el('strong', {}, `${report.duplicates.length} duplicate row keys`),
-      el('div.small.muted', {}, 'Same W/O, floor and project appear more than once. All rows were kept; the extras are numbered #2, #3 and so on.')));
-  }
-  if (report.skipped.length) {
-    quality.push(el('li', {}, el('strong', {}, `${report.skipped.length} rows skipped`),
-      el('div.small.muted', {}, report.skipped.slice(0, 6).map((s) => `row ${s.row}: ${s.value ?? ''} (${s.reason})`).join(' · '))));
-  }
-  if (report.panelRows?.length) {
-    quality.push(el('li', {}, el('strong', {}, `${report.panelRows.length} panel-only rows left out`),
-      el('div.small.muted', {}, 'Panel work belongs to another department. ' +
-        report.panelRows.slice(0, 5).map((r) => `${r.wo} ${r.floor || r.project || ''}`).join(' · '))));
-  }
-  if (report.suspectQty?.length) {
-    quality.push(el('li', {}, el('strong', {}, `${report.suspectQty.length} impossible piece counts ignored`),
-      el('div.small.muted', {}, report.suspectQty.slice(0, 5)
-        .map((r) => `W/O ${r.wo} ${r.op} = ${r.value} (${r.why})`).join(' · '))));
-  }
-  if (report.errorCells.length) {
-    quality.push(el('li', {}, el('strong', {}, `${report.errorCells.length} formula errors in the sheet`),
-      el('div.small.muted', {}, 'Cells containing #REF!, #VALUE! or #N/A were read as blank. Worth fixing in the source file.')));
-  }
-  if (report.unknownStatus.length) {
-    quality.push(el('li', {}, el('strong', {}, `${report.unknownStatus.length} free-text status values`),
-      el('div.small.muted', {},
-        Array.from(new Set(report.unknownStatus.map((u) => u.value))).slice(0, 8).join(' · '))));
-  }
-
-  return el('div', {},
-    el('div.stats', { style: { marginBottom: '16px', border: '1px solid var(--line-soft)', borderRadius: '8px', overflow: 'hidden' } },
-      el('div.stat', {}, el('div.n', {}, fmtNum(report.counts.orders)), el('div.k', {}, 'Orders')),
-      el('div.stat.ok', {}, el('div.n', {}, fmtNum(diff.added.length)), el('div.k', {}, 'New')),
-      el('div.stat.warn', {}, el('div.n', {}, fmtNum(diff.changed.length)), el('div.k', {}, 'Changed')),
-      el('div.stat', {}, el('div.n', {}, fmtNum(diff.removed.length)), el('div.k', {}, 'Gone')),
-    ),
-    section('New orders', added, 'ok'),
-    section('Changed', changed, 'warn'),
-    section('No longer in the schedule', removed, 'mute'),
-    quality.length ? el('div', {},
-      el('div.row', { style: { marginBottom: '6px' } }, el('strong', {}, 'Data quality notes')),
-      el('ul.list', { style: { border: '1px solid var(--line-soft)', borderRadius: '8px' } }, ...quality)) : null
-  );
-}
-
-async function handleFile(file, rerender) {
-  const busy = toast(`Reading ${file.name}…`, 60000);
-  try {
-    const buf = await file.arrayBuffer();
-    const result = await importWorkbook(buf, { fileName: file.name });
-    const diff = diffRevisions(state.orders, result.orders);
-
-    modal(`Import ${file.name}`, changeReport(diff, result.report), {
-      wide: true,
-      actions: [
-        { label: 'Cancel', onClick: (dlg) => dlg.close() },
-        {
-          label: `Load ${fmtNum(result.orders.length)} orders`, class: 'primary',
-          onClick: (dlg) => {
-            setImport(result);
-            toast(`Loaded ${result.orders.length} orders from ${file.name}`);
-            dlg.close();
-            rerender();
-          }
-        },
-      ],
-    });
-  } catch (e) {
-    modal('Import failed', el('div', {},
-      el('p', {}, e.message),
-      el('p.small.muted', {}, 'The schedule already loaded has not been changed.')));
-  } finally {
-    document.querySelectorAll('.toast').forEach((t) => t.remove());
-  }
-}
 
 async function handleMachineFile(file, kind, rerender) {
   toast(`Reading ${file.name}…`, 60000);
@@ -138,16 +30,16 @@ async function handleMachineFile(file, kind, rerender) {
     const result = await importMachineWorkbook(buf, { kind, fileName: file.name });
     const r = result.report;
     setMachineImport(result);
-    toast(`Loaded ${result.tasks.length} tasks from ${file.name}`);
+    toast(`Loaded ${result.tasks.length} lines from ${file.name}`);
     modal(`Imported ${file.name}`, el('div', {},
       el('div.stats', { style: { border: '1px solid var(--line-soft)', borderRadius: '8px', overflow: 'hidden', marginBottom: '14px' } },
-        el('div.stat', {}, el('div.n', {}, fmtNum(r.count)), el('div.k', {}, 'Tasks')),
+        el('div.stat', {}, el('div.n', {}, fmtNum(r.count)), el('div.k', {}, 'Lines')),
         el('div.stat', {}, el('div.n', {}, String(r.sheets.length)), el('div.k', {}, 'Sheets'))),
       el('ul.list', { style: { border: '1px solid var(--line-soft)', borderRadius: '8px' } },
         ...r.sheets.map((sh) => el('li', {},
           el('div.row.small', {},
             el('strong', {}, sh.sheet),
-            el('span.muted', {}, MACHINE_LABEL[sh.machine] || sh.machine),
+            el('span.muted', {}, MACHINE_BY_KEY[sh.machine]?.label || sh.machine),
             el('span.spacer'),
             el('span.mono', {}, fmtNum(sh.rows) + ' rows'))))),
       r.missing.length ? el('div.banner.warn', { style: { marginTop: '12px' } },
@@ -162,20 +54,14 @@ async function handleMachineFile(file, kind, rerender) {
   }
 }
 
-const MACHINE_LABEL = {
-  'roll-auto': 'Rolling (Auto)', 'roll-man': 'Rolling (Manual)',
-  fom1: 'FOM 1', fom2: 'FOM 2', fom3: 'FOM 3',
-  multipunch: 'Multi Punch', cnc1: 'CNC',
-};
-
-/** One drop zone, used for each of the three workbooks. */
-function dropZone({ title, hint, accept = '.xlsx', onFile }) {
+/** One drop zone, used for each workbook. */
+function dropZone({ title, hint, onFile }) {
   const zone = el('div.drop', {},
     el('div', { style: { fontSize: '14px', fontWeight: '600', marginBottom: '4px' } }, title),
     el('div.small.muted', { style: { marginBottom: '10px' } }, hint),
     el('button.primary.sm', {
       onclick: () => {
-        const inp = el('input', { type: 'file', accept, style: { display: 'none' } });
+        const inp = el('input', { type: 'file', accept: '.xlsx', style: { display: 'none' } });
         inp.addEventListener('change', () => { if (inp.files[0]) onFile(inp.files[0]); });
         document.body.append(inp); inp.click(); inp.remove();
       },
@@ -197,72 +83,33 @@ function dropZone({ title, hint, accept = '.xlsx', onFile }) {
 /* ---------- view ---------- */
 
 export function renderData(rerender) {
-  const meta = state.meta;
-
-  const drop = el('div.drop', {},
-    el('div', { style: { fontSize: '14px', fontWeight: '600', marginBottom: '4px' } },
-      'Daily Schedule'),
-    el('div.small.muted', { style: { marginBottom: '10px' } }, 'Used to verify the machine schedules'),
-    el('div', {},
-      el('button.primary', {
-        onclick: () => {
-          const inp = el('input', { type: 'file', accept: '.xlsx', style: { display: 'none' } });
-          inp.addEventListener('change', () => {
-            if (inp.files[0]) handleFile(inp.files[0], rerender);
-          });
-          document.body.append(inp);
-          inp.click();
-          inp.remove();
-        },
-      }, 'Choose file')));
-
-  for (const ev of ['dragenter', 'dragover']) {
-    drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); });
-  }
-  for (const ev of ['dragleave', 'drop']) {
-    drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); });
-  }
-  drop.addEventListener('drop', (e) => {
-    const f = e.dataTransfer?.files?.[0];
-    if (f) handleFile(f, rerender);
-  });
-
   const mm = state.machineMeta || {};
   const slot = (label, key, node) => el('div', {},
     el('div.row', { style: { marginBottom: '6px' } },
       el('strong.small', {}, label),
       el('span.spacer'),
       mm[key]?.fileName
-        ? el('span.small.muted', {}, `${mm[key].fileName} · ${fmtNum(mm[key].count)} tasks · ${fmtWhen(mm[key].importedAt)}`)
+        ? el('span.small.muted', {}, `${mm[key].fileName} · ${fmtNum(mm[key].count)} lines · ${fmtWhen(mm[key].importedAt)}`)
         : chip('not loaded', 'warn')),
     node);
 
   const importPanel = el('div.panel', {},
     el('header', {}, 'Schedules'),
     el('div.body', {},
-      el('div.banner.info', { style: { marginBottom: '14px' } },
-        el('div', {},
-          el('strong', {}, 'Rolling and CNC are the base. '),
-          'They carry the per-machine detail — die, quantity, status. The Daily Schedule is imported on top and used to check that dates still agree.')),
-      el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: '14px' } },
-        slot('1 · Rolling schedule', 'rolling', dropZone({
+      el('p.small.muted', { style: { marginTop: 0 } },
+        'These two workbooks are the whole source of truth. Re-import either one ' +
+        'whenever a new revision comes out — statuses you have set are kept.'),
+      el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '14px' } },
+        slot('Rolling schedule', 'rolling', dropZone({
           title: 'Rolling workbook',
           hint: 'Auto, Manual and Complete sheets',
           onFile: (f) => handleMachineFile(f, 'rolling', rerender),
         })),
-        slot('2 · CNC schedule', 'cnc', dropZone({
+        slot('CNC schedule', 'cnc', dropZone({
           title: 'CNC workbook',
           hint: 'FOM 1-3, MultiPunch & SAW, CNC & FMC',
           onFile: (f) => handleMachineFile(f, 'cnc', rerender),
-        })),
-        el('div', {},
-          el('div.row', { style: { marginBottom: '6px' } },
-            el('strong.small', {}, '3 · Daily Schedule'),
-            el('span.spacer'),
-            meta.fileName
-              ? el('span.small.muted', {}, `${meta.fileName} · ${fmtWhen(meta.importedAt)}`)
-              : chip('not loaded', 'warn')),
-          drop))));
+        })))));
 
   /* shared file */
   const connected = sharedFileName();
@@ -320,9 +167,9 @@ export function renderData(rerender) {
         }, 'Create a new one')),
       el('div.banner.warn', { style: { marginTop: '12px' } },
         el('div', {},
-          el('strong', {}, 'Two people editing the same order at once: '),
-          'the app merges record by record and the most recent edit wins for that one field. ' +
-          'Separate orders never overwrite each other.')));
+          el('strong', {}, 'Two people updating the same line at once: '),
+          'the app merges line by line and the most recent update wins for that one line. ' +
+          'Separate lines never overwrite each other.')));
   }
 
   const sharedPanel = el('div.panel', {}, el('header', {}, 'Shared file'), sharedBody);
@@ -352,14 +199,11 @@ export function renderData(rerender) {
             document.body.append(inp); inp.click(); inp.remove();
           },
         }, 'Import a backup'),
-        el('button', {
-          onclick: () => { seedGuide(); toast('Starter guide sections restored'); rerender(); },
-        }, 'Restore starter guide'),
         el('span.spacer'),
         el('button.danger', {
           onclick: async () => {
             if (await confirmDialog('Clear everything on this device?',
-              'Progress, shift logs, plans and guide edits stored in this browser will be deleted. If you are connected to a shared file, that file is not touched.',
+              'The loaded schedules and every status set in this browser will be deleted. If you are connected to a shared file, that file is not touched.',
               { confirmLabel: 'Clear', danger: true })) {
               resetAll();
               location.reload();
@@ -367,7 +211,7 @@ export function renderData(rerender) {
           },
         }, 'Clear this device')),
       el('div.small.muted', { style: { marginTop: '10px' } },
-        'Export writes one JSON file containing the schedule, all logged progress, shift updates, plans and the guide.')));
+        'Export writes one JSON file containing the loaded schedules and every status set against them.')));
 
   /* people */
   const peopleInput = el('input', { placeholder: 'Add a name', style: { maxWidth: '220px' } });
@@ -398,21 +242,8 @@ export function renderData(rerender) {
             }, '×'))))
         : el('div.small.muted', {}, 'No names yet. Add the people on your crew so updates are attributed.')));
 
-  /* audit */
-  const auditPanel = el('div.panel', {},
-    el('header', {}, 'Recent activity'),
-    state.audit.length
-      ? el('ul.list', {}, ...state.audit.slice(0, 30).map((a) => el('li', {},
-          el('div.row.small', {},
-            el('strong', {}, a.who),
-            el('span', {}, a.what),
-            el('span.muted', {}, a.detail || ''),
-            el('span.spacer'),
-            el('span.muted.nowrap', {}, fmtWhen(a.at))))))
-      : el('div.empty', {}, 'Nothing yet.'));
-
   return el('div', {}, importPanel,
     el('div.grid.two', { style: { marginTop: '16px' } },
-      el('div', {}, sharedPanel, peoplePanel),
-      el('div', {}, backupPanel, auditPanel)));
+      el('div', {}, sharedPanel),
+      el('div', {}, backupPanel, peoplePanel)));
 }

@@ -2,21 +2,22 @@
 
 import { el, clear, chip } from './ui.js';
 import { state, loadLocal, save, onChange, me, sharedFileName } from './store.js';
-import { renderTracker } from './views/tracker.js';
-import { renderData, initSharedFile, seedGuide } from './views/data.js';
-import { SHIFTS, shiftAt } from './schema.js';
+import { makeCentreView } from './views/centre.js';
+import { renderData, initSharedFile } from './views/data.js';
+import { SHIFTS, shiftAt } from './shifts.js';
 
-// Scaled back to just the tracker and setup while this piece gets built
-// right, machine group by machine group. Dashboard, Orders, Materials,
-// Planner, Shift Update, Verify and Guide still exist on disk — just not
-// wired into nav — and can come back once this is solid.
+// One page per work centre, so an operator opens their own machine's queue
+// instead of scrolling past everyone else's.
 const TABS = [
-  { key: 'tracker', label: 'Tracker', render: renderTracker },
+  { key: 'rolling', label: 'Rolling', render: makeCentreView('Rolling') },
+  { key: 'fom', label: 'FOM', render: makeCentreView('FOM') },
+  { key: 'cnc', label: 'CNC', render: makeCentreView('CNC') },
+  { key: 'punch', label: 'Multi Punch', render: makeCentreView('Punch') },
   { key: 'setup', label: 'Setup', render: renderData },
 ];
 
-let current = location.hash.slice(1) || 'tracker';
-if (!TABS.some((t) => t.key === current)) current = 'tracker';
+let current = location.hash.slice(1) || 'rolling';
+if (!TABS.some((t) => t.key === current)) current = 'rolling';
 
 const root = document.getElementById('app');
 let scheduled = false;
@@ -95,7 +96,6 @@ window.addEventListener('hashchange', () => {
 });
 
 loadLocal();
-seedGuide();
 onChange(scheduleRender);
 render();
 initSharedFile(render);

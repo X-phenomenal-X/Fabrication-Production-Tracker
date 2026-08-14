@@ -38,7 +38,7 @@ step('File System Access available: ' + await page.evaluate(() => 'showOpenFileP
 
 const tabs = await page.$$eval('nav.tabs button', (ns) => ns.map((n) => n.textContent.trim()));
 step('tabs: ' + tabs.join(', '));
-if (tabs.join(',') !== 'Tracker,Setup') throw new Error('expected exactly Tracker, Setup — got ' + tabs.join(','));
+if (tabs.join(',') !== 'Rolling,FOM,CNC,Multi Punch,Setup') throw new Error('unexpected nav: ' + tabs.join(','));
 
 // import Rolling + CNC through the real UI
 await page.click('nav.tabs button:has-text("Setup")');
@@ -54,33 +54,31 @@ for (const [label, file] of [['Rolling workbook', ROLLING], ['CNC workbook', CNC
   await page.waitForSelector('dialog', { state: 'detached' });
 }
 
-await page.click('nav.tabs button:has-text("Tracker")');
-await page.waitForSelector('main h2');
-const groups = await page.$$eval('main h2', (ns) => ns.map((n) => n.textContent.trim()));
-step('groups shown: ' + groups.join(', '));
-if (!['Rolling', 'FOM', 'CNC', 'Punch'].every((g) => groups.includes(g))) {
-  throw new Error('expected Rolling, FOM, CNC, Punch — got ' + groups.join(', '));
-}
+await page.click('nav.tabs button:has-text("Rolling")');
+await page.waitForFunction(() => document.querySelector('.centre-title')?.textContent.trim() === 'Rolling (Auto)');
+const groups = await page.$$eval('.dgroup-label', (ns) => ns.map((n) => n.textContent.trim()));
+step('date groups on Rolling (Auto): ' + groups.join(', '));
+if (!groups.length) throw new Error('no date groups rendered');
+const suOk = await page.$$eval('.su-title', (ns) => ns.length > 0);
+step('shift update panel: ' + (suOk ? 'shown' : 'absent'));
 
 // status click survives a reload from disk. This build is a single bundled
 // IIFE with no importable /js/*.js modules from outside it, so the target
 // row is found from the rendered DOM rather than by reaching into JS state.
-const panel = page.locator('.panel', { hasText: 'Rolling (Auto)' }).first();
-const firstNotStarted = panel.locator('table tbody tr .chip', { hasText: 'Not started' }).first();
-const scoutRow = firstNotStarted.locator('xpath=ancestor::tr[1]');
-const wo = (await scoutRow.locator('td').nth(0).textContent()).trim();
-const dieRaw = (await scoutRow.locator('td').nth(3).textContent()).trim();
-const die = dieRaw === '—' ? '' : dieRaw;
+const scout = page.locator('.line').filter({ has: page.locator('.status', { hasText: 'Not started' }) }).first();
+const wo = (await scout.locator('.line-id .mono').textContent()).trim();
+const dieEl = scout.locator('.die');
+const die = (await dieEl.count()) ? (await dieEl.textContent()).trim() : '';
 step(`target line: W/O ${wo} die ${die || '(none)'}`);
 
 // Re-locate by W/O + die rather than reusing a locator built on "Not started"
-// chip text — that filter stops matching the instant the click changes the
+// status text — that filter stops matching the instant the click changes the
 // text, so re-resolving it would silently grab a different, unclicked row.
-const stableRow = panel.locator('table tbody tr')
-  .filter({ hasText: wo }).filter({ hasText: dieRaw }).first();
-await stableRow.locator('.chip').first().click();
+const stableRow = page.locator('.line').filter({ hasText: wo })
+  .filter({ hasText: die || '—' }).first();
+await stableRow.locator('.status').click();
 await page.waitForTimeout(300);
-const afterClick = (await stableRow.locator('.chip').first().textContent()).trim();
+const afterClick = (await stableRow.locator('.status').textContent()).trim();
 if (afterClick !== 'In Progress') throw new Error(`expected "In Progress", got "${afterClick}"`);
 
 const key = `roll-auto|${wo}|${die}`;

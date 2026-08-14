@@ -6,33 +6,29 @@
      and what makes the department see each other's updates.
 
    Sync is a per-record merge, not whole-file last-write-wins. Every record
-   carries an `at` timestamp and the newer one wins, so two people editing
-   different orders at the same time both keep their work. */
+   carries an `at` timestamp and the newer one wins, so two people updating
+   different lines at the same time both keep their work. */
 
 const LS_KEY = 'bv.cutting.v1';
 const IDB_NAME = 'bv-cutting';
 const IDB_STORE = 'handles';
 
+/* Fields written by earlier versions of this app, before it narrowed to the
+   machine schedules. Stripped on load so an existing install — and the shared
+   JSON on the network drive — sheds them rather than carrying them forever. */
+const RETIRED_KEYS = [
+  'meta', 'orders', 'wip', 'prep', 'screens', 'progress', 'material',
+  'history', 'manualOrders', 'shiftLogs', 'plan', 'guide', 'audit',
+  'lastImportReport',
+];
+
 export const state = {
-  meta: { revision: null, importedAt: null, fileName: null },
-  orders: [],
-  wip: [],
-  prep: [],
-  screens: [],
-  progress: {},   // `${orderId}|${opKey}` -> { done, at, by, note }
-  material: {},   // `${orderId}|${profileKey}` -> { status, note, at, by }
-  history: [],    // every change, newest first — the traceability record
-  manualOrders: {}, // id -> order added by hand, e.g. service orders
   tasks: [],        // machine-schedule rows: the base for scheduling
   machineMeta: {},  // kind -> { fileName, importedAt, count }
   taskStatus: {},   // `${machine}|${wo}|${die}` -> { status, at, by }
-  shiftLogs: {},  // id -> log
-  plan: {},       // `${date}|${shift}` -> { ids, at, by }
-  guide: {},      // id -> doc
+  shiftUpdate: null, // latest Shift Update sheet: { date, shift, machines }
   people: [],
-  audit: [],
-  settings: { me: null, activeOnly: true },
-  lastImportReport: null,
+  settings: { me: null },
 };
 
 let saveTimer = null;
@@ -59,121 +55,22 @@ export function me() {
   return state.settings.me || 'Unassigned';
 }
 
-/* ---------- audit ---------- */
-
-export function log(what, detail) {
-  state.audit.unshift({ at: now(), who: me(), what, detail });
-  if (state.audit.length > 800) state.audit.length = 800;
-}
-
-/** Append to the per-order traceability record. Unlike `audit`, this is keyed
-    by order so an order's whole history can be shown on the order itself. */
-export function trace(orderId, kind, from, to, note) {
-  state.history.unshift({
-    id: uid(), orderId, kind, from: from ?? null, to: to ?? null,
-    note: note || null, at: now(), by: me(),
-  });
-  if (state.history.length > 5000) state.history.length = 5000;
-}
-
-export function historyFor(orderId) {
-  return state.history.filter((h) => h.orderId === orderId);
-}
-
 /* ---------- mutations ---------- */
 
-export function setProgress(orderId, opKey, done, note) {
-  const key = `${orderId}|${opKey}`;
-  const prev = state.progress[key];
-  state.progress[key] = { done, at: now(), by: me(), note: note ?? prev?.note ?? null };
-  log('progress', `${orderId} ${opKey} → ${done}`);
-  trace(orderId, `cut:${opKey}`, prev?.done ?? null, done, note);
-  save();
-}
-
-export function setMaterial(orderId, profileKey, status, note) {
-  const key = `${orderId}|${profileKey}`;
-  const prev = state.material[key];
-  state.material[key] = { status, note: note ?? null, at: now(), by: me() };
-  log('material', `${orderId} ${profileKey} → ${status}`);
-  trace(orderId, `material:${profileKey}`, prev?.status ?? null, status, note);
-  save();
-}
-
-/** Status of a single machine-schedule line, e.g. Not started / In Progress /
-    Done. Keyed by machine+wo+die rather than the task's own id, because the
-    id embeds a sheet row number that shifts on every re-import — keying on
-    the row would silently orphan an operator's update the next time the
-    Rolling or CNC workbook is reloaded. */
+/** Status of a single machine-schedule line: Not started / In Progress / Done.
+    Keyed by machine+wo+die rather than the task's own id, because that id
+    embeds a sheet row number that shifts on every re-import — keying on the
+    row would silently orphan an operator's update the next time the Rolling
+    or CNC workbook is reloaded. */
 export function setTaskStatus(key, status) {
-  const prev = state.taskStatus[key];
   state.taskStatus[key] = { status, at: now(), by: me() };
-  log('task status', `${key} → ${status}`);
-  trace(key, 'task', prev?.status ?? null, status);
-  save();
-}
-
-export function clearProgress(orderId, opKey) {
-  const key = `${orderId}|${opKey}`;
-  if (!state.progress[key]) return;
-  // Tombstone rather than delete, so the removal survives a merge.
-  state.progress[key] = { done: null, at: now(), by: me(), deleted: true };
-  save();
-}
-
-export function saveShiftLog(entry) {
-  const id = entry.id || uid();
-  state.shiftLogs[id] = { ...entry, id, at: now(), by: entry.by || me() };
-  log('shift log', `${entry.date} ${entry.shift}`);
-  save();
-  return id;
-}
-
-export function deleteShiftLog(id) {
-  if (state.shiftLogs[id]) state.shiftLogs[id] = { id, at: now(), by: me(), deleted: true };
-  save();
-}
-
-export function setPlan(date, shift, ids) {
-  state.plan[`${date}|${shift}`] = { ids, at: now(), by: me() };
-  save();
-}
-
-export function saveGuideDoc(doc) {
-  const id = doc.id || uid();
-  state.guide[id] = { ...doc, id, at: now(), by: me() };
-  log('guide', doc.title || id);
-  save();
-  return id;
-}
-
-export function deleteGuideDoc(id) {
-  if (state.guide[id]) state.guide[id] = { id, at: now(), by: me(), deleted: true };
-  save();
-}
-
-/** Orders added by hand — service orders and anything not on the schedule.
-    Kept separate from imported rows so a re-import never wipes them. */
-export function saveManualOrder(o) {
-  const id = o.id || `manual:${uid()}`;
-  state.manualOrders[id] = { ...o, id, manual: true, at: now(), by: o.by || me() };
-  log('manual order', `${o.wo || id}`);
-  trace(id, 'order', null, o.wo || 'created', o.notes);
-  save();
-  return id;
-}
-
-export function deleteManualOrder(id) {
-  if (state.manualOrders[id]) {
-    state.manualOrders[id] = { id, at: now(), by: me(), deleted: true };
-  }
   save();
 }
 
 /** Load a machine workbook. Tasks for that workbook's machines are replaced;
     the other workbook's tasks are left alone, so Rolling and CNC can be
     imported independently. */
-export function setMachineImport({ tasks, report }) {
+export function setMachineImport({ tasks, shiftUpdate, report }) {
   const machines = new Set(tasks.map((t) => t.machine));
   state.tasks = state.tasks
     .filter((t) => t.source !== report.kind && !machines.has(t.machine))
@@ -182,22 +79,7 @@ export function setMachineImport({ tasks, report }) {
     ...state.machineMeta,
     [report.kind]: { fileName: report.fileName, importedAt: report.importedAt, count: tasks.length },
   };
-  log('import', `${report.fileName} — ${tasks.length} machine tasks`);
-  save();
-}
-
-export function setImport({ orders, wip, prep, screens, report }) {
-  state.orders = orders;
-  state.wip = wip;
-  state.prep = prep;
-  state.screens = screens;
-  state.meta = {
-    revision: report.fileName,
-    importedAt: report.importedAt,
-    fileName: report.fileName,
-  };
-  state.lastImportReport = report;
-  log('import', `${report.fileName} — ${orders.length} orders`);
+  if (shiftUpdate) state.shiftUpdate = { ...shiftUpdate, importedAt: report.importedAt };
   save();
 }
 
@@ -205,26 +87,13 @@ export function setImport({ orders, wip, prep, screens, report }) {
 
 function snapshot() {
   return {
-    v: 1,
-    meta: state.meta,
-    orders: state.orders,
-    wip: state.wip,
-    prep: state.prep,
-    screens: state.screens,
-    progress: state.progress,
-    material: state.material,
-    history: state.history,
-    manualOrders: state.manualOrders,
+    v: 2,
     tasks: state.tasks,
     machineMeta: state.machineMeta,
     taskStatus: state.taskStatus,
-    shiftLogs: state.shiftLogs,
-    plan: state.plan,
-    guide: state.guide,
+    shiftUpdate: state.shiftUpdate,
     people: state.people,
-    audit: state.audit,
     settings: state.settings,
-    lastImportReport: state.lastImportReport,
   };
 }
 
@@ -249,7 +118,14 @@ export function save() {
 export function loadLocal() {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) apply(JSON.parse(raw));
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    apply(data);
+    // Rewrite immediately if the payload still carries retired fields, so the
+    // cleanup is visible now rather than waiting for the next incidental save.
+    if (RETIRED_KEYS.some((k) => data[k] !== undefined)) {
+      localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+    }
   } catch (e) {
     console.warn('could not read local data', e);
   }
@@ -258,7 +134,6 @@ export function loadLocal() {
 /* ---------- shared file ---------- */
 
 let fileHandle = null;
-let lastFileWrite = 0;
 
 export function sharedFileName() {
   return fileHandle ? fileHandle.name : null;
@@ -313,22 +188,9 @@ function mergeRecords(mine = {}, theirs = {}) {
 
 function mergeSnapshot(remote) {
   if (!remote) return;
-  state.progress = mergeRecords(state.progress, remote.progress);
-  state.material = mergeRecords(state.material, remote.material);
-  state.manualOrders = mergeRecords(state.manualOrders, remote.manualOrders);
   state.taskStatus = mergeRecords(state.taskStatus, remote.taskStatus);
-
-  // History is append-only, so merge by id and re-sort newest first.
-  const haveIds = new Set(state.history.map((h) => h.id));
-  for (const h of remote.history || []) if (!haveIds.has(h.id)) state.history.push(h);
-  state.history.sort((a, b) => (a.at < b.at ? 1 : -1));
-  if (state.history.length > 5000) state.history.length = 5000;
-  state.shiftLogs = mergeRecords(state.shiftLogs, remote.shiftLogs);
-  state.plan = mergeRecords(state.plan, remote.plan);
-  state.guide = mergeRecords(state.guide, remote.guide);
   state.people = Array.from(new Set([...(state.people || []), ...(remote.people || [])]));
 
-  // The order list comes from whichever revision was imported most recently.
   // Machine tasks come from whichever side imported them most recently.
   for (const kind of ['rolling', 'cnc']) {
     const mine = state.machineMeta?.[kind]?.importedAt || '';
@@ -337,26 +199,10 @@ function mergeSnapshot(remote) {
       state.tasks = state.tasks.filter((t) => t.source !== kind)
         .concat(remote.tasks.filter((t) => t.source === kind));
       state.machineMeta = { ...state.machineMeta, [kind]: remote.machineMeta[kind] };
+      // The shift update rides along with the CNC workbook.
+      if (kind === 'cnc' && remote.shiftUpdate) state.shiftUpdate = remote.shiftUpdate;
     }
   }
-
-  const mineAt = state.meta?.importedAt || '';
-  const theirsAt = remote.meta?.importedAt || '';
-  if (theirsAt > mineAt && Array.isArray(remote.orders) && remote.orders.length) {
-    state.orders = remote.orders;
-    state.wip = remote.wip || [];
-    state.prep = remote.prep || [];
-    state.screens = remote.screens || [];
-    state.meta = remote.meta;
-    state.lastImportReport = remote.lastImportReport || state.lastImportReport;
-  }
-
-  const seen = new Set(state.audit.map((a) => a.at + a.who + a.what));
-  for (const a of remote.audit || []) {
-    if (!seen.has(a.at + a.who + a.what)) state.audit.push(a);
-  }
-  state.audit.sort((x, y) => (x.at < y.at ? 1 : -1));
-  if (state.audit.length > 800) state.audit.length = 800;
 }
 
 async function readHandle(handle) {
@@ -369,7 +215,7 @@ export async function connectSharedFile({ create = false } = {}) {
   if (!supportsSharedFile()) {
     throw new Error(
       'This browser cannot open a shared file directly. Use Chrome or Edge, ' +
-      'or use Export / Import on the Data tab instead.'
+      'or use Export / Import on the Setup tab instead.'
     );
   }
   const opts = {
@@ -435,7 +281,6 @@ async function writeSharedFile() {
   const w = await fileHandle.createWritable();
   await w.write(JSON.stringify(snapshot()));
   await w.close();
-  lastFileWrite = Date.now();
 }
 
 function queueFileSave() {

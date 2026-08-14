@@ -1,5 +1,5 @@
-/* Parses the Rolling and CNC workbooks and verifies them against the Daily
-   Schedule. Run: node test/machines-check.mjs */
+/* Parses the Rolling and CNC workbooks and reports what came out.
+   Run: node test/machines-check.mjs */
 import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
@@ -7,7 +7,6 @@ import path from 'path';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DIR = '/root/.claude/uploads/042835a0-704b-5601-bc20-4ed82d27578f';
 const FILES = {
-  daily: `${DIR}/6c674bbc-Daily_Schedule_Aug_10_Rev_B.xlsx`,
   rolling: `${DIR}/da7bb9f1-Rolling_Schedule_2026.xlsx`,
   cnc: `${DIR}/bae855fd-CNC_Schedule_Rev_E.xlsx`,
 };
@@ -45,15 +44,11 @@ const out = await page.evaluate(async (b64) => {
     for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
     return a.buffer;
   };
-  const { importMachineWorkbook, verifyAgainstDaily } = await import('/js/import-machines.js');
-  const { importWorkbook } = await import('/js/import.js');
+  const { importMachineWorkbook } = await import('/js/import-machines.js');
 
   const roll = await importMachineWorkbook(toBuf(b64.rolling), { kind: 'rolling', fileName: 'Rolling.xlsx' });
   const cnc = await importMachineWorkbook(toBuf(b64.cnc), { kind: 'cnc', fileName: 'CNC.xlsx' });
-  const daily = await importWorkbook(toBuf(b64.daily), { fileName: 'Daily.xlsx' });
-
   const tasks = roll.tasks.concat(cnc.tasks);
-  const v = verifyAgainstDaily(tasks, daily.orders);
 
   const byMachine = {};
   const byStatus = {};
@@ -61,29 +56,33 @@ const out = await page.evaluate(async (b64) => {
     byMachine[t.machine] = (byMachine[t.machine] || 0) + 1;
     byStatus[t.status] = (byStatus[t.status] || 0) + 1;
   }
-  const kinds = {};
-  for (const i of v.issues) kinds[i.kind] = (kinds[i.kind] || 0) + 1;
 
-  const live = tasks.filter((t) => !t.archived && t.status !== 'DONE');
-  const withSetup = tasks.filter((t) => t.setup).length;
-  const pinHole = tasks.filter((t) => t.pinHole).length;
+  const open = tasks.filter((t) => !t.archived && t.status !== 'DONE');
+  const openBackOrder = open.filter((t) => t.backOrder);
+  // A line that is running AND short of material: the case that used to
+  // collapse into a plain "In progress" and lose the back-order half.
+  const runningAndShort = open.filter((t) => t.status === 'IP' && t.backOrder);
 
   return {
-    rollingSheets: roll.report.sheets, cncSheets: cnc.report.sheets,
-    totalTasks: tasks.length, live: live.length,
-    byMachine, byStatus,
-    withSetup, pinHole,
-    dieCount: new Set(tasks.map((t) => t.die).filter(Boolean)).size,
-    verify: {
-      machineWos: v.machineWos, dailyWos: v.dailyWos, matched: v.matched,
-      issues: v.issues.length, kinds,
-      notScheduled: v.notScheduled.length,
-      sampleIssues: v.issues.slice(0, 4).map((i) => ({ kind: i.kind, wo: i.wo, detail: i.detail })),
-    },
-    sampleTask: live[0],
+    rollingSheets: roll.report.sheets,
+    cncSheets: cnc.report.sheets,
+    totalTasks: tasks.length,
+    open: open.length,
+    byMachine,
+    byStatus,
+    openBackOrder: openBackOrder.length,
+    runningAndShort: runningAndShort.length,
+    withCuttingDate: open.filter((t) => t.cuttingDate).length,
+    dies: new Set(tasks.map((t) => t.die).filter(Boolean)).size,
+    sample: open[0],
   };
 }, b64);
 
-console.log(JSON.stringify(out, null, 2).slice(0, 4200));
+console.log(JSON.stringify(out, null, 2).slice(0, 3000));
+
+if (out.totalTasks < 3000) throw new Error(`expected ~3900 tasks, got ${out.totalTasks}`);
+if (!out.runningAndShort) throw new Error('expected some lines that are both IP and back-ordered');
+console.log('\nOK');
+
 fs.unlinkSync(harness);
 await browser.close();

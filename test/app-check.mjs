@@ -1,7 +1,7 @@
-/* End-to-end smoke test for the minimal Tracker app: serves the app, imports
-   the real Rolling and CNC workbooks, walks the Tracker, exercises the
-   status-cycle click, confirms it survives a reload AND a re-import, and
-   fails on any console error.
+/* End-to-end smoke test: serves the app, imports the Rolling and CNC
+   workbooks, walks all four work-centre pages, exercises sub-tabs, date
+   groups and the status click, confirms a status survives both a reload and
+   a re-import, and asserts the old data is gone.
    Run: node test/app-check.mjs */
 import { chromium } from 'playwright';
 import fs from 'fs';
@@ -13,6 +13,9 @@ const DIR = '/root/.claude/uploads/042835a0-704b-5601-bc20-4ed82d27578f';
 const ROLLING = `${DIR}/da7bb9f1-Rolling_Schedule_2026.xlsx`;
 const CNC = `${DIR}/bae855fd-CNC_Schedule_Rev_E.xlsx`;
 const SHOT = path.join(ROOT, 'test', 'screens');
+
+const RETIRED = ['orders', 'wip', 'prep', 'screens', 'progress', 'material', 'history',
+  'manualOrders', 'shiftLogs', 'plan', 'guide', 'audit'];
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 
@@ -45,10 +48,11 @@ await page.goto(base + '/index.html');
 await page.waitForSelector('header.top');
 step('app booted');
 
-// only two tabs should exist now
 const tabs = await page.$$eval('nav.tabs button', (ns) => ns.map((n) => n.textContent.trim()));
 step('tabs: ' + tabs.join(', '));
-if (tabs.join(',') !== 'Tracker,Setup') throw new Error('expected exactly Tracker, Setup — got ' + tabs.join(','));
+if (tabs.join(',') !== 'Rolling,FOM,CNC,Multi Punch,Setup') {
+  throw new Error('unexpected nav: ' + tabs.join(','));
+}
 
 // identity
 await page.evaluate(() => import('/js/store.js').then((m) => {
@@ -58,82 +62,118 @@ await page.evaluate(() => import('/js/store.js').then((m) => {
 }));
 step('identity set');
 
-// empty state before any import
-await page.waitForSelector('main .empty');
-step('empty state shown before import');
+// no old data seeded on boot
+const seeded = await page.evaluate((retired) => import('/js/store.js').then((m) => {
+  const raw = localStorage.getItem('bv.cutting.v1');
+  const stored = raw ? JSON.parse(raw) : {};
+  return {
+    inState: retired.filter((k) => m.state[k] !== undefined),
+    inStorage: retired.filter((k) => stored[k] !== undefined),
+  };
+}), RETIRED);
+step('retired keys — in state: ' + (seeded.inState.join(',') || 'none') +
+  ' | in storage: ' + (seeded.inStorage.join(',') || 'none'));
+if (seeded.inState.length || seeded.inStorage.length) throw new Error('old data is still present');
 
-// Setup: import Rolling then CNC
+// import both workbooks
 await page.click('nav.tabs button:has-text("Setup")');
 await page.waitForSelector('.drop');
-
 for (const [label, file] of [['Rolling workbook', ROLLING], ['CNC workbook', CNC]]) {
   const ch = page.waitForEvent('filechooser');
   await page.click(`.drop:has-text("${label}") button`);
   await (await ch).setFiles(file);
   await page.waitForSelector('dialog .stat', { timeout: 120000 });
   const n = await page.$eval('dialog .stat .n', (x) => x.textContent);
-  step(`${label}: ${n} tasks`);
+  step(`${label}: ${n} lines`);
   await page.click('dialog header button');
   await page.waitForSelector('dialog', { state: 'detached' });
 }
+await page.screenshot({ path: path.join(SHOT, 'setup.png'), fullPage: true });
 
-const taskCount = await page.evaluate(() => import('/js/store.js').then((m) => m.state.tasks.length));
-step('machine tasks loaded: ' + taskCount);
-
-// Tracker: four group headers with real content
-await page.click('nav.tabs button:has-text("Tracker")');
-await page.waitForSelector('main h2');
-const groups = await page.$$eval('main h2', (ns) => ns.map((n) => n.textContent.trim()));
-step('groups shown: ' + groups.join(', '));
-if (!['Rolling', 'FOM', 'CNC', 'Punch'].every((g) => groups.includes(g))) {
-  throw new Error('expected Rolling, FOM, CNC, Punch — got ' + groups.join(', '));
+// walk every centre page
+for (const [tab, expectSubtabs, expectTitle] of [
+  ['Rolling', 2, 'Rolling (Auto)'], ['FOM', 3, 'FOM 1'],
+  ['CNC', 4, 'CNC 1'], ['Multi Punch', 0, 'Multi Punch'],
+]) {
+  await page.click(`nav.tabs button:has-text("${tab}")`);
+  // Rendering is deferred to the next frame, so the previous page's title is
+  // still in the DOM the instant after the click — wait for the new one.
+  await page.waitForFunction(
+    (t) => document.querySelector('.centre-title')?.textContent.trim() === t, expectTitle);
+  const title = await page.$eval('.centre-title', (n) => n.textContent.trim());
+  const subtabs = await page.$$eval('.subtabs button', (ns) => ns.map((n) => n.textContent.trim()));
+  const groups = await page.$$eval('.dgroup-label', (ns) => ns.map((n) => n.textContent.trim()));
+  const stats = await page.$$eval('.cstat', (ns) =>
+    ns.map((n) => n.querySelector('i').textContent + '=' + n.querySelector('b').textContent));
+  step(`${tab}: "${title}" | subtabs [${subtabs.join(' ')}] | groups [${groups.join(' ')}] | ${stats.join(' ')}`);
+  if (subtabs.length !== expectSubtabs) {
+    throw new Error(`${tab}: expected ${expectSubtabs} sub-tabs, got ${subtabs.length}`);
+  }
+  await page.screenshot({ path: path.join(SHOT, `centre-${tab.replace(/\s+/g, '-').toLowerCase()}.png`), fullPage: true });
 }
 
-const machineCards = await page.$$eval('main .panel header', (ns) =>
-  ns.map((n) => n.childNodes[0]?.textContent?.trim()).filter(Boolean));
-step('machine cards: ' + machineCards.join(', '));
-await page.screenshot({ path: path.join(SHOT, 'tracker.png'), fullPage: true });
+// the CNC workbook's Shift Update sheet is parsed and surfaced
+const su = await page.evaluate(() => import('/js/store.js').then((m) => {
+  const s = m.state.shiftUpdate;
+  return s ? { date: s.date, shift: s.shift, machines: Object.keys(s.machines) } : null;
+}));
+step('shift update: ' + JSON.stringify(su));
+if (!su || !su.machines.length) throw new Error('Shift Update sheet was not parsed');
+for (const k of ['roll-auto', 'fom1', 'cnc1', 'multipunch']) {
+  if (!su.machines.includes(k)) throw new Error(`shift update missing ${k}`);
+}
+const suPanel = await page.$$eval('.su-title', (ns) => ns.length);
+step('shift update panel rendered on this page: ' + (suPanel ? 'yes' : 'no'));
 
-// Pick a specific Not-started line to click, rather than "whatever renders
-// first" — a click that lands on Done disappears from view by design (Done
-// is hidden by default), so grabbing "the first chip" again afterwards can
-// silently land on an unrelated row that happens to read the same label.
+// sub-tab switching actually changes the queue
+await page.click('nav.tabs button:has-text("FOM")');
+await page.waitForSelector('.centre-title');
+const fom1 = await page.$eval('.centre-title', (n) => n.textContent.trim());
+await page.click('.subtabs button:has-text("FOM 3")');
+await page.waitForTimeout(200);
+const fom3 = await page.$eval('.centre-title', (n) => n.textContent.trim());
+step(`sub-tab switch: ${fom1} -> ${fom3}`);
+if (fom1 === fom3) throw new Error('sub-tab did not switch machine');
+
+// status click on Rolling
+await page.click('nav.tabs button:has-text("Rolling")');
+await page.waitForSelector('.centre-title');
 const target = await page.evaluate(async () => {
   const model = await import('/js/model.js');
   const row = model.tasksForMachine('roll-auto').find((r) => r.status.key === 'NOT_STARTED');
   return row ? { wo: row.task.wo, die: row.task.die || '' } : null;
 });
-if (!target) throw new Error('no Not-started line found on Rolling (Auto) to test with');
-step('target line: W/O ' + target.wo + ' die ' + (target.die || '(none)'));
+if (!target) throw new Error('no Not-started line on Rolling (Auto) to test with');
+step(`target line: W/O ${target.wo} die ${target.die || '(none)'}`);
 
-const panel = page.locator('.panel', { hasText: 'Rolling (Auto)' }).first();
-const row = panel.locator('table tbody tr')
-  .filter({ hasText: target.wo }).filter({ hasText: target.die || '—' }).first();
-const chipBtn = row.locator('.chip').first();
-const before = (await chipBtn.textContent()).trim();
-await chipBtn.click();
+// expand every group so the target is reachable regardless of bucket
+await page.$$eval('.dgroup-head[aria-expanded="false"]', (ns) => ns.forEach((n) => n.click()));
 await page.waitForTimeout(250);
-const after = (await row.locator('.chip').first().textContent()).trim();
+await page.$$eval('.showmore', (ns) => ns.forEach((n) => n.click()));
+await page.waitForTimeout(250);
+
+const line = page.locator('.line').filter({ hasText: target.wo })
+  .filter({ hasText: target.die || '—' }).first();
+const before = (await line.locator('.status').textContent()).trim();
+await line.locator('.status').click();
+await page.waitForTimeout(250);
+const after = (await line.locator('.status').textContent()).trim();
 step(`status cycled: "${before}" -> "${after}"`);
-if (before === after) throw new Error('status chip did not change on click');
 if (after !== 'In Progress') throw new Error(`expected "In Progress", got "${after}"`);
 
-const clicked = {
-  key: `roll-auto|${target.wo}|${target.die}`,
-  val: await page.evaluate((k) => import('/js/store.js').then((m) => m.state.taskStatus[k]),
-    `roll-auto|${target.wo}|${target.die}`),
-};
-step('stored status: ' + JSON.stringify(clicked));
-if (!clicked.val) throw new Error('no taskStatus was recorded for the clicked line');
+const key = `roll-auto|${target.wo}|${target.die}`;
+const stored = await page.evaluate((k) => import('/js/store.js').then((m) => m.state.taskStatus[k]), key);
+step('stored: ' + JSON.stringify(stored));
+if (!stored) throw new Error('status was not recorded');
 
-// reload -> status survives
+// survives reload
 await page.reload();
 await page.waitForSelector('header.top');
-const afterReload = await page.evaluate((key) => import('/js/store.js').then((m) => m.state.taskStatus[key]), clicked.key);
-step('status after reload: ' + JSON.stringify(afterReload));
-if (!afterReload || afterReload.status !== clicked.val.status) throw new Error('status did not survive reload');
+const afterReload = await page.evaluate((k) => import('/js/store.js').then((m) => m.state.taskStatus[k]), key);
+step('after reload: ' + JSON.stringify(afterReload));
+if (afterReload?.status !== stored.status) throw new Error('status did not survive reload');
 
-// re-import Rolling -> status must survive (proves the stable key, not row number)
+// survives re-import (the stable-key guarantee)
 await page.click('nav.tabs button:has-text("Setup")');
 await page.waitForSelector('.drop');
 const ch2 = page.waitForEvent('filechooser');
@@ -142,18 +182,15 @@ await (await ch2).setFiles(ROLLING);
 await page.waitForSelector('dialog .stat', { timeout: 120000 });
 await page.click('dialog header button');
 await page.waitForSelector('dialog', { state: 'detached' });
+const afterReimport = await page.evaluate((k) => import('/js/store.js').then((m) => m.state.taskStatus[k]), key);
+step('after re-import: ' + JSON.stringify(afterReimport));
+if (afterReimport?.status !== stored.status) throw new Error('status lost on re-import — stable key broken');
 
-const afterReimport = await page.evaluate((key) => import('/js/store.js').then((m) => m.state.taskStatus[key]), clicked.key);
-step('status after re-import: ' + JSON.stringify(afterReimport));
-if (!afterReimport || afterReimport.status !== clicked.val.status) {
-  throw new Error('status was lost on re-import — stable key is not working');
-}
-
-// phone layout
-await page.click('nav.tabs button:has-text("Tracker")');
+// phone
+await page.click('nav.tabs button:has-text("Rolling")');
 await page.setViewportSize({ width: 390, height: 844 });
-await page.waitForTimeout(200);
-await page.screenshot({ path: path.join(SHOT, 'tracker-phone.png'), fullPage: true });
+await page.waitForTimeout(250);
+await page.screenshot({ path: path.join(SHOT, 'centre-phone.png'), fullPage: true });
 step('phone layout captured');
 
 console.log('\nERRORS:', errors.length ? '\n  ' + errors.join('\n  ') : 'none');

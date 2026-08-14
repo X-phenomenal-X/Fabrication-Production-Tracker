@@ -243,6 +243,138 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   .stat .n { font-size: 19px; }
 }
 
+/* ---------- work-centre page ---------- */
+
+.centre { padding-bottom: 40px; }
+
+.centre-head {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg);
+  padding: 14px 0 10px;
+  margin: -18px 0 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.centre-title { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+
+.centre-stats { display: flex; gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); border-radius: 8px; overflow: hidden; }
+.cstat { background: var(--panel); padding: 6px 14px; text-align: center; min-width: 62px; }
+.cstat b { display: block; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.cstat i { display: block; font-style: normal; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); font-weight: 600; margin-top: 1px; }
+.cstat.bad b { color: var(--bad); }
+.cstat.work b { color: var(--work); }
+
+.subtabs { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 12px; }
+.subtabs button {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 14px; border-radius: 999px; font-weight: 600; font-size: 13px;
+  background: var(--panel); border: 1px solid var(--line); color: var(--ink-2); cursor: pointer;
+}
+.subtabs button:hover { border-color: var(--ink-3); color: var(--ink); }
+.subtabs button[aria-current="true"] {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.subtab-count {
+  font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  background: var(--panel-2); color: var(--ink-2);
+}
+.subtabs button[aria-current="true"] .subtab-count { background: rgba(255,255,255,.24); color: #fff; }
+
+.centre-filters { margin-top: 12px; }
+.centre-filters input[type="search"] { max-width: 300px; }
+
+/* date groups */
+
+.dgroup { margin-top: 16px; }
+.dgroup-head {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  background: none; border: none; padding: 4px 2px; cursor: pointer;
+  font: inherit; text-align: left;
+}
+.dgroup-head:hover .dgroup-label { color: var(--ink); }
+.dgroup-caret { color: var(--ink-3); font-size: 11px; width: 10px; }
+.dgroup-label {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-2);
+}
+.dgroup-label.bad { color: var(--bad); }
+.dgroup-label.warn { color: var(--warn); }
+.dgroup-count {
+  font-size: 11px; font-weight: 700; color: var(--ink-3);
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  padding: 1px 8px; border-radius: 999px;
+}
+.dgroup-body {
+  margin-top: 6px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--panel); overflow: hidden;
+}
+
+/* one scheduled line */
+
+.line {
+  display: flex; align-items: center; gap: 14px;
+  padding: 11px 14px; border-bottom: 1px solid var(--line-soft);
+}
+.line:last-of-type { border-bottom: 0; }
+.line:hover { background: var(--panel-2); }
+
+.line-main { flex: 1; min-width: 0; }
+.line-id { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.line-id .mono { font-size: 14px; }
+.die {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  background: var(--accent-soft); color: var(--accent);
+  padding: 1px 7px; border-radius: 5px;
+}
+.line-where { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.line-note { margin-top: 3px; }
+
+.line-qty { flex-shrink: 0; text-align: right; min-width: 68px; }
+.line-qty .mono { font-size: 14px; font-weight: 600; }
+.line-date { flex-shrink: 0; width: 74px; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.line-status { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+
+.status {
+  min-width: 108px; padding: 8px 14px; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-2);
+}
+.status:hover { border-color: var(--ink-3); }
+.status.ok   { background: var(--ok-soft);   color: var(--ok);   border-color: transparent; }
+.status.work { background: var(--work-soft); color: var(--work); border-color: transparent; }
+
+.showmore { margin: 10px 14px 12px; }
+
+@media (max-width: 720px) {
+  .centre-head { position: static; margin: -12px 0 4px; }
+  .centre-title { font-size: 18px; }
+  .centre-stats { width: 100%; margin-top: 10px; }
+  .cstat { flex: 1; min-width: 0; padding: 6px 4px; }
+  .line { flex-wrap: wrap; gap: 8px; padding: 12px; }
+  .line-main { flex-basis: 100%; }
+  .line-status { margin-left: auto; }
+  .status { min-width: 96px; }
+}
+
+/* ---------- shift update panel ---------- */
+
+.su {
+  margin-top: 14px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--panel); overflow: hidden;
+}
+.su-head {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
+  background: var(--panel-2);
+}
+.su-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
+.su-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; padding: 12px 14px; }
+.su-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); margin-bottom: 4px; }
+.su-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
+.su-list li { margin: 1px 0; }
+
 </style>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#9986;</text></svg>">
 </head>
@@ -267,18 +399,12 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   // js/store.js
   var store_exports = {};
   __export(store_exports, {
-    clearProgress: () => clearProgress,
     connectSharedFile: () => connectSharedFile,
-    deleteGuideDoc: () => deleteGuideDoc,
-    deleteManualOrder: () => deleteManualOrder,
-    deleteShiftLog: () => deleteShiftLog,
     disconnectSharedFile: () => disconnectSharedFile,
     exportJson: () => exportJson,
     grantSharedFile: () => grantSharedFile,
-    historyFor: () => historyFor,
     importJson: () => importJson,
     loadLocal: () => loadLocal,
-    log: () => log,
     me: () => me,
     now: () => now,
     onChange: () => onChange,
@@ -286,19 +412,11 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     reconnectSharedFile: () => reconnectSharedFile,
     resetAll: () => resetAll,
     save: () => save,
-    saveGuideDoc: () => saveGuideDoc,
-    saveManualOrder: () => saveManualOrder,
-    saveShiftLog: () => saveShiftLog,
-    setImport: () => setImport,
     setMachineImport: () => setMachineImport,
-    setMaterial: () => setMaterial,
-    setPlan: () => setPlan,
-    setProgress: () => setProgress,
     setTaskStatus: () => setTaskStatus,
     sharedFileName: () => sharedFileName,
     state: () => state,
     supportsSharedFile: () => supportsSharedFile,
-    trace: () => trace,
     uid: () => uid
   });
   function onChange(fn) {
@@ -317,141 +435,29 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   function me() {
     return state.settings.me || "Unassigned";
   }
-  function log(what, detail) {
-    state.audit.unshift({ at: now(), who: me(), what, detail });
-    if (state.audit.length > 800) state.audit.length = 800;
-  }
-  function trace(orderId, kind, from, to, note) {
-    state.history.unshift({
-      id: uid(),
-      orderId,
-      kind,
-      from: from ?? null,
-      to: to ?? null,
-      note: note || null,
-      at: now(),
-      by: me()
-    });
-    if (state.history.length > 5e3) state.history.length = 5e3;
-  }
-  function historyFor(orderId) {
-    return state.history.filter((h) => h.orderId === orderId);
-  }
-  function setProgress(orderId, opKey, done, note) {
-    const key = `${orderId}|${opKey}`;
-    const prev = state.progress[key];
-    state.progress[key] = { done, at: now(), by: me(), note: note ?? prev?.note ?? null };
-    log("progress", `${orderId} ${opKey} \u2192 ${done}`);
-    trace(orderId, `cut:${opKey}`, prev?.done ?? null, done, note);
-    save();
-  }
-  function setMaterial(orderId, profileKey, status, note) {
-    const key = `${orderId}|${profileKey}`;
-    const prev = state.material[key];
-    state.material[key] = { status, note: note ?? null, at: now(), by: me() };
-    log("material", `${orderId} ${profileKey} \u2192 ${status}`);
-    trace(orderId, `material:${profileKey}`, prev?.status ?? null, status, note);
-    save();
-  }
   function setTaskStatus(key, status) {
-    const prev = state.taskStatus[key];
     state.taskStatus[key] = { status, at: now(), by: me() };
-    log("task status", `${key} \u2192 ${status}`);
-    trace(key, "task", prev?.status ?? null, status);
     save();
   }
-  function clearProgress(orderId, opKey) {
-    const key = `${orderId}|${opKey}`;
-    if (!state.progress[key]) return;
-    state.progress[key] = { done: null, at: now(), by: me(), deleted: true };
-    save();
-  }
-  function saveShiftLog(entry) {
-    const id = entry.id || uid();
-    state.shiftLogs[id] = { ...entry, id, at: now(), by: entry.by || me() };
-    log("shift log", `${entry.date} ${entry.shift}`);
-    save();
-    return id;
-  }
-  function deleteShiftLog(id) {
-    if (state.shiftLogs[id]) state.shiftLogs[id] = { id, at: now(), by: me(), deleted: true };
-    save();
-  }
-  function setPlan(date2, shift, ids) {
-    state.plan[`${date2}|${shift}`] = { ids, at: now(), by: me() };
-    save();
-  }
-  function saveGuideDoc(doc) {
-    const id = doc.id || uid();
-    state.guide[id] = { ...doc, id, at: now(), by: me() };
-    log("guide", doc.title || id);
-    save();
-    return id;
-  }
-  function deleteGuideDoc(id) {
-    if (state.guide[id]) state.guide[id] = { id, at: now(), by: me(), deleted: true };
-    save();
-  }
-  function saveManualOrder(o) {
-    const id = o.id || `manual:${uid()}`;
-    state.manualOrders[id] = { ...o, id, manual: true, at: now(), by: o.by || me() };
-    log("manual order", `${o.wo || id}`);
-    trace(id, "order", null, o.wo || "created", o.notes);
-    save();
-    return id;
-  }
-  function deleteManualOrder(id) {
-    if (state.manualOrders[id]) {
-      state.manualOrders[id] = { id, at: now(), by: me(), deleted: true };
-    }
-    save();
-  }
-  function setMachineImport({ tasks, report }) {
+  function setMachineImport({ tasks, shiftUpdate, report }) {
     const machines = new Set(tasks.map((t) => t.machine));
     state.tasks = state.tasks.filter((t) => t.source !== report.kind && !machines.has(t.machine)).concat(tasks.map((t) => ({ ...t, source: report.kind })));
     state.machineMeta = {
       ...state.machineMeta,
       [report.kind]: { fileName: report.fileName, importedAt: report.importedAt, count: tasks.length }
     };
-    log("import", `${report.fileName} \u2014 ${tasks.length} machine tasks`);
-    save();
-  }
-  function setImport({ orders, wip, prep, screens, report }) {
-    state.orders = orders;
-    state.wip = wip;
-    state.prep = prep;
-    state.screens = screens;
-    state.meta = {
-      revision: report.fileName,
-      importedAt: report.importedAt,
-      fileName: report.fileName
-    };
-    state.lastImportReport = report;
-    log("import", `${report.fileName} \u2014 ${orders.length} orders`);
+    if (shiftUpdate) state.shiftUpdate = { ...shiftUpdate, importedAt: report.importedAt };
     save();
   }
   function snapshot() {
     return {
-      v: 1,
-      meta: state.meta,
-      orders: state.orders,
-      wip: state.wip,
-      prep: state.prep,
-      screens: state.screens,
-      progress: state.progress,
-      material: state.material,
-      history: state.history,
-      manualOrders: state.manualOrders,
+      v: 2,
       tasks: state.tasks,
       machineMeta: state.machineMeta,
       taskStatus: state.taskStatus,
-      shiftLogs: state.shiftLogs,
-      plan: state.plan,
-      guide: state.guide,
+      shiftUpdate: state.shiftUpdate,
       people: state.people,
-      audit: state.audit,
-      settings: state.settings,
-      lastImportReport: state.lastImportReport
+      settings: state.settings
     };
   }
   function apply(data) {
@@ -473,7 +479,12 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   function loadLocal() {
     try {
       const raw = localStorage.getItem(LS_KEY);
-      if (raw) apply(JSON.parse(raw));
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      apply(data);
+      if (RETIRED_KEYS.some((k) => data[k] !== void 0)) {
+        localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+      }
     } catch (e) {
       console.warn("could not read local data", e);
     }
@@ -524,17 +535,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   }
   function mergeSnapshot(remote) {
     if (!remote) return;
-    state.progress = mergeRecords(state.progress, remote.progress);
-    state.material = mergeRecords(state.material, remote.material);
-    state.manualOrders = mergeRecords(state.manualOrders, remote.manualOrders);
     state.taskStatus = mergeRecords(state.taskStatus, remote.taskStatus);
-    const haveIds = new Set(state.history.map((h) => h.id));
-    for (const h of remote.history || []) if (!haveIds.has(h.id)) state.history.push(h);
-    state.history.sort((a, b) => a.at < b.at ? 1 : -1);
-    if (state.history.length > 5e3) state.history.length = 5e3;
-    state.shiftLogs = mergeRecords(state.shiftLogs, remote.shiftLogs);
-    state.plan = mergeRecords(state.plan, remote.plan);
-    state.guide = mergeRecords(state.guide, remote.guide);
     state.people = Array.from(/* @__PURE__ */ new Set([...state.people || [], ...remote.people || []]));
     for (const kind of ["rolling", "cnc"]) {
       const mine = state.machineMeta?.[kind]?.importedAt || "";
@@ -542,24 +543,9 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       if (theirs > mine && Array.isArray(remote.tasks)) {
         state.tasks = state.tasks.filter((t) => t.source !== kind).concat(remote.tasks.filter((t) => t.source === kind));
         state.machineMeta = { ...state.machineMeta, [kind]: remote.machineMeta[kind] };
+        if (kind === "cnc" && remote.shiftUpdate) state.shiftUpdate = remote.shiftUpdate;
       }
     }
-    const mineAt = state.meta?.importedAt || "";
-    const theirsAt = remote.meta?.importedAt || "";
-    if (theirsAt > mineAt && Array.isArray(remote.orders) && remote.orders.length) {
-      state.orders = remote.orders;
-      state.wip = remote.wip || [];
-      state.prep = remote.prep || [];
-      state.screens = remote.screens || [];
-      state.meta = remote.meta;
-      state.lastImportReport = remote.lastImportReport || state.lastImportReport;
-    }
-    const seen = new Set(state.audit.map((a) => a.at + a.who + a.what));
-    for (const a of remote.audit || []) {
-      if (!seen.has(a.at + a.who + a.what)) state.audit.push(a);
-    }
-    state.audit.sort((x, y) => x.at < y.at ? 1 : -1);
-    if (state.audit.length > 800) state.audit.length = 800;
   }
   async function readHandle(handle) {
     const f = await handle.getFile();
@@ -569,7 +555,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   async function connectSharedFile({ create = false } = {}) {
     if (!supportsSharedFile()) {
       throw new Error(
-        "This browser cannot open a shared file directly. Use Chrome or Edge, or use Export / Import on the Data tab instead."
+        "This browser cannot open a shared file directly. Use Chrome or Edge, or use Export / Import on the Setup tab instead."
       );
     }
     const opts = {
@@ -626,7 +612,6 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     const w = await fileHandle.createWritable();
     await w.write(JSON.stringify(snapshot()));
     await w.close();
-    lastFileWrite = Date.now();
   }
   function queueFileSave() {
     clearTimeout(saveTimer);
@@ -650,47 +635,43 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   function resetAll() {
     localStorage.removeItem(LS_KEY);
   }
-  var LS_KEY, IDB_NAME, IDB_STORE, state, saveTimer, listeners, fileHandle, lastFileWrite;
+  var LS_KEY, IDB_NAME, IDB_STORE, RETIRED_KEYS, state, saveTimer, listeners, fileHandle;
   var init_store = __esm({
     "js/store.js"() {
       LS_KEY = "bv.cutting.v1";
       IDB_NAME = "bv-cutting";
       IDB_STORE = "handles";
+      RETIRED_KEYS = [
+        "meta",
+        "orders",
+        "wip",
+        "prep",
+        "screens",
+        "progress",
+        "material",
+        "history",
+        "manualOrders",
+        "shiftLogs",
+        "plan",
+        "guide",
+        "audit",
+        "lastImportReport"
+      ];
       state = {
-        meta: { revision: null, importedAt: null, fileName: null },
-        orders: [],
-        wip: [],
-        prep: [],
-        screens: [],
-        progress: {},
-        // `${orderId}|${opKey}` -> { done, at, by, note }
-        material: {},
-        // `${orderId}|${profileKey}` -> { status, note, at, by }
-        history: [],
-        // every change, newest first — the traceability record
-        manualOrders: {},
-        // id -> order added by hand, e.g. service orders
         tasks: [],
         // machine-schedule rows: the base for scheduling
         machineMeta: {},
         // kind -> { fileName, importedAt, count }
         taskStatus: {},
         // `${machine}|${wo}|${die}` -> { status, at, by }
-        shiftLogs: {},
-        // id -> log
-        plan: {},
-        // `${date}|${shift}` -> { ids, at, by }
-        guide: {},
-        // id -> doc
+        shiftUpdate: null,
+        // latest Shift Update sheet: { date, shift, machines }
         people: [],
-        audit: [],
-        settings: { me: null, activeOnly: true },
-        lastImportReport: null
+        settings: { me: null }
       };
       saveTimer = null;
       listeners = /* @__PURE__ */ new Set();
       fileHandle = null;
-      lastFileWrite = 0;
     }
   });
 
@@ -808,175 +789,97 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   // js/app.js
   init_store();
 
-  // js/views/tracker.js
+  // js/views/centre.js
   init_store();
 
   // js/model.js
   init_store();
-
-  // js/schema.js
-  var SHEET = {
-    DAILY: "Daily Sched",
-    WIP: "WIP",
-    PREP: "PREP Tracker",
-    SCREENS: "screens sch"
+  function today() {
+    return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  }
+  function addDays(iso, n) {
+    const d = /* @__PURE__ */ new Date(iso + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  var TRACK_STATUS = {
+    NOT_STARTED: { key: "NOT_STARTED", label: "Not started", tone: "mute" },
+    IN_PROGRESS: { key: "IN_PROGRESS", label: "In Progress", tone: "work" },
+    DONE: { key: "DONE", label: "Done", tone: "ok" }
   };
-  var FIELDS = {
-    wo: 1,
-    job: 2,
-    project: 3,
-    floor: 4,
-    qty: 5,
-    notes: 6,
-    rem: 7,
-    quar: 8,
-    commRes: 9,
-    vents: 10,
-    drFramesCutting: 11,
-    series: 12,
-    shipDate: 13,
-    glazingDate: 15,
-    cuttingDate: 16,
-    panelsToGlazing: 17,
-    purch: 18,
-    bdRec: 19,
-    weeks: 20,
-    extStatus: 21,
-    warehouse: 22,
-    reason: 23,
-    openReq: 24,
-    openReqQty: 25,
-    daysToShip: 26
-  };
-  var OPS = [
-    { key: "cut", col: 27, label: "CUT", kind: "status", note: "Overall cut status" },
-    { key: "hts", col: 28, label: "HTS", kind: "qty", alt: "VERT. CUT" },
-    { key: "widths", col: 29, label: "WIDTHS", kind: "qty", alt: "VERT. CNC" },
-    { key: "punch", col: 30, label: "PUNCH", kind: "qty", alt: "WIDTHS" },
-    { key: "vynls", col: 31, label: "VYNL.S", kind: "qty" },
-    { key: "sps", col: 32, label: "SP.S", kind: "qty" },
-    // Louvres belong to Cutting, so this column stays despite the "PAN" in its name.
-    { key: "lvrs", col: 33, label: "LVRS/TC PAN", kind: "qty" },
-    { key: "vent", col: 34, label: "VENT", kind: "qty" },
-    { key: "wwcnc", col: 35, label: "WW CNC", kind: "qty" },
-    // Column 36, CP CUTTING (sub-header "C CHANNEL (PANEL)"), is panel work and
-    // belongs to another department. Deliberately not tracked here.
-    { key: "sldroll", col: 37, label: "SLD ROLLING", kind: "qty" },
-    { key: "sldcut", col: 38, label: "SLD CUTTING", kind: "qty" },
-    { key: "adaptors", col: 39, label: "ADAPTORS CNC", kind: "qty" },
-    { key: "bdprep", col: 40, label: "BD Prep", kind: "status" },
-    { key: "mtlstatus", col: 41, label: "MTL STATUS", kind: "status" }
+  var TRACK_STATUS_ORDER = ["NOT_STARTED", "IN_PROGRESS", "DONE"];
+  function nextTrackStatus(key) {
+    const i = TRACK_STATUS_ORDER.indexOf(key);
+    return TRACK_STATUS_ORDER[(i + 1) % TRACK_STATUS_ORDER.length];
+  }
+  function taskStatusKey(t) {
+    return `${t.machine}|${t.wo}|${t.die || ""}`;
+  }
+  function effectiveTaskStatus(t) {
+    const override = state.taskStatus[taskStatusKey(t)];
+    if (override?.status && TRACK_STATUS[override.status]) {
+      return { ...TRACK_STATUS[override.status], by: override.by, at: override.at, overridden: true };
+    }
+    let bucket = "NOT_STARTED";
+    if (t.status === "DONE") bucket = "DONE";
+    else if (t.status === "IP") bucket = "IN_PROGRESS";
+    return { ...TRACK_STATUS[bucket], overridden: false };
+  }
+  function tasksInScope() {
+    return (state.tasks || []).filter((t) => !t.archived);
+  }
+  function hasTasks() {
+    return tasksInScope().length > 0;
+  }
+  function tasksForMachine(machineKey) {
+    return tasksInScope().filter((t) => t.machine === machineKey).map((task) => ({ task, status: effectiveTaskStatus(task) })).sort((a, b) => (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1);
+  }
+  function openCountFor(machineKey) {
+    return tasksForMachine(machineKey).filter((r) => r.status.key !== "DONE").length;
+  }
+  var DATE_GROUPS = [
+    { key: "OVERDUE", label: "Overdue", tone: "bad", open: true, cap: 25 },
+    { key: "TODAY", label: "Today", tone: "warn", open: true, cap: 25 },
+    { key: "WEEK", label: "This week", tone: "mute", open: true, cap: 25 },
+    { key: "LATER", label: "Later", tone: "mute", open: false, cap: 25 },
+    { key: "NODATE", label: "No date", tone: "mute", open: false, cap: 25 }
   ];
-  var QTY_OPS = OPS.filter((o) => o.kind === "qty");
-  var OP_BY_KEY = Object.fromEntries(OPS.map((o) => [o.key, o]));
-  var CUT_STATUS = {
-    BO: { label: "Back Order", tone: "bad", rank: 0 },
-    NR: { label: "Not Received", tone: "bad", rank: 1 },
-    IP: { label: "In Progress", tone: "work", rank: 2 },
-    ROLLING: { label: "Rolling", tone: "work", rank: 3 },
-    ROLLED: { label: "Rolled", tone: "ok", rank: 4 },
-    OK: { label: "Cut OK", tone: "ok", rank: 5 },
-    DONE: { label: "Done", tone: "ok", rank: 6 },
-    NA: { label: "N/A", tone: "mute", rank: 7 }
-  };
-  var CUT_ALIASES = {
-    "I.P": "IP",
-    "I/P": "IP",
-    "IN PROGRESS": "IP",
-    "INPROGRESS": "IP",
-    "N/A": "NA",
-    "NA": "NA",
-    "-": "NA",
-    "B/O": "BO",
-    "BACK ORDER": "BO",
-    "BACKORDER": "BO",
-    "N.R": "NR",
-    "NOT RECEIVED": "NR",
-    "OK": "OK",
-    "DONE": "DONE",
-    "ROLLING": "ROLLING",
-    "ROLLED": "ROLLED",
-    "COMPLETE": "DONE",
-    "COMPLETED": "DONE"
-  };
-  function normCutStatus(raw) {
-    if (raw == null) return null;
-    const s = String(raw).trim().toUpperCase().replace(/\s+/g, " ");
-    if (!s) return null;
-    if (CUT_ALIASES[s]) return CUT_ALIASES[s];
-    if (CUT_STATUS[s]) return s;
-    return null;
+  function dateGroupOf(task, ref = today()) {
+    const d = task.cuttingDate;
+    if (!d) return "NODATE";
+    if (d < ref) return "OVERDUE";
+    if (d === ref) return "TODAY";
+    return d <= addDays(ref, 7) ? "WEEK" : "LATER";
   }
-  var PURCH_ALIASES = {
-    "PULLED": "PULLED",
-    "STOCK OK": "STOCK OK",
-    "@ PAINT": "@ PAINT",
-    "AT PAINT": "@ PAINT",
-    "ON ORDER": "ON ORDER",
-    "EXT DUE": "EXT DUE",
-    "TBD": "TBD",
-    "N/A": "NA"
-  };
-  function normPurch(raw) {
-    if (raw == null) return null;
-    const s = String(raw).trim().toUpperCase().replace(/\s+/g, " ");
-    if (!s) return null;
-    return PURCH_ALIASES[s] || s;
+  function groupedQueue(machineKey, { showDone = false, q = "", ref = today() } = {}) {
+    const term = q.trim().toLowerCase();
+    const rows = tasksForMachine(machineKey).filter((r) => showDone || r.status.key !== "DONE").filter((r) => {
+      if (!term) return true;
+      const hay = [r.task.wo, r.task.project, r.task.floor, r.task.die].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(term);
+    });
+    const byKey = new Map(DATE_GROUPS.map((g) => [g.key, []]));
+    for (const r of rows) byKey.get(dateGroupOf(r.task, ref)).push(r);
+    return DATE_GROUPS.map((g) => ({ ...g, rows: byKey.get(g.key) })).filter((g) => g.rows.length);
   }
-  var SECTION_HINTS = [
-    "COMMERCIAL DOOR FRAMES",
-    "MU FOR DESIGN/TESTING",
-    "IN GLAZING",
-    "IN CUTTING",
-    "MAT'L REQUIRED",
-    "GLASS ONLY JOBS",
-    "SHIPPING SCHEDULE",
-    "WINDOW WALL",
-    "ON HOLD",
-    "SCHEDULING IN PROCESS"
-  ];
-  var BANNER_MAX_FILLED = 5;
-  var JUNK_FIRST_CELL = /* @__PURE__ */ new Set([
-    "W/O#",
-    "W/O #",
-    "WO#",
-    "-",
-    "--",
-    "",
-    "QUEST",
-    "PLEASE SEE SCHEDULER BEFORE PROCEEDING BELOW:",
-    "PLEASE SEE SCHEDULER BEFORE PROCEEDING BELOW"
-  ]);
-  function isJunkRow(first) {
-    if (first == null) return true;
-    const s = String(first).trim().toUpperCase();
-    return JUNK_FIRST_CELL.has(s);
+  function machineSummary(machineKey, ref = today()) {
+    const all = tasksForMachine(machineKey);
+    const open = all.filter((r) => r.status.key !== "DONE");
+    return {
+      total: all.length,
+      open: open.length,
+      inProgress: open.filter((r) => r.status.key === "IN_PROGRESS").length,
+      overdue: open.filter((r) => dateGroupOf(r.task, ref) === "OVERDUE").length,
+      backOrder: open.filter((r) => r.task.backOrder).length,
+      done: all.length - open.length
+    };
   }
-  function isWorkOrder(v) {
-    if (v == null) return false;
-    if (typeof v === "object" && v.error) return false;
-    const s = String(v).trim();
-    if (!s) return false;
-    return !isJunkRow(s);
-  }
-  function isErpWorkOrder(v) {
-    return v != null && /^\d{3,7}$/.test(String(v).trim());
-  }
-  function isPanelOnly(project, floor, hasCuttingWork) {
-    if (hasCuttingWork) return false;
-    const text = `${project || ""} ${floor || ""}`;
-    return /\bpanels?\b/i.test(text);
-  }
-  var SHIFTS = {
-    DAY: { key: "DAY", label: "Day", short: "D", from: 7, to: 15, full: true },
-    AFT: { key: "AFT", label: "Afternoon", short: "A", from: 15, to: 23, full: true },
-    NIGHT: { key: "NIGHT", label: "Midnight", short: "M", from: 23, to: 7, full: false, crew: 3 }
-  };
-  function shiftAt(date2 = /* @__PURE__ */ new Date()) {
-    const h = date2.getHours();
-    if (h >= 7 && h < 15) return "DAY";
-    if (h >= 15 && h < 23) return "AFT";
-    return "NIGHT";
+  function shiftUpdateFor(machineKey) {
+    const su = state.shiftUpdate;
+    if (!su?.machines) return null;
+    const entry = su.machines[machineKey];
+    if (!entry) return null;
+    return { ...entry, date: su.date, shift: su.shift };
   }
 
   // js/machines.js
@@ -1013,203 +916,196 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     return groups;
   }
 
-  // js/profiles.js
-  var PROFILES = [
-    { key: "widths", label: "Widths", ops: ["widths"] },
-    { key: "heights", label: "Heights", ops: ["hts"] },
-    { key: "vents", label: "Vents", ops: ["vent"] },
-    { key: "louvers", label: "Louvers", ops: ["lvrs"] },
-    { key: "service", label: "Service Orders", ops: [] },
-    { key: "hinges", label: "Hinges", ops: [] },
-    { key: "extra", label: "Extra Operations", ops: ["punch", "vynls", "sps", "wwcnc", "sldroll", "sldcut", "adaptors"] }
-  ];
-  var PROFILE_BY_KEY = Object.fromEntries(PROFILES.map((p) => [p.key, p]));
-  var PROFILE_OF_OP = (() => {
-    const map = {};
-    for (const p of PROFILES) for (const op of p.ops) map[op] = p.key;
-    return map;
-  })();
-
-  // js/model.js
-  function hasTasks() {
-    return Array.isArray(state.tasks) && state.tasks.length > 0;
-  }
-  var TRACK_STATUS = {
-    NOT_STARTED: { key: "NOT_STARTED", label: "Not started", tone: "mute" },
-    IN_PROGRESS: { key: "IN_PROGRESS", label: "In Progress", tone: "work" },
-    DONE: { key: "DONE", label: "Done", tone: "ok" }
-  };
-  var TRACK_STATUS_ORDER = ["NOT_STARTED", "IN_PROGRESS", "DONE"];
-  function nextTrackStatus(key) {
-    const i = TRACK_STATUS_ORDER.indexOf(key);
-    return TRACK_STATUS_ORDER[(i + 1) % TRACK_STATUS_ORDER.length];
-  }
-  function taskStatusKey(t) {
-    return `${t.machine}|${t.wo}|${t.die || ""}`;
-  }
-  function effectiveTaskStatus(t) {
-    const key = taskStatusKey(t);
-    const override = state.taskStatus[key];
-    if (override?.status && TRACK_STATUS[override.status]) {
-      return { ...TRACK_STATUS[override.status], by: override.by, at: override.at, overridden: true, blocked: false };
+  // js/views/centre.js
+  var viewState = /* @__PURE__ */ new Map();
+  function stateFor(group) {
+    if (!viewState.has(group)) {
+      viewState.set(group, { machine: null, q: "", showDone: false, open: {}, expanded: {} });
     }
-    let bucket = "NOT_STARTED";
-    if (t.status === "DONE") bucket = "DONE";
-    else if (t.status === "IP") bucket = "IN_PROGRESS";
-    return { ...TRACK_STATUS[bucket], overridden: false, blocked: t.status === "BO" || t.status === "HOLD" };
+    return viewState.get(group);
   }
-  function tasksInScope() {
-    return (state.tasks || []).filter((t) => !t.archived);
-  }
-  function tasksForMachine(machineKey) {
-    return tasksInScope().filter((t) => t.machine === machineKey).map((task) => ({ task, status: effectiveTaskStatus(task) })).sort((a, b) => (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1);
-  }
-
-  // js/views/tracker.js
-  var TRACKED_GROUPS = ["Rolling", "FOM", "CNC", "Punch"];
-  var PAGE_SIZE = 25;
-  var state_ = { q: "", showDone: false, expanded: /* @__PURE__ */ new Set() };
-  function statusChip(row, rerender) {
+  function statusButton(row, rerender) {
     const s = row.status;
-    return el("button.chip." + s.tone, {
-      style: { cursor: "pointer", border: "none" },
+    return el("button.status." + s.tone, {
       title: s.overridden ? `${s.by} \xB7 ${fmtWhen(s.at)}` : "Click to advance",
-      onclick: (e) => {
-        e.stopPropagation();
+      onclick: () => {
         setTaskStatus(taskStatusKey(row.task), nextTrackStatus(s.key));
         rerender();
       }
-    }, s.label, s.blocked ? " \u26A0" : "");
+    }, s.label);
   }
-  function matches(row, q) {
-    if (!q) return true;
-    const hay = [row.task.wo, row.task.project, row.task.floor, row.task.die].filter(Boolean).join(" ").toLowerCase();
-    return hay.includes(q.toLowerCase());
-  }
-  function machineTable(machine, rerender) {
-    const all = tasksForMachine(machine.key);
-    const filtered = all.filter((r) => state_.showDone || r.status.key !== "DONE").filter((r) => matches(r, state_.q));
-    const doneCount = all.filter((r) => r.status.key === "DONE").length;
-    const expanded = state_.expanded.has(machine.key);
-    const rows = expanded ? filtered : filtered.slice(0, PAGE_SIZE);
-    const hiddenCount = filtered.length - rows.length;
-    const body = rows.length ? el("div.tbl-wrap", {}, el(
-      "table",
-      {},
-      el("thead", {}, el(
-        "tr",
-        {},
-        el("th", {}, "W/O"),
-        el("th", {}, "Project"),
-        el("th", {}, "Floor"),
-        el("th", {}, "Die"),
-        el("th.num", {}, "Qty"),
-        el("th.hide-sm", {}, "Cut date"),
-        el("th", {}, "Status")
-      )),
-      el("tbody", {}, ...rows.map((row) => {
-        const t = row.task;
-        const note = t.comments || t.boStat || (t.bo ? `B/O ${t.bo}` : null);
-        return el(
-          "tr",
-          {},
-          el("td", {}, el("span.mono.strong", {}, t.wo)),
-          el("td", {}, t.project || "\u2014"),
-          el("td", {}, t.floor || "\u2014"),
-          el("td", {}, t.die || "\u2014"),
-          el("td.num", {}, fmtNum(t.qty)),
-          el("td.hide-sm.nowrap", {}, fmtDate(t.cuttingDate)),
-          el(
-            "td",
-            {},
-            statusChip(row, rerender),
-            note ? el("div.small.muted", { style: { marginTop: "3px" } }, note) : null
-          )
-        );
-      }))
-    )) : el(
-      "div.empty",
-      {},
-      all.length ? "Nothing matches." : "No lines scheduled here."
-    );
+  function taskRow(row, rerender) {
+    const t = row.task;
+    const note = t.comments || t.boStat;
     return el(
-      "div.panel",
+      "div.line",
       {},
       el(
-        "header",
+        "div.line-main",
         {},
-        machine.label,
-        machine.note ? el("span.small.muted.hide-sm", {}, machine.note) : null,
-        el("span.spacer"),
-        el("span.small.muted", {}, `${filtered.length} open`),
-        doneCount && !state_.showDone ? el("span.small.muted", {}, `\xB7 ${doneCount} done, hidden`) : null
+        el(
+          "div.line-id",
+          {},
+          el("span.mono.strong", {}, t.wo),
+          t.die ? el("span.die", {}, t.die) : null
+        ),
+        el(
+          "div.line-where",
+          {},
+          el("span", {}, t.project || "\u2014"),
+          t.floor ? el("span.muted", {}, " \xB7 " + t.floor) : null
+        ),
+        note ? el("div.small.muted.line-note", {}, note) : null
       ),
-      el("div.body.flush", {}, body),
-      hiddenCount > 0 ? el(
-        "div.body",
+      el(
+        "div.line-qty",
         {},
-        el("button.sm", {
+        el("span.mono", {}, fmtNum(t.qty)),
+        el("span.small.muted", {}, " pcs")
+      ),
+      el("div.line-date.hide-sm", {}, fmtDate(t.cuttingDate)),
+      el(
+        "div.line-status",
+        {},
+        t.backOrder ? chip("B/O", "bad", "Back order \u2014 short of material") : null,
+        statusButton(row, rerender)
+      )
+    );
+  }
+  function dateGroup(group, vs, rerender) {
+    const isOpen = vs.open[group.key] ?? group.open;
+    const expanded = vs.expanded[group.key];
+    const cap = group.cap && !expanded ? group.cap : Infinity;
+    const shown = group.rows.slice(0, cap);
+    const hidden = group.rows.length - shown.length;
+    return el(
+      "section.dgroup",
+      {},
+      el(
+        "button.dgroup-head",
+        {
+          "aria-expanded": String(isOpen),
           onclick: () => {
-            state_.expanded.add(machine.key);
+            vs.open[group.key] = !isOpen;
             rerender();
           }
-        }, `Show ${hiddenCount} more`)
-      ) : null,
-      expanded && filtered.length > PAGE_SIZE ? el(
-        "div.body",
+        },
+        el("span.dgroup-caret", {}, isOpen ? "\u25BE" : "\u25B8"),
+        el("span.dgroup-label." + group.tone, {}, group.label),
+        el("span.dgroup-count", {}, String(group.rows.length))
+      ),
+      isOpen ? el(
+        "div.dgroup-body",
         {},
-        el("button.sm.ghost", {
+        ...shown.map((r) => taskRow(r, rerender)),
+        hidden > 0 ? el("button.sm.showmore", {
           onclick: () => {
-            state_.expanded.delete(machine.key);
+            vs.expanded[group.key] = true;
             rerender();
           }
-        }, "Show fewer")
+        }, `Show ${hidden} more`) : null
       ) : null
     );
   }
-  function groupSection(group, machines, rerender) {
+  function shiftUpdatePanel(machineKey) {
+    const su = shiftUpdateFor(machineKey);
+    if (!su) return null;
+    const has = su.done.length || su.next.length || su.notes.length || su.down;
+    if (!has) return null;
+    const list = (label, items) => items.length ? el(
+      "div.su-col",
+      {},
+      el("div.su-label", {}, label),
+      el("ul.su-list", {}, ...items.map((t) => el("li", {}, t)))
+    ) : null;
     return el(
-      "div",
-      { style: { marginTop: "18px" } },
-      el(
-        "h2",
-        { style: { margin: "0 0 10px", fontSize: "13px", textTransform: "uppercase", letterSpacing: ".06em", color: "var(--ink-2)" } },
-        group
-      ),
-      el("div.grid.two", {}, ...machines.map((m) => machineTable(m, rerender)))
-    );
-  }
-  function renderTracker(rerender, go2) {
-    if (!hasTasks()) {
-      return el(
-        "div.panel",
-        {},
-        el(
-          "div.empty",
-          {},
-          el("h3", {}, "No schedule loaded yet"),
-          el("p", {}, "Import the Rolling and CNC workbooks to get started."),
-          el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
-        )
-      );
-    }
-    const groups = machinesByGroup();
-    const head = el(
-      "div.panel",
+      "div.su",
       {},
       el(
-        "div.body",
+        "div.su-head",
+        {},
+        el("span.su-title", {}, "Latest shift update"),
+        su.date ? chip(`${su.shift || ""} ${fmtDate(su.date)}`.trim(), "mute") : null,
+        su.down ? chip("MACHINE DOWN", "bad") : null,
+        su.ops != null ? el("span.small.muted", {}, `${su.ops} operator${su.ops === 1 ? "" : "s"}`) : null
+      ),
+      el(
+        "div.su-body",
+        {},
+        list("Work done / in progress", su.done),
+        list("Next in schedule", su.next),
+        list("Notes", su.notes)
+      )
+    );
+  }
+  function makeCentreView(group) {
+    return function renderCentre(rerender, go2) {
+      if (!hasTasks()) {
+        return el(
+          "div.panel",
+          {},
+          el(
+            "div.empty",
+            {},
+            el("h3", {}, "No schedule loaded yet"),
+            el("p", {}, "Import the Rolling and CNC workbooks to get started."),
+            el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
+          )
+        );
+      }
+      const machines = machinesByGroup().get(group) || [];
+      const vs = stateFor(group);
+      if (!vs.machine || !machines.some((m) => m.key === vs.machine)) {
+        vs.machine = machines[0]?.key || null;
+      }
+      const machine = machines.find((m) => m.key === vs.machine);
+      if (!machine) return el("div.panel", {}, el("div.empty", {}, "No machines in this centre."));
+      const sum = machineSummary(machine.key);
+      const groups = groupedQueue(machine.key, { showDone: vs.showDone, q: vs.q });
+      const tabs = machines.length > 1 ? el("div.subtabs", {}, ...machines.map((m) => el(
+        "button",
+        {
+          "aria-current": String(m.key === vs.machine),
+          onclick: () => {
+            vs.machine = m.key;
+            rerender();
+          }
+        },
+        m.label,
+        el("span.subtab-count", {}, String(openCountFor(m.key)))
+      ))) : null;
+      const head = el(
+        "div.centre-head",
         {},
         el(
           "div.row",
           {},
+          el(
+            "div",
+            {},
+            el("h1.centre-title", {}, machine.label),
+            machine.note ? el("div.small.muted", {}, machine.note) : null
+          ),
+          el("span.spacer"),
+          el(
+            "div.centre-stats",
+            {},
+            el("div.cstat", {}, el("b", {}, fmtNum(sum.open)), el("i", {}, "open")),
+            el("div.cstat" + (sum.inProgress ? ".work" : ""), {}, el("b", {}, fmtNum(sum.inProgress)), el("i", {}, "running")),
+            el("div.cstat" + (sum.overdue ? ".bad" : ""), {}, el("b", {}, fmtNum(sum.overdue)), el("i", {}, "overdue")),
+            el("div.cstat" + (sum.backOrder ? ".bad" : ""), {}, el("b", {}, fmtNum(sum.backOrder)), el("i", {}, "B/O"))
+          )
+        ),
+        tabs,
+        el(
+          "div.row.centre-filters",
+          {},
           el("input", {
             type: "search",
             placeholder: "Search W/O, project, die\u2026",
-            value: state_.q,
-            style: { maxWidth: "280px" },
+            value: vs.q,
             oninput: (e) => {
-              state_.q = e.target.value;
+              vs.q = e.target.value;
               clearTimeout(head._t);
               head._t = setTimeout(rerender, 150);
             }
@@ -1220,20 +1116,25 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
             { style: { gap: "6px" } },
             el("input", {
               type: "checkbox",
-              checked: state_.showDone,
+              checked: vs.showDone,
               style: { width: "auto" },
               onchange: (e) => {
-                state_.showDone = e.target.checked;
+                vs.showDone = e.target.checked;
                 rerender();
               }
             }),
-            "Show done"
+            `Show done${sum.done ? ` (${sum.done})` : ""}`
           )
         )
-      )
-    );
-    const sections = TRACKED_GROUPS.filter((g) => groups.has(g)).map((g) => groupSection(g, groups.get(g), rerender));
-    return el("div", {}, head, ...sections);
+      );
+      const su = shiftUpdatePanel(machine.key);
+      const body = groups.length ? el("div", {}, ...groups.map((g) => dateGroup(g, vs, rerender))) : el("div.panel", {}, el(
+        "div.empty",
+        {},
+        vs.q ? "Nothing matches that search." : "Nothing outstanding on this machine."
+      ));
+      return el("div.centre", {}, head, su, body);
+    };
   }
 
   // js/views/data.js
@@ -1430,305 +1331,8 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     return { sheetNames, sheets };
   }
 
-  // js/import.js
-  var PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
-  function cell(cells, col) {
-    const v = cells[col - 1];
-    return v === void 0 ? null : v;
-  }
-  function asText(v) {
-    if (v == null) return null;
-    if (typeof v === "object") return v.error ? null : null;
-    if (v instanceof Date) return v.toISOString().slice(0, 10);
-    const s = String(v).trim();
-    return s === "" ? null : s;
-  }
-  function asNumber(v) {
-    if (v == null || typeof v === "object") return null;
-    if (v instanceof Date) return null;
-    const n = typeof v === "number" ? v : Number(String(v).trim());
-    return isFinite(n) ? n : null;
-  }
-  function asDate(v) {
-    if (!(v instanceof Date)) return null;
-    if (v.getTime() < PHANTOM_BEFORE) return null;
-    return v.toISOString().slice(0, 10);
-  }
-  function isError(v) {
-    return v != null && typeof v === "object" && !!v.error;
-  }
-  function filledCount(cells) {
-    let n = 0;
-    for (const v of cells) if (v != null && v !== "") n++;
-    return n;
-  }
-  function sectionOf(cells, filled) {
-    if (filled > BANNER_MAX_FILLED) return null;
-    for (let i = 0; i < Math.min(cells.length, 6); i++) {
-      const t = asText(cells[i]);
-      if (!t) continue;
-      const up = t.toUpperCase().replace(/\s+/g, " ").trim();
-      if (SECTION_HINTS.some((h) => up.startsWith(h))) return up.replace(/[.\s]+$/, "");
-    }
-    return null;
-  }
-  function parseDailySheet(sheet, report) {
-    const orders = [];
-    let section = null;
-    const seen = /* @__PURE__ */ new Map();
-    for (const row of sheet.rows) {
-      if (row.r <= 2 || row.empty) continue;
-      const cells = row.cells;
-      const filled = filledCount(cells);
-      const sec = sectionOf(cells, filled);
-      if (sec) {
-        section = sec;
-        continue;
-      }
-      const first = cell(cells, FIELDS.wo);
-      if (!isWorkOrder(first)) {
-        if (asText(first) && !isJunkRow(first)) {
-          report.skipped.push({ row: row.r, reason: "no work order number", value: asText(first) });
-        }
-        continue;
-      }
-      if (filled <= BANNER_MAX_FILLED) {
-        report.skipped.push({ row: row.r, reason: "row too sparse to be an order", value: asText(first) });
-        continue;
-      }
-      const wo = String(first).trim();
-      const floor = asText(cell(cells, FIELDS.floor));
-      const project = asText(cell(cells, FIELDS.project));
-      const base = [wo, floor || "", project || ""].join("::");
-      const nth = (seen.get(base) || 0) + 1;
-      seen.set(base, nth);
-      const id = nth === 1 ? base : `${base}#${nth}`;
-      if (nth > 1) report.duplicates.push({ row: row.r, id: base, occurrence: nth });
-      const o = {
-        id,
-        wo,
-        row: row.r,
-        section,
-        job: asText(cell(cells, FIELDS.job)),
-        project: asText(cell(cells, FIELDS.project)),
-        floor,
-        qty: asNumber(cell(cells, FIELDS.qty)),
-        notes: asText(cell(cells, FIELDS.notes)),
-        rem: asNumber(cell(cells, FIELDS.rem)),
-        quar: asNumber(cell(cells, FIELDS.quar)),
-        commRes: asText(cell(cells, FIELDS.commRes)),
-        series: asText(cell(cells, FIELDS.series)),
-        shipDate: asDate(cell(cells, FIELDS.shipDate)),
-        glazingDate: asDate(cell(cells, FIELDS.glazingDate)),
-        cuttingDate: asDate(cell(cells, FIELDS.cuttingDate)),
-        bdRec: asDate(cell(cells, FIELDS.bdRec)),
-        purch: normPurch(cell(cells, FIELDS.purch)),
-        extStatus: asText(cell(cells, FIELDS.extStatus)),
-        warehouse: asText(cell(cells, FIELDS.warehouse)),
-        reason: asText(cell(cells, FIELDS.reason)),
-        daysToShip: asNumber(cell(cells, FIELDS.daysToShip)),
-        ops: {}
-      };
-      if (o.commRes && !/^(COMM|RES)$/i.test(o.commRes)) o.commRes = null;
-      const wh = cell(cells, FIELDS.warehouse);
-      if (wh instanceof Date) o.warehouse = asDate(wh);
-      for (const op of OPS) {
-        const raw = cell(cells, op.col);
-        if (isError(raw)) {
-          report.errorCells.push({ row: row.r, op: op.label, code: raw.error });
-          continue;
-        }
-        if (op.kind === "qty") {
-          const n = asNumber(raw);
-          if (n != null && n > 0) {
-            const looksLikeDate = n >= 4e4 && n <= 6e4 && Number.isInteger(n);
-            const wayOverQty = o.qty > 0 && n > o.qty * 100;
-            if (looksLikeDate || wayOverQty) {
-              report.suspectQty.push({
-                row: row.r,
-                wo,
-                op: op.label,
-                value: n,
-                orderQty: o.qty,
-                why: looksLikeDate ? "looks like a date serial" : "far larger than the order quantity"
-              });
-            } else {
-              o.ops[op.key] = { target: n };
-            }
-          }
-        } else {
-          const st = normCutStatus(raw);
-          const txt2 = asText(raw);
-          if (st) o.ops[op.key] = { status: st };
-          else if (txt2 && txt2.toUpperCase() !== "N/A") {
-            o.ops[op.key] = { status: null, text: txt2 };
-            report.unknownStatus.push({ row: row.r, op: op.label, value: txt2 });
-          }
-        }
-      }
-      const hasCuttingWork = Object.values(o.ops).some((v) => v.target > 0 || v.status);
-      if (isPanelOnly(o.project, o.floor, hasCuttingWork)) {
-        report.panelRows.push({ row: row.r, wo, project: o.project, floor: o.floor });
-        continue;
-      }
-      orders.push(o);
-    }
-    return orders;
-  }
-  function parsePrep(sheet) {
-    const out = [];
-    for (const row of sheet.rows) {
-      if (row.r <= 1 || row.empty) continue;
-      const c = row.cells;
-      const job = asText(c[0]);
-      if (!job) continue;
-      out.push({
-        job,
-        project: asText(c[1]),
-        pm: asText(c[2]),
-        lastFloor: asText(c[3]),
-        nextUp: asText(c[4]),
-        prodWeek: c[5] instanceof Date ? asDate(c[5]) : asText(c[5]),
-        notes: asText(c[6])
-      });
-    }
-    return out;
-  }
-  function parseWip(sheet) {
-    const out = [];
-    for (const row of sheet.rows) {
-      if (row.r <= 2 || row.empty) continue;
-      const c = row.cells;
-      const wo = c[0];
-      if (!isErpWorkOrder(wo)) continue;
-      out.push({
-        wo: String(wo).trim(),
-        project: asText(c[1]),
-        floor: asText(c[2]),
-        schQty: asNumber(c[3]),
-        remAssy: asNumber(c[4]),
-        remGlaz: asNumber(c[5]),
-        quar: asNumber(c[6]),
-        cpRem: asNumber(c[7]),
-        shipDate: asDate(c[8]),
-        shpRem: asNumber(c[9])
-      });
-    }
-    return out;
-  }
-  function parseScreens(sheet) {
-    const out = [];
-    for (const row of sheet.rows) {
-      if (row.r <= 1 || row.empty) continue;
-      const c = row.cells;
-      const product = asText(c[0]);
-      const job = asText(c[1]);
-      if (!product || !job) continue;
-      out.push({
-        product,
-        job,
-        project: asText(c[2]),
-        floor: asText(c[3]),
-        wsQty: asNumber(c[4]),
-        dsQty: asNumber(c[5]),
-        notes: asText(c[6]),
-        shipDate: asDate(c[7]),
-        glazingDate: asDate(c[8]),
-        extStatus: asText(c[9]),
-        warehouse: asDate(c[10]) || asText(c[10]),
-        po: asText(c[11]),
-        status: asText(c[12]),
-        cut: asText(c[13]),
-        assy: asText(c[14]),
-        mesh: asText(c[15])
-      });
-    }
-    return out;
-  }
-  async function importWorkbook(arrayBuffer, { fileName = "schedule.xlsx" } = {}) {
-    const report = {
-      fileName,
-      importedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      skipped: [],
-      duplicates: [],
-      errorCells: [],
-      unknownStatus: [],
-      suspectQty: [],
-      panelRows: [],
-      sheetsFound: [],
-      sheetsMissing: []
-    };
-    const wb = await readXlsx(arrayBuffer, {
-      only: [SHEET.DAILY, SHEET.WIP, SHEET.PREP, SHEET.SCREENS]
-    });
-    for (const key of [SHEET.DAILY, SHEET.WIP, SHEET.PREP, SHEET.SCREENS]) {
-      (wb.sheets[key] ? report.sheetsFound : report.sheetsMissing).push(key);
-    }
-    if (!wb.sheets[SHEET.DAILY]) {
-      throw new Error(
-        `This workbook has no "${SHEET.DAILY}" sheet. Sheets found: ${wb.sheetNames.join(", ")}`
-      );
-    }
-    const orders = parseDailySheet(wb.sheets[SHEET.DAILY], report);
-    const wip = wb.sheets[SHEET.WIP] ? parseWip(wb.sheets[SHEET.WIP]) : [];
-    const prep = wb.sheets[SHEET.PREP] ? parsePrep(wb.sheets[SHEET.PREP]) : [];
-    const screens = wb.sheets[SHEET.SCREENS] ? parseScreens(wb.sheets[SHEET.SCREENS]) : [];
-    const wipByWo = /* @__PURE__ */ new Map();
-    for (const w of wip) {
-      const k = w.floor ? `${w.wo}::${w.floor}` : w.wo;
-      wipByWo.set(k, w);
-      if (!wipByWo.has(w.wo)) wipByWo.set(w.wo, w);
-    }
-    for (const o of orders) {
-      const w = wipByWo.get(o.id) || wipByWo.get(o.wo);
-      if (w) o.wip = { remAssy: w.remAssy, remGlaz: w.remGlaz, cpRem: w.cpRem, shpRem: w.shpRem };
-    }
-    report.counts = {
-      orders: orders.length,
-      wip: wip.length,
-      prep: prep.length,
-      screens: screens.length
-    };
-    return { orders, wip, prep, screens, report };
-  }
-  function diffRevisions(prevOrders = [], nextOrders = []) {
-    const prev = new Map(prevOrders.map((o) => [o.id, o]));
-    const next = new Map(nextOrders.map((o) => [o.id, o]));
-    const added = [];
-    const removed = [];
-    const changed = [];
-    const WATCH = [
-      ["shipDate", "Ship date"],
-      ["glazingDate", "Glazing date"],
-      ["cuttingDate", "Cutting date"],
-      ["qty", "Qty"],
-      ["purch", "Material"],
-      ["extStatus", "Ext status"],
-      ["notes", "Notes"]
-    ];
-    for (const [id, o] of next) {
-      const p = prev.get(id);
-      if (!p) {
-        added.push(o);
-        continue;
-      }
-      const fields = [];
-      for (const [key, label] of WATCH) {
-        if ((p[key] ?? null) !== (o[key] ?? null)) {
-          fields.push({ key, label, from: p[key] ?? null, to: o[key] ?? null });
-        }
-      }
-      const pCut = p.ops?.cut?.status ?? null;
-      const nCut = o.ops?.cut?.status ?? null;
-      if (pCut !== nCut) fields.push({ key: "cut", label: "Cut status", from: pCut, to: nCut });
-      if (fields.length) changed.push({ order: o, fields });
-    }
-    for (const [id, o] of prev) if (!next.has(id)) removed.push(o);
-    return { added, removed, changed };
-  }
-
   // js/import-machines.js
-  var PHANTOM_BEFORE2 = Date.UTC(1990, 0, 1);
+  var PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
   function txt(v) {
     if (v == null || typeof v === "object") return null;
     if (v instanceof Date) return v.toISOString().slice(0, 10);
@@ -1743,7 +1347,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   }
   function date(v) {
     if (!(v instanceof Date)) return null;
-    if (v.getTime() < PHANTOM_BEFORE2) return null;
+    if (v.getTime() < PHANTOM_BEFORE) return null;
     return v.toISOString().slice(0, 10);
   }
   function isWo(v) {
@@ -1753,12 +1357,18 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     const s = txt(raw);
     if (!s) return "OPEN";
     const u = s.toUpperCase();
-    if (/^DONE|COMPLETE/.test(u)) return "DONE";
+    if (/^(DONE|COMPLETE)/.test(u)) return "DONE";
     if (/^(I\.?P|IN PROGRESS|RUNNING)/.test(u)) return "IP";
     if (/^(B\/?O|BACK ?ORDER)/.test(u)) return "BO";
     if (/HOLD/.test(u)) return "HOLD";
     if (/READY|STOCK OK/.test(u)) return "READY";
     return "OPEN";
+  }
+  function readsBackOrder(statusRaw, boStat, bo) {
+    const u = (txt(statusRaw) || "").toUpperCase();
+    if (/\bB\/?O\b|BACK ?ORDER/.test(u)) return true;
+    if (txt(boStat)) return true;
+    return typeof bo === "number" && bo > 0;
   }
   var SHEET_MAP = {
     rolling: [
@@ -1907,7 +1517,10 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       const wo = get(row.cells, "wo");
       if (!isWo(wo)) continue;
       const qty = num(get(row.cells, "qty"));
-      const status = spec.complete ? "DONE" : normTaskStatus(get(row.cells, "status"));
+      const statusRaw = get(row.cells, "status");
+      const status = spec.complete ? "DONE" : normTaskStatus(statusRaw);
+      const boQty = num(get(row.cells, "bo")) ?? num(get(row.cells, "boInt"));
+      const boStat = txt(get(row.cells, "boStat"));
       out.push({
         id: `${spec.machine}:${String(wo).trim()}:${txt(get(row.cells, "die")) || "x"}:${row.r}`,
         machine: spec.machine,
@@ -1928,19 +1541,94 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         dayShift: txt(get(row.cells, "dayShift")),
         shifts: num(get(row.cells, "shifts")),
         pinHole: txt(get(row.cells, "pinHole")),
-        bo: num(get(row.cells, "bo")) ?? num(get(row.cells, "boInt")),
-        boStat: txt(get(row.cells, "boStat")),
+        bo: boQty,
+        boStat,
+        backOrder: spec.complete ? false : readsBackOrder(statusRaw, boStat, boQty),
         archived: !!spec.complete
       });
     }
     report.sheets.push({ sheet: spec.sheet, machine: spec.machine, rows: out.length });
     return out;
   }
+  var SU_SHEET = "Shift Update";
+  var SU_MACHINE = {
+    "ROLLINGETASAUTO": "roll-auto",
+    "ROLLINGIOTAMANUAL": "roll-man",
+    "FOM1": "fom1",
+    "FOM2": "fom2",
+    "FOM3": "fom3",
+    "CNC1": "cnc1",
+    "CNC2": "cnc2",
+    "CNC3": "cnc3",
+    "CNCSBZ140": "cnc140",
+    "MULTIPUNCH": "multipunch"
+  };
+  function suKey(label) {
+    return String(label || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+  function parseShiftUpdateBlock(rows, off) {
+    const g = (row, col) => row.cells[off + col - 1];
+    const header2 = rows[1];
+    const date2 = header2 ? date_(g(header2, 2)) : null;
+    const shift = header2 ? txt(g(header2, 6)) : null;
+    const out = {};
+    let cur = null;
+    for (const row of rows.slice(3)) {
+      const name = txt(g(row, 1));
+      if (name) {
+        const key = SU_MACHINE[suKey(name)];
+        cur = key || null;
+        if (cur && !out[cur]) {
+          const opsRaw = g(row, 2);
+          const opsTxt = txt(opsRaw);
+          out[cur] = {
+            machine: cur,
+            label: name,
+            // "#Ops" is normally a headcount but is sometimes the word DOWN.
+            ops: typeof opsRaw === "number" ? opsRaw : null,
+            down: /DOWN/i.test(opsTxt || ""),
+            done: [],
+            next: [],
+            notes: []
+          };
+        }
+      }
+      if (!cur || !out[cur]) continue;
+      const d = txt(g(row, 4));
+      const n = txt(g(row, 6));
+      const note = txt(g(row, 7));
+      if (d) out[cur].done.push(d);
+      if (n) out[cur].next.push(n);
+      if (note) out[cur].notes.push(note);
+      if (d && /^down$/i.test(d)) out[cur].down = true;
+    }
+    return { date: date2, shift, machines: out };
+  }
+  function date_(v) {
+    return date(v);
+  }
+  function parseShiftUpdate(sheet) {
+    if (!sheet) return null;
+    const left = parseShiftUpdateBlock(sheet.rows, 0);
+    const right = parseShiftUpdateBlock(sheet.rows, 8);
+    const weight = (e) => e ? e.done.length + e.next.length + (e.ops ? 1 : 0) : -1;
+    const machines = { ...left.machines };
+    for (const [k, e] of Object.entries(right.machines)) {
+      if (weight(e) > weight(machines[k])) machines[k] = e;
+    }
+    return {
+      date: left.date || right.date,
+      shift: left.shift || right.shift,
+      machines
+    };
+  }
   async function importMachineWorkbook(arrayBuffer, { kind, fileName = "schedule.xlsx" } = {}) {
     const specs = SHEET_MAP[kind];
     if (!specs) throw new Error(`Unknown workbook type "${kind}".`);
     const report = { kind, fileName, importedAt: (/* @__PURE__ */ new Date()).toISOString(), sheets: [], missing: [] };
-    const wb = await readXlsx(arrayBuffer, { only: specs.map((s) => s.sheet) });
+    const wanted = specs.map((s) => s.sheet);
+    if (kind === "cnc") wanted.push(SU_SHEET);
+    const wb = await readXlsx(arrayBuffer, { only: wanted });
     let tasks = [];
     for (const spec of specs) {
       const sheet = wb.sheets[spec.sheet];
@@ -1950,187 +1638,24 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       }
       tasks = tasks.concat(parseMachineSheet(sheet, spec, report));
     }
+    let shiftUpdate = null;
+    if (kind === "cnc") {
+      shiftUpdate = parseShiftUpdate(wb.sheets[SU_SHEET]);
+      if (!shiftUpdate) report.missing.push(SU_SHEET);
+      else report.shiftUpdate = {
+        date: shiftUpdate.date,
+        shift: shiftUpdate.shift,
+        machines: Object.keys(shiftUpdate.machines).length
+      };
+    }
     if (!tasks.length) {
       throw new Error(
         `No machine schedule rows found. Expected sheets: ${specs.map((s) => s.sheet).join(", ")}. This workbook has: ${wb.sheetNames.slice(0, 12).join(", ")}`
       );
     }
     report.count = tasks.length;
-    return { tasks, report };
+    return { tasks, shiftUpdate, report };
   }
-
-  // js/views/guide.js
-  init_store();
-  var SEED_DOCS = [
-    {
-      id: "seed-statuses",
-      title: "Status codes \u2014 what they mean",
-      order: 10,
-      body: `These are the codes used in the Daily Schedule. The app normalises spelling
-variants automatically (for example \`I.P\` is read as \`IP\`).
-
-## Cut status (column CUT)
-- **OK** \u2014 cutting complete for this order
-- **IP** \u2014 in progress, started but not finished
-- **ROLLING** \u2014 on the roll former
-- **ROLLED** \u2014 roll forming finished
-- **BO** \u2014 back order, cannot complete
-- **NR** \u2014 not received
-- **N/A** \u2014 does not apply to this order
-
-## Material status (column purch)
-- **Pulled** \u2014 material is pulled and staged, ready to cut
-- **STOCK OK** \u2014 stock on hand, still needs pulling
-- **@ PAINT** \u2014 out at paint, not available yet
-- **ON ORDER** \u2014 purchased, not arrived
-- **EXT DUE** \u2014 extrusion due in
-- **TBD** \u2014 not yet determined
-
-Anything in **ON ORDER**, **EXT DUE** or **TBD** shows as *Blocked* on the board,
-because cutting cannot start without material.
-
-### TODO for the department
-- Confirm whether **ROLLED** counts as finished for scheduling purposes
-- Confirm who is allowed to change an order to **BO**`
-    },
-    {
-      id: "seed-operations",
-      title: "Cutting operations",
-      order: 20,
-      body: `Each order carries a piece count per operation. The app tracks how many
-of those pieces are actually done \u2014 the spreadsheet only ever held the target.
-
-## Operations with piece counts
-- **HTS** \u2014 heights (sub-header: VERT. CUT)
-- **WIDTHS** \u2014 (sub-header: VERT. CNC)
-- **PUNCH**
-- **VYNL.S** \u2014 vinyl strips
-- **SP.S**
-- **LVRS/TC PAN** \u2014 louvres / TC panel
-- **VENT**
-- **WW CNC** \u2014 window wall CNC
-- **SLD ROLLING** \u2014 slider rolling
-- **SLD CUTTING** \u2014 slider cutting
-- **ADAPTORS CNC**
-
-## Operations tracked as a status
-- **BD Prep**
-- **MTL STATUS**
-
-## Not tracked here
-- **CP CUTTING** (C CHANNEL / PANEL) \u2014 panel work, another department
-- Panel-only orders are left out of the import entirely
-
-**LVRS/TC PAN** is kept despite the name: louvres are Cutting's work.
-
-### TODO for the department
-- Add the machine or station that each operation runs on
-- Add typical run rate per operation so the planner can estimate a shift`
-    },
-    {
-      id: "seed-machines",
-      title: "Work centres and routing",
-      order: 25,
-      body: `Taken from the Shift Assignment, FOM and TARGETS sheets. Operator counts are
-the usual full-shift crewing (week of Aug 12) \u2014 edit as they change.
-
-## Rolling
-- **Rolling (Auto)** \u2014 Etas line, 4 operators
-- **Rolling (Manual)** \u2014 Iota line, 2 operators
-
-## FOM
-- **FOM 1** \u2014 8900 + screen
-- **FOM 2** \u2014 widths
-- **FOM 3** \u2014 vents + widths
-
-## CNC
-- **CNC 1**, **CNC 2**, **CNC 3**, **CNC 140**
-
-## Saws and punch
-- **Elumatec Saw #1**, **Elumatec Saw #2**
-- **Multi Punch** \u2014 counted in pieces, not frames
-
-## Prep
-- **Prep** \u2014 the BD Prep step
-
-Notching, Saws #1/#3/#4/#5 and Proline are not tracked here.
-
-## Product routing
-- **Window wall** \u2192 Rolling, Elumatec Saw, FOM 2, Multi Punch, CNC
-- **Vents** \u2192 Rolling, FOM 3
-- **Doors** \u2192 Rolling, FOM 1, CNC
-
-### TODO for the department
-- Confirm the routing above still matches how work is released
-- Add the usual operator count for **Prep** (not in the Shift Assignment sheet)
-- Add cycle times per work centre so the planner can size a shift`
-    },
-    {
-      id: "seed-rolling-setup",
-      title: "Rolling setup and changeovers",
-      order: 26,
-      body: `The rolling schedule is driven by **SA DIE#**, and each die maps to a setup
-in the Rolling Set Up Chart.
-
-## How a setup is identified
-Setup number is **knurling setup - crimping setup**, for example \`11-1\`.
-
-- \`S80.104\`, \`S80.105\`, \`S80.321\`, \`S80.333\`, \`S80.328\`, \`S80.179\` \u2014 INT 80.104 / 80.143 / 80.205 family, setup **11-1**
-- \`S80.347\`, \`S80.346\` \u2014 setup **11-2**
-- \`S80.278\`, \`S80.339\` \u2014 setup **12-1**
-
-## Why it matters for scheduling
-Orders sharing a setup should be run together. Every change of setup number is a
-changeover, and changeovers are the main cost on the rolling line.
-
-### TODO for the department
-- Paste the full setup chart in here, or note where the master copy lives
-- Record how long a changeover actually takes between each setup pair`
-    },
-    {
-      id: "seed-shifts",
-      title: "Shifts and handover",
-      order: 30,
-      body: `## Shift pattern
-- **Day** and **Afternoon** run full operations
-- **Midnight** runs a 3-person crew \u2014 single-station work only
-
-## Handover rules
-1. Log piece counts on the board as work is completed, not at the end of the shift
-2. Post a shift update before leaving, even on a quiet shift
-3. Anything started but unfinished goes in **Carrying over**
-4. Breakdowns and missing material go in **Issues** so they are visible on Today
-
-### TODO for the department
-- Confirm exact shift start and end times (the app assumes 07:00 / 15:00 / 23:00)
-- Name who is responsible for posting the update on each shift`
-    },
-    {
-      id: "seed-schedule",
-      title: "Working with the Daily Schedule file",
-      order: 40,
-      body: `The company issues the Daily Schedule as \`Daily_Schedule_<date>_Rev_<x>.xlsx\`.
-This app does not replace that file \u2014 it reads it.
-
-## When a new revision comes out
-1. Open **Data & Import**
-2. Drop the new workbook in
-3. Review the change list \u2014 new orders, moved ship dates, changed cut status
-4. Progress already logged in the app is kept; only the schedule is replaced
-
-## What the app reads
-- **Daily Sched** \u2014 the orders and the cutting columns
-- **WIP** \u2014 the ERP export, for remaining quantities
-- **PREP Tracker** \u2014 job level, project manager, last floor completed
-- **screens sch** \u2014 screens
-
-Rows that are section banners (\`IN CUTTING\`, \`MAT'L REQUIRED\`, \`WINDOW WALL\`)
-are read as headings, not orders. Repeated header rows and separators are ignored.
-
-### TODO for the department
-- Note who issues the revision and how often`
-    }
-  ];
 
   // js/views/data.js
   var pendingHandle = null;
@@ -2143,160 +1668,6 @@ are read as headings, not orders. Repeated header rows and separators are ignore
     } catch {
     }
   }
-  function seedGuide() {
-    for (const d of SEED_DOCS) {
-      if (!state.guide[d.id]) state.guide[d.id] = { ...d, at: (/* @__PURE__ */ new Date(0)).toISOString(), by: "starter" };
-    }
-    save();
-  }
-  function changeReport(diff, report) {
-    const section = (title, nodes, tone) => nodes.length ? el(
-      "div",
-      { style: { marginBottom: "16px" } },
-      el("div.row", { style: { marginBottom: "6px" } }, el("strong", {}, title), chip(String(nodes.length), tone)),
-      el("ul.list", { style: { border: "1px solid var(--line-soft)", borderRadius: "8px" } }, ...nodes)
-    ) : null;
-    const added = diff.added.slice(0, 40).map((o) => el(
-      "li",
-      {},
-      el("span.mono.strong", {}, o.wo),
-      " ",
-      el("span", {}, `${o.project || "\u2014"} \xB7 ${o.floor || "\u2014"}`),
-      o.cuttingDate ? el("span.small.muted", {}, ` cut ${fmtDate(o.cuttingDate)}`) : null
-    ));
-    const changed = diff.changed.slice(0, 60).map(({ order, fields }) => el(
-      "li",
-      {},
-      el(
-        "div.row",
-        {},
-        el("span.mono.strong", {}, order.wo),
-        el("span.small.muted", {}, `${order.project || "\u2014"} \xB7 ${order.floor || "\u2014"}`)
-      ),
-      el("div.small", { style: { marginTop: "3px" } }, ...fields.map((f) => el(
-        "div",
-        {},
-        `${f.label}: `,
-        el("span.muted", {}, String(f.from ?? "\u2014")),
-        " \u2192 ",
-        el("strong", {}, String(f.to ?? "\u2014"))
-      )))
-    ));
-    const removed = diff.removed.slice(0, 40).map((o) => el(
-      "li",
-      {},
-      el("span.mono.strong", {}, o.wo),
-      " ",
-      el("span.muted", {}, `${o.project || "\u2014"} \xB7 ${o.floor || "\u2014"}`)
-    ));
-    const quality = [];
-    if (report.duplicates.length) {
-      quality.push(el(
-        "li",
-        {},
-        el("strong", {}, `${report.duplicates.length} duplicate row keys`),
-        el("div.small.muted", {}, "Same W/O, floor and project appear more than once. All rows were kept; the extras are numbered #2, #3 and so on.")
-      ));
-    }
-    if (report.skipped.length) {
-      quality.push(el(
-        "li",
-        {},
-        el("strong", {}, `${report.skipped.length} rows skipped`),
-        el("div.small.muted", {}, report.skipped.slice(0, 6).map((s) => `row ${s.row}: ${s.value ?? ""} (${s.reason})`).join(" \xB7 "))
-      ));
-    }
-    if (report.panelRows?.length) {
-      quality.push(el(
-        "li",
-        {},
-        el("strong", {}, `${report.panelRows.length} panel-only rows left out`),
-        el("div.small.muted", {}, "Panel work belongs to another department. " + report.panelRows.slice(0, 5).map((r) => `${r.wo} ${r.floor || r.project || ""}`).join(" \xB7 "))
-      ));
-    }
-    if (report.suspectQty?.length) {
-      quality.push(el(
-        "li",
-        {},
-        el("strong", {}, `${report.suspectQty.length} impossible piece counts ignored`),
-        el("div.small.muted", {}, report.suspectQty.slice(0, 5).map((r) => `W/O ${r.wo} ${r.op} = ${r.value} (${r.why})`).join(" \xB7 "))
-      ));
-    }
-    if (report.errorCells.length) {
-      quality.push(el(
-        "li",
-        {},
-        el("strong", {}, `${report.errorCells.length} formula errors in the sheet`),
-        el("div.small.muted", {}, "Cells containing #REF!, #VALUE! or #N/A were read as blank. Worth fixing in the source file.")
-      ));
-    }
-    if (report.unknownStatus.length) {
-      quality.push(el(
-        "li",
-        {},
-        el("strong", {}, `${report.unknownStatus.length} free-text status values`),
-        el(
-          "div.small.muted",
-          {},
-          Array.from(new Set(report.unknownStatus.map((u) => u.value))).slice(0, 8).join(" \xB7 ")
-        )
-      ));
-    }
-    return el(
-      "div",
-      {},
-      el(
-        "div.stats",
-        { style: { marginBottom: "16px", border: "1px solid var(--line-soft)", borderRadius: "8px", overflow: "hidden" } },
-        el("div.stat", {}, el("div.n", {}, fmtNum(report.counts.orders)), el("div.k", {}, "Orders")),
-        el("div.stat.ok", {}, el("div.n", {}, fmtNum(diff.added.length)), el("div.k", {}, "New")),
-        el("div.stat.warn", {}, el("div.n", {}, fmtNum(diff.changed.length)), el("div.k", {}, "Changed")),
-        el("div.stat", {}, el("div.n", {}, fmtNum(diff.removed.length)), el("div.k", {}, "Gone"))
-      ),
-      section("New orders", added, "ok"),
-      section("Changed", changed, "warn"),
-      section("No longer in the schedule", removed, "mute"),
-      quality.length ? el(
-        "div",
-        {},
-        el("div.row", { style: { marginBottom: "6px" } }, el("strong", {}, "Data quality notes")),
-        el("ul.list", { style: { border: "1px solid var(--line-soft)", borderRadius: "8px" } }, ...quality)
-      ) : null
-    );
-  }
-  async function handleFile(file, rerender) {
-    const busy = toast(`Reading ${file.name}\u2026`, 6e4);
-    try {
-      const buf = await file.arrayBuffer();
-      const result = await importWorkbook(buf, { fileName: file.name });
-      const diff = diffRevisions(state.orders, result.orders);
-      modal(`Import ${file.name}`, changeReport(diff, result.report), {
-        wide: true,
-        actions: [
-          { label: "Cancel", onClick: (dlg) => dlg.close() },
-          {
-            label: `Load ${fmtNum(result.orders.length)} orders`,
-            class: "primary",
-            onClick: (dlg) => {
-              setImport(result);
-              toast(`Loaded ${result.orders.length} orders from ${file.name}`);
-              dlg.close();
-              rerender();
-            }
-          }
-        ]
-      });
-    } catch (e) {
-      modal("Import failed", el(
-        "div",
-        {},
-        el("p", {}, e.message),
-        el("p.small.muted", {}, "The schedule already loaded has not been changed.")
-      ));
-    } finally {
-      document.querySelectorAll(".toast").forEach((t) => t.remove());
-    }
-  }
   async function handleMachineFile(file, kind, rerender) {
     toast(`Reading ${file.name}\u2026`, 6e4);
     try {
@@ -2304,14 +1675,14 @@ are read as headings, not orders. Repeated header rows and separators are ignore
       const result = await importMachineWorkbook(buf, { kind, fileName: file.name });
       const r = result.report;
       setMachineImport(result);
-      toast(`Loaded ${result.tasks.length} tasks from ${file.name}`);
+      toast(`Loaded ${result.tasks.length} lines from ${file.name}`);
       modal(`Imported ${file.name}`, el(
         "div",
         {},
         el(
           "div.stats",
           { style: { border: "1px solid var(--line-soft)", borderRadius: "8px", overflow: "hidden", marginBottom: "14px" } },
-          el("div.stat", {}, el("div.n", {}, fmtNum(r.count)), el("div.k", {}, "Tasks")),
+          el("div.stat", {}, el("div.n", {}, fmtNum(r.count)), el("div.k", {}, "Lines")),
           el("div.stat", {}, el("div.n", {}, String(r.sheets.length)), el("div.k", {}, "Sheets"))
         ),
         el(
@@ -2324,7 +1695,7 @@ are read as headings, not orders. Repeated header rows and separators are ignore
               "div.row.small",
               {},
               el("strong", {}, sh.sheet),
-              el("span.muted", {}, MACHINE_LABEL[sh.machine] || sh.machine),
+              el("span.muted", {}, MACHINE_BY_KEY[sh.machine]?.label || sh.machine),
               el("span.spacer"),
               el("span.mono", {}, fmtNum(sh.rows) + " rows")
             )
@@ -2348,16 +1719,7 @@ are read as headings, not orders. Repeated header rows and separators are ignore
       document.querySelectorAll(".toast").forEach((t) => t.remove());
     }
   }
-  var MACHINE_LABEL = {
-    "roll-auto": "Rolling (Auto)",
-    "roll-man": "Rolling (Manual)",
-    fom1: "FOM 1",
-    fom2: "FOM 2",
-    fom3: "FOM 3",
-    multipunch: "Multi Punch",
-    cnc1: "CNC"
-  };
-  function dropZone({ title, hint, accept = ".xlsx", onFile }) {
+  function dropZone({ title, hint, onFile }) {
     const zone = el(
       "div.drop",
       {},
@@ -2365,7 +1727,7 @@ are read as headings, not orders. Repeated header rows and separators are ignore
       el("div.small.muted", { style: { marginBottom: "10px" } }, hint),
       el("button.primary.sm", {
         onclick: () => {
-          const inp = el("input", { type: "file", accept, style: { display: "none" } });
+          const inp = el("input", { type: "file", accept: ".xlsx", style: { display: "none" } });
           inp.addEventListener("change", () => {
             if (inp.files[0]) onFile(inp.files[0]);
           });
@@ -2394,48 +1756,6 @@ are read as headings, not orders. Repeated header rows and separators are ignore
     return zone;
   }
   function renderData(rerender) {
-    const meta = state.meta;
-    const drop = el(
-      "div.drop",
-      {},
-      el(
-        "div",
-        { style: { fontSize: "14px", fontWeight: "600", marginBottom: "4px" } },
-        "Daily Schedule"
-      ),
-      el("div.small.muted", { style: { marginBottom: "10px" } }, "Used to verify the machine schedules"),
-      el(
-        "div",
-        {},
-        el("button.primary", {
-          onclick: () => {
-            const inp = el("input", { type: "file", accept: ".xlsx", style: { display: "none" } });
-            inp.addEventListener("change", () => {
-              if (inp.files[0]) handleFile(inp.files[0], rerender);
-            });
-            document.body.append(inp);
-            inp.click();
-            inp.remove();
-          }
-        }, "Choose file")
-      )
-    );
-    for (const ev of ["dragenter", "dragover"]) {
-      drop.addEventListener(ev, (e) => {
-        e.preventDefault();
-        drop.classList.add("over");
-      });
-    }
-    for (const ev of ["dragleave", "drop"]) {
-      drop.addEventListener(ev, (e) => {
-        e.preventDefault();
-        drop.classList.remove("over");
-      });
-    }
-    drop.addEventListener("drop", (e) => {
-      const f = e.dataTransfer?.files?.[0];
-      if (f) handleFile(f, rerender);
-    });
     const mm = state.machineMeta || {};
     const slot = (label, key, node) => el(
       "div",
@@ -2445,7 +1765,7 @@ are read as headings, not orders. Repeated header rows and separators are ignore
         { style: { marginBottom: "6px" } },
         el("strong.small", {}, label),
         el("span.spacer"),
-        mm[key]?.fileName ? el("span.small.muted", {}, `${mm[key].fileName} \xB7 ${fmtNum(mm[key].count)} tasks \xB7 ${fmtWhen(mm[key].importedAt)}`) : chip("not loaded", "warn")
+        mm[key]?.fileName ? el("span.small.muted", {}, `${mm[key].fileName} \xB7 ${fmtNum(mm[key].count)} lines \xB7 ${fmtWhen(mm[key].importedAt)}`) : chip("not loaded", "warn")
       ),
       node
     );
@@ -2457,40 +1777,23 @@ are read as headings, not orders. Repeated header rows and separators are ignore
         "div.body",
         {},
         el(
-          "div.banner.info",
-          { style: { marginBottom: "14px" } },
-          el(
-            "div",
-            {},
-            el("strong", {}, "Rolling and CNC are the base. "),
-            "They carry the per-machine detail \u2014 die, quantity, status. The Daily Schedule is imported on top and used to check that dates still agree."
-          )
+          "p.small.muted",
+          { style: { marginTop: 0 } },
+          "These two workbooks are the whole source of truth. Re-import either one whenever a new revision comes out \u2014 statuses you have set are kept."
         ),
         el(
           "div.grid",
-          { style: { gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: "14px" } },
-          slot("1 \xB7 Rolling schedule", "rolling", dropZone({
+          { style: { gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: "14px" } },
+          slot("Rolling schedule", "rolling", dropZone({
             title: "Rolling workbook",
             hint: "Auto, Manual and Complete sheets",
             onFile: (f) => handleMachineFile(f, "rolling", rerender)
           })),
-          slot("2 \xB7 CNC schedule", "cnc", dropZone({
+          slot("CNC schedule", "cnc", dropZone({
             title: "CNC workbook",
             hint: "FOM 1-3, MultiPunch & SAW, CNC & FMC",
             onFile: (f) => handleMachineFile(f, "cnc", rerender)
-          })),
-          el(
-            "div",
-            {},
-            el(
-              "div.row",
-              { style: { marginBottom: "6px" } },
-              el("strong.small", {}, "3 \xB7 Daily Schedule"),
-              el("span.spacer"),
-              meta.fileName ? el("span.small.muted", {}, `${meta.fileName} \xB7 ${fmtWhen(meta.importedAt)}`) : chip("not loaded", "warn")
-            ),
-            drop
-          )
+          }))
         )
       )
     );
@@ -2600,8 +1903,8 @@ are read as headings, not orders. Repeated header rows and separators are ignore
           el(
             "div",
             {},
-            el("strong", {}, "Two people editing the same order at once: "),
-            "the app merges record by record and the most recent edit wins for that one field. Separate orders never overwrite each other."
+            el("strong", {}, "Two people updating the same line at once: "),
+            "the app merges line by line and the most recent update wins for that one line. Separate lines never overwrite each other."
           )
         )
       );
@@ -2641,19 +1944,12 @@ are read as headings, not orders. Repeated header rows and separators are ignore
               inp.remove();
             }
           }, "Import a backup"),
-          el("button", {
-            onclick: () => {
-              seedGuide();
-              toast("Starter guide sections restored");
-              rerender();
-            }
-          }, "Restore starter guide"),
           el("span.spacer"),
           el("button.danger", {
             onclick: async () => {
               if (await confirmDialog(
                 "Clear everything on this device?",
-                "Progress, shift logs, plans and guide edits stored in this browser will be deleted. If you are connected to a shared file, that file is not touched.",
+                "The loaded schedules and every status set in this browser will be deleted. If you are connected to a shared file, that file is not touched.",
                 { confirmLabel: "Clear", danger: true }
               )) {
                 resetAll();
@@ -2665,7 +1961,7 @@ are read as headings, not orders. Repeated header rows and separators are ignore
         el(
           "div.small.muted",
           { style: { marginTop: "10px" } },
-          "Export writes one JSON file containing the schedule, all logged progress, shift updates, plans and the guide."
+          "Export writes one JSON file containing the loaded schedules and every status set against them."
         )
       )
     );
@@ -2709,24 +2005,6 @@ are read as headings, not orders. Repeated header rows and separators are ignore
         ))) : el("div.small.muted", {}, "No names yet. Add the people on your crew so updates are attributed.")
       )
     );
-    const auditPanel = el(
-      "div.panel",
-      {},
-      el("header", {}, "Recent activity"),
-      state.audit.length ? el("ul.list", {}, ...state.audit.slice(0, 30).map((a) => el(
-        "li",
-        {},
-        el(
-          "div.row.small",
-          {},
-          el("strong", {}, a.who),
-          el("span", {}, a.what),
-          el("span.muted", {}, a.detail || ""),
-          el("span.spacer"),
-          el("span.muted.nowrap", {}, fmtWhen(a.at))
-        )
-      ))) : el("div.empty", {}, "Nothing yet.")
-    );
     return el(
       "div",
       {},
@@ -2734,19 +2012,35 @@ are read as headings, not orders. Repeated header rows and separators are ignore
       el(
         "div.grid.two",
         { style: { marginTop: "16px" } },
-        el("div", {}, sharedPanel, peoplePanel),
-        el("div", {}, backupPanel, auditPanel)
+        el("div", {}, sharedPanel),
+        el("div", {}, backupPanel, peoplePanel)
       )
     );
   }
 
+  // js/shifts.js
+  var SHIFTS = {
+    DAY: { key: "DAY", label: "Day", from: 7, to: 15, full: true },
+    AFT: { key: "AFT", label: "Afternoon", from: 15, to: 23, full: true },
+    NIGHT: { key: "NIGHT", label: "Midnight", from: 23, to: 7, full: false, crew: 3 }
+  };
+  function shiftAt(date2 = /* @__PURE__ */ new Date()) {
+    const h = date2.getHours();
+    if (h >= 7 && h < 15) return "DAY";
+    if (h >= 15 && h < 23) return "AFT";
+    return "NIGHT";
+  }
+
   // js/app.js
   var TABS = [
-    { key: "tracker", label: "Tracker", render: renderTracker },
+    { key: "rolling", label: "Rolling", render: makeCentreView("Rolling") },
+    { key: "fom", label: "FOM", render: makeCentreView("FOM") },
+    { key: "cnc", label: "CNC", render: makeCentreView("CNC") },
+    { key: "punch", label: "Multi Punch", render: makeCentreView("Punch") },
     { key: "setup", label: "Setup", render: renderData }
   ];
-  var current = location.hash.slice(1) || "tracker";
-  if (!TABS.some((t) => t.key === current)) current = "tracker";
+  var current = location.hash.slice(1) || "rolling";
+  if (!TABS.some((t) => t.key === current)) current = "rolling";
   var root = document.getElementById("app");
   var scheduled = false;
   function go(key) {
@@ -2834,7 +2128,6 @@ are read as headings, not orders. Repeated header rows and separators are ignore
     }
   });
   loadLocal();
-  seedGuide();
   onChange(scheduleRender);
   render();
   initSharedFile(render);
