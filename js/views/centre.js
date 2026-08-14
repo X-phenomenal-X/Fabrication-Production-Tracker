@@ -12,7 +12,7 @@ import {
 } from '../ui.js';
 import {
   setTaskStatus, setTaskStatusMany, restoreTaskStatus, setTaskNote,
-  setMachineConfig, setTaskFields, clearTaskEdits, historyFor,
+  setMachineConfig, resetMachineConfig, setTaskFields, clearTaskEdits, historyFor,
   setTaskMachineMany,
   EDITABLE_FIELDS, state,
 } from '../store.js';
@@ -560,9 +560,7 @@ function machineSettings(machine, rerender) {
       actions: [
         {
           label: 'Reset', onClick: (dlg) => {
-            delete state.machineConfig[machine.key];
-            setMachineConfig(machine.key, {});
-            delete state.machineConfig[machine.key];
+            resetMachineConfig(machine.key);
             dlg.close(); toast('Reset to defaults'); rerender();
           },
         },

@@ -49,6 +49,7 @@ export const state = {
      be relying on it. */
   manualTasks: {},  // id -> task-shaped record, plus { manual, at, by }
   todos: {},        // id -> { text, date, done, assignee, at, by, doneAt, doneBy }
+  deletions: {},    // `${map}:${key}` -> { at, by } — see forget()
   people: [],
   settings: { me: null },
 };
@@ -75,6 +76,57 @@ export function uid() {
 
 export function me() {
   return state.settings.me || 'Unassigned';
+}
+
+/* ---------- removing a record ---------- */
+
+/* Deleting cannot mean simply removing the key.
+
+   Sync merges per record and reads "missing on my side" as "the other device
+   knows something I do not", so a plain delete is undone by the next sync from
+   any device that still holds the record — a cleared rush reappears, a deleted
+   job comes back. Every removal is therefore written down: the key goes, and a
+   tombstone carrying the time it went takes its place in `deletions`.
+
+   mergeSnapshot() applies those after merging, so a deletion beats any copy of
+   the record older than itself, while a genuinely newer edit still wins — which
+   is right, because that is somebody re-flagging a rush after you cleared it. */
+const DELETABLE = [
+  'taskStatus', 'taskNote', 'taskEdit', 'backOrder', 'rush', 'taskAssign',
+  'manualTasks', 'todos', 'shiftLogs', 'machineConfig',
+];
+
+function forget(map, key) {
+  if (!DELETABLE.includes(map)) throw new Error(`forget(): ${map} is not a synced record map`);
+  delete state[map][key];
+  state.deletions = { ...state.deletions, [`${map}:${key}`]: { at: now(), by: me() } };
+}
+
+/** Re-apply every recorded deletion to the merged state. */
+function applyDeletions() {
+  for (const [k, tomb] of Object.entries(state.deletions || {})) {
+    const i = k.indexOf(':');
+    const map = k.slice(0, i);
+    const key = k.slice(i + 1);
+    const rec = state[map]?.[key];
+    if (!rec) continue;
+    if (rec.at && tomb.at && rec.at > tomb.at) continue;   // re-created since
+    delete state[map][key];
+  }
+}
+
+/* Tombstones are not kept forever. Ninety days is far longer than a device
+   here goes without opening the app, and it stops the synced document growing
+   by one entry for every note ever cleared. */
+const TOMBSTONE_DAYS = 90;
+
+function pruneDeletions() {
+  const cutoff = new Date(Date.now() - TOMBSTONE_DAYS * 86400000).toISOString();
+  const out = {};
+  for (const [k, v] of Object.entries(state.deletions || {})) {
+    if ((v.at || '') > cutoff) out[k] = v;
+  }
+  state.deletions = out;
 }
 
 /* ---------- history ---------- */
@@ -130,7 +182,7 @@ export function restoreTaskStatus(before) {
   const by = me();
   for (const { key, prev } of before) {
     const cur = state.taskStatus[key]?.status ?? null;
-    if (prev == null) delete state.taskStatus[key];
+    if (prev == null) forget('taskStatus', key);
     else state.taskStatus[key] = { status: prev, at, by };
     if (cur !== prev) logChange(key, 'undo', null, cur, prev);
   }
@@ -142,7 +194,7 @@ export function restoreTaskStatus(before) {
 export function setTaskNote(key, text) {
   const t = String(text || '').trim();
   const prev = state.taskNote[key]?.text ?? null;
-  if (!t) delete state.taskNote[key];
+  if (!t) forget('taskNote', key);
   else state.taskNote[key] = { text: t, at: now(), by: me() };
   if (prev !== (t || null)) logChange(key, 'note', null, prev, t || null);
   save();
@@ -180,7 +232,7 @@ export function setTaskFields(key, patch, sheet = {}) {
   }
 
   if (Object.keys(fields).length) state.taskEdit[key] = { fields, at: now(), by: me() };
-  else delete state.taskEdit[key];
+  else forget('taskEdit', key);
   save();
 }
 
@@ -209,7 +261,7 @@ export function setBackOrder(key, patch) {
   // A record with nothing meaningful left in it is not worth keeping.
   const empty = next.flagged == null && next.qty == null
     && !next.assignee && !next.note;
-  if (empty) delete state.backOrder[key];
+  if (empty) forget('backOrder', key);
   else state.backOrder[key] = { ...next, at: now(), by: me() };
   save();
 }
@@ -221,7 +273,7 @@ export function clearBackOrder(key) {
   for (const f of BACKORDER_FIELDS) {
     if (cur[f] != null && cur[f] !== '') logChange(key, 'backorder', f, cur[f], null);
   }
-  delete state.backOrder[key];
+  forget('backOrder', key);
   save();
 }
 
@@ -247,7 +299,7 @@ export function setRush(key, patch) {
     logChange(key, 'rush', f, cur[f] ?? null, v);
   }
 
-  if (!next.on) delete state.rush[key];
+  if (!next.on) forget('rush', key);
   else state.rush[key] = { ...next, at: now(), by: me() };
   save();
 }
@@ -258,7 +310,7 @@ export function clearRush(key) {
   for (const f of RUSH_FIELDS) {
     if (cur[f] != null && cur[f] !== '' && cur[f] !== false) logChange(key, 'rush', f, cur[f], null);
   }
-  delete state.rush[key];
+  forget('rush', key);
   save();
 }
 
@@ -270,7 +322,7 @@ function assignOne(key, machine, importedMachine) {
   const cur = state.taskAssign[key]?.machine || importedMachine || null;
   const next = machine || importedMachine || null;
   if (cur === next) return;
-  if (!machine || machine === importedMachine) delete state.taskAssign[key];
+  if (!machine || machine === importedMachine) forget('taskAssign', key);
   else state.taskAssign[key] = { machine, at: now(), by: me() };
   logChange(key, 'machine', null, cur, next);
 }
@@ -298,7 +350,7 @@ export function setTaskMachineMany(keys, machine, importedMachine) {
 export function clearTaskEdits(key, sheet = {}) {
   const cur = state.taskEdit[key]?.fields || {};
   for (const [f, v] of Object.entries(cur)) logChange(key, 'field', f, v, sheet[f] ?? null);
-  delete state.taskEdit[key];
+  forget('taskEdit', key);
   save();
 }
 
@@ -358,9 +410,7 @@ export function updateManualTask(id, patch) {
 export function deleteManualTask(id) {
   const cur = state.manualTasks?.[id];
   if (!cur) return;
-  const rest = { ...state.manualTasks };
-  delete rest[id];
-  state.manualTasks = rest;
+  forget('manualTasks', id);
   logChange(`${cur.machine}|${cur.wo}|${cur.die || ''}`, 'manual', null, 'added', 'removed');
   save();
 }
@@ -393,9 +443,7 @@ export function setTodo(id, patch) {
 }
 
 export function deleteTodo(id) {
-  const rest = { ...state.todos };
-  delete rest[id];
-  state.todos = rest;
+  forget('todos', id);
   save();
 }
 
@@ -408,11 +456,19 @@ export function saveShiftLog(date, shift, patch) {
 }
 
 export function deleteShiftLog(key) {
-  delete state.shiftLogs[key];
+  forget('shiftLogs', key);
   save();
 }
 
 /** Per-machine overrides: display name, note and usual operator count. */
+/** Put a machine back to its built-in name, note and crew. Recorded as a
+    deletion so another device does not sync the old override back in. */
+export function resetMachineConfig(key) {
+  if (!state.machineConfig?.[key]) return;
+  forget('machineConfig', key);
+  save();
+}
+
 export function setMachineConfig(key, patch) {
   const cur = state.machineConfig[key] || {};
   const next = { ...cur, ...patch, at: now(), by: me() };
@@ -464,6 +520,7 @@ function snapshot() {
     shiftLogs: state.shiftLogs,
     manualTasks: state.manualTasks,
     todos: state.todos,
+    deletions: state.deletions,
     people: state.people,
     settings: state.settings,
   };
@@ -509,6 +566,7 @@ export function loadLocal() {
     if (!raw) return;
     const data = JSON.parse(raw);
     apply(data);
+    pruneDeletions();
     // Rewrite immediately if the payload still carries retired fields, so the
     // cleanup is visible now rather than waiting for the next incidental save.
     if (RETIRED_KEYS.some((k) => data[k] !== undefined)) {
@@ -592,6 +650,10 @@ function mergeSnapshot(remote) {
   state.shiftLogs = mergeRecords(state.shiftLogs, remote.shiftLogs);
   state.manualTasks = mergeRecords(state.manualTasks, remote.manualTasks);
   state.todos = mergeRecords(state.todos, remote.todos);
+  // Merge the tombstones, then re-apply them: a record the other device
+  // still holds must not walk back in after being deleted here.
+  state.deletions = mergeRecords(state.deletions, remote.deletions);
+  applyDeletions();
   state.people = Array.from(new Set([...(state.people || []), ...(remote.people || [])]));
 
   // Machine tasks come from whichever side imported them most recently.

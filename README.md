@@ -425,6 +425,32 @@ holds only `tasks`, `machineMeta`, `taskStatus`, `taskNote`, `taskEdit`,
 see above. An old install's `shiftLogs` were written in a different shape and
 are dropped on load rather than half-rendered.)
 
+## Deleting, with sync on
+
+Per-record merging has one thing it cannot get right on its own. It reads
+"missing on my side" as "the other device knows something I do not" — which is
+correct for a record that has not reached you yet, and exactly wrong for one
+that was deleted. Clear a rush on the PC and the phone's copy walks straight
+back in on the next sync, on both devices.
+
+So a removal is written down rather than performed. The key goes, and a
+tombstone carrying the time it went is stored in `state.deletions` under
+`` `${map}:${key}` ``. `mergeSnapshot()` merges those like any other record and
+then re-applies them, so a deletion beats any copy of the record older than
+itself — while a genuinely newer edit still wins, because that is somebody
+re-flagging a rush after you cleared it.
+
+This covers every removal in the app: statuses undone, notes cleared, edits
+reverted, rushes and back orders cleared, lines put back on their imported
+machine, manual jobs, to-dos, shift updates and machine renames. Tombstones are
+pruned after 90 days.
+
+`test/cloud-check.mjs` drives it on two devices: the PC clears a rush the phone
+still holds, and both must end up with it gone; then the phone re-flags it and
+that must survive. Disabling the tombstone makes the first assertion fail with
+`a cleared rush came back on sync` on both devices, which is what the bug
+actually looked like.
+
 ## Sharing
 
 There are two ways to share, and they use the same per-record merge: every

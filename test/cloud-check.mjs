@@ -258,6 +258,43 @@ if (onPc.pcStatus !== 'IN_PROGRESS' || onPc.phoneStatus !== 'DONE' || onPc.assig
   throw new Error('a concurrent edit was lost: ' + JSON.stringify(onPc));
 }
 
+/* ---------- deleting something makes it stay deleted ---------- */
+
+/* The one that per-record merging gets wrong on its own. The PC clears the
+   rush it set earlier; the phone still holds a copy. Without a tombstone the
+   phone's copy reads as "newer information the PC has not seen" and walks
+   straight back in on the next sync — on both devices. */
+const rushKey = pcWork.key;
+await pc.evaluate((k) => import('/js/store.js').then((m) => m.clearRush(k)), rushKey);
+await pc.waitForTimeout(3500);
+await pc.evaluate(() => import('/js/store.js').then((m) => m.pushCloud?.() ?? null)).catch(() => {});
+await phone.evaluate(() => import('/js/store.js').then((m) => m.pullCloud()));
+await pc.evaluate(() => import('/js/store.js').then((m) => m.pullCloud()));
+await pc.waitForTimeout(500);
+
+const rushAfter = async (page) => page.evaluate((k) => import('/js/store.js').then((s) => ({
+  rush: s.state.rush[k] ? 'still there' : 'gone',
+  tomb: !!s.state.deletions[`rush:${k}`],
+})), rushKey);
+const delPc = await rushAfter(pc);
+const delPhone = await rushAfter(phone);
+step('after PC cleared the rush — PC: ' + JSON.stringify(delPc) + ' phone: ' + JSON.stringify(delPhone));
+if (delPc.rush !== 'gone' || delPhone.rush !== 'gone') {
+  throw new Error('a cleared rush came back on sync: ' + JSON.stringify({ delPc, delPhone }));
+}
+if (!delPc.tomb || !delPhone.tomb) throw new Error('the deletion was not recorded for other devices');
+
+// ...and re-flagging it afterwards still wins over the deletion.
+await phone.evaluate((k) => import('/js/store.js').then((m) =>
+  m.setRush(k, { on: true, needBy: null, assignee: 'Marek', reason: 'Back on again.' })), rushKey);
+await phone.waitForTimeout(3500);
+await pc.evaluate(() => import('/js/store.js').then((m) => m.pullCloud()));
+await pc.waitForTimeout(300);
+const reflagged = await pc.evaluate((k) => import('/js/store.js').then((s) =>
+  s.state.rush[k]?.assignee ?? null), rushKey);
+step('re-flagged after the delete: ' + reflagged);
+if (reflagged !== 'Marek') throw new Error('a tombstone outlived a newer edit');
+
 /* ---------- failure is reported, not swallowed ---------- */
 
 const rejected = await phone.evaluate(([url]) => import('/js/cloud.js').then(async (c) => {
