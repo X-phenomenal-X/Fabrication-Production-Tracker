@@ -1,4 +1,4 @@
-# Cutting Tracker — Rolling, FOM, CNC, Multi Punch
+# Cutting Tracker — Rolling, FOM, CNC & FMC, Multi Punch
 
 A page per work centre, driven entirely by the department's own Rolling and CNC
 schedule workbooks. Each page shows that machine's open lines grouped by
@@ -26,12 +26,14 @@ npm run build       # regenerate Cutting-Tracker.html after changing source
 ## First run
 
 1. **Setup** → import the Rolling workbook, then the CNC workbook.
-2. Pick your centre from the nav: **Rolling · FOM · CNC · Multi Punch**.
+2. Pick your centre from the nav: **Rolling · FOM · CNC & FMC · Multi Punch**.
 3. Pick your machine from the sub-tabs, and work the queue.
 4. At the end of the shift, **Shift Update** → Write.
 
-The nav reads **Rolling · FOM · CNC · Multi Punch · Back Orders · Shift Update
-· Setup**.
+The nav reads **Rolling · FOM · CNC & FMC · Multi Punch · Rush · Back Orders ·
+Shift Update · Setup**.
+
+To use it on a phone, set up **Sync across devices** in Setup once — see below.
 
 ## The pages
 
@@ -39,11 +41,30 @@ The nav reads **Rolling · FOM · CNC · Multi Punch · Back Orders · Shift Upd
 |---|---|---|
 | Rolling | Rolling (Auto/Etas), Rolling (Manual/Iota) | Rolling workbook: `Auto`, `Manual` |
 | FOM | FOM 1, FOM 2, FOM 3 | CNC workbook: `FOM1`, `FOM2`, `FOM3` |
-| CNC | CNC 1, CNC 2, CNC 3, CNC 140 | CNC workbook: `CNC & FMC` |
+| CNC & FMC | Unassigned queue, CNC 1, FMC 1, FMC 2 | CNC workbook: `CNC & FMC` |
 | Multi Punch | Multi Punch | CNC workbook: `MultiPunch & SAW` |
 
 Machines with no lines scheduled still appear — a machine that is idle should
 look different from one that does not exist.
+
+## CNC & FMC: one queue, split by hand
+
+CNC 2 and CNC 3 are gone; **FMC 1 and FMC 2** took their place. That changes
+more than a label, because the workbook's `CNC & FMC` sheet has **no machine
+column** — it is one flat list of `WO# · PROJECT · FL · Product · QTY · B/O ·
+B/O Stat · Cutting Date · Status`. There is no per-machine CNC schedule
+anywhere in either workbook. (`CNC Daily` has a Work Center column but is dated
+Sept 27th, and `Machine Schedule` is from Jan 29th — both long stale.)
+
+So the sheet imports into an **Unassigned** queue, which is the first sub-tab,
+and a line is put on CNC 1, FMC 1 or FMC 2 by hand — from the arrow button on
+the line, or by selecting several and using **Move to** in the bulk bar.
+
+Assignment is an *overlay*. The line's key stays built from the machine it was
+imported under, so moving a line keeps its status, note, history, rush and back
+order, and survives re-importing the workbook. `test/app-check.mjs` asserts the
+key still starts with `cncfmc|` after a move, because the alternative silently
+orphans everything attached to that line.
 
 ## A line
 
@@ -86,6 +107,26 @@ for a line that is running *and* short of material. Reading that as a single
 status silently loses the back-order half — 67 open lines in the sample data.
 It is parsed into its own flag and shown as a red **B/O** badge beside the
 status, and counted in the header.
+
+## Rush
+
+Nothing in either workbook says "this one first" — a rush is always somebody
+deciding, usually because a shipping gate moved or site called. So it is
+recorded as what it is: a flag, **the date it is actually needed by**, **who is
+being told**, and **the reason**.
+
+A rushed line sorts to the top of its machine's queue whatever its cutting
+date, carries an amber `RUSH Aug 20` badge and a spine down its left edge, and
+turns red once the date is inside two days or past. The centre header counts
+them and there is a **Rush** filter pill.
+
+The **Rush** page collects every rush line across all centres, bucketed by how
+close its date is — **Past its date · Today · Next two days · Later · No date
+given** — with an "only mine" toggle for the ones put on you. Clicking a row
+opens the same dialog as the line does.
+
+Every field change is logged to the line's history with who and when, the same
+as everything else.
 
 ## Back orders
 
@@ -192,21 +233,38 @@ Updates are stamped with who wrote them and when, saved under `date|shift`, and
 merged record-by-record through the shared file like everything else — so two
 people writing different shifts do not overwrite each other.
 
-### The imported sheet
+### The imported sheets
 
-The CNC workbook's **`Shift Update`** sheet carries the most current word on
-most machines, finer than the per-line Status columns. Besides feeding the
+The CNC workbook's shift-update sheets carry the most current word on most
+machines, finer than the per-line Status columns. Besides feeding the
 suggestions above, each centre page shows its machine's entry over the queue,
 with a **MACHINE DOWN** badge when `#Ops` reads `DOWN`.
 
-That sheet is laid out as two side-by-side blocks (columns 1–7 and 9–15), each
-with its own Date/Shift header — both are read, and where a machine appears in
-both the entry with actual content wins.
+A block is laid out as two side-by-side halves (columns 1–7 and 9–15), each
+with its own Date/Shift header. Blocks also **stack vertically**, and that
+turned out to matter: the sheet named exactly `Shift Update` is still the old
+layout listing CNC 1, CNC 2, CNC 3 and CNC SBZ140, while `Shift Update 2` holds
+the old Day sheet at the top and, from row 57 down, a newer one — the only
+place **FMC 1 and FMC 2 appear anywhere in either workbook**.
 
-There are several near-identical sheets (`Shift Update 2`, `Shift Update (3)`,
-`Shift Update Old`), all currently dated the same day. Only the one named
-exactly **`Shift Update`** is read, and its date and shift are shown on the
-panel so a stale one is obvious.
+Reading one sheet whole would mean choosing between the newest shift and the
+only block that knows the FMCs exist. So every `Shift Update*` sheet is read,
+every block within it is found by its own Date header, and entries are merged
+**per machine, newest shift winning**. Each entry keeps the date and shift of
+the block it came from, so FOM 1 shows its Afternoon entry while FMC 1 shows
+its Day one, and the panel says which.
+
+Machine names on the sheet that the app has no work centre for are collected
+and reported on import rather than dropped in silence — that is how the
+department finds out the app is behind the floor again. Right now that list is
+`CNC 2, CNC 3, CNC SBZ140, CNC-3, Notching, Proline, Elumatec Saw #1–3,
+Saw #1–8`.
+
+**One thing to settle:** the newest block writes **`CNC-3`**, not `CNC 1`. The
+app is set up as CNC 1 + FMC 1 + FMC 2, so `CNC-3` currently goes to the
+unrecognised list. If the remaining CNC is really called CNC-3 on the floor,
+rename `cnc1` in `js/machines.js` and add `'CNC3': 'cnc1'` to `SU_MACHINE` in
+`js/import-machines.js`.
 
 ## What was removed
 
@@ -219,8 +277,8 @@ The stored data went with it. On first load the app rewrites its saved payload
 without the retired fields, so an existing install — and the shared JSON on the
 network drive — sheds them rather than carrying them indefinitely. State now
 holds only `tasks`, `machineMeta`, `taskStatus`, `taskNote`, `taskEdit`,
-`backOrder`, `taskHistory`, `machineConfig`, `shiftUpdate`, `shiftLogs`,
-`people` and `settings`.
+`backOrder`, `rush`, `taskAssign`, `taskHistory`, `machineConfig`,
+`shiftUpdate`, `shiftLogs`, `people` and `settings`.
 
 (Shift-update posting has since come back, rebuilt around the machine layout —
 see above. An old install's `shiftLogs` were written in a different shape and
@@ -228,20 +286,68 @@ are dropped on load rather than half-rendered.)
 
 ## Sharing
 
-Each person connects once to the same JSON file (Chrome/Edge, File System
-Access API). Statuses merge line by line — two people updating different lines
-both keep their work; only the same line updated twice resolves to the most
-recent.
+There are two ways to share, and they use the same per-record merge: every
+record carries an `at` timestamp and the newer one wins, so two people updating
+different lines both keep their work and only the same line updated twice
+resolves to the most recent.
 
-Without a shared file the app still works fully, storing data in that browser.
+### On the shop floor PCs — a shared file
+
+Each person connects once to the same JSON file on the network drive
+(Chrome/Edge, File System Access API). No account, no internet.
+
+### On phones — sync across devices
+
+No phone browser has the File System Access API, so the shared file cannot
+work there. **Setup → Sync across devices** connects the app to a free
+[Supabase](https://supabase.com) project over plain HTTPS instead, and then the
+same board is open on a phone on the floor and a PC in the office at once.
+
+1. Make a free project at supabase.com.
+2. Run the setup SQL once (Setup shows it, with a copy button). It creates one
+   `tracker_state` table and three policies.
+3. Paste the **Project URL** and the **anon public key** from Settings → API.
+4. Do the same on every phone and PC, with the same **site name**.
+
+The snapshot is pushed as **two documents, not one**:
+
+| | what | size on the real data | pushed |
+|---|---|---|---|
+| `base` | the imported workbooks | ~1.6 MB | only on re-import |
+| `work` | statuses, notes, edits, rush, back orders, assignments, shift updates, history | ~1 KB | debounced, on every change |
+
+Together that would mean a phone uploading the workbooks every time somebody
+taps Done. Split, a tap costs a kilobyte. `test/cloud-check.mjs` asserts the
+`work` document stays at least five times smaller than `base` and never carries
+the task list.
+
+Pulls poll every 30 seconds while the tab is visible, and immediately when you
+come back to the app — which on a phone is exactly when its copy is most likely
+to be stale.
+
+**The trade-off, plainly:** those policies let anyone holding the address and
+the anon key read and write the department's data. There is no login. Keep the
+key to the department, the same way the network share is kept to the
+department. If that is not acceptable, the shared file on the network drive
+gives up phones and keeps everything inside the building.
+
+Without either, the app still works fully, storing data in that browser.
 Export / Import moves it between machines.
+
+### Putting it on a URL
+
+`.github/workflows/pages.yml` publishes the built single file to GitHub Pages
+on every push to `main`. Enable it once in **Settings → Pages → Source: GitHub
+Actions**; the workflow will not do anything until you do. `manifest.webmanifest`
+means **Add to Home Screen** on a phone opens it like an app.
 
 ## Tests
 
 ```
 npm install                        # once — installs esbuild + playwright
-node test/machines-check.mjs       # parses both workbooks, checks the back-order flag
-node test/app-check.mjs            # walks all four centre pages, status click, reload, re-import
+node test/machines-check.mjs       # parses both workbooks, the back-order flag, the shift update
+node test/app-check.mjs            # walks every page: status, rush, back orders, assignment, shift update
+node test/cloud-check.mjs          # two devices against a mock cloud — do they converge?
 node build.mjs && node test/standalone-check.mjs   # same against the built file, opened via file://
 ```
 
@@ -251,6 +357,18 @@ machine rename, the back-order dialog and page including the tri-state clear,
 and the shift update — pulling the workbook entry, inserting a chip, saving,
 and reading it back after a reload. It also asserts that a status, an edit and
 a back order all survive a reload and a re-import.
+
+`test/cloud-check.mjs` is the one worth knowing about. There is no Supabase to
+reach from a test, so it stands up a mock that speaks the same PostgREST
+shapes the client uses — the `site=eq.` / `part=in.()` filters, the
+`on_conflict` upsert with `Prefer: resolution=merge-duplicates`, and the CORS
+preflight that the `apikey` and `Prefer` headers force a browser to send.
+Getting any of those wrong fails there rather than on the shop floor. It then
+drives two browser contexts with separate storage as two people: the PC imports
+the workbooks and sets a status, a rush and a note; the phone connects having
+never seen a workbook and must receive all of it; both then edit different
+lines and must converge without losing either. It also asserts a wrong key
+produces a sentence an operator can act on rather than a stack trace.
 
 ## Interface notes
 

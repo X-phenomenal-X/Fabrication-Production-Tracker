@@ -229,8 +229,11 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 @media (max-width: 720px) {
   main { padding: 12px; }
   header.top { padding: 9px 12px; gap: 8px; }
-  nav.tabs { width: 100%; margin-left: 0; overflow-x: auto; }
-  nav.tabs button { padding: 7px 11px; font-size: 13px; }
+  /* Eight tabs wrap to three rows and eat the screen; one scrolling row keeps
+     the header the same height however many pages there are. */
+  nav.tabs { width: 100%; margin-left: 0; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  nav.tabs button { padding: 7px 11px; font-size: 13px; white-space: nowrap; }
   .hide-sm { display: none !important; }
   .oplabel { width: 88px; }
   .stat .n { font-size: 19px; }
@@ -710,3 +713,56 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   .sug-label { width: auto; padding-top: 0; }
   .su-when { align-items: stretch; }
 }
+
+/* ---------- rush ---------- */
+
+.badge-rush {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 7px; border-radius: 5px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .03em;
+  background: var(--warn-soft); color: var(--warn);
+  white-space: nowrap;
+}
+/* Past its date or due inside two days: this is the one that actually needs
+   picking up now, so it stops being amber. */
+.badge-rush.hot { background: var(--bad-soft); color: var(--bad); }
+.badge-rush svg { flex-shrink: 0; }
+
+/* A rush line keeps a spine down its left edge, so it reads as jumping the
+   queue even when the queue is scrolled past its badge. */
+.line.rush { box-shadow: inset 3px 0 0 var(--warn); }
+.line.rush.sel { box-shadow: inset 3px 0 0 var(--warn); }
+
+.line-rushband {
+  display: flex; align-items: flex-start; gap: 6px; margin-top: 5px;
+  font-size: 12.5px; color: var(--warn);
+}
+.line-rushband svg { flex-shrink: 0; margin-top: 2px; color: var(--warn); }
+
+.line-iconbtn.rush { color: var(--warn); }
+.line-iconbtn.moved { color: var(--accent); }
+
+.rush-flagrow { align-items: flex-start; gap: 10px; margin-top: 14px; }
+.rush-flagrow input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--warn); }
+.rush-quick { display: flex; gap: 2px; margin-top: 5px; flex-wrap: wrap; }
+
+.rush-line .line-main { flex: 1; }
+.rush-need { font-weight: 700; font-variant-numeric: tabular-nums; }
+.rush-need.late { color: var(--bad); }
+
+/* ---------- putting a line on a machine ---------- */
+
+.movegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.movebtn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 12px 14px; text-align: left; border-radius: 9px;
+}
+.movebtn:hover { border-color: var(--accent); background: var(--accent-soft); }
+.movebtn.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.movebtn.on .muted { color: var(--accent); opacity: .75; }
+
+/* ---------- cloud setup ---------- */
+
+.cloud-steps { margin: 10px 0 0; padding-left: 20px; line-height: 1.7; }
+.cloud-steps li { margin: 2px 0; }
+.cloud-steps .linkbtn { padding: 0 3px; font-size: inherit; }

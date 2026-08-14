@@ -63,9 +63,15 @@ const out = await page.evaluate(async (b64) => {
   // collapse into a plain "In progress" and lose the back-order half.
   const runningAndShort = open.filter((t) => t.status === 'IP' && t.backOrder);
 
+  const su = cnc.shiftUpdate;
   return {
     rollingSheets: roll.report.sheets,
     cncSheets: cnc.report.sheets,
+    shiftUpdate: {
+      ...cnc.report.shiftUpdate,
+      entries: Object.fromEntries(Object.entries(su.machines).map(([k, e]) =>
+        [k, `${e.label} · ${e.date} ${e.shift} · ${e.done.length} done / ${e.next.length} next`])),
+    },
     totalTasks: tasks.length,
     open: open.length,
     byMachine,

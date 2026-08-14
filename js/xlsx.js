@@ -188,7 +188,8 @@ function parseSheet(xml, shared, dateStyles, maxRows) {
 /**
  * Read an .xlsx into { sheetNames, sheets: { [name]: { rows, width } } }.
  * `only` limits which sheets are parsed — important here because the workbook
- * contains a 1M-row scratch sheet we never need.
+ * contains a 1M-row scratch sheet we never need. It takes a list of names, or
+ * a predicate for the sheets whose names are only known by pattern.
  */
 export async function readXlsx(arrayBuffer, { only = null, maxRows = 25000 } = {}) {
   if (typeof DecompressionStream === 'undefined') {
@@ -232,7 +233,8 @@ export async function readXlsx(arrayBuffer, { only = null, maxRows = 25000 } = {
     targets.set(name, target.startsWith('xl/') ? target : 'xl/' + target);
   }
 
-  const wanted = only ? sheetNames.filter((n) => only.includes(n)) : sheetNames;
+  const keep = typeof only === 'function' ? only : (n) => only.includes(n);
+  const wanted = only ? sheetNames.filter(keep) : sheetNames;
   const sheets = {};
   for (const name of wanted) {
     const xml = await readFile(zip, targets.get(name));

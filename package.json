@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node test/machines-check.mjs && node test/app-check.mjs",
+    "test": "node test/machines-check.mjs && node test/app-check.mjs && node test/cloud-check.mjs",
+    "test:cloud": "node test/cloud-check.mjs",
     "test:standalone": "node build.mjs && node test/standalone-check.mjs",
     "serve": "node -e \"import('http').then(async({default:h})=>{const fs=await import('fs'),p=await import('path');const T={'.html':'text/html','.js':'text/javascript','.css':'text/css'};h.createServer((q,r)=>{const f=p.join(process.cwd(),q.url==='/'?'/index.html':q.url.split('?')[0]);if(!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);return r.end('not found')}r.writeHead(200,{'content-type':T[p.extname(f)]||'text/plain'});r.end(fs.readFileSync(f))}).listen(8000,()=>console.log('http://localhost:8000'))})\""
   },

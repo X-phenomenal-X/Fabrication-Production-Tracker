@@ -2,7 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1f6feb">
+  <meta name="color-scheme" content="light dark">
+  <!-- Add to Home Screen on a phone: opens without browser chrome. Both the
+       manifest and the icon are ignored when the file is opened from a shared
+       drive, which is why neither is required for the app to work. -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Cutting">
+  <link rel="manifest" href="manifest.webmanifest">
   <title>Cutting — BV Glazing Production Tracker</title>
   <style>
 /* BV Cutting — department tracker */
@@ -236,8 +244,11 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 @media (max-width: 720px) {
   main { padding: 12px; }
   header.top { padding: 9px 12px; gap: 8px; }
-  nav.tabs { width: 100%; margin-left: 0; overflow-x: auto; }
-  nav.tabs button { padding: 7px 11px; font-size: 13px; }
+  /* Eight tabs wrap to three rows and eat the screen; one scrolling row keeps
+     the header the same height however many pages there are. */
+  nav.tabs { width: 100%; margin-left: 0; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  nav.tabs button { padding: 7px 11px; font-size: 13px; white-space: nowrap; }
   .hide-sm { display: none !important; }
   .oplabel { width: 88px; }
   .stat .n { font-size: 19px; }
@@ -718,6 +729,59 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   .su-when { align-items: stretch; }
 }
 
+/* ---------- rush ---------- */
+
+.badge-rush {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 7px; border-radius: 5px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .03em;
+  background: var(--warn-soft); color: var(--warn);
+  white-space: nowrap;
+}
+/* Past its date or due inside two days: this is the one that actually needs
+   picking up now, so it stops being amber. */
+.badge-rush.hot { background: var(--bad-soft); color: var(--bad); }
+.badge-rush svg { flex-shrink: 0; }
+
+/* A rush line keeps a spine down its left edge, so it reads as jumping the
+   queue even when the queue is scrolled past its badge. */
+.line.rush { box-shadow: inset 3px 0 0 var(--warn); }
+.line.rush.sel { box-shadow: inset 3px 0 0 var(--warn); }
+
+.line-rushband {
+  display: flex; align-items: flex-start; gap: 6px; margin-top: 5px;
+  font-size: 12.5px; color: var(--warn);
+}
+.line-rushband svg { flex-shrink: 0; margin-top: 2px; color: var(--warn); }
+
+.line-iconbtn.rush { color: var(--warn); }
+.line-iconbtn.moved { color: var(--accent); }
+
+.rush-flagrow { align-items: flex-start; gap: 10px; margin-top: 14px; }
+.rush-flagrow input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--warn); }
+.rush-quick { display: flex; gap: 2px; margin-top: 5px; flex-wrap: wrap; }
+
+.rush-line .line-main { flex: 1; }
+.rush-need { font-weight: 700; font-variant-numeric: tabular-nums; }
+.rush-need.late { color: var(--bad); }
+
+/* ---------- putting a line on a machine ---------- */
+
+.movegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.movebtn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 12px 14px; text-align: left; border-radius: 9px;
+}
+.movebtn:hover { border-color: var(--accent); background: var(--accent-soft); }
+.movebtn.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.movebtn.on .muted { color: var(--accent); opacity: .75; }
+
+/* ---------- cloud setup ---------- */
+
+.cloud-steps { margin: 10px 0 0; padding-left: 20px; line-height: 1.7; }
+.cloud-steps li { margin: 2px 0; }
+.cloud-steps .linkbtn { padding: 0 3px; font-size: inherit; }
+
 </style>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#9986;</text></svg>">
 </head>
@@ -1006,48 +1070,179 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         x: "M18 6 6 18M6 6l12 12",
         upload: "M12 16V4M7 9l5-5 5 5M4 20h16",
         pencil: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
-        clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2"
+        clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
+        bolt: "M13 2 4 14h6l-1 8 9-12h-6z",
+        arrow: "M5 12h13M12 5l7 7-7 7",
+        cloud: "M17.5 19a4.5 4.5 0 0 0 .3-9A6.5 6.5 0 0 0 5.3 11 4 4 0 0 0 6 19z"
       };
     }
   });
 
+  // js/app.js
+  init_ui();
+
+  // js/cloud.js
+  var LS_CLOUD = "bv.cutting.cloud";
+  var TABLE = "tracker_state";
+  var CLOUD_PARTS = ["base", "work"];
+  function cloudConfig() {
+    try {
+      const raw = localStorage.getItem(LS_CLOUD);
+      if (!raw) return null;
+      const c = JSON.parse(raw);
+      return c && c.url && c.key ? { site: "cutting", ...c } : null;
+    } catch {
+      return null;
+    }
+  }
+  function setCloudConfig(cfg) {
+    if (!cfg) localStorage.removeItem(LS_CLOUD);
+    else {
+      localStorage.setItem(LS_CLOUD, JSON.stringify({
+        url: String(cfg.url || "").trim().replace(/\/+$/, ""),
+        key: String(cfg.key || "").trim(),
+        site: String(cfg.site || "cutting").trim() || "cutting"
+      }));
+    }
+  }
+  function cloudEnabled() {
+    return !!cloudConfig();
+  }
+  function cloudHost() {
+    const c = cloudConfig();
+    if (!c) return null;
+    try {
+      return `${new URL(c.url).hostname} \xB7 ${c.site}`;
+    } catch {
+      return c.site;
+    }
+  }
+  function headers(cfg, extra = {}) {
+    return {
+      apikey: cfg.key,
+      Authorization: `Bearer ${cfg.key}`,
+      "Content-Type": "application/json",
+      ...extra
+    };
+  }
+  async function explain(res) {
+    let detail = "";
+    try {
+      const body = await res.json();
+      detail = body.message || body.hint || body.error || "";
+    } catch {
+    }
+    if (res.status === 401 || res.status === 403) {
+      return new Error(
+        `The cloud rejected the key. Check the anon key, and that the three policies in the setup SQL were created.${detail ? ` (${detail})` : ""}`
+      );
+    }
+    if (res.status === 404) {
+      return new Error(
+        `No "${TABLE}" table at that address. Run the setup SQL in the Supabase SQL editor, then try again.`
+      );
+    }
+    return new Error(`Cloud error ${res.status}${detail ? `: ${detail}` : ""}`);
+  }
+  async function call(cfg, path, opts = {}) {
+    let res;
+    try {
+      res = await fetch(`${cfg.url}/rest/v1/${path}`, opts);
+    } catch (e) {
+      throw new Error(
+        `Could not reach the cloud. Check the internet connection and the address.${e?.message ? ` (${e.message})` : ""}`
+      );
+    }
+    if (!res.ok) throw await explain(res);
+    return res;
+  }
+  async function cloudPull(parts = CLOUD_PARTS, cfg = cloudConfig()) {
+    if (!cfg) return null;
+    const list = parts.map((p) => `"${p}"`).join(",");
+    const res = await call(
+      cfg,
+      `${TABLE}?site=eq.${encodeURIComponent(cfg.site)}&part=in.(${list})&select=part,data,updated_at`,
+      { headers: headers(cfg) }
+    );
+    const rows = await res.json();
+    const out = { base: null, work: null, updatedAt: {} };
+    for (const r of rows) {
+      out[r.part] = r.data;
+      out.updatedAt[r.part] = r.updated_at;
+    }
+    return out;
+  }
+  async function cloudPush(docs, cfg = cloudConfig()) {
+    if (!cfg) return false;
+    const rows = Object.entries(docs).filter(([, data]) => data != null).map(([part, data]) => ({ site: cfg.site, part, data, updated_at: (/* @__PURE__ */ new Date()).toISOString() }));
+    if (!rows.length) return false;
+    await call(cfg, `${TABLE}?on_conflict=site,part`, {
+      method: "POST",
+      headers: headers(cfg, { Prefer: "resolution=merge-duplicates,return=minimal" }),
+      body: JSON.stringify(rows)
+    });
+    return true;
+  }
+  async function cloudTest(cfg) {
+    if (!cfg?.url || !cfg?.key) throw new Error("Both the project URL and the anon key are needed.");
+    try {
+      new URL(cfg.url);
+    } catch {
+      throw new Error("That project URL does not look like a web address.");
+    }
+    await cloudPull(["work"], { site: "cutting", ...cfg });
+    return true;
+  }
+
   // js/store.js
-  var store_exports = {};
-  __export(store_exports, {
-    BACKORDER_FIELDS: () => BACKORDER_FIELDS,
-    EDITABLE_FIELDS: () => EDITABLE_FIELDS,
-    clearBackOrder: () => clearBackOrder,
-    clearTaskEdits: () => clearTaskEdits,
-    connectSharedFile: () => connectSharedFile,
-    deleteShiftLog: () => deleteShiftLog,
-    disconnectSharedFile: () => disconnectSharedFile,
-    exportJson: () => exportJson,
-    grantSharedFile: () => grantSharedFile,
-    historyFor: () => historyFor,
-    importJson: () => importJson,
-    loadLocal: () => loadLocal,
-    logChange: () => logChange,
-    me: () => me,
-    now: () => now,
-    onChange: () => onChange,
-    pullSharedFile: () => pullSharedFile,
-    reconnectSharedFile: () => reconnectSharedFile,
-    resetAll: () => resetAll,
-    restoreTaskStatus: () => restoreTaskStatus,
-    save: () => save,
-    saveShiftLog: () => saveShiftLog,
-    setBackOrder: () => setBackOrder,
-    setMachineConfig: () => setMachineConfig,
-    setMachineImport: () => setMachineImport,
-    setTaskFields: () => setTaskFields,
-    setTaskNote: () => setTaskNote,
-    setTaskStatus: () => setTaskStatus,
-    setTaskStatusMany: () => setTaskStatusMany,
-    sharedFileName: () => sharedFileName,
-    state: () => state,
-    supportsSharedFile: () => supportsSharedFile,
-    uid: () => uid
-  });
+  var LS_KEY = "bv.cutting.v1";
+  var IDB_NAME = "bv-cutting";
+  var IDB_STORE = "handles";
+  var RETIRED_KEYS = [
+    "meta",
+    "orders",
+    "wip",
+    "prep",
+    "screens",
+    "progress",
+    "material",
+    "history",
+    "manualOrders",
+    "plan",
+    "guide",
+    "audit",
+    "lastImportReport"
+  ];
+  var state = {
+    tasks: [],
+    // machine-schedule rows: the base for scheduling
+    machineMeta: {},
+    // kind -> { fileName, importedAt, count }
+    taskStatus: {},
+    // `${machine}|${wo}|${die}` -> { status, at, by }
+    shiftUpdate: null,
+    // latest Shift Update sheet: { date, shift, machines }
+    taskNote: {},
+    // `${machine}|${wo}|${die}` -> { text, at, by }
+    taskEdit: {},
+    // same key -> { fields: {...}, at, by } — corrections to the sheet
+    backOrder: {},
+    // same key -> { flagged, qty, assignee, note, at, by }
+    rush: {},
+    // same key -> { on, needBy, assignee, reason, at, by }
+    taskAssign: {},
+    // same key -> { machine, at, by } — which machine took a queued line
+    taskHistory: [],
+    // every change to a line, newest first
+    machineConfig: {},
+    // machineKey -> { label, note, ops, hidden }
+    shiftLogs: {},
+    // `${date}|${shift}` -> { date, shift, rows, notes, at, by }
+    people: [],
+    settings: { me: null }
+  };
+  var saveTimer = null;
+  var listeners = /* @__PURE__ */ new Set();
   function onChange(fn) {
     listeners.add(fn);
     return () => listeners.delete(fn);
@@ -1064,6 +1259,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   function me() {
     return state.settings.me || "Unassigned";
   }
+  var HISTORY_CAP = 4e3;
   function logChange(key, kind, field, from, to) {
     state.taskHistory.unshift({
       id: uid(),
@@ -1116,6 +1312,13 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     if (prev !== (t || null)) logChange(key, "note", null, prev, t || null);
     save();
   }
+  var EDITABLE_FIELDS = [
+    { key: "project", label: "Project", type: "text" },
+    { key: "floor", label: "Floor / Tag", type: "text" },
+    { key: "die", label: "Die", type: "text" },
+    { key: "qty", label: "Qty", type: "number" },
+    { key: "cuttingDate", label: "Cutting date", type: "date" }
+  ];
   function setTaskFields(key, patch, sheet = {}) {
     const cur = state.taskEdit[key]?.fields || {};
     const fields = { ...cur };
@@ -1133,6 +1336,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     else delete state.taskEdit[key];
     save();
   }
+  var BACKORDER_FIELDS = ["flagged", "qty", "assignee", "note"];
   function setBackOrder(key, patch) {
     const cur = state.backOrder[key] || {};
     const next = { ...cur };
@@ -1157,6 +1361,45 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       if (cur[f] != null && cur[f] !== "") logChange(key, "backorder", f, cur[f], null);
     }
     delete state.backOrder[key];
+    save();
+  }
+  var RUSH_FIELDS = ["on", "needBy", "assignee", "reason"];
+  function setRush(key, patch) {
+    const cur = state.rush[key] || {};
+    const next = { ...cur };
+    for (const f of RUSH_FIELDS) {
+      if (!(f in patch)) continue;
+      let v = patch[f];
+      if (f === "on") v = !!v;
+      else if (f === "needBy") v = String(v ?? "").trim() || null;
+      else v = String(v ?? "").trim() || null;
+      if ((cur[f] ?? null) === (v ?? null)) continue;
+      next[f] = v;
+      logChange(key, "rush", f, cur[f] ?? null, v);
+    }
+    if (!next.on) delete state.rush[key];
+    else state.rush[key] = { ...next, at: now(), by: me() };
+    save();
+  }
+  function clearRush(key) {
+    const cur = state.rush[key];
+    if (!cur) return;
+    for (const f of RUSH_FIELDS) {
+      if (cur[f] != null && cur[f] !== "" && cur[f] !== false) logChange(key, "rush", f, cur[f], null);
+    }
+    delete state.rush[key];
+    save();
+  }
+  function assignOne(key, machine, importedMachine) {
+    const cur = state.taskAssign[key]?.machine || importedMachine || null;
+    const next = machine || importedMachine || null;
+    if (cur === next) return;
+    if (!machine || machine === importedMachine) delete state.taskAssign[key];
+    else state.taskAssign[key] = { machine, at: now(), by: me() };
+    logChange(key, "machine", null, cur, next);
+  }
+  function setTaskMachineMany(keys, machine, importedMachine) {
+    for (const key of keys) assignOne(key, machine, importedMachine);
     save();
   }
   function clearTaskEdits(key, sheet = {}) {
@@ -1194,6 +1437,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     };
     if (shiftUpdate) state.shiftUpdate = { ...shiftUpdate, importedAt: report.importedAt };
     save();
+    queueCloudPush({ base: true });
   }
   function snapshot() {
     return {
@@ -1205,6 +1449,8 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       taskNote: state.taskNote,
       taskEdit: state.taskEdit,
       backOrder: state.backOrder,
+      rush: state.rush,
+      taskAssign: state.taskAssign,
       taskHistory: state.taskHistory,
       machineConfig: state.machineConfig,
       shiftLogs: state.shiftLogs,
@@ -1237,6 +1483,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     }
     emit();
     if (fileHandle) queueFileSave();
+    queueCloudPush();
   }
   function loadLocal() {
     try {
@@ -1251,6 +1498,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       console.warn("could not read local data", e);
     }
   }
+  var fileHandle = null;
   function sharedFileName() {
     return fileHandle ? fileHandle.name : null;
   }
@@ -1301,6 +1549,8 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     state.taskNote = mergeRecords(state.taskNote, remote.taskNote);
     state.taskEdit = mergeRecords(state.taskEdit, remote.taskEdit);
     state.backOrder = mergeRecords(state.backOrder, remote.backOrder);
+    state.rush = mergeRecords(state.rush, remote.rush);
+    state.taskAssign = mergeRecords(state.taskAssign, remote.taskAssign);
     const seen = new Set(state.taskHistory.map((h) => h.id));
     for (const h of remote.taskHistory || []) if (!seen.has(h.id)) state.taskHistory.push(h);
     state.taskHistory.sort((a, b) => a.at < b.at ? 1 : -1);
@@ -1384,6 +1634,101 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     await w.write(JSON.stringify(snapshot()));
     await w.close();
   }
+  var CLOUD_BASE_KEYS = ["tasks", "machineMeta", "shiftUpdate"];
+  function cloudDoc(part) {
+    const snap = snapshot();
+    const pick = (keys) => Object.fromEntries(keys.map((k) => [k, snap[k]]));
+    if (part === "base") return pick(["v", ...CLOUD_BASE_KEYS]);
+    return pick(Object.keys(snap).filter((k) => !CLOUD_BASE_KEYS.includes(k)));
+  }
+  var cloudTimer = null;
+  var cloudPoll = null;
+  var cloudBusy = false;
+  var cloudState = { on: false, at: null, error: null, pushing: false };
+  function cloudStatus() {
+    return { ...cloudState, on: cloudEnabled(), where: cloudHost() };
+  }
+  function setCloudState(patch) {
+    cloudState = { ...cloudState, ...patch };
+    emit();
+  }
+  async function pullCloud({ parts = CLOUD_PARTS } = {}) {
+    if (!cloudEnabled() || cloudBusy) return false;
+    cloudBusy = true;
+    try {
+      const remote = await cloudPull(parts);
+      if (remote?.work) mergeSnapshot(remote.work);
+      if (remote?.base) mergeSnapshot(remote.base);
+      localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+      setCloudState({ at: now(), error: null });
+      return true;
+    } catch (e) {
+      setCloudState({ error: e.message });
+      return false;
+    } finally {
+      cloudBusy = false;
+    }
+  }
+  async function pushCloud(withBase) {
+    if (!cloudEnabled()) return;
+    setCloudState({ pushing: true });
+    try {
+      const remote = await cloudPull(withBase ? CLOUD_PARTS : ["work"]);
+      if (remote?.work) mergeSnapshot(remote.work);
+      if (withBase && remote?.base) mergeSnapshot(remote.base);
+      const docs = { work: cloudDoc("work") };
+      if (withBase) docs.base = cloudDoc("base");
+      await cloudPush(docs);
+      localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+      setCloudState({ at: now(), error: null, pushing: false });
+    } catch (e) {
+      setCloudState({ error: e.message, pushing: false });
+    }
+  }
+  var cloudBaseDirty = false;
+  function queueCloudPush({ base = false } = {}) {
+    if (!cloudEnabled()) return;
+    if (base) cloudBaseDirty = true;
+    clearTimeout(cloudTimer);
+    cloudTimer = setTimeout(() => {
+      const withBase = cloudBaseDirty;
+      cloudBaseDirty = false;
+      pushCloud(withBase);
+    }, base ? 400 : 2500);
+  }
+  async function connectCloud(cfg) {
+    if (cfg) {
+      await cloudTest(cfg);
+      setCloudConfig(cfg);
+    }
+    if (!cloudEnabled()) return null;
+    await pullCloud();
+    await pushCloud(true);
+    startCloudPolling();
+    setCloudState({ on: true });
+    return cloudHost();
+  }
+  function disconnectCloud() {
+    setCloudConfig(null);
+    clearInterval(cloudPoll);
+    cloudPoll = null;
+    clearTimeout(cloudTimer);
+    setCloudState({ on: false, at: null, error: null });
+  }
+  function startCloudPolling() {
+    clearInterval(cloudPoll);
+    if (!cloudEnabled()) return;
+    cloudPoll = setInterval(() => {
+      if (document.visibilityState === "visible") pullCloud({ parts: ["work"] });
+    }, 3e4);
+  }
+  async function initCloud() {
+    if (!cloudEnabled()) return null;
+    setCloudState({ on: true });
+    await pullCloud();
+    startCloudPolling();
+    return cloudHost();
+  }
   function queueFileSave() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
@@ -1406,76 +1751,11 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   function resetAll() {
     localStorage.removeItem(LS_KEY);
   }
-  var LS_KEY, IDB_NAME, IDB_STORE, RETIRED_KEYS, state, saveTimer, listeners, HISTORY_CAP, EDITABLE_FIELDS, BACKORDER_FIELDS, fileHandle;
-  var init_store = __esm({
-    "js/store.js"() {
-      LS_KEY = "bv.cutting.v1";
-      IDB_NAME = "bv-cutting";
-      IDB_STORE = "handles";
-      RETIRED_KEYS = [
-        "meta",
-        "orders",
-        "wip",
-        "prep",
-        "screens",
-        "progress",
-        "material",
-        "history",
-        "manualOrders",
-        "plan",
-        "guide",
-        "audit",
-        "lastImportReport"
-      ];
-      state = {
-        tasks: [],
-        // machine-schedule rows: the base for scheduling
-        machineMeta: {},
-        // kind -> { fileName, importedAt, count }
-        taskStatus: {},
-        // `${machine}|${wo}|${die}` -> { status, at, by }
-        shiftUpdate: null,
-        // latest Shift Update sheet: { date, shift, machines }
-        taskNote: {},
-        // `${machine}|${wo}|${die}` -> { text, at, by }
-        taskEdit: {},
-        // same key -> { fields: {...}, at, by } — corrections to the sheet
-        backOrder: {},
-        // same key -> { flagged, qty, assignee, note, at, by }
-        taskHistory: [],
-        // every change to a line, newest first
-        machineConfig: {},
-        // machineKey -> { label, note, ops, hidden }
-        shiftLogs: {},
-        // `${date}|${shift}` -> { date, shift, rows, notes, at, by }
-        people: [],
-        settings: { me: null }
-      };
-      saveTimer = null;
-      listeners = /* @__PURE__ */ new Set();
-      HISTORY_CAP = 4e3;
-      EDITABLE_FIELDS = [
-        { key: "project", label: "Project", type: "text" },
-        { key: "floor", label: "Floor / Tag", type: "text" },
-        { key: "die", label: "Die", type: "text" },
-        { key: "qty", label: "Qty", type: "number" },
-        { key: "cuttingDate", label: "Cutting date", type: "date" }
-      ];
-      BACKORDER_FIELDS = ["flagged", "qty", "assignee", "note"];
-      fileHandle = null;
-    }
-  });
-
-  // js/app.js
-  init_ui();
-  init_store();
 
   // js/views/centre.js
   init_ui();
-  init_store();
 
   // js/model.js
-  init_store();
   function today() {
     return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   }
@@ -1525,8 +1805,17 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   function hasTasks() {
     return tasksInScope().length > 0;
   }
+  function assignedMachine(task) {
+    return state.taskAssign?.[taskStatusKey(task)]?.machine || task.machine;
+  }
+  function isAssigned(task) {
+    return !!state.taskAssign?.[taskStatusKey(task)]?.machine;
+  }
   function tasksForMachine(machineKey) {
-    return tasksInScope().filter((t) => t.machine === machineKey).map((t) => resolveTask(t)).map((task) => ({ task, status: effectiveTaskStatus(task) })).sort((a, b) => (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1);
+    return tasksInScope().filter((t) => assignedMachine(t) === machineKey).map((t) => resolveTask(t)).map((task) => ({ task, status: effectiveTaskStatus(task), rush: resolveRush(task) })).sort((a, b) => {
+      if (a.rush.on !== b.rush.on) return a.rush.on ? -1 : 1;
+      return (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1;
+    });
   }
   function openCountFor(machineKey) {
     return tasksForMachine(machineKey).filter((r) => r.status.key !== "DONE").length;
@@ -1550,6 +1839,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     const rows = tasksForMachine(machineKey).filter((r) => showDone || r.status.key !== "DONE").filter((r) => {
       if (filter === "ALL") return true;
       if (filter === "BO") return resolveBackOrder(r.task).on;
+      if (filter === "RUSH") return r.rush.on;
       return r.status.key === filter;
     }).filter((r) => {
       if (!term) return true;
@@ -1570,8 +1860,38 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       inProgress: open.filter((r) => r.status.key === "IN_PROGRESS").length,
       overdue: open.filter((r) => dateGroupOf(r.task, ref) === "OVERDUE").length,
       backOrder: open.filter((r) => resolveBackOrder(r.task).on).length,
+      rush: open.filter((r) => r.rush.on).length,
       done: all.length - open.length
     };
+  }
+  function rushFor(key) {
+    return state.rush?.[key] || null;
+  }
+  function resolveRush(task, ref = today()) {
+    const rec = rushFor(taskStatusKey(task));
+    if (!rec?.on) return { on: false };
+    const needBy = rec.needBy || null;
+    return {
+      on: true,
+      needBy,
+      late: !!needBy && needBy < ref,
+      soon: !!needBy && needBy >= ref && needBy <= addDays(ref, 2),
+      assignee: rec.assignee || null,
+      reason: rec.reason || null,
+      at: rec.at || null,
+      by: rec.by || null
+    };
+  }
+  function allRush(ref = today()) {
+    const rows = [];
+    for (const t of tasksInScope()) {
+      const task = resolveTask(t);
+      const rush = resolveRush(task, ref);
+      if (!rush.on) continue;
+      if (effectiveTaskStatus(task).key === "DONE") continue;
+      rows.push({ task, rush, machine: assignedMachine(task) });
+    }
+    return rows.sort((a, b) => (a.rush.needBy || a.task.cuttingDate || "9999") < (b.rush.needBy || b.task.cuttingDate || "9999") ? -1 : 1);
   }
   function backOrderFor(key) {
     return state.backOrder?.[key] || null;
@@ -1602,7 +1922,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       const bo = resolveBackOrder(task);
       if (!bo.on) continue;
       if (effectiveTaskStatus(task).key === "DONE") continue;
-      rows.push({ task, bo, machine: task.machine });
+      rows.push({ task, bo, machine: assignedMachine(task) });
     }
     const groups = /* @__PURE__ */ new Map();
     for (const r of rows) {
@@ -1638,7 +1958,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     if (!su?.machines) return null;
     const entry = su.machines[machineKey];
     if (!entry) return null;
-    return { ...entry, date: su.date, shift: su.shift };
+    return { date: su.date, shift: su.shift, ...entry };
   }
   function shiftWindow(date2, shift) {
     const mk = (d, h) => {
@@ -1663,13 +1983,12 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       if (h.kind !== "status") continue;
       const t = Date.parse(h.at);
       if (!(t >= from && t < to)) continue;
-      if (!h.key.startsWith(machineKey + "|")) continue;
       if (!seen.has(h.key)) seen.set(h.key, h);
     }
     const out = [];
     for (const [key, h] of seen) {
       const task = taskByKey(key);
-      if (!task) continue;
+      if (!task || assignedMachine(task) !== machineKey) continue;
       out.push({ task, to: h.to, by: h.by, at: h.at });
     }
     return out.sort((a, b) => a.at < b.at ? -1 : 1);
@@ -1677,7 +1996,6 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
 
   // js/views/backorders.js
   init_ui();
-  init_store();
 
   // js/machines.js
   var MACHINES = [
@@ -1686,14 +2004,22 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     { key: "fom1", label: "FOM 1", group: "FOM", ops: 1, note: "8900 + Screen" },
     { key: "fom2", label: "FOM 2", group: "FOM", ops: 1, note: "Widths" },
     { key: "fom3", label: "FOM 3", group: "FOM", ops: 1, note: "Vent + Widths" },
+    /* CNC & FMC. The workbook's `CNC & FMC` sheet is one flat list with no
+       machine column — there is no per-machine CNC schedule anywhere in it — so
+       everything it imports lands in this shared queue and is put on a machine
+       by hand. `queue: true` marks it as the holding pen rather than a machine
+       anyone stands at, so it is skipped on the shift update and in targets. */
+    {
+      key: "cncfmc",
+      label: "Unassigned",
+      group: "CNC",
+      queue: true,
+      note: "straight off the CNC & FMC sheet"
+    },
     { key: "cnc1", label: "CNC 1", group: "CNC", ops: 1 },
-    { key: "cnc2", label: "CNC 2", group: "CNC", ops: 1 },
-    { key: "cnc3", label: "CNC 3", group: "CNC", ops: 1 },
-    { key: "cnc140", label: "CNC 140", group: "CNC", ops: 1 },
-    { key: "elu1", label: "Elumatec Saw #1", group: "Saw", ops: 1 },
-    { key: "elu2", label: "Elumatec Saw #2", group: "Saw", ops: 2 },
-    { key: "multipunch", label: "Multi Punch", group: "Punch", ops: 1, note: "pcs not frames" },
-    { key: "prep", label: "Prep", group: "Prep", ops: null, note: "BD Prep" }
+    { key: "fmc1", label: "FMC 1", group: "CNC", ops: 1 },
+    { key: "fmc2", label: "FMC 2", group: "CNC", ops: 1 },
+    { key: "multipunch", label: "Multi Punch", group: "Punch", ops: 1, note: "pcs not frames" }
   ];
   var STANDING_ROWS = [
     { key: "service", label: "Service Orders" },
@@ -1703,7 +2029,12 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   var MACHINE_BY_KEY = Object.fromEntries(
     [...MACHINES, ...STANDING_ROWS].map((m) => [m.key, m])
   );
-  var SHIFT_ROWS = [...STANDING_ROWS, ...MACHINES];
+  function assignableIn(group) {
+    return MACHINES.filter((m) => m.group === group && !m.queue);
+  }
+  function hasQueue(group) {
+    return MACHINES.some((m) => m.group === group && m.queue);
+  }
   function machinesByGroup() {
     const groups = /* @__PURE__ */ new Map();
     for (const m of MACHINES) {
@@ -1714,6 +2045,10 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   }
 
   // js/views/backorders.js
+  function machineLabel(key) {
+    const m = MACHINE_BY_KEY[key];
+    return m ? machineConfig(m).label : key;
+  }
   var TYPE_A_NAME = "__type__";
   function backOrderDialog(task, rerender) {
     const key = taskStatusKey(task);
@@ -1945,7 +2280,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
           el("span.spacer"),
           short ? el("span.small.muted", {}, `${fmtNum(short)} pcs short`) : null
         ),
-        el("div.dgroup-body", {}, ...g.rows.map(({ task, bo }) => el(
+        el("div.dgroup-body", {}, ...g.rows.map(({ task, bo, machine }) => el(
           "div.line.bo-line",
           {
             style: { cursor: "pointer" },
@@ -1959,7 +2294,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
               {},
               el("span.mono.strong", {}, task.wo),
               task.die ? el("span.die", {}, task.die) : null,
-              chip(MACHINE_BY_KEY[task.machine]?.label || task.machine, "mute")
+              chip(machineLabel(machine), "mute")
             ),
             el(
               "div.line-where",
@@ -1984,6 +2319,321 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         )))
       );
     });
+    return el("div.centre", {}, head, ...sections2);
+  }
+
+  // js/views/rush.js
+  init_ui();
+  function machineLabel2(key) {
+    const m = MACHINE_BY_KEY[key];
+    return m ? machineConfig(m).label : key;
+  }
+  var TYPE_A_NAME2 = "__type__";
+  function rushDialog(task, rerender) {
+    const key = taskStatusKey(task);
+    const cur = rushFor(key) || {};
+    const resolved = resolveRush(task);
+    const flag = el("input", { type: "checkbox", checked: resolved.on, style: { width: "auto" } });
+    const needBy = el("input", { type: "date", value: cur.needBy || "" });
+    const quick = (label, iso) => el("button.linkbtn", {
+      type: "button",
+      onclick: () => {
+        needBy.value = iso;
+        flag.checked = true;
+      }
+    }, label);
+    const people = state.people || [];
+    const known = cur.assignee && !people.includes(cur.assignee) ? [cur.assignee] : [];
+    const nameInput = el("input", {
+      value: cur.assignee || "",
+      placeholder: "Name",
+      style: { display: "none", marginTop: "8px" }
+    });
+    const who = el(
+      "select",
+      {
+        onchange: (e) => {
+          const typing = e.target.value === TYPE_A_NAME2;
+          nameInput.style.display = typing ? "" : "none";
+          if (typing) nameInput.focus();
+        }
+      },
+      el("option", { value: "", selected: !cur.assignee }, "Nobody in particular"),
+      ...[...people, ...known].map((p) => el("option", {
+        value: p,
+        selected: cur.assignee === p
+      }, p)),
+      el("option", { value: TYPE_A_NAME2 }, "\u2014 type a name \u2014")
+    );
+    const reason = el("textarea", {
+      value: cur.reason || "",
+      placeholder: "Shipping gate Friday, site is waiting, remake for a broken piece\u2026",
+      style: { minHeight: "84px" }
+    });
+    const body = el(
+      "div",
+      {},
+      el(
+        "div.bo-dialoghead",
+        {},
+        el("span.mono.strong", {}, `W/O ${task.wo}`),
+        task.die ? el("span.die", {}, task.die) : null,
+        el(
+          "span.small.muted",
+          {},
+          `${task.project || ""}${task.floor ? " \xB7 " + task.floor : ""}`.trim()
+        )
+      ),
+      el(
+        "label.row.rush-flagrow",
+        {},
+        flag,
+        el(
+          "span",
+          {},
+          el("strong", {}, "Mark as rush"),
+          el("div.small.muted", {}, "Rush lines sort to the top of the machine's queue.")
+        )
+      ),
+      el(
+        "div.grid",
+        { style: { gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: "12px", marginTop: "14px" } },
+        el(
+          "label.field",
+          {},
+          el(
+            "span",
+            {},
+            "Needed by",
+            task.cuttingDate ? el("em.of-total", {}, `cutting date ${fmtDate(task.cuttingDate)}`) : null
+          ),
+          needBy,
+          el(
+            "div.rush-quick",
+            {},
+            quick("Today", today()),
+            quick("Tomorrow", addDays(today(), 1)),
+            quick("End of week", addDays(today(), 5))
+          )
+        ),
+        el(
+          "label.field",
+          {},
+          el("span", {}, "Tell"),
+          who,
+          nameInput
+        )
+      ),
+      el(
+        "label.field",
+        { style: { marginTop: "12px" } },
+        el("span", {}, "Why it is a rush"),
+        reason
+      ),
+      cur.at ? el(
+        "div.small.muted",
+        { style: { marginTop: "10px" } },
+        `Last updated by ${cur.by} \xB7 ${fmtWhen(cur.at)}`
+      ) : null
+    );
+    modal(`Rush \u2014 ${task.wo}`, body, {
+      actions: [
+        cur.at ? {
+          label: "Clear",
+          class: "danger",
+          onClick: (dlg) => {
+            clearRush(key);
+            dlg.close();
+            toast("Rush cleared");
+            rerender();
+          }
+        } : null,
+        {
+          label: "Save",
+          class: "primary",
+          onClick: (dlg) => {
+            const assignee = who.value === TYPE_A_NAME2 ? nameInput.value : who.value;
+            setRush(key, {
+              on: flag.checked,
+              needBy: needBy.value || null,
+              assignee,
+              reason: reason.value
+            });
+            dlg.close();
+            toast(flag.checked ? "Marked as rush" : "Rush cleared");
+            rerender();
+          }
+        }
+      ].filter(Boolean)
+    });
+  }
+  var BUCKETS = [
+    { key: "LATE", label: "Past its date", tone: "bad" },
+    { key: "TODAY", label: "Today", tone: "bad" },
+    { key: "SOON", label: "Next two days", tone: "warn" },
+    { key: "LATER", label: "Later", tone: "mute" },
+    { key: "NODATE", label: "No date given", tone: "mute" }
+  ];
+  function bucketOf(rush, ref) {
+    if (!rush.needBy) return "NODATE";
+    if (rush.needBy < ref) return "LATE";
+    if (rush.needBy === ref) return "TODAY";
+    return rush.needBy <= addDays(ref, 2) ? "SOON" : "LATER";
+  }
+  var mineOnly2 = false;
+  function renderRush(rerender, go2) {
+    if (!hasTasks()) {
+      return el(
+        "div.panel",
+        {},
+        el(
+          "div.empty",
+          {},
+          el("div.empty-icon", {}, icon("upload", { size: 28 })),
+          el("h3", {}, "No schedule loaded yet"),
+          el("p", {}, "Import the Rolling and CNC workbooks to get started."),
+          el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
+        )
+      );
+    }
+    const ref = today();
+    const all = allRush(ref);
+    const rows = mineOnly2 ? all.filter((r) => r.rush.assignee === me()) : all;
+    const late = all.filter((r) => bucketOf(r.rush, ref) === "LATE").length;
+    const todayN = all.filter((r) => bucketOf(r.rush, ref) === "TODAY").length;
+    const pieces = rows.reduce((a, r) => a + (r.task.qty || 0), 0);
+    const head = el(
+      "div.centre-head",
+      {},
+      el(
+        "div.row.centre-title-row",
+        {},
+        el(
+          "div",
+          {},
+          el("h1.centre-title", {}, "Rush"),
+          el("div.centre-sub", {}, "Lines that jump the queue, across every centre")
+        ),
+        el("span.spacer"),
+        el(
+          "div.centre-stats",
+          {},
+          el(
+            "div.cstat" + (all.length ? ".warn" : ""),
+            {},
+            el("b", {}, fmtNum(all.length)),
+            el("i", {}, "lines")
+          ),
+          el(
+            "div.cstat" + (late ? ".bad" : ""),
+            {},
+            el("b", {}, fmtNum(late)),
+            el("i", {}, "past date")
+          ),
+          el(
+            "div.cstat" + (todayN ? ".bad" : ""),
+            {},
+            el("b", {}, fmtNum(todayN)),
+            el("i", {}, "today")
+          ),
+          el("div.cstat", {}, el("b", {}, fmtNum(pieces)), el("i", {}, "pcs"))
+        )
+      ),
+      el(
+        "div.centre-filters",
+        {},
+        el(
+          "label.row.small.donetoggle",
+          {},
+          el("input", {
+            type: "checkbox",
+            checked: mineOnly2,
+            onchange: (e) => {
+              mineOnly2 = e.target.checked;
+              rerender();
+            }
+          }),
+          `Only mine (${me()})`
+        )
+      )
+    );
+    if (!rows.length) {
+      return el(
+        "div.centre",
+        {},
+        head,
+        el("div.panel", {}, el(
+          "div.empty",
+          {},
+          el("div.empty-icon", {}, icon("check", { size: 28 })),
+          el("h3", {}, mineOnly2 ? "Nothing rushed to you" : "Nothing is rushed"),
+          el("div", {}, mineOnly2 ? "Nobody has put a rush line on you." : "Open any line and use the rush button to put it at the top of its queue.")
+        ))
+      );
+    }
+    const byBucket = new Map(BUCKETS.map((b) => [b.key, []]));
+    for (const r of rows) byBucket.get(bucketOf(r.rush, ref)).push(r);
+    const sections2 = BUCKETS.filter((b) => byBucket.get(b.key).length).map((b) => el(
+      "section.dgroup",
+      {},
+      el(
+        "div.dgroup-head",
+        {},
+        el("span.dgroup-label." + b.tone, {}, b.label),
+        el("span.dgroup-count", {}, String(byBucket.get(b.key).length))
+      ),
+      el("div.dgroup-body", {}, ...byBucket.get(b.key).map(({ task, rush, machine }) => el(
+        "div.line.rush-line",
+        {
+          style: { cursor: "pointer" },
+          onclick: () => rushDialog(task, rerender)
+        },
+        el(
+          "div.line-main",
+          {},
+          el(
+            "div.line-id",
+            {},
+            el("span.mono.strong", {}, task.wo),
+            task.die ? el("span.die", {}, task.die) : null,
+            chip(machineLabel2(machine), "mute")
+          ),
+          el(
+            "div.line-where",
+            {},
+            el("span", {}, task.project || "\u2014"),
+            task.floor ? el("span.muted", {}, " \xB7 " + task.floor) : null
+          ),
+          rush.reason || rush.assignee ? el(
+            "div.line-rushband",
+            {},
+            icon("bolt", { size: 12 }),
+            el(
+              "span",
+              {},
+              rush.assignee ? el("strong", {}, rush.assignee) : null,
+              rush.reason ? el("span", {}, `${rush.assignee ? " \u2014 " : ""}${rush.reason}`) : null
+            )
+          ) : null
+        ),
+        el(
+          "div.line-qty",
+          {},
+          el("span.mono", {}, fmtNum(task.qty)),
+          el("span.small.muted", {}, "pcs")
+        ),
+        el(
+          "div.line-date",
+          {},
+          el(
+            "div.rush-need" + (rush.late || rush.needBy === ref ? ".late" : ""),
+            {},
+            rush.needBy ? fmtDate(rush.needBy) : "\u2014"
+          ),
+          el("div.small.muted", {}, "needed")
+        )
+      )))
+    ));
     return el("div.centre", {}, head, ...sections2);
   }
 
@@ -2081,15 +2731,17 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       }
     );
   }
-  function taskLine(row, vs, rerender) {
+  function taskLine(row, vs, rerender, group) {
     const t = row.task;
     const key = taskStatusKey(t);
     const note = taskNoteFor(key);
     const bo = resolveBackOrder(t);
+    const rush = row.rush || resolveRush(t);
     const sheetNote = t.comments || (bo.on ? null : t.boStat);
     const selected = vs.selected.has(key);
+    const canMove = hasQueue(group);
     const node = el(
-      "div.line" + (selected ? ".sel" : ""),
+      "div.line" + (selected ? ".sel" : "") + (rush.on ? ".rush" : ""),
       {},
       el(
         "label.line-pick",
@@ -2113,6 +2765,14 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
           {},
           el("span.mono.strong", {}, t.wo),
           t.die ? el("span.die" + (t.edited?.die ? ".edited" : ""), {}, t.die) : null,
+          rush.on ? el(
+            "span.badge-rush" + (rush.late || rush.soon ? ".hot" : ""),
+            {
+              title: rush.needBy ? `Rush \u2014 needed by ${fmtDate(rush.needBy)}${rush.late ? " (past)" : ""}` : "Rush"
+            },
+            icon("bolt", { size: 11 }),
+            rush.needBy ? `RUSH ${fmtDate(rush.needBy)}` : "RUSH"
+          ) : null,
           bo.on ? el(
             "span.badge-bo",
             {
@@ -2132,6 +2792,17 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
           t.floor ? el("span.muted", {}, " \xB7 " + t.floor) : null
         ),
         sheetNote ? el("div.small.muted.line-note", {}, sheetNote) : null,
+        rush.on && (rush.assignee || rush.reason) ? el(
+          "div.line-rushband",
+          {},
+          icon("bolt", { size: 12 }),
+          el(
+            "span",
+            {},
+            rush.assignee ? el("strong", {}, rush.assignee) : null,
+            rush.reason ? el("span", {}, `${rush.assignee ? " \u2014 " : ""}${rush.reason}`) : null
+          )
+        ) : null,
         bo.on && (bo.assignee || bo.note || bo.qty != null || bo.sheetShort) ? el(
           "div.line-boband",
           {},
@@ -2162,6 +2833,14 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       el(
         "div.line-tools",
         {},
+        canMove ? el("button.line-iconbtn" + (isAssigned(t) ? ".moved" : ""), {
+          title: "Put this line on a machine",
+          onclick: () => moveDialog([key], group, rerender)
+        }, icon("arrow", { size: 15 })) : null,
+        el("button.line-iconbtn" + (rush.on ? ".rush" : ""), {
+          title: rush.on ? "Edit the rush" : "Mark as rush",
+          onclick: () => rushDialog(t, rerender)
+        }, icon("bolt", { size: 15 })),
         el("button.line-iconbtn" + (note ? ".has" : ""), {
           title: note ? "Edit note" : "Add a note",
           onclick: () => noteEditor(row, rerender)
@@ -2178,6 +2857,44 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       el("div.line-status", {}, statusControl(row, vs, rerender))
     );
     return node;
+  }
+  function moveDialog(keys, group, rerender) {
+    const targets = assignableIn(group).map(machineConfig);
+    const first = taskByKey(keys[0]);
+    const imported = first?.machine || null;
+    const cur = keys.length === 1 && first ? state.taskAssign?.[keys[0]]?.machine || imported : null;
+    const title = keys.length === 1 ? `Put W/O ${first?.wo ?? ""} on a machine` : `Put ${keys.length} lines on a machine`;
+    const go2 = (dlg, machine) => {
+      setTaskMachineMany(keys, machine, imported);
+      dlg.close();
+      toast(machine ? `Moved to ${targets.find((m) => m.key === machine)?.label || machine}` : "Back in the queue");
+      rerender();
+    };
+    const body = el(
+      "div",
+      {},
+      el(
+        "p.small.muted",
+        { style: { marginTop: 0 } },
+        "The workbook does not say which machine these run on \u2014 that is decided here. Moving a line keeps its status, note, history and back order."
+      ),
+      el("div.movegrid", {}, ...targets.map((m) => el(
+        "button.movebtn" + (m.key === cur ? ".on" : ""),
+        {
+          onclick: (e) => go2(e.target.closest("dialog"), m.key)
+        },
+        el("strong", {}, m.label),
+        m.note ? el("span.small.muted", {}, m.note) : null
+      ))),
+      imported && cur !== imported ? el(
+        "div",
+        { style: { marginTop: "12px" } },
+        el("button.ghost", {
+          onclick: (e) => go2(e.target.closest("dialog"), null)
+        }, icon("undo", { size: 13 }), " Send back to the unassigned queue")
+      ) : null
+    );
+    modal(title, body, {});
   }
   var HISTORY_LABEL = { status: "Status", note: "Note", field: "Edited", undo: "Undone" };
   function historyList(key) {
@@ -2295,7 +3012,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       ].filter(Boolean)
     });
   }
-  function dateGroup(group, vs, rerender) {
+  function dateGroup(group, vs, rerender, centre) {
     const isOpen = vs.open[group.key] ?? group.open;
     const expanded = vs.expanded[group.key];
     const cap = group.cap && !expanded ? group.cap : Infinity;
@@ -2334,7 +3051,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       isOpen ? el(
         "div.dgroup-body",
         {},
-        ...shown.map((r) => taskLine(r, vs, rerender)),
+        ...shown.map((r) => taskLine(r, vs, rerender, centre)),
         hidden > 0 ? el("button.sm.showmore", {
           onclick: () => {
             vs.expanded[group.key] = true;
@@ -2434,7 +3151,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       }
     );
   }
-  function bulkBar(vs, rerender) {
+  function bulkBar(vs, rerender, group) {
     const keys = Array.from(vs.selected);
     if (!keys.length) return null;
     const apply2 = (statusKey) => {
@@ -2447,6 +3164,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       });
       rerender();
     };
+    const canMove = hasQueue(group);
     return el(
       "div.bulkbar",
       { role: "status" },
@@ -2455,6 +3173,12 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       ...TRACK_STATUS_ORDER.map((k) => el("button.bulk-btn", {
         onclick: () => apply2(k)
       }, icon(STATUS_ICON[k], { size: 14 }), TRACK_STATUS[k].label)),
+      canMove ? el("button.bulk-btn", {
+        onclick: () => moveDialog(keys, group, () => {
+          vs.selected.clear();
+          rerender();
+        })
+      }, icon("arrow", { size: 14 }), "Move to") : null,
       el("button.bulk-x", {
         title: "Clear selection",
         onclick: () => {
@@ -2468,6 +3192,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
     { key: "ALL", label: "All" },
     { key: "NOT_STARTED", label: "Not started" },
     { key: "IN_PROGRESS", label: "Running" },
+    { key: "RUSH", label: "Rush" },
     { key: "BO", label: "Back order" }
   ];
   function makeCentreView(group) {
@@ -2550,6 +3275,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
             {},
             stat(sum.open, "open"),
             stat(sum.inProgress, "running", "work"),
+            stat(sum.rush, "rush", "warn"),
             stat(sum.overdue, "overdue", "bad"),
             stat(sum.backOrder, "B/O", "bad")
           )
@@ -2604,7 +3330,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
           )
         )
       );
-      const body = groups.length ? el("div", {}, ...groups.map((g) => dateGroup(g, vs, rerender))) : el("div.panel", {}, el(
+      const body = groups.length ? el("div", {}, ...groups.map((g) => dateGroup(g, vs, rerender, group))) : el("div.panel", {}, el(
         "div.empty",
         {},
         el("div.empty-icon", {}, icon("check", { size: 28 })),
@@ -2617,14 +3343,13 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
         head,
         shiftUpdatePanel(machine.key),
         body,
-        bulkBar(vs, rerender)
+        bulkBar(vs, rerender, group)
       );
     };
   }
 
   // js/views/shiftupdate.js
   init_ui();
-  init_store();
 
   // js/shifts.js
   var SHIFTS = {
@@ -2644,7 +3369,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
   var CENTRES = [
     ["Rolling", "Rolling"],
     ["FOM", "FOM"],
-    ["CNC", "CNC"],
+    ["CNC", "CNC & FMC"],
     ["Punch", "Multi Punch"]
   ];
   var FIELDS = [
@@ -2692,7 +3417,7 @@ dialog footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); disp
       rows: STANDING_ROWS.map((r) => ({ ...r, standing: true }))
     }];
     for (const [group, label] of CENTRES) {
-      const rows = (byGroup.get(group) || []).map(machineConfig).filter((m) => !m.hidden);
+      const rows = (byGroup.get(group) || []).filter((m) => !m.queue).map(machineConfig).filter((m) => !m.hidden);
       if (rows.length) out.push({ label, rows });
     }
     return out;
@@ -3116,7 +3841,6 @@ ${add.join("\n")}` : add.join("\n");
 
   // js/views/data.js
   init_ui();
-  init_store();
 
   // js/xlsx.js
   var SIG_EOCD = 101010256;
@@ -3299,7 +4023,8 @@ ${add.join("\n")}` : add.join("\n");
       target = target.replace(/^\/xl\//, "").replace(/^\//, "");
       targets.set(name, target.startsWith("xl/") ? target : "xl/" + target);
     }
-    const wanted = only ? sheetNames.filter((n) => only.includes(n)) : sheetNames;
+    const keep = typeof only === "function" ? only : (n) => only.includes(n);
+    const wanted = only ? sheetNames.filter(keep) : sheetNames;
     const sheets = {};
     for (const name of wanted) {
       const xml = await readFile(zip, targets.get(name));
@@ -3470,8 +4195,10 @@ ${add.join("\n")}` : add.join("\n");
         }
       },
       {
+        // No machine column on this sheet — it is one queue for CNC 1, FMC 1 and
+        // FMC 2, split by hand in the app rather than guessed at here.
         sheet: "CNC & FMC",
-        machine: "cnc1",
+        machine: "cncfmc",
         cols: {
           wo: 1,
           project: 2,
@@ -3531,6 +4258,7 @@ ${add.join("\n")}` : add.join("\n");
     return out;
   }
   var SU_SHEET = "Shift Update";
+  var SU_SHEET_RE = /^shift update/i;
   var SU_MACHINE = {
     "ROLLINGETASAUTO": "roll-auto",
     "ROLLINGIOTAMANUAL": "roll-man",
@@ -3538,38 +4266,56 @@ ${add.join("\n")}` : add.join("\n");
     "FOM2": "fom2",
     "FOM3": "fom3",
     "CNC1": "cnc1",
-    "CNC2": "cnc2",
-    "CNC3": "cnc3",
-    "CNCSBZ140": "cnc140",
+    "FMC1": "fmc1",
+    "FMC2": "fmc2",
     "MULTIPUNCH": "multipunch"
   };
+  var SU_SKIP = /* @__PURE__ */ new Set(["MACHINE", "DATE", "TOTAL", "SERVICEORDERS", "K1285PULLS", "BACKORDER"]);
+  var SU_SHIFT_RANK = { DAY: 0, AFTERNOON: 1, AFT: 1, MIDNIGHT: 2, NIGHT: 2 };
   function suKey(label) {
     return String(label || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   }
-  function parseShiftUpdateBlock(rows, off) {
+  function suWhen(date2, shift) {
+    if (!date2) return "";
+    const rank = SU_SHIFT_RANK[suKey(shift)] ?? 0;
+    return `${date2}#${rank}`;
+  }
+  function suBlockStarts(rows, off) {
+    const starts = [];
+    rows.forEach((row, i) => {
+      if (/^date$/i.test(txt(row.cells[off]) || "")) starts.push(i);
+    });
+    if (!starts.length) starts.push(1);
+    return starts;
+  }
+  function parseShiftUpdateBlock(rows, off, from, to, unknown) {
     const g = (row, col) => row.cells[off + col - 1];
-    const header2 = rows[1];
-    const date2 = header2 ? date_(g(header2, 2)) : null;
+    const header2 = rows[from];
+    const blockDate = header2 ? date(g(header2, 2)) : null;
     const shift = header2 ? txt(g(header2, 6)) : null;
     const out = {};
     let cur = null;
-    for (const row of rows.slice(3)) {
+    for (const row of rows.slice(from + 2, to)) {
       const name = txt(g(row, 1));
       if (name) {
-        const key = SU_MACHINE[suKey(name)];
+        const k = suKey(name);
+        const key = SU_MACHINE[k];
         cur = key || null;
+        if (!key && k && !SU_SKIP.has(k)) unknown.add(name.trim());
         if (cur && !out[cur]) {
           const opsRaw = g(row, 2);
           const opsTxt = txt(opsRaw);
           out[cur] = {
             machine: cur,
-            label: name,
+            label: name.trim(),
             // "#Ops" is normally a headcount but is sometimes the word DOWN.
             ops: typeof opsRaw === "number" ? opsRaw : null,
             down: /DOWN/i.test(opsTxt || ""),
             done: [],
             next: [],
-            notes: []
+            notes: [],
+            date: blockDate,
+            shift
           };
         }
       }
@@ -3582,24 +4328,45 @@ ${add.join("\n")}` : add.join("\n");
       if (note) out[cur].notes.push(note);
       if (d && /^down$/i.test(d)) out[cur].down = true;
     }
-    return { date: date2, shift, machines: out };
+    return { date: blockDate, shift, machines: out };
   }
-  function date_(v) {
-    return date(v);
-  }
-  function parseShiftUpdate(sheet) {
-    if (!sheet) return null;
-    const left = parseShiftUpdateBlock(sheet.rows, 0);
-    const right = parseShiftUpdateBlock(sheet.rows, 8);
-    const weight = (e) => e ? e.done.length + e.next.length + (e.ops ? 1 : 0) : -1;
-    const machines = { ...left.machines };
-    for (const [k, e] of Object.entries(right.machines)) {
-      if (weight(e) > weight(machines[k])) machines[k] = e;
+  function parseShiftUpdateSheet(sheet, unknown) {
+    const blocks = [];
+    for (const off of [0, 8]) {
+      const starts = suBlockStarts(sheet.rows, off);
+      starts.forEach((from, i) => {
+        const to = i + 1 < starts.length ? starts[i + 1] : sheet.rows.length;
+        blocks.push(parseShiftUpdateBlock(sheet.rows, off, from, to, unknown));
+      });
     }
+    return blocks;
+  }
+  function parseShiftUpdate(sheets) {
+    const list = Object.values(sheets || {}).filter(Boolean);
+    if (!list.length) return null;
+    const unknown = /* @__PURE__ */ new Set();
+    const blocks = list.flatMap((s) => parseShiftUpdateSheet(s, unknown));
+    const said = (e) => e ? e.done.length + e.next.length + (e.ops ? 1 : 0) : -1;
+    const machines = {};
+    for (const b of blocks) {
+      for (const [k, e] of Object.entries(b.machines)) {
+        const cur = machines[k];
+        if (!cur) {
+          machines[k] = e;
+          continue;
+        }
+        const a = suWhen(e.date, e.shift);
+        const c = suWhen(cur.date, cur.shift);
+        if (a > c || a === c && said(e) > said(cur)) machines[k] = e;
+      }
+    }
+    const newest = Object.values(machines).map((e) => suWhen(e.date, e.shift)).filter(Boolean).sort().pop();
+    const latest = Object.values(machines).find((e) => suWhen(e.date, e.shift) === newest);
     return {
-      date: left.date || right.date,
-      shift: left.shift || right.shift,
-      machines
+      date: latest?.date || null,
+      shift: latest?.shift || null,
+      machines,
+      unknown: [...unknown].sort()
     };
   }
   async function importMachineWorkbook(arrayBuffer, { kind, fileName = "schedule.xlsx" } = {}) {
@@ -3607,8 +4374,9 @@ ${add.join("\n")}` : add.join("\n");
     if (!specs) throw new Error(`Unknown workbook type "${kind}".`);
     const report = { kind, fileName, importedAt: (/* @__PURE__ */ new Date()).toISOString(), sheets: [], missing: [] };
     const wanted = specs.map((s) => s.sheet);
-    if (kind === "cnc") wanted.push(SU_SHEET);
-    const wb = await readXlsx(arrayBuffer, { only: wanted });
+    const wb = await readXlsx(arrayBuffer, {
+      only: (n) => wanted.includes(n) || kind === "cnc" && SU_SHEET_RE.test(n)
+    });
     let tasks = [];
     for (const spec of specs) {
       const sheet = wb.sheets[spec.sheet];
@@ -3620,12 +4388,19 @@ ${add.join("\n")}` : add.join("\n");
     }
     let shiftUpdate = null;
     if (kind === "cnc") {
-      shiftUpdate = parseShiftUpdate(wb.sheets[SU_SHEET]);
+      const suSheets = Object.fromEntries(
+        Object.entries(wb.sheets).filter(([n]) => SU_SHEET_RE.test(n))
+      );
+      shiftUpdate = parseShiftUpdate(suSheets);
       if (!shiftUpdate) report.missing.push(SU_SHEET);
       else report.shiftUpdate = {
         date: shiftUpdate.date,
         shift: shiftUpdate.shift,
-        machines: Object.keys(shiftUpdate.machines).length
+        sheets: Object.keys(suSheets),
+        machines: Object.keys(shiftUpdate.machines).length,
+        // Machine names on the sheet the app has no work centre for. Worth
+        // showing: it is how the department finds out the app is behind the floor.
+        unknown: shiftUpdate.unknown
       };
     }
     if (!tasks.length) {
@@ -3734,6 +4509,193 @@ ${add.join("\n")}` : add.join("\n");
       if (f) onFile(f);
     });
     return zone;
+  }
+  var SETUP_SQL = `create table if not exists tracker_state (
+  site text not null,
+  part text not null,
+  data jsonb not null,
+  updated_at timestamptz not null default now(),
+  primary key (site, part)
+);
+alter table tracker_state enable row level security;
+create policy "tracker read"   on tracker_state for select using (true);
+create policy "tracker insert" on tracker_state for insert with check (true);
+create policy "tracker update" on tracker_state for update using (true) with check (true);`;
+  function sqlDialog() {
+    const box = el("textarea", {
+      value: SETUP_SQL,
+      readonly: true,
+      style: { minHeight: "260px", fontFamily: "var(--mono)", fontSize: "12px" }
+    });
+    modal(
+      "Run this once in Supabase",
+      el(
+        "div",
+        {},
+        el(
+          "p.small.muted",
+          { style: { marginTop: 0 } },
+          "Supabase \u2192 SQL Editor \u2192 New query \u2192 paste \u2192 Run. It makes the one table the tracker syncs through."
+        ),
+        box,
+        el(
+          "div.banner.warn",
+          { style: { marginTop: "12px" } },
+          el(
+            "div",
+            {},
+            el("strong", {}, "Anyone with the address and the key can read and write this data. "),
+            "There is no login. Keep the key to the department, the same way the network share is kept to the department."
+          )
+        )
+      ),
+      {
+        wide: true,
+        actions: [{
+          label: "Copy SQL",
+          class: "primary",
+          onClick: async () => {
+            try {
+              await navigator.clipboard.writeText(SETUP_SQL);
+              toast("SQL copied");
+            } catch {
+              box.select();
+              toast("Select and copy the text");
+            }
+          }
+        }]
+      }
+    );
+  }
+  function cloudSection(rerender) {
+    const st = cloudStatus();
+    const cfg = cloudConfig();
+    const body = el("div.body", {});
+    if (st.on) {
+      body.append(
+        el(
+          "div.banner" + (st.error ? ".bad" : ".ok"),
+          { style: { marginBottom: "12px" } },
+          el(
+            "div",
+            {},
+            el("strong", {}, st.error ? "Sync problem: " : "Syncing: "),
+            st.error || st.where,
+            el(
+              "div.small",
+              { style: { marginTop: "4px" } },
+              st.error ? "Your work is still saved on this device and will go up once this is fixed." : `Open the same address on your phone and sign in as yourself.${st.at ? ` Last synced ${fmtWhen(st.at)}.` : ""}`
+            )
+          )
+        ),
+        el(
+          "div.row",
+          {},
+          el("button", {
+            onclick: async () => {
+              await pullCloud();
+              toast("Refreshed");
+              rerender();
+            }
+          }, icon("cloud", { size: 14 }), " Refresh now"),
+          el("button", { onclick: sqlDialog }, "Show setup SQL"),
+          el("button.ghost", {
+            onclick: async () => {
+              const ok = await confirmDialog(
+                "Stop syncing this device?",
+                "Work already sent stays in the cloud. This device keeps its own copy and stops sending updates.",
+                { confirmLabel: "Stop syncing" }
+              );
+              if (!ok) return;
+              disconnectCloud();
+              toast("Sync off");
+              rerender();
+            }
+          }, "Stop syncing")
+        )
+      );
+      return el("div.panel", {}, el("header", {}, "Sync across devices"), body);
+    }
+    const url = el("input", {
+      value: cfg?.url || "",
+      placeholder: "https://xxxxxxxx.supabase.co",
+      autocapitalize: "off",
+      spellcheck: false
+    });
+    const key = el("input", {
+      value: cfg?.key || "",
+      placeholder: "anon public key",
+      autocapitalize: "off",
+      spellcheck: false
+    });
+    const site = el("input", { value: cfg?.site || "cutting", placeholder: "cutting" });
+    body.append(
+      el(
+        "p.small.muted",
+        { style: { marginTop: 0 } },
+        "Connect this device to a free Supabase project and the tracker works on phones too \u2014 statuses, notes, rush, back orders and shift updates all merge line by line, exactly as they do through the shared file."
+      ),
+      el(
+        "ol.small.muted.cloud-steps",
+        {},
+        el("li", {}, "Make a free project at supabase.com."),
+        el(
+          "li",
+          {},
+          "Run the setup SQL once \u2014 ",
+          el("button.linkbtn", { onclick: sqlDialog }, "show it"),
+          "."
+        ),
+        el("li", {}, "Copy the Project URL and the anon public key from Settings \u2192 API, and paste them here."),
+        el("li", {}, "Do the same on every phone and PC, with the same site name.")
+      ),
+      el(
+        "div.grid",
+        { style: { gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: "12px", marginTop: "14px" } },
+        el("label.field", {}, el("span", {}, "Project URL"), url),
+        el("label.field", {}, el("span", {}, "Anon public key"), key),
+        el("label.field", {}, el(
+          "span",
+          {},
+          "Site name",
+          el("em.of-total", {}, "same on every device")
+        ), site)
+      ),
+      el(
+        "div.row",
+        { style: { marginTop: "14px" } },
+        el("button.primary", {
+          onclick: async (e) => {
+            const btn = e.target;
+            btn.disabled = true;
+            btn.textContent = "Checking\u2026";
+            try {
+              const where = await connectCloud({
+                url: url.value,
+                key: key.value,
+                site: site.value
+              });
+              toast(`Syncing with ${where}`);
+              rerender();
+            } catch (err) {
+              btn.disabled = false;
+              btn.textContent = "Connect";
+              modal("Could not connect", el(
+                "div",
+                {},
+                el("p", {}, err.message),
+                el(
+                  "p.small.muted",
+                  {},
+                  "Nothing was changed. Your data is still on this device."
+                )
+              ));
+            }
+          }
+        }, "Connect")
+      )
+    );
+    return el("div.panel", {}, el("header", {}, "Sync across devices"), body);
   }
   function renderData(rerender) {
     const mm = state.machineMeta || {};
@@ -3890,6 +4852,7 @@ ${add.join("\n")}` : add.join("\n");
       );
     }
     const sharedPanel = el("div.panel", {}, el("header", {}, "Shared file"), sharedBody);
+    const cloudPanel = cloudSection(rerender);
     const backupPanel = el(
       "div.panel",
       {},
@@ -3992,7 +4955,7 @@ ${add.join("\n")}` : add.join("\n");
       el(
         "div.grid.two",
         { style: { marginTop: "16px" } },
-        el("div", {}, sharedPanel),
+        el("div", {}, cloudPanel, sharedPanel),
         el("div", {}, backupPanel, peoplePanel)
       )
     );
@@ -4002,8 +4965,9 @@ ${add.join("\n")}` : add.join("\n");
   var TABS = [
     { key: "rolling", label: "Rolling", render: makeCentreView("Rolling") },
     { key: "fom", label: "FOM", render: makeCentreView("FOM") },
-    { key: "cnc", label: "CNC", render: makeCentreView("CNC") },
+    { key: "cnc", label: "CNC & FMC", render: makeCentreView("CNC") },
     { key: "punch", label: "Multi Punch", render: makeCentreView("Punch") },
+    { key: "rush", label: "Rush", render: renderRush },
     { key: "backorders", label: "Back Orders", render: renderBackOrders },
     { key: "shift", label: "Shift Update", render: renderShiftUpdate },
     { key: "setup", label: "Setup", render: renderData }
@@ -4064,10 +5028,10 @@ ${add.join("\n")}` : add.join("\n");
         { title: "Current shift" },
         shift.label + (shift.full ? "" : ` \xB7 ${shift.crew} crew`)
       ),
-      shared ? chip("shared file", "ok", "Connected to " + shared) : chip(
+      cloudEnabled() ? chip("synced", "ok", "Syncing across devices via " + cloudHost()) : shared ? chip("shared file", "ok", "Connected to " + shared) : chip(
         "this device only",
         "mute",
-        "Not connected to a shared file \u2014 updates stay on this computer"
+        "Not syncing \u2014 updates stay on this device. Set it up under Setup."
       ),
       el("nav.tabs", {}, ...TABS.map((t) => el("button", {
         "aria-current": String(t.key === current),
@@ -4100,10 +5064,11 @@ ${add.join("\n")}` : add.join("\n");
   onChange(scheduleRender);
   render();
   initSharedFile(render);
+  initCloud();
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && sharedFileName()) {
-      Promise.resolve().then(() => (init_store(), store_exports)).then((m) => m.pullSharedFile());
-    }
+    if (document.visibilityState !== "visible") return;
+    if (sharedFileName()) pullSharedFile();
+    if (cloudEnabled()) pullCloud({ parts: ["work"] });
   });
 })();
 

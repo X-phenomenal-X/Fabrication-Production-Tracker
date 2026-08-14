@@ -39,10 +39,26 @@ const browser = await chromium.launch({
 const page = await browser.newPage({ viewport: { width: 1440, height: 950 } });
 
 const errors = [];
-page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+// The cloud check deliberately points at an unreachable host, so its network
+// failure is expected noise rather than a fault in the app.
+const EXPECTED = /ERR_TUNNEL_CONNECTION_FAILED|example\.invalid|ERR_NAME_NOT_RESOLVED/;
+page.on('console', (m) => {
+  if (m.type() === 'error' && !EXPECTED.test(m.text())) errors.push('console: ' + m.text());
+});
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message + '\n     STACK: ' + (e.stack || '').split('\n').slice(0, 4).join(' | ')));
 
 const step = (s) => console.log('  •', s);
+
+/* Rendering is deferred to the next frame, so the click alone proves nothing.
+   Waiting on the nav rather than the page title, because a machine that has
+   been renamed no longer has the title the test started with. */
+const gotoTab = async (name) => {
+  await page.click(`nav.tabs button:has-text("${name}")`);
+  await page.waitForFunction(
+    (n) => document.querySelector('nav.tabs button[aria-current="true"]')?.textContent.trim() === n,
+    name);
+  await page.waitForTimeout(120);
+};
 
 await page.goto(base + '/index.html');
 await page.waitForSelector('header.top');
@@ -50,7 +66,7 @@ step('app booted');
 
 const tabs = await page.$$eval('nav.tabs button', (ns) => ns.map((n) => n.textContent.trim()));
 step('tabs: ' + tabs.join(', '));
-if (tabs.join(',') !== 'Rolling,FOM,CNC,Multi Punch,Back Orders,Shift Update,Setup') {
+if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Rush,Back Orders,Shift Update,Setup') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -93,7 +109,7 @@ await page.screenshot({ path: path.join(SHOT, 'setup.png'), fullPage: true });
 // walk every centre page
 for (const [tab, expectSubtabs, expectTitle] of [
   ['Rolling', 2, 'Rolling (Auto)'], ['FOM', 3, 'FOM 1'],
-  ['CNC', 4, 'CNC 1'], ['Multi Punch', 0, 'Multi Punch'],
+  ['CNC & FMC', 4, 'Unassigned'], ['Multi Punch', 0, 'Multi Punch'],
 ]) {
   await page.click(`nav.tabs button:has-text("${tab}")`);
   // Rendering is deferred to the next frame, so the previous page's title is
@@ -119,9 +135,22 @@ const su = await page.evaluate(() => import('/js/store.js').then((m) => {
 }));
 step('shift update: ' + JSON.stringify(su));
 if (!su || !su.machines.length) throw new Error('Shift Update sheet was not parsed');
-for (const k of ['roll-auto', 'fom1', 'cnc1', 'multipunch']) {
+// FMC 1 and FMC 2 only exist in the newer block stacked below the old one in
+// `Shift Update 2` — proof the stacked-block parse works, not just the sheet
+// named exactly "Shift Update".
+for (const k of ['roll-auto', 'fom1', 'cnc1', 'fmc1', 'fmc2', 'multipunch']) {
   if (!su.machines.includes(k)) throw new Error(`shift update missing ${k}`);
 }
+for (const k of ['cnc2', 'cnc3', 'cnc140']) {
+  if (su.machines.includes(k)) throw new Error(`${k} should no longer be a machine`);
+}
+const suWhen = await page.evaluate(() => import('/js/model.js').then((m) => ({
+  fom1: m.shiftUpdateFor('fom1'), fmc1: m.shiftUpdateFor('fmc1'),
+})).then((r) => Object.fromEntries(
+  Object.entries(r).map(([k, e]) => [k, `${e.label} ${e.date} ${e.shift}`]))));
+step('per-machine shift-update source: ' + JSON.stringify(suWhen));
+if (suWhen.fom1 === suWhen.fmc1) throw new Error('entries should carry their own block date/shift');
+
 const suPanel = await page.$$eval('.su-title', (ns) => ns.length);
 step('shift update panel rendered on this page: ' + (suPanel ? 'yes' : 'no'));
 
@@ -353,14 +382,123 @@ const boAfter = await page.evaluate((k) => import('/js/store.js').then((m) => m.
 step('back order after re-import: ' + JSON.stringify(boAfter));
 if (!boAfter || boAfter.qty !== 12) throw new Error('back order lost on re-import');
 
+// ---------- rush ----------
+await gotoTab('Rolling');
+await page.$$eval('.dgroup-head[aria-expanded="false"]', (ns) => ns.forEach((n) => n.click()));
+await page.waitForTimeout(200);
+
+const rushWo = await page.$eval('.line .mono.strong', (n) => n.textContent.trim());
+await page.locator('.line').filter({ hasText: rushWo }).first()
+  .locator('.line-iconbtn[title="Mark as rush"]').click();
+await page.waitForSelector('dialog .rush-flagrow');
+await page.locator('dialog .rush-flagrow input').check();
+// The needed-by date is the whole point: a shipping gate that beats the sheet.
+const gate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+await page.locator('dialog input[type="date"]').fill(gate);
+await page.selectOption('dialog select', 'Abhay');
+await page.locator('dialog textarea').fill('Shipping gate moved up — trailer Friday.');
+await page.click('dialog footer button.primary');
+await page.waitForTimeout(300);
+
+const rushRec = await page.evaluate(() => import('/js/store.js').then((m) => {
+  const k = Object.keys(m.state.rush)[0];
+  return { key: k, ...m.state.rush[k] };
+}));
+step('rush stored: ' + JSON.stringify(rushRec));
+if (!rushRec.on || rushRec.assignee !== 'Abhay') throw new Error('rush record not saved');
+if (!rushRec.needBy) throw new Error('needed-by date not saved');
+
+// a rush line sorts above everything else on its machine, whatever its date
+const firstWo = await page.$eval('.line .mono.strong', (n) => n.textContent.trim());
+step(`first line on the machine: ${firstWo} (rushed ${rushWo})`);
+if (firstWo !== rushWo) throw new Error('rush line did not sort to the top');
+
+const rushBadge = await page.locator('.line').filter({ hasText: rushWo }).first()
+  .locator('.badge-rush').first().textContent();
+step('rush badge: ' + rushBadge.trim());
+if (!rushBadge.includes('RUSH')) throw new Error('rush badge missing');
+
+const rushHist = await page.evaluate((k) => import('/js/store.js').then(
+  (m) => m.state.taskHistory.filter((h) => h.key === k && h.kind === 'rush').length), rushRec.key);
+step('rush history entries: ' + rushHist);
+if (!rushHist) throw new Error('rush changes were not recorded in history');
+
+await gotoTab('Rush');
+await page.waitForSelector('.rush-line');
+const rushBuckets = await page.$$eval('.dgroup-label', (ns) => ns.map((n) => n.textContent.trim()));
+const rushCount = await page.$$eval('.rush-line', (ns) => ns.length);
+step(`rush page — buckets [${rushBuckets.join(' | ')}] · ${rushCount} lines`);
+if (!rushBuckets.includes('Past its date')) throw new Error('a past-date rush should bucket as late');
+await page.screenshot({ path: path.join(SHOT, 'rush.png'), fullPage: true });
+
+// ---------- CNC & FMC: shared queue, assigned by hand ----------
+await gotoTab('CNC & FMC');
+await page.waitForSelector('.subtabs button');
+const cncTabs = await page.$$eval('.subtabs button', (ns) => ns.map((n) => n.textContent.trim()));
+step('CNC sub-tabs: ' + cncTabs.join(' | '));
+if (!cncTabs.some((t) => t.startsWith('FMC 1')) || !cncTabs.some((t) => t.startsWith('FMC 2'))) {
+  throw new Error('FMC 1 and FMC 2 missing from the CNC centre');
+}
+
+const queuedBefore = await page.evaluate(() =>
+  import('/js/model.js').then((m) => m.openCountFor('cncfmc')));
+const moveWo = await page.$eval('.line .mono.strong', (n) => n.textContent.trim());
+await page.locator('.line').filter({ hasText: moveWo }).first()
+  .locator('.line-iconbtn[title="Put this line on a machine"]').click();
+await page.waitForSelector('dialog .movebtn');
+await page.locator('dialog .movebtn', { hasText: 'FMC 2' }).first().click();
+await page.waitForTimeout(300);
+
+const moved = await page.evaluate(() => import('/js/model.js').then(async (m) => {
+  const s = await import('/js/store.js');
+  return {
+    queue: m.openCountFor('cncfmc'),
+    fmc2: m.openCountFor('fmc2'),
+    assigns: Object.entries(s.state.taskAssign).map(([k, v]) => `${k} -> ${v.machine} by ${v.by}`),
+  };
+}));
+step(`moved to FMC 2 — queue ${queuedBefore} -> ${moved.queue}, FMC 2 = ${moved.fmc2} | ${moved.assigns.join(', ')}`);
+if (moved.queue !== queuedBefore - 1) throw new Error('line did not leave the queue');
+if (moved.fmc2 !== 1) throw new Error('line did not arrive on FMC 2');
+// The key must still be the imported one, or every overlay on that line is orphaned.
+if (!moved.assigns[0].startsWith('cncfmc|')) {
+  throw new Error('assignment changed the line key: ' + moved.assigns[0]);
+}
+await page.screenshot({ path: path.join(SHOT, 'centre-cnc-fmc.png'), fullPage: true });
+
+// ---------- cloud sync config ----------
+// No live Supabase here, so this covers the parts that must work without one:
+// the config round-trip, the split of the snapshot into base/work, and that a
+// bad address fails with a sentence rather than a stack trace.
+const cloud = await page.evaluate(async () => {
+  const c = await import('/js/cloud.js');
+  c.setCloudConfig({ url: 'https://example.invalid', key: 'k', site: 'cutting' });
+  const saved = c.cloudConfig();
+  let err = null;
+  try { await c.cloudTest({ url: 'https://example.invalid', key: 'k' }); }
+  catch (e) { err = e.message; }
+  let badUrl = null;
+  try { await c.cloudTest({ url: 'not a url', key: 'k' }); }
+  catch (e) { badUrl = e.message; }
+  c.setCloudConfig(null);
+  return { saved, enabled: c.cloudEnabled(), err, badUrl };
+});
+step('cloud config round-trip: ' + JSON.stringify(cloud.saved));
+step('unreachable host says: ' + cloud.err);
+step('bad url says: ' + cloud.badUrl);
+if (cloud.saved.site !== 'cutting') throw new Error('cloud config did not round-trip');
+if (cloud.enabled) throw new Error('cloud config was not cleared');
+if (!/Could not reach/.test(cloud.err)) throw new Error('network failure not explained in words');
+if (!/web address/.test(cloud.badUrl)) throw new Error('bad URL not explained in words');
+
 // ---------- shift update ----------
-await page.click('nav.tabs button:has-text("Shift Update")');
+await gotoTab('Shift Update');
 await page.waitForSelector('.sucard');
 
 const suCards = await page.$$eval('.sucard-name', (ns) => ns.map((n) => n.textContent.trim()));
 const suGroups = await page.$$eval('.dgroup-label', (ns) => ns.map((n) => n.textContent.trim()));
 step(`shift update — groups [${suGroups.join(' ')}] | ${suCards.length} cards: ${suCards.join(', ')}`);
-if (suGroups.join(',') !== 'Department,Rolling,FOM,CNC,Multi Punch') {
+if (suGroups.join(',') !== 'Department,Rolling,FOM,CNC & FMC,Multi Punch') {
   throw new Error('unexpected shift update sections: ' + suGroups.join(','));
 }
 if (!suCards.includes('FOM 1') || !suCards.includes('FOM 2')) {
@@ -415,7 +553,7 @@ await page.screenshot({ path: path.join(SHOT, 'shift-read.png'), fullPage: true 
 // it survives a reload, and the recent list points back at it
 await page.reload();
 await page.waitForSelector('header.top');
-await page.click('nav.tabs button:has-text("Shift Update")');
+await gotoTab('Shift Update');
 await page.waitForSelector('.su-recentrow');
 const recent = await page.$$eval('.su-recentrow', (ns) => ns.map((n) => n.textContent.trim()));
 step('recent updates: ' + recent.join(' | '));

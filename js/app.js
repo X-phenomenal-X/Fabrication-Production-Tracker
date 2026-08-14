@@ -1,10 +1,14 @@
 /* Shell: tabs, the identity picker, and the render loop. */
 
 import { el, clear, chip } from './ui.js';
-import { state, loadLocal, save, onChange, me, sharedFileName } from './store.js';
+import {
+  state, loadLocal, save, onChange, me, sharedFileName, cloudEnabled, cloudHost,
+  initCloud, pullCloud, pullSharedFile,
+} from './store.js';
 import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
 import { renderShiftUpdate } from './views/shiftupdate.js';
+import { renderRush } from './views/rush.js';
 import { renderData, initSharedFile } from './views/data.js';
 import { SHIFTS, shiftAt } from './shifts.js';
 
@@ -13,8 +17,9 @@ import { SHIFTS, shiftAt } from './shifts.js';
 const TABS = [
   { key: 'rolling', label: 'Rolling', render: makeCentreView('Rolling') },
   { key: 'fom', label: 'FOM', render: makeCentreView('FOM') },
-  { key: 'cnc', label: 'CNC', render: makeCentreView('CNC') },
+  { key: 'cnc', label: 'CNC & FMC', render: makeCentreView('CNC') },
   { key: 'punch', label: 'Multi Punch', render: makeCentreView('Punch') },
+  { key: 'rush', label: 'Rush', render: renderRush },
   { key: 'backorders', label: 'Back Orders', render: renderBackOrders },
   { key: 'shift', label: 'Shift Update', render: renderShiftUpdate },
   { key: 'setup', label: 'Setup', render: renderData },
@@ -69,8 +74,12 @@ function header() {
       el('small', {}, 'BV Glazing · production tracker')),
     el('span.chip' + (shift.full ? '' : '.warn'), { title: 'Current shift' },
       shift.label + (shift.full ? '' : ` · ${shift.crew} crew`)),
-    shared ? chip('shared file', 'ok', 'Connected to ' + shared) : chip('this device only', 'mute',
-      'Not connected to a shared file — updates stay on this computer'),
+    cloudEnabled()
+      ? chip('synced', 'ok', 'Syncing across devices via ' + cloudHost())
+      : shared
+        ? chip('shared file', 'ok', 'Connected to ' + shared)
+        : chip('this device only', 'mute',
+            'Not syncing — updates stay on this device. Set it up under Setup.'),
     el('nav.tabs', {}, ...TABS.map((t) => el('button', {
       'aria-current': String(t.key === current),
       onclick: () => go(t.key),
@@ -103,10 +112,12 @@ loadLocal();
 onChange(scheduleRender);
 render();
 initSharedFile(render);
+initCloud();
 
-// Pick up other people's edits when the tab regains focus.
+// Pick up other people's edits when the tab regains focus — coming back to the
+// app on a phone is exactly the moment its copy is most likely to be stale.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && sharedFileName()) {
-    import('./store.js').then((m) => m.pullSharedFile());
-  }
+  if (document.visibilityState !== 'visible') return;
+  if (sharedFileName()) pullSharedFile();
+  if (cloudEnabled()) pullCloud({ parts: ['work'] });
 });

@@ -38,7 +38,7 @@ step('File System Access available: ' + await page.evaluate(() => 'showOpenFileP
 
 const tabs = await page.$$eval('nav.tabs button', (ns) => ns.map((n) => n.textContent.trim()));
 step('tabs: ' + tabs.join(', '));
-if (tabs.join(',') !== 'Rolling,FOM,CNC,Multi Punch,Back Orders,Shift Update,Setup') {
+if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Rush,Back Orders,Shift Update,Setup') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 

@@ -87,14 +87,31 @@ export function hasTasks() {
   return tasksInScope().length > 0;
 }
 
-/** One machine's lines, each paired with its effective status, soonest
-    cutting date first. The view decides whether to hide Done lines. */
+/** Which machine a line is actually on. The CNC & FMC sheet has no machine
+    column, so its lines import into a shared queue and are put on CNC 1, FMC 1
+    or FMC 2 by hand. The assignment is an overlay: the line's key still uses
+    the machine it was imported under, so moving it keeps its status, note,
+    history and shortage. */
+export function assignedMachine(task) {
+  return state.taskAssign?.[taskStatusKey(task)]?.machine || task.machine;
+}
+
+export function isAssigned(task) {
+  return !!state.taskAssign?.[taskStatusKey(task)]?.machine;
+}
+
+/** One machine's lines, each paired with its effective status. Rush lines come
+    first — that is the whole point of marking one — then soonest cutting date.
+    The view decides whether to hide Done lines. */
 export function tasksForMachine(machineKey) {
   return tasksInScope()
-    .filter((t) => t.machine === machineKey)
+    .filter((t) => assignedMachine(t) === machineKey)
     .map((t) => resolveTask(t))
-    .map((task) => ({ task, status: effectiveTaskStatus(task) }))
-    .sort((a, b) => ((a.task.cuttingDate || '9999') < (b.task.cuttingDate || '9999') ? -1 : 1));
+    .map((task) => ({ task, status: effectiveTaskStatus(task), rush: resolveRush(task) }))
+    .sort((a, b) => {
+      if (a.rush.on !== b.rush.on) return a.rush.on ? -1 : 1;
+      return (a.task.cuttingDate || '9999') < (b.task.cuttingDate || '9999') ? -1 : 1;
+    });
 }
 
 export function openCountFor(machineKey) {
@@ -132,6 +149,7 @@ export function groupedQueue(machineKey, { showDone = false, q = '', filter = 'A
     .filter((r) => {
       if (filter === 'ALL') return true;
       if (filter === 'BO') return resolveBackOrder(r.task).on;
+      if (filter === 'RUSH') return r.rush.on;
       return r.status.key === filter;
     })
     .filter((r) => {
@@ -160,8 +178,48 @@ export function machineSummary(machineKey, ref = today()) {
     inProgress: open.filter((r) => r.status.key === 'IN_PROGRESS').length,
     overdue: open.filter((r) => dateGroupOf(r.task, ref) === 'OVERDUE').length,
     backOrder: open.filter((r) => resolveBackOrder(r.task).on).length,
+    rush: open.filter((r) => r.rush.on).length,
     done: all.length - open.length,
   };
+}
+
+/* ---------- rush ---------- */
+
+export function rushFor(key) {
+  return state.rush?.[key] || null;
+}
+
+/** A line's rush marking, plus how close its needed-by date is. `late` and
+    `soon` are what turn the badge red rather than amber. */
+export function resolveRush(task, ref = today()) {
+  const rec = rushFor(taskStatusKey(task));
+  if (!rec?.on) return { on: false };
+  const needBy = rec.needBy || null;
+  return {
+    on: true,
+    needBy,
+    late: !!needBy && needBy < ref,
+    soon: !!needBy && needBy >= ref && needBy <= addDays(ref, 2),
+    assignee: rec.assignee || null,
+    reason: rec.reason || null,
+    at: rec.at || null,
+    by: rec.by || null,
+  };
+}
+
+/** Every rush line still open, across all machines, most urgent first. */
+export function allRush(ref = today()) {
+  const rows = [];
+  for (const t of tasksInScope()) {
+    const task = resolveTask(t);
+    const rush = resolveRush(task, ref);
+    if (!rush.on) continue;
+    if (effectiveTaskStatus(task).key === 'DONE') continue;
+    rows.push({ task, rush, machine: assignedMachine(task) });
+  }
+  return rows.sort((a, b) =>
+    ((a.rush.needBy || a.task.cuttingDate || '9999') <
+     (b.rush.needBy || b.task.cuttingDate || '9999') ? -1 : 1));
 }
 
 /* ---------- back orders ---------- */
@@ -202,7 +260,7 @@ export function allBackOrders() {
     const bo = resolveBackOrder(task);
     if (!bo.on) continue;
     if (effectiveTaskStatus(task).key === 'DONE') continue;
-    rows.push({ task, bo, machine: task.machine });
+    rows.push({ task, bo, machine: assignedMachine(task) });
   }
 
   const groups = new Map();
@@ -253,7 +311,9 @@ export function shiftUpdateFor(machineKey) {
   if (!su?.machines) return null;
   const entry = su.machines[machineKey];
   if (!entry) return null;
-  return { ...entry, date: su.date, shift: su.shift };
+  // Entries carry their own date and shift: they no longer all come from one
+  // block, since FMC 1 and FMC 2 only appear on a different one.
+  return { date: su.date, shift: su.shift, ...entry };
 }
 
 /* ---------- shift windows ---------- */
@@ -290,7 +350,6 @@ export function workInShift(machineKey, date, shift) {
     if (h.kind !== 'status') continue;
     const t = Date.parse(h.at);
     if (!(t >= from && t < to)) continue;
-    if (!h.key.startsWith(machineKey + '|')) continue;
     // Several changes to one line collapse to its latest state in the window.
     if (!seen.has(h.key)) seen.set(h.key, h);
   }
@@ -298,7 +357,9 @@ export function workInShift(machineKey, date, shift) {
   const out = [];
   for (const [key, h] of seen) {
     const task = taskByKey(key);
-    if (!task) continue;
+    // Matched on where the line is *now*, not the key's prefix: a queued CNC
+    // line keeps its `cncfmc|` key after being put on FMC 1.
+    if (!task || assignedMachine(task) !== machineKey) continue;
     out.push({ task, to: h.to, by: h.by, at: h.at });
   }
   return out.sort((a, b) => (a.at < b.at ? -1 : 1));

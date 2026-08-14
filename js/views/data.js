@@ -1,11 +1,12 @@
 /* Setup: load the Rolling and CNC schedules, manage the shared file everyone
    syncs through, and keep the list of who is using it. */
 
-import { el, chip, fmtNum, fmtWhen, toast, modal, download, confirmDialog } from '../ui.js';
+import { el, chip, icon, fmtNum, fmtWhen, toast, modal, download, confirmDialog } from '../ui.js';
 import {
   state, setMachineImport, save, exportJson, importJson, resetAll,
   connectSharedFile, reconnectSharedFile, grantSharedFile, pullSharedFile,
   supportsSharedFile, sharedFileName, disconnectSharedFile, me,
+  connectCloud, disconnectCloud, pullCloud, cloudStatus, cloudConfig,
 } from '../store.js';
 import { importMachineWorkbook } from '../import-machines.js';
 import { MACHINE_BY_KEY } from '../machines.js';
@@ -78,6 +79,138 @@ function dropZone({ title, hint, onFile }) {
     if (f) onFile(f);
   });
   return zone;
+}
+
+/* ---------- cloud sync ---------- */
+
+/* The shared file needs the File System Access API, which no phone browser
+   has. This is the same sync over HTTPS, so the tracker can be open on a phone
+   on the floor and a PC in the office at the same time. */
+
+const SETUP_SQL = `create table if not exists tracker_state (
+  site text not null,
+  part text not null,
+  data jsonb not null,
+  updated_at timestamptz not null default now(),
+  primary key (site, part)
+);
+alter table tracker_state enable row level security;
+create policy "tracker read"   on tracker_state for select using (true);
+create policy "tracker insert" on tracker_state for insert with check (true);
+create policy "tracker update" on tracker_state for update using (true) with check (true);`;
+
+function sqlDialog() {
+  const box = el('textarea', {
+    value: SETUP_SQL,
+    readonly: true,
+    style: { minHeight: '260px', fontFamily: 'var(--mono)', fontSize: '12px' },
+  });
+  modal('Run this once in Supabase', el('div', {},
+    el('p.small.muted', { style: { marginTop: 0 } },
+      'Supabase → SQL Editor → New query → paste → Run. It makes the one table '
+      + 'the tracker syncs through.'),
+    box,
+    el('div.banner.warn', { style: { marginTop: '12px' } },
+      el('div', {},
+        el('strong', {}, 'Anyone with the address and the key can read and write this data. '),
+        'There is no login. Keep the key to the department, the same way the network share is kept to the department.'))),
+    {
+      wide: true,
+      actions: [{
+        label: 'Copy SQL', class: 'primary', onClick: async () => {
+          try {
+            await navigator.clipboard.writeText(SETUP_SQL);
+            toast('SQL copied');
+          } catch { box.select(); toast('Select and copy the text'); }
+        },
+      }],
+    });
+}
+
+function cloudSection(rerender) {
+  const st = cloudStatus();
+  const cfg = cloudConfig();
+  const body = el('div.body', {});
+
+  if (st.on) {
+    body.append(
+      el('div.banner' + (st.error ? '.bad' : '.ok'), { style: { marginBottom: '12px' } },
+        el('div', {},
+          el('strong', {}, st.error ? 'Sync problem: ' : 'Syncing: '),
+          st.error || st.where,
+          el('div.small', { style: { marginTop: '4px' } },
+            st.error
+              ? 'Your work is still saved on this device and will go up once this is fixed.'
+              : `Open the same address on your phone and sign in as yourself.${st.at ? ` Last synced ${fmtWhen(st.at)}.` : ''}`))),
+      el('div.row', {},
+        el('button', {
+          onclick: async () => { await pullCloud(); toast('Refreshed'); rerender(); },
+        }, icon('cloud', { size: 14 }), ' Refresh now'),
+        el('button', { onclick: sqlDialog }, 'Show setup SQL'),
+        el('button.ghost', {
+          onclick: async () => {
+            const ok = await confirmDialog('Stop syncing this device?',
+              'Work already sent stays in the cloud. This device keeps its own copy and stops sending updates.',
+              { confirmLabel: 'Stop syncing' });
+            if (!ok) return;
+            disconnectCloud(); toast('Sync off'); rerender();
+          },
+        }, 'Stop syncing')));
+    return el('div.panel', {}, el('header', {}, 'Sync across devices'), body);
+  }
+
+  const url = el('input', {
+    value: cfg?.url || '', placeholder: 'https://xxxxxxxx.supabase.co',
+    autocapitalize: 'off', spellcheck: false,
+  });
+  const key = el('input', {
+    value: cfg?.key || '', placeholder: 'anon public key',
+    autocapitalize: 'off', spellcheck: false,
+  });
+  const site = el('input', { value: cfg?.site || 'cutting', placeholder: 'cutting' });
+
+  body.append(
+    el('p.small.muted', { style: { marginTop: 0 } },
+      'Connect this device to a free Supabase project and the tracker works on '
+      + 'phones too — statuses, notes, rush, back orders and shift updates all '
+      + 'merge line by line, exactly as they do through the shared file.'),
+    el('ol.small.muted.cloud-steps', {},
+      el('li', {}, 'Make a free project at supabase.com.'),
+      el('li', {}, 'Run the setup SQL once — ',
+        el('button.linkbtn', { onclick: sqlDialog }, 'show it'), '.'),
+      el('li', {}, 'Copy the Project URL and the anon public key from Settings → API, and paste them here.'),
+      el('li', {}, 'Do the same on every phone and PC, with the same site name.')),
+
+    el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: '12px', marginTop: '14px' } },
+      el('label.field', {}, el('span', {}, 'Project URL'), url),
+      el('label.field', {}, el('span', {}, 'Anon public key'), key),
+      el('label.field', {}, el('span', {}, 'Site name',
+        el('em.of-total', {}, 'same on every device')), site)),
+
+    el('div.row', { style: { marginTop: '14px' } },
+      el('button.primary', {
+        onclick: async (e) => {
+          const btn = e.target;
+          btn.disabled = true;
+          btn.textContent = 'Checking…';
+          try {
+            const where = await connectCloud({
+              url: url.value, key: key.value, site: site.value,
+            });
+            toast(`Syncing with ${where}`);
+            rerender();
+          } catch (err) {
+            btn.disabled = false;
+            btn.textContent = 'Connect';
+            modal('Could not connect', el('div', {},
+              el('p', {}, err.message),
+              el('p.small.muted', {},
+                'Nothing was changed. Your data is still on this device.')));
+          }
+        },
+      }, 'Connect')));
+
+  return el('div.panel', {}, el('header', {}, 'Sync across devices'), body);
 }
 
 /* ---------- view ---------- */
@@ -174,6 +307,8 @@ export function renderData(rerender) {
 
   const sharedPanel = el('div.panel', {}, el('header', {}, 'Shared file'), sharedBody);
 
+  const cloudPanel = cloudSection(rerender);
+
   /* backup */
   const backupPanel = el('div.panel', {},
     el('header', {}, 'Backup & transfer'),
@@ -244,6 +379,6 @@ export function renderData(rerender) {
 
   return el('div', {}, importPanel,
     el('div.grid.two', { style: { marginTop: '16px' } },
-      el('div', {}, sharedPanel),
+      el('div', {}, cloudPanel, sharedPanel),
       el('div', {}, backupPanel, peoplePanel)));
 }

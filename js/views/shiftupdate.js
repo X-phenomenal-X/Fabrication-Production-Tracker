@@ -26,7 +26,7 @@ import { SHIFTS, SHIFT_ORDER, shiftAt } from '../shifts.js';
 const CENTRES = [
   ['Rolling', 'Rolling'],
   ['FOM', 'FOM'],
-  ['CNC', 'CNC'],
+  ['CNC', 'CNC & FMC'],
   ['Punch', 'Multi Punch'],
 ];
 
@@ -89,7 +89,10 @@ function sections() {
   }];
 
   for (const [group, label] of CENTRES) {
-    const rows = (byGroup.get(group) || []).map(machineConfig).filter((m) => !m.hidden);
+    // The CNC & FMC holding queue is not a machine anyone stands at, so it is
+    // not something to report a shift on.
+    const rows = (byGroup.get(group) || [])
+      .filter((m) => !m.queue).map(machineConfig).filter((m) => !m.hidden);
     if (rows.length) out.push({ label, rows });
   }
   return out;

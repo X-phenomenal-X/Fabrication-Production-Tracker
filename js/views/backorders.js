@@ -9,8 +9,16 @@ import { el, chip, icon, fmtDate, fmtNum, fmtWhen, toast, modal } from '../ui.js
 import { state, setBackOrder, clearBackOrder, me } from '../store.js';
 import {
   allBackOrders, resolveBackOrder, backOrderFor, taskStatusKey, hasTasks,
+  machineConfig,
 } from '../model.js';
 import { MACHINE_BY_KEY } from '../machines.js';
+
+/** A machine's name as the department has it — a renamed machine must not go
+    back to its built-in label just because this page is not the centre page. */
+function machineLabel(key) {
+  const m = MACHINE_BY_KEY[key];
+  return m ? machineConfig(m).label : key;
+}
 
 const TYPE_A_NAME = '__type__';
 
@@ -178,7 +186,7 @@ export function renderBackOrders(rerender, go) {
         el('span.spacer'),
         short ? el('span.small.muted', {}, `${fmtNum(short)} pcs short`) : null),
 
-      el('div.dgroup-body', {}, ...g.rows.map(({ task, bo }) => el('div.line.bo-line', {
+      el('div.dgroup-body', {}, ...g.rows.map(({ task, bo, machine }) => el('div.line.bo-line', {
         style: { cursor: 'pointer' },
         onclick: () => backOrderDialog(task, rerender),
       },
@@ -186,7 +194,7 @@ export function renderBackOrders(rerender, go) {
           el('div.line-id', {},
             el('span.mono.strong', {}, task.wo),
             task.die ? el('span.die', {}, task.die) : null,
-            chip(MACHINE_BY_KEY[task.machine]?.label || task.machine, 'mute')),
+            chip(machineLabel(machine), 'mute')),
           el('div.line-where', {},
             el('span', {}, task.project || '—'),
             task.floor ? el('span.muted', {}, ' · ' + task.floor) : null),

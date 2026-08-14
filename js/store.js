@@ -9,6 +9,13 @@
    carries an `at` timestamp and the newer one wins, so two people updating
    different lines at the same time both keep their work. */
 
+import {
+  setCloudConfig, cloudEnabled, cloudHost,
+  cloudPull, cloudPush, cloudTest, CLOUD_PARTS,
+} from './cloud.js';
+
+export { cloudEnabled, cloudHost, cloudConfig } from './cloud.js';
+
 const LS_KEY = 'bv.cutting.v1';
 const IDB_NAME = 'bv-cutting';
 const IDB_STORE = 'handles';
@@ -30,6 +37,8 @@ export const state = {
   taskNote: {},     // `${machine}|${wo}|${die}` -> { text, at, by }
   taskEdit: {},     // same key -> { fields: {...}, at, by } — corrections to the sheet
   backOrder: {},    // same key -> { flagged, qty, assignee, note, at, by }
+  rush: {},         // same key -> { on, needBy, assignee, reason, at, by }
+  taskAssign: {},   // same key -> { machine, at, by } — which machine took a queued line
   taskHistory: [],  // every change to a line, newest first
   machineConfig: {}, // machineKey -> { label, note, ops, hidden }
   shiftLogs: {},    // `${date}|${shift}` -> { date, shift, rows, notes, at, by }
@@ -209,6 +218,67 @@ export function clearBackOrder(key) {
   save();
 }
 
+/* Fields of a rush record. A rush is a human decision — nothing in the
+   workbook says "this one first" — so unlike a back order there is no sheet
+   value to fall back to and `on` is a plain boolean. */
+export const RUSH_FIELDS = ['on', 'needBy', 'assignee', 'reason'];
+
+/** Mark a line as rush: needed by a date, optionally put on someone, with the
+    reason (a shipping gate, a site call) written down. */
+export function setRush(key, patch) {
+  const cur = state.rush[key] || {};
+  const next = { ...cur };
+
+  for (const f of RUSH_FIELDS) {
+    if (!(f in patch)) continue;
+    let v = patch[f];
+    if (f === 'on') v = !!v;
+    else if (f === 'needBy') v = String(v ?? '').trim() || null;
+    else v = String(v ?? '').trim() || null;
+    if ((cur[f] ?? null) === (v ?? null)) continue;
+    next[f] = v;
+    logChange(key, 'rush', f, cur[f] ?? null, v);
+  }
+
+  if (!next.on) delete state.rush[key];
+  else state.rush[key] = { ...next, at: now(), by: me() };
+  save();
+}
+
+export function clearRush(key) {
+  const cur = state.rush[key];
+  if (!cur) return;
+  for (const f of RUSH_FIELDS) {
+    if (cur[f] != null && cur[f] !== '' && cur[f] !== false) logChange(key, 'rush', f, cur[f], null);
+  }
+  delete state.rush[key];
+  save();
+}
+
+/** Put a queued line on a machine. The line's key never changes — it stays
+    built from the machine the workbook imported it under — so assigning a line
+    does not orphan its status, note, history or shortage. `null` sends it back
+    to the shared queue. */
+function assignOne(key, machine, importedMachine) {
+  const cur = state.taskAssign[key]?.machine || importedMachine || null;
+  const next = machine || importedMachine || null;
+  if (cur === next) return;
+  if (!machine || machine === importedMachine) delete state.taskAssign[key];
+  else state.taskAssign[key] = { machine, at: now(), by: me() };
+  logChange(key, 'machine', null, cur, next);
+}
+
+export function setTaskMachine(key, machine, importedMachine) {
+  assignOne(key, machine, importedMachine);
+  save();
+}
+
+/** Assign a whole selection at once — one save, not one per line. */
+export function setTaskMachineMany(keys, machine, importedMachine) {
+  for (const key of keys) assignOne(key, machine, importedMachine);
+  save();
+}
+
 /** Drop every correction on a line and go back to what the workbook says. */
 export function clearTaskEdits(key, sheet = {}) {
   const cur = state.taskEdit[key]?.fields || {};
@@ -256,6 +326,9 @@ export function setMachineImport({ tasks, shiftUpdate, report }) {
   };
   if (shiftUpdate) state.shiftUpdate = { ...shiftUpdate, importedAt: report.importedAt };
   save();
+  // The imported workbooks are the only thing that puts the heavy half of the
+  // snapshot out of date, so this is the one place it gets pushed.
+  queueCloudPush({ base: true });
 }
 
 /* ---------- local persistence ---------- */
@@ -270,6 +343,8 @@ function snapshot() {
     taskNote: state.taskNote,
     taskEdit: state.taskEdit,
     backOrder: state.backOrder,
+    rush: state.rush,
+    taskAssign: state.taskAssign,
     taskHistory: state.taskHistory,
     machineConfig: state.machineConfig,
     shiftLogs: state.shiftLogs,
@@ -309,6 +384,7 @@ export function save() {
   }
   emit();
   if (fileHandle) queueFileSave();
+  queueCloudPush();
 }
 
 export function loadLocal() {
@@ -388,6 +464,8 @@ function mergeSnapshot(remote) {
   state.taskNote = mergeRecords(state.taskNote, remote.taskNote);
   state.taskEdit = mergeRecords(state.taskEdit, remote.taskEdit);
   state.backOrder = mergeRecords(state.backOrder, remote.backOrder);
+  state.rush = mergeRecords(state.rush, remote.rush);
+  state.taskAssign = mergeRecords(state.taskAssign, remote.taskAssign);
 
   // History is append-only: merge by id and keep it newest-first.
   const seen = new Set(state.taskHistory.map((h) => h.id));
@@ -488,6 +566,137 @@ async function writeSharedFile() {
   const w = await fileHandle.createWritable();
   await w.write(JSON.stringify(snapshot()));
   await w.close();
+}
+
+/* ---------- cloud sync ---------- */
+
+/* The shared file needs the File System Access API, which no phone browser
+   has. This is the same merge over HTTPS instead, so the tracker works on a
+   phone and a PC at once.
+
+   The snapshot is split in two. `base` is the imported workbooks — about a
+   megabyte, changing only on re-import. `work` is what people actually do —
+   a few kilobytes, changing constantly. Pushing them together would mean a
+   phone uploading the workbooks every time somebody taps Done. */
+const CLOUD_BASE_KEYS = ['tasks', 'machineMeta', 'shiftUpdate'];
+
+function cloudDoc(part) {
+  const snap = snapshot();
+  const pick = (keys) => Object.fromEntries(keys.map((k) => [k, snap[k]]));
+  if (part === 'base') return pick(['v', ...CLOUD_BASE_KEYS]);
+  return pick(Object.keys(snap).filter((k) => !CLOUD_BASE_KEYS.includes(k)));
+}
+
+let cloudTimer = null;
+let cloudPoll = null;
+let cloudBusy = false;
+let cloudState = { on: false, at: null, error: null, pushing: false };
+
+export function cloudStatus() {
+  return { ...cloudState, on: cloudEnabled(), where: cloudHost() };
+}
+
+function setCloudState(patch) {
+  cloudState = { ...cloudState, ...patch };
+  emit();
+}
+
+/** Merge whatever the cloud has into local state. Safe to call any time. */
+export async function pullCloud({ parts = CLOUD_PARTS } = {}) {
+  if (!cloudEnabled() || cloudBusy) return false;
+  cloudBusy = true;
+  try {
+    const remote = await cloudPull(parts);
+    // Each document is a partial snapshot; mergeSnapshot ignores absent keys.
+    if (remote?.work) mergeSnapshot(remote.work);
+    if (remote?.base) mergeSnapshot(remote.base);
+    localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+    setCloudState({ at: now(), error: null });
+    return true;
+  } catch (e) {
+    setCloudState({ error: e.message });
+    return false;
+  } finally {
+    cloudBusy = false;
+  }
+}
+
+/** Push, merging the cloud's copy in first so a concurrent edit is not lost.
+    `base` rides along only when this device imported more recently. */
+async function pushCloud(withBase) {
+  if (!cloudEnabled()) return;
+  setCloudState({ pushing: true });
+  try {
+    const remote = await cloudPull(withBase ? CLOUD_PARTS : ['work']);
+    if (remote?.work) mergeSnapshot(remote.work);
+    if (withBase && remote?.base) mergeSnapshot(remote.base);
+
+    const docs = { work: cloudDoc('work') };
+    if (withBase) docs.base = cloudDoc('base');
+    await cloudPush(docs);
+
+    localStorage.setItem(LS_KEY, JSON.stringify(snapshot()));
+    setCloudState({ at: now(), error: null, pushing: false });
+  } catch (e) {
+    setCloudState({ error: e.message, pushing: false });
+  }
+}
+
+let cloudBaseDirty = false;
+
+function queueCloudPush({ base = false } = {}) {
+  if (!cloudEnabled()) return;
+  if (base) cloudBaseDirty = true;
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(() => {
+    const withBase = cloudBaseDirty;
+    cloudBaseDirty = false;
+    pushCloud(withBase);
+  }, base ? 400 : 2500);
+}
+
+/** Connect (or reconnect) and start syncing. Returns where it connected to. */
+export async function connectCloud(cfg) {
+  if (cfg) {
+    await cloudTest(cfg);
+    setCloudConfig(cfg);
+  }
+  if (!cloudEnabled()) return null;
+
+  await pullCloud();
+  // First device to connect seeds the cloud with whatever it already has.
+  await pushCloud(true);
+  startCloudPolling();
+  setCloudState({ on: true });
+  return cloudHost();
+}
+
+export function disconnectCloud() {
+  setCloudConfig(null);
+  clearInterval(cloudPoll);
+  cloudPoll = null;
+  clearTimeout(cloudTimer);
+  setCloudState({ on: false, at: null, error: null });
+}
+
+/* Poll rather than subscribe: it is a handful of bytes a minute, it needs no
+   websocket to survive the shop's network, and a tracker that is thirty
+   seconds stale is not a tracker anybody notices is stale. */
+function startCloudPolling() {
+  clearInterval(cloudPoll);
+  if (!cloudEnabled()) return;
+  cloudPoll = setInterval(() => {
+    if (document.visibilityState === 'visible') pullCloud({ parts: ['work'] });
+  }, 30000);
+}
+
+/** Called once at boot. Reconnects silently if this device is already set up. */
+export async function initCloud() {
+  if (!cloudEnabled()) return null;
+  setCloudState({ on: true });
+  await pullCloud();
+  startCloudPolling();
+  return cloudHost();
 }
 
 function queueFileSave() {

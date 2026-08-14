@@ -13,15 +13,18 @@ import {
 import {
   setTaskStatus, setTaskStatusMany, restoreTaskStatus, setTaskNote,
   setMachineConfig, setTaskFields, clearTaskEdits, historyFor,
+  setTaskMachineMany,
   EDITABLE_FIELDS, state,
 } from '../store.js';
 import {
   groupedQueue, machineSummary, openCountFor, taskStatusKey, hasTasks,
-  shiftUpdateFor, taskNoteFor, machineConfig, resolveBackOrder,
+  shiftUpdateFor, taskNoteFor, machineConfig, resolveBackOrder, resolveRush,
+  isAssigned, taskByKey,
   TRACK_STATUS_ORDER, TRACK_STATUS,
 } from '../model.js';
 import { backOrderDialog } from './backorders.js';
-import { machinesByGroup } from '../machines.js';
+import { rushDialog } from './rush.js';
+import { machinesByGroup, assignableIn, hasQueue } from '../machines.js';
 
 /* Per-centre view state, kept while the app is open. */
 const viewState = new Map();
@@ -102,16 +105,18 @@ function noteEditor(row, rerender) {
     });
 }
 
-function taskLine(row, vs, rerender) {
+function taskLine(row, vs, rerender, group) {
   const t = row.task;
   const key = taskStatusKey(t);
   const note = taskNoteFor(key);
   const bo = resolveBackOrder(t);
+  const rush = row.rush || resolveRush(t);
   // boStat already surfaces inside the back-order band when flagged.
   const sheetNote = t.comments || (bo.on ? null : t.boStat);
   const selected = vs.selected.has(key);
+  const canMove = hasQueue(group);
 
-  const node = el('div.line' + (selected ? '.sel' : ''), {},
+  const node = el('div.line' + (selected ? '.sel' : '') + (rush.on ? '.rush' : ''), {},
     el('label.line-pick', {},
       el('input', {
         type: 'checkbox', checked: selected, 'aria-label': `Select ${t.wo}`,
@@ -125,6 +130,12 @@ function taskLine(row, vs, rerender) {
       el('div.line-id', {},
         el('span.mono.strong', {}, t.wo),
         t.die ? el('span.die' + (t.edited?.die ? '.edited' : ''), {}, t.die) : null,
+        rush.on ? el('span.badge-rush' + (rush.late || rush.soon ? '.hot' : ''), {
+          title: rush.needBy
+            ? `Rush — needed by ${fmtDate(rush.needBy)}${rush.late ? ' (past)' : ''}`
+            : 'Rush',
+        }, icon('bolt', { size: 11 }),
+          rush.needBy ? `RUSH ${fmtDate(rush.needBy)}` : 'RUSH') : null,
         bo.on ? el('span.badge-bo', {
           title: bo.qty != null ? `${bo.qty} pieces short` : 'Back order — short of material',
         }, icon('alert', { size: 11 }),
@@ -136,6 +147,11 @@ function taskLine(row, vs, rerender) {
         el('span', {}, t.project || '—'),
         t.floor ? el('span.muted', {}, ' · ' + t.floor) : null),
       sheetNote ? el('div.small.muted.line-note', {}, sheetNote) : null,
+      rush.on && (rush.assignee || rush.reason) ? el('div.line-rushband', {},
+        icon('bolt', { size: 12 }),
+        el('span', {},
+          rush.assignee ? el('strong', {}, rush.assignee) : null,
+          rush.reason ? el('span', {}, `${rush.assignee ? ' — ' : ''}${rush.reason}`) : null)) : null,
       bo.on && (bo.assignee || bo.note || bo.qty != null || bo.sheetShort) ? el('div.line-boband', {},
         icon('alert', { size: 12 }),
         el('span', {},
@@ -156,6 +172,14 @@ function taskLine(row, vs, rerender) {
     el('div.line-date.hide-sm', {}, fmtDate(t.cuttingDate)),
 
     el('div.line-tools', {},
+      canMove ? el('button.line-iconbtn' + (isAssigned(t) ? '.moved' : ''), {
+        title: 'Put this line on a machine',
+        onclick: () => moveDialog([key], group, rerender),
+      }, icon('arrow', { size: 15 })) : null,
+      el('button.line-iconbtn' + (rush.on ? '.rush' : ''), {
+        title: rush.on ? 'Edit the rush' : 'Mark as rush',
+        onclick: () => rushDialog(t, rerender),
+      }, icon('bolt', { size: 15 })),
       el('button.line-iconbtn' + (note ? '.has' : ''), {
         title: note ? 'Edit note' : 'Add a note',
         onclick: () => noteEditor(row, rerender),
@@ -172,6 +196,50 @@ function taskLine(row, vs, rerender) {
     el('div.line-status', {}, statusControl(row, vs, rerender)));
 
   return node;
+}
+
+/* ---------- put a line on a machine ---------- */
+
+/* The CNC & FMC sheet is one flat list with no machine column, so its lines
+   land in a shared queue and someone says which machine takes them. The line's
+   key never changes, so moving it keeps its status, note, history and
+   shortage — see setTaskMachine. */
+function moveDialog(keys, group, rerender) {
+  const targets = assignableIn(group).map(machineConfig);
+  const first = taskByKey(keys[0]);
+  const imported = first?.machine || null;
+  const cur = keys.length === 1 && first
+    ? (state.taskAssign?.[keys[0]]?.machine || imported)
+    : null;
+
+  const title = keys.length === 1
+    ? `Put W/O ${first?.wo ?? ''} on a machine`
+    : `Put ${keys.length} lines on a machine`;
+
+  const go = (dlg, machine) => {
+    setTaskMachineMany(keys, machine, imported);
+    dlg.close();
+    toast(machine
+      ? `Moved to ${targets.find((m) => m.key === machine)?.label || machine}`
+      : 'Back in the queue');
+    rerender();
+  };
+
+  const body = el('div', {},
+    el('p.small.muted', { style: { marginTop: 0 } },
+      'The workbook does not say which machine these run on — that is decided here. '
+      + 'Moving a line keeps its status, note, history and back order.'),
+    el('div.movegrid', {}, ...targets.map((m) => el('button.movebtn' + (m.key === cur ? '.on' : ''), {
+      onclick: (e) => go(e.target.closest('dialog'), m.key),
+    },
+      el('strong', {}, m.label),
+      m.note ? el('span.small.muted', {}, m.note) : null))),
+    imported && cur !== imported ? el('div', { style: { marginTop: '12px' } },
+      el('button.ghost', {
+        onclick: (e) => go(e.target.closest('dialog'), null),
+      }, icon('undo', { size: 13 }), ' Send back to the unassigned queue')) : null);
+
+  modal(title, body, {});
 }
 
 /* ---------- edit a line ---------- */
@@ -257,7 +325,7 @@ function editLine(row, rerender) {
 
 /* ---------- date groups ---------- */
 
-function dateGroup(group, vs, rerender) {
+function dateGroup(group, vs, rerender, centre) {
   const isOpen = vs.open[group.key] ?? group.open;
   const expanded = vs.expanded[group.key];
   const cap = group.cap && !expanded ? group.cap : Infinity;
@@ -285,7 +353,7 @@ function dateGroup(group, vs, rerender) {
       }, allPicked ? 'Clear' : 'Select all') : null),
 
     isOpen ? el('div.dgroup-body', {},
-      ...shown.map((r) => taskLine(r, vs, rerender)),
+      ...shown.map((r) => taskLine(r, vs, rerender, centre)),
       hidden > 0 ? el('button.sm.showmore', {
         onclick: () => { vs.expanded[group.key] = true; rerender(); },
       }, `Show ${hidden} more`) : null) : null);
@@ -365,7 +433,7 @@ function machineSettings(machine, rerender) {
 
 /* ---------- bulk bar ---------- */
 
-function bulkBar(vs, rerender) {
+function bulkBar(vs, rerender, group) {
   const keys = Array.from(vs.selected);
   if (!keys.length) return null;
 
@@ -380,12 +448,17 @@ function bulkBar(vs, rerender) {
     rerender();
   };
 
+  const canMove = hasQueue(group);
+
   return el('div.bulkbar', { role: 'status' },
     el('span.bulk-count', {}, `${keys.length} selected`),
     el('span.spacer'),
     ...TRACK_STATUS_ORDER.map((k) => el('button.bulk-btn', {
       onclick: () => apply(k),
     }, icon(STATUS_ICON[k], { size: 14 }), TRACK_STATUS[k].label)),
+    canMove ? el('button.bulk-btn', {
+      onclick: () => moveDialog(keys, group, () => { vs.selected.clear(); rerender(); }),
+    }, icon('arrow', { size: 14 }), 'Move to') : null,
     el('button.bulk-x', {
       title: 'Clear selection',
       onclick: () => { vs.selected.clear(); rerender(); },
@@ -398,6 +471,7 @@ const FILTERS = [
   { key: 'ALL', label: 'All' },
   { key: 'NOT_STARTED', label: 'Not started' },
   { key: 'IN_PROGRESS', label: 'Running' },
+  { key: 'RUSH', label: 'Rush' },
   { key: 'BO', label: 'Back order' },
 ];
 
@@ -454,6 +528,7 @@ export function makeCentreView(group) {
         el('div.centre-stats', {},
           stat(sum.open, 'open'),
           stat(sum.inProgress, 'running', 'work'),
+          stat(sum.rush, 'rush', 'warn'),
           stat(sum.overdue, 'overdue', 'bad'),
           stat(sum.backOrder, 'B/O', 'bad'))),
 
@@ -489,7 +564,7 @@ export function makeCentreView(group) {
           `Show done${sum.done ? ` (${fmtNum(sum.done)})` : ''}`)));
 
     const body = groups.length
-      ? el('div', {}, ...groups.map((g) => dateGroup(g, vs, rerender)))
+      ? el('div', {}, ...groups.map((g) => dateGroup(g, vs, rerender, group)))
       : el('div.panel', {}, el('div.empty', {},
           el('div.empty-icon', {}, icon('check', { size: 28 })),
           el('h3', {}, vs.q || vs.filter !== 'ALL' ? 'Nothing matches' : 'All clear'),
@@ -501,6 +576,6 @@ export function makeCentreView(group) {
       head,
       shiftUpdatePanel(machine.key),
       body,
-      bulkBar(vs, rerender));
+      bulkBar(vs, rerender, group));
   };
 }
