@@ -285,7 +285,15 @@ people writing different shifts do not overwrite each other.
 ### The imported sheet
 
 The CNC workbook's shift-update sheet carries the most current word on most
-machines, finer than the per-line Status columns. Besides feeding the
+machines, finer than the per-line Status columns.
+
+**It is only ever as fresh as the file.** The panel shows the entry's date and,
+beside it, how old that is — *today*, *yesterday*, *3 days old* — because
+"Latest shift update" next to a bare date reads as current even when it is days
+behind, which is exactly how a day-old entry got taken for today's. The
+suggestion chips on the Shift Update write page are dated for the same reason:
+offering them unlabelled next to this shift's own tracked work invites pasting
+yesterday's report into today's. Besides feeding the
 suggestions above, each centre page shows its machine's entry over the queue,
 with a **MACHINE DOWN** badge when `#Ops` reads `DOWN`.
 

@@ -567,6 +567,17 @@ const fomBack = await page.evaluate(() => import('/js/model.js').then((m) => m.o
 step('after putting it back, FOM 1 = ' + fomBack);
 if (fomBack !== fomBefore.fom1) throw new Error('putting the line back did not restore FOM 1');
 
+// ---------- the shift update says how old it is ----------
+// The workbook's entry is dated 2026-08-13; the test runs later than that, so
+// it must not be presented as current. "Latest shift update" beside a neutral
+// date is how a day-old entry got read as today's.
+await gotoTab('Multi Punch');
+const suChips = await page.$$eval('.su .chip', (ns) => ns.map((n) => n.textContent.trim()));
+step('shift-update panel chips: ' + suChips.join(' | '));
+if (!suChips.some((c) => /yesterday|days old|today/.test(c))) {
+  throw new Error('shift-update panel does not say how old the entry is');
+}
+
 // ---------- stale-import warning ----------
 // Exactly the situation that bit in practice: data already loaded, then a
 // parsing fix ships. The stored result does not re-parse itself, so the app

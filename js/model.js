@@ -338,6 +338,18 @@ export function shiftUpdateFor(machineKey) {
   return { date: su.date, shift: su.shift, ...entry };
 }
 
+/** How old the imported shift update is, in words. A shift update is only
+    ever a snapshot of when the workbook was last saved, and "Latest shift
+    update" next to a neutral date reads as current even when it is days
+    behind — which is exactly how a day-old entry got taken for today's. */
+export function shiftUpdateAge(date, ref = today()) {
+  if (!date) return null;
+  const days = Math.round((Date.parse(ref) - Date.parse(date)) / 86400000);
+  if (days <= 0) return { days: 0, label: 'today', tone: 'ok' };
+  if (days === 1) return { days, label: 'yesterday', tone: 'warn' };
+  return { days, label: `${days} days old`, tone: 'bad' };
+}
+
 /* ---------- shift windows ---------- */
 
 /* Day 07:00-15:00, Afternoon 15:00-23:00, Midnight 23:00-07:00 — the last

@@ -16,7 +16,7 @@ import {
 } from '../ui.js';
 import { state, saveShiftLog, deleteShiftLog, me } from '../store.js';
 import {
-  today, hasTasks, machineConfig, shiftUpdateFor, workInShift,
+  today, hasTasks, machineConfig, shiftUpdateFor, workInShift, shiftUpdateAge,
 } from '../model.js';
 import { machinesByGroup, STANDING_ROWS } from '../machines.js';
 import { SHIFTS, SHIFT_ORDER, shiftAt } from '../shifts.js';
@@ -131,9 +131,17 @@ function suggestions(row, entry, rerender) {
   const tracked = entry.tracked || [];
   const sheet = entry.sheet;
 
+  // Date the workbook suggestions: they are a snapshot from whenever the file
+  // was last saved, and offering them unlabelled next to this shift's own
+  // tracked work invites pasting yesterday's report into today's.
+  const age = sheet ? shiftUpdateAge(sheet.date) : null;
+  const from = sheet
+    ? `From the workbook${sheet.date ? ` · ${fmtDate(sheet.date)}${age && age.days ? ` (${age.label})` : ''}` : ''}`
+    : '';
+
   return el('div.sugs', {},
     group(`Moved this shift · ${tracked.length}`, 'done', tracked),
-    sheet ? group('From the workbook', 'done', sheet.done || []) : null,
+    sheet ? group(from, 'done', sheet.done || []) : null,
     sheet ? group('Next, from the workbook', 'next', sheet.next || []) : null,
     sheet ? group('Workbook notes', 'notes', sheet.notes || []) : null);
 }

@@ -19,7 +19,7 @@ import {
 import {
   groupedQueue, machineSummary, openCountFor, runningNow, taskStatusKey, hasTasks,
   shiftUpdateFor, taskNoteFor, machineConfig, resolveBackOrder, resolveRush,
-  isAssigned, taskByKey, staleImports,
+  isAssigned, taskByKey, staleImports, shiftUpdateAge,
   TRACK_STATUS_ORDER, TRACK_STATUS,
 } from '../model.js';
 import { backOrderDialog } from './backorders.js';
@@ -480,11 +480,15 @@ function shiftUpdatePanel(machineKey) {
   // after a parsing fix it can still be showing what the old parser made of the
   // sheet. Say so here rather than let it look like current truth.
   const staleSu = staleImports().includes('cnc');
+  const age = shiftUpdateAge(su.date);
 
   return el('div.su' + (su.down ? '.down' : ''), {},
     el('div.su-head', {},
-      el('span.su-title', {}, 'Latest shift update'),
+      el('span.su-title', {}, 'Last shift update'),
       su.date ? chip(`${su.shift || ''} ${fmtDate(su.date)}`.trim(), 'mute') : null,
+      // Age, not just the date: a reader should not have to work out what
+      // "Aug 13" means relative to today before trusting what is under it.
+      age ? chip(age.label, age.tone) : null,
       staleSu ? chip('re-import to refresh', 'warn') : null,
       su.down ? el('span.badge-down', {}, icon('alert', { size: 12 }), 'Machine down') : null,
       el('span.spacer'),
