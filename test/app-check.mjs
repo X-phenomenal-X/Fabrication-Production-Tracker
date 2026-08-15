@@ -789,17 +789,19 @@ if (dieCheck.missing) throw new Error('an unknown die should resolve to nothing'
 const drawCheck = await page.evaluate(() => import('/js/dies.js').then((d) => ({
   count: d.drawingCount(),
   isImage: (d.drawingFor('SA83-001')?.src || '').startsWith('data:image/webp;base64,'),
-  // A drawing sheet and a listing thumbnail are both pictures, but only one is
-  // dimensioned with callouts, so the lookup has to be able to tell them apart.
   sheetSource: d.drawingFor('SA83-001')?.source,
-  listingSource: d.drawingFor('SA80-106')?.source,
+  series8000Source: d.drawingFor('SA80-106')?.source,
+  newest8000Source: d.drawingFor('SA80-374')?.source,
+  retired8000IsNull: d.drawingFor('SA80-240'),
   missingIsNull: d.drawingFor('SA99-999'),
 })));
 step('drawings: ' + JSON.stringify({ ...drawCheck, isImage: drawCheck.isImage }));
 if (drawCheck.count < 400) throw new Error('the drawings did not load');
 if (!drawCheck.isImage) throw new Error('a known drawing did not resolve to an image');
 if (drawCheck.sheetSource !== 'sheet') throw new Error('a drawing sheet should say it is a sheet');
-if (drawCheck.listingSource !== 'listing') throw new Error('a listing thumbnail should say where it came from');
+if (drawCheck.series8000Source !== 'sheet') throw new Error('8000 Series should use its full drawing sheets');
+if (drawCheck.newest8000Source !== 'sheet') throw new Error('the new SA80-374 drawing did not load');
+if (drawCheck.retired8000IsNull !== null) throw new Error('SA80-240 is absent from the replacement Series PDFs');
 if (drawCheck.missingIsNull !== null) throw new Error('an unknown drawing should be null, not a broken image');
 
 // And it opens from a die on a line.

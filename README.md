@@ -199,7 +199,7 @@ through the assembled profile with every component called out where it sits.
 The listing tells you `80-113` is the exterior; the drawing tells you which
 piece that is on the rack.
 
-`js/drawings.js` carries **883 pictures, 2.3 MB**, keyed by sub-assembly. Each
+`js/drawings.js` carries **883 pictures, 2.9 MB**, keyed by sub-assembly. Each
 page is cropped to the drawing itself — the revision table, the components
 table and the title block are dropped, since the first two repeat what the app
 already knows and the third is letterhead — then rendered 1-bit at 720px and
@@ -208,24 +208,22 @@ which is what makes carrying hundreds of them inside a single offline file
 possible at all. They keep a white ground in dark mode: inverted line art no
 longer matches the paper drawing next to the machine.
 
-**Where a drawing sheet is not in hand, the listing's own thumbnail stands
-in.** Every Listing has an *Assembly Diagram* column with a small profile per
-row — no dimensions and no callouts, but a real picture of the shape, and a
-real picture beats none. `tools/extract-listing-thumbs.py` pulls those out,
-and `extract-drawings.py` merges them into the gaps. The sheet always wins
-where both exist, `DRAWING_SOURCE` records which kind each one is, and the
-lookup captions the thumbnails so nobody hunts for a callout that was never
-drawn on them.
+**The current library uses full Series PDF sheets throughout.** The clearer
+8000 Series sets replaced the older Listing thumbnails, so every carried
+picture now has dimensions and component callouts. `DRAWING_SOURCE` remains
+able to identify a fallback thumbnail if a future incomplete series needs one,
+but the current build does not use any.
 
-That is **620 sheets and 263 thumbnails**. Against the current schedules, 164
-of the dies in use are sub-assemblies the book carries, and 163 of those now
-have a picture — 100 full sheets, 63 thumbnails, one gap (`S89.083HT`).
+That is **883 full sheets and zero thumbnails**. Against the current schedules,
+164 of the dies in use are sub-assemblies the book carries, and 163 of those
+have a full sheet; the remaining gap is `S89.083HT`.
 `drawingFor()` still returns null rather than a broken image, so the last one
 degrades quietly.
 
 ```
 tools/extract-listing-thumbs.py <dir-of-listing-pdfs> thumbs.json
 tools/extract-drawings.py <dir-of-drawing-pdfs> js/drawings.js thumbs.json
+tools/replace-series-drawings.py js/drawings.js tools/8000-series-drawing-map.json <dir-of-8000-pdfs> <pdftoppm>
 ```
 
 The thumbnails are cut by row position rather than by an assumed row height:

@@ -1,0 +1,21 @@
+{
+  "replace": "SA80-\\d{3}",
+  "assemblyFormat": "SA80-{number:03d}",
+  "expectedDrawings": 263,
+  "crop": [0.13, 0.15, 0.94, 0.66],
+  "documents": [
+    {
+      "file": "8000 series PDF Set 1.pdf",
+      "ranges": [
+        { "pages": [1, 130], "firstAssembly": 101 }
+      ]
+    },
+    {
+      "file": "8000 series PDF Set 2.pdf",
+      "ranges": [
+        { "pages": [1, 9], "firstAssembly": 231 },
+        { "pages": [10, 133], "firstAssembly": 251 }
+      ]
+    }
+  ]
+}
