@@ -76,7 +76,7 @@ step('tabs: ' + tabs.join(', '));
 const setupGear = await page.$$eval('.hdr-setup', (ns) => ns.map((n) => n.getAttribute('aria-label')));
 step('setup control: ' + JSON.stringify(setupGear));
 if (setupGear.length !== 1) throw new Error('Setup is not reachable from the header');
-if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Today,Staging,Rush,Back Orders,Die Lookup,Extrusions,Shift Update') {
+if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Today,Staging,Rush,Back Orders,Die Lookup,Extrusions,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -115,6 +115,20 @@ for (const [label, file] of [['Rolling workbook', ROLLING], ['CNC workbook', CNC
   await page.waitForSelector('dialog', { state: 'detached' });
 }
 await page.screenshot({ path: path.join(SHOT, 'setup.png'), fullPage: true });
+
+// The cover is an operational briefing, not a decorative landing page: it
+// must expose real work and every shortcut must remain a full-size control.
+await gotoTab('Overview');
+await page.waitForSelector('.overview');
+const overview = await page.evaluate(() => ({
+  bands: document.querySelectorAll('.overview-band').length,
+  quickStarts: document.querySelectorAll('.overview-quick').length,
+  hasPriority: !!document.querySelector('.overview-open'),
+}));
+step('overview: ' + JSON.stringify(overview));
+if (overview.bands !== 3 || overview.quickStarts !== 4 || !overview.hasPriority) {
+  throw new Error('overview briefing is incomplete: ' + JSON.stringify(overview));
+}
 
 // walk every centre page
 for (const [tab, expectSubtabs, expectTitle] of [

@@ -1,34 +1,57 @@
-# Option 2 visual QA
+# Option 3 Overview visual QA
 
-## Comparison
+## Comparison target
 
-- Visual target: `C:\Users\abhay.badhwar\.codex\generated_images\01a001db-b21a-7120-b6c0-c6cc1bbe39eb\exec-0de710d6-3fef-49d1-89c9-ffed7a3bbb1c.png`
-- Implementation capture: `test/screens/qa/rolling-desktop-dark.png`
-- Combined comparison: `test/artifacts/option2-comparison-final.png`
-- Viewport: 1487 × 1058, dark colour scheme, seeded production state, Rolling (Auto), selected overdue rush line
-- Responsive check: 390 × 844, queue and full-width selected-line drawer
+- Source visual truth: `C:\Users\abhay.badhwar\.codex\generated_images\01a001db-b21a-7120-b6c0-c6cc1bbe39eb\exec-23fa4c39-b928-4878-b998-4898567a1e55.png`
+- Rendered implementation: `test/screens/overview-desktop-qa.png`
+- Full-view comparison evidence: `test/screens/overview-qa-comparison.png`
+- Focused priority-action comparison: `test/screens/overview-qa-focus.png`
+- Responsive evidence: `test/screens/overview-phone-qa.png`
+- Desktop viewport/state: 1488 × 1058 CSS px, device pixel ratio 1, dark scheme, sanitized production fixture, Midnight shift, populated handoff and queues.
+- Pixel normalization: source 1487 × 1058 px; implementation 1488 × 1058 px. Both were displayed at the same scale in the full-view comparison; the one-pixel source-width difference is immaterial.
+- Phone viewport/state: 390 × 844 CSS px, device pixel ratio 1, same fixture and route.
 
-## Findings and corrections
+## Fidelity surfaces
 
-1. **P1 — none.** The production queue, three-state status control, line selection, filters, navigation, and contextual actions remain operational.
-2. **P2 — running strip had too much visual weight.** Replaced the half-width purple fill with a neutral command surface and a narrow work-colour rail.
-3. **P2 — machine choice followed the metrics.** Moved the machine tabs ahead of the four metrics to match the selected direction's information hierarchy.
-4. **P2 — the command rail lacked centre workload counts and current-shift context.** Added compact live counts for all four centres and restored the shift chip on desktop.
-5. **P2 — staging required two decisions for the common case.** Added a large one-tap action for the next shift and kept a secondary picker for exceptions.
-6. **P2 — long Shift Update forms had no way to focus the remaining work.** Added an `Only incomplete` filter without hiding saved content by default.
-7. **P2 — Setup did not answer whether this device was ready.** Added readiness cards for schedules, sharing, local storage, crew identity, and the latest backup.
-8. **P3 — phone detail mode initially preserved the desktop selection during the responsive test.** Verified that a fresh phone session starts on the queue; an explicit line selection opens a full-width drawer with large status targets and a visible close action.
-9. **P2 — the approved layout still read as one flat dark slab.** Raised the separation between the command rail, filters, running strip, queue selection and inspector with stronger solid surfaces, coloured edges and restrained elevation.
-10. **P2 — generic line marks did not distinguish machines or tools.** Replaced them with a consistent vendored icon subset for Rolling, FOM, CNC/FMC, Punch, Today, Staging and Shift Update, then gave navigation, metrics, overview cards and inspector actions purpose-sized icon tiles.
-11. **P2 — brighter mixed surfaces exposed a false failure in the visual contrast test.** Updated its parser for Chromium's `color(srgb …)` serialization; all 26 sampled text pairs now pass WCAG AA in both themes.
-12. **P2 — interactions changed state without enough spatial feedback.** Added one-shot motion for page and machine changes, queue selection, status confirmation, group reveal, inspector entry/exit, and Today item completion. Hover lift is limited to precise pointers, and every CSS and Web Animations path honours reduced motion.
+- Fonts and typography: the app keeps its offline system stack and established weights. Overview-specific W/O, quantity, shift and action typography was enlarged to match the source hierarchy and remain readable on the floor. No external font was introduced.
+- Spacing and layout rhythm: the final desktop uses the source's three-column composition: 232px command rail, 922px briefing/action region and 274px quick-start rail. Cards share the existing 8px app radius and restrained border/elevation tokens.
+- Colors and tokens: the source's navy surfaces and blue, violet, amber and red semantic rails map to the existing dark-mode tokens. Light mode continues to derive from the same token system.
+- Image and icon fidelity: the source contains line icons but no photographic or branded image assets. The implementation uses the app's existing vendored Lucide-compatible icon paths so the single-file offline constraint remains intact; no placeholder, emoji or external asset was added.
+- Copy and content: headings and action order match the selected design. Work orders, dates, quantities, shortages, rush flags, machine issues and handoff text are derived from real tracker state rather than copied mock values.
 
-## Deliberate differences from the concept
+## Findings and comparison history
 
-- The existing Cutting wordmark was retained; the concept's invented BV badge was not introduced as a fake brand asset. The icon set was expanded from a consistent Lucide-compatible subset and remains vendored into the single offline file.
-- Queue rows keep checkboxes, rush/back-order context, notes, and the large three-state status control because these are working shop-floor actions, not decorative table fields.
-- Date and shift context use the app's existing Today and Shift Update semantics; the current shift also appears in the command rail.
+1. **P1 — phone header expanded to 178px and appeared to squeeze the briefing.**
+   - Evidence: the first phone render showed the Overview tab class inheriting the page-level `.overview` rules.
+   - Fix: renamed the navigation wrapper to `.briefing`, restoring the proven two-row phone shell.
+   - Post-fix evidence: `overview-phone-qa.png` measures a 96px header, 0px document overflow and full-width briefing cards.
+2. **P2 — quick starts began below the briefing instead of forming the source's right-hand command rail.**
+   - Evidence: the first full-view render placed the aside at y=234 while the source begins it beside the date and handoff.
+   - Fix: promoted Overview to a two-column grid, spanning quick starts across both rows; tuned the desktop rail to 274px and its cards to 178px.
+   - Post-fix evidence: the final quick-start rail begins at y=20, x=1194 and spans 798px, aligned with the briefing top.
+3. **P2 — the first-action typography was too small for the source hierarchy and shop-floor glanceability.**
+   - Evidence: the focused comparison showed the W/O, quantity and Open W/O label receding behind badges and secondary copy.
+   - Fix: enlarged the W/O and quantity to 28px, project to the large body token and primary-action type to 17–20px.
+   - Post-fix evidence: the focused comparison preserves the same reading order as the source: urgency, W/O, project/context, quantity, then action.
+4. **P2 — Overview initially sat inside the Production Centres navigation group.**
+   - Evidence: the selected source gives Overview its own navigation heading.
+   - Fix: added a dedicated Overview group while retaining the existing centre and department-tool groups.
+   - Post-fix evidence: desktop and phone captures show Overview as the first, separately labelled entry point.
 
-## Result
+No actionable P0, P1 or P2 findings remain.
 
-Final result: **passed**. No unresolved P1 or P2 visual issues at the tested desktop and phone states. The complete app, cloud, routing, visual, offline and standalone gates pass; the self-contained build is 3,661 KB.
+## Interaction and responsive evidence
+
+- Open W/O routed from Overview to `#fom` and opened the correct line inspector.
+- Today quick start routed to `#today`.
+- Phone rendered all three bands and four quick starts with no horizontal page overflow; the smallest main-page control is 44px high.
+- Browser console diagnostics returned no errors.
+- End-to-end app, standalone-file and offline checks pass after adding Overview to their navigation assertions.
+
+## Intentional differences
+
+- The implementation uses live derived tracker values instead of the concept's static sample data.
+- The mock's unconfigured “Contact your lead” card was not shipped as a false action.
+- Existing app icons and system fonts were retained to preserve the zero-dependency, fully offline build.
+
+final result: passed

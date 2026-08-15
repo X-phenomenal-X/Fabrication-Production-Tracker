@@ -97,7 +97,7 @@ const booted = await page.evaluate(() => ({
   online: navigator.onLine,
 }));
 step('offline boot: ' + JSON.stringify(booted));
-if (booted.tabs !== 11) fail(`the app did not render its nav offline (${booted.tabs} tabs)`);
+if (booted.tabs !== 12) fail(`the app did not render its nav offline (${booted.tabs} tabs)`);
 if (!booted.chip.includes('offline')) fail('the header does not say it is offline: ' + booted.chip.join(', '));
 
 // The day's list is still there, and still writable.

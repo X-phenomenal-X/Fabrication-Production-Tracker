@@ -12,6 +12,7 @@ import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
 import { renderToday } from './views/today.js';
 import { renderStaging } from './views/staging.js';
+import { renderOverview } from './views/overview.js';
 import { renderDies } from './views/dies.js';
 import { renderExtrusions } from './views/extrusions.js';
 import { renderShiftUpdate } from './views/shiftupdate.js';
@@ -29,6 +30,7 @@ import { registerServiceWorker, watchConnection, isOnline } from './offline.js';
 // write the update, set the app up. Mixing them in one row of eight made the
 // four that matter no easier to find than Setup.
 const TABS = [
+  { key: 'overview', label: 'Overview', kind: 'centre', icon: 'home', render: renderOverview },
   { key: 'rolling', label: 'Rolling', kind: 'centre', icon: 'rollers', render: makeCentreView('Rolling') },
   { key: 'fom', label: 'FOM', kind: 'centre', icon: 'factory', render: makeCentreView('FOM') },
   { key: 'cnc', label: 'CNC & FMC', short: 'CNC', kind: 'centre', icon: 'cpu', render: makeCentreView('CNC') },
@@ -43,8 +45,8 @@ const TABS = [
   { key: 'setup', label: 'Setup', kind: 'tool', icon: 'gear', render: renderData },
 ];
 
-let current = location.hash.slice(1) || 'rolling';
-if (!TABS.some((t) => t.key === current)) current = 'rolling';
+let current = location.hash.slice(1) || 'overview';
+if (!TABS.some((t) => t.key === current)) current = 'overview';
 
 const root = document.getElementById('app');
 let scheduled = false;
@@ -94,7 +96,7 @@ const TAB_GROUP = { rolling: 'Rolling', fom: 'FOM', cnc: 'CNC', punch: 'Punch' }
 
 function tabBadge(tab) {
   const { key } = tab;
-  if (tab.kind === 'centre' && hasTasks()) {
+  if (TAB_GROUP[key] && hasTasks()) {
     const n = (machinesByGroup().get(TAB_GROUP[key]) || [])
       .reduce((total, machine) => total + openCountFor(machine.key), 0);
     return n ? el('span.tab-badge.centre-count', {}, String(n)) : null;
@@ -262,9 +264,12 @@ function header() {
       syncIndicator()),
 
     el('nav.tabs', { 'aria-label': 'Pages' },
+      el('div.tabgroup.briefing', { role: 'group', 'aria-label': 'Overview' },
+        el('span.nav-eyebrow', { 'aria-hidden': 'true' }, 'Overview'),
+        ...TABS.filter((t) => t.key === 'overview').map(tabButton)),
       el('div.tabgroup.centres', { role: 'group', 'aria-label': 'Production centres' },
         el('span.nav-eyebrow', { 'aria-hidden': 'true' }, 'Production centres'),
-        ...TABS.filter((t) => t.kind === 'centre').map(tabButton)),
+        ...TABS.filter((t) => t.kind === 'centre' && t.key !== 'overview').map(tabButton)),
       el('span.tabsep', { 'aria-hidden': 'true' }),
       el('div.tabgroup.tools', { role: 'group', 'aria-label': 'Department tools' },
         el('span.nav-eyebrow', { 'aria-hidden': 'true' }, 'Department tools'),

@@ -1,0 +1,311 @@
+/* The cover sheet for an incoming shift.
+
+   This page stores nothing. It is a briefing assembled from the same queues,
+   shortages, rush flags and shift logs the working pages already use, so its
+   priorities cannot drift into a second version of the schedule. */
+
+import { el, chip, icon, fmtDate, fmtNum, fmtWhen } from '../ui.js';
+import { state, me } from '../store.js';
+import {
+  addDays, assignedMachine, effectiveTaskStatus, hasTasks, machineConfig,
+  resolveBackOrder, resolveRush, resolveTask, shiftUpdateFor, taskNoteFor,
+  taskStatusKey, tasksInScope, today, todayBoard,
+} from '../model.js';
+import { MACHINES, MACHINE_BY_KEY } from '../machines.js';
+import { SHIFTS, shiftAt } from '../shifts.js';
+import { focusCentreTask } from './centre.js';
+
+const GROUP_PAGE = { Rolling: 'rolling', FOM: 'fom', CNC: 'cnc', Punch: 'punch' };
+const PREVIOUS_SHIFT = {
+  DAY: { key: 'NIGHT', day: -1 },
+  AFT: { key: 'DAY', day: 0 },
+  NIGHT: { key: 'AFT', day: 0 },
+};
+
+function longDate(iso) {
+  const date = new Date(iso + 'T00:00:00');
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric',
+  }).format(date);
+}
+
+function currentShift(now = new Date()) {
+  const key = shiftAt(now);
+  const ref = today();
+  // Between midnight and 07:00 the floor is still working the shift that
+  // started yesterday at 23:00. Naming it with today's date would point at
+  // the wrong saved handoff and the wrong shift-update record.
+  const date = key === 'NIGHT' && now.getHours() < 7 ? addDays(ref, -1) : ref;
+  return { key, date, shift: SHIFTS[key] };
+}
+
+function previousHandoff(date, shiftKey) {
+  const previous = PREVIOUS_SHIFT[shiftKey];
+  const previousDate = addDays(date, previous.day);
+  const log = state.shiftLogs?.[`${previousDate}|${previous.key}`] || null;
+  const source = log?.rows || {};
+  const usefulRow = Object.entries(source).find(([, row]) =>
+    String(row?.notes || row?.next || row?.done || '').trim());
+  const rowText = usefulRow
+    ? String(usefulRow[1].notes || usefulRow[1].next || usefulRow[1].done || '').trim().split('\n')[0]
+    : '';
+  return {
+    key: previous.key,
+    label: SHIFTS[previous.key].label,
+    date: previousDate,
+    log,
+    text: String(log?.notes || '').trim() || rowText || 'No written handoff for this shift yet.',
+  };
+}
+
+function machineLabel(key) {
+  const machine = MACHINE_BY_KEY[key];
+  return machine ? machineConfig(machine).label : key || 'Unassigned';
+}
+
+function rowFor(task, ref) {
+  const resolved = resolveTask(task);
+  return {
+    task: resolved,
+    machine: assignedMachine(resolved),
+    status: effectiveTaskStatus(resolved),
+    rush: resolveRush(resolved, ref),
+    bo: resolveBackOrder(resolved),
+  };
+}
+
+function uniqueRows(rows) {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const key = taskStatusKey(row.task);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function urgency(a, b) {
+  if (a.rush.on !== b.rush.on) return a.rush.on ? -1 : 1;
+  if (a.bo.on !== b.bo.on) return a.bo.on ? -1 : 1;
+  if (a.status.key !== b.status.key) {
+    if (a.status.key === 'IN_PROGRESS') return -1;
+    if (b.status.key === 'IN_PROGRESS') return 1;
+  }
+  const ad = a.task.cuttingDate || '9999-99-99';
+  const bd = b.task.cuttingDate || '9999-99-99';
+  return ad === bd ? String(a.task.wo).localeCompare(String(b.task.wo), undefined, { numeric: true })
+    : ad.localeCompare(bd);
+}
+
+function openTask(row, go) {
+  const page = focusCentreTask(row.task);
+  go(page || GROUP_PAGE[MACHINE_BY_KEY[row.machine]?.group] || 'today');
+}
+
+function taskContext(row) {
+  const note = taskNoteFor(taskStatusKey(row.task))?.text;
+  return row.rush.reason || row.bo.note || note || row.task.comments || '';
+}
+
+function taskBadges(row) {
+  return [
+    row.task.die ? el('span.die', {}, row.task.die) : null,
+    row.rush.on ? chip('Rush', row.rush.late ? 'bad' : 'warn') : null,
+    row.bo.on ? chip('B/O', 'bad') : null,
+  ];
+}
+
+function dueText(task, ref) {
+  if (!task.cuttingDate) return 'No cutting date';
+  const prefix = task.cuttingDate < ref ? 'Due' : task.cuttingDate === ref ? 'Due today' : 'Due';
+  return `${prefix} ${fmtDate(task.cuttingDate)}`;
+}
+
+function primaryWork(row, ref, go) {
+  if (!row) return el('div.overview-empty', {},
+    icon('check', { size: 24 }),
+    el('div', {}, el('strong', {}, 'Nothing overdue'),
+      el('div.small.muted', {}, 'The next scheduled lines are shown below.')));
+
+  const context = taskContext(row);
+  return el('div.overview-focus-card', {},
+    el('div.overview-focus-icon', {}, icon(row.rush.on ? 'bolt' : 'alert', { size: 28 })),
+    el('div.overview-focus-copy', {},
+      el('div.overview-task-id', {},
+        el('strong.mono', {}, row.task.wo),
+        ...taskBadges(row)),
+      el('div.overview-project', {},
+        row.task.project || 'No project',
+        row.task.floor ? el('span.muted', {}, ` · ${row.task.floor}`) : null),
+      context ? el('div.overview-context', {}, context) : null),
+    el('div.overview-focus-qty', {},
+      el('strong.mono', {}, fmtNum(row.task.qty)),
+      el('span', {}, 'pcs'),
+      el('small', {}, dueText(row.task, ref))),
+    el('button.primary.overview-open', {
+      onclick: () => openTask(row, go),
+      'aria-label': `Open work order ${row.task.wo}`,
+    }, icon('arrow', { size: 18 }), el('span', {}, 'Open W/O', el('b.mono', {}, row.task.wo))));
+}
+
+function upcomingRow(row, ref, go) {
+  return el('button.overview-upcoming-row', {
+    onclick: () => openTask(row, go),
+    'aria-label': `Open work order ${row.task.wo}`,
+  },
+    el('span.overview-row-icon', {}, icon('clock', { size: 18 })),
+    el('span.overview-row-main', {},
+      el('span', {}, el('strong.mono', {}, row.task.wo), ...taskBadges(row)),
+      el('span', {}, row.task.project || 'No project', row.task.floor ? ` · ${row.task.floor}` : '')),
+    el('span.overview-row-qty', {}, el('strong.mono', {}, fmtNum(row.task.qty)), ' pcs'),
+    el('span.overview-row-date', {}, dueText(row.task, ref)),
+    icon('chevron', { size: 17 }));
+}
+
+function watchTask(label, row, tone, iconName, go) {
+  if (!row) return null;
+  const context = taskContext(row);
+  return el('button.overview-watch-row.' + tone, {
+    onclick: () => openTask(row, go),
+    'aria-label': `${label}: open work order ${row.task.wo}`,
+  },
+    el('span.overview-watch-icon', {}, icon(iconName, { size: 20 })),
+    el('span.overview-watch-label', {}, label),
+    el('span.overview-watch-main', {},
+      el('strong', {}, row.task.wo, ' ', row.task.project || ''),
+      el('span', {}, context || machineLabel(row.machine))),
+    el('span.overview-watch-qty.mono', {}, `${fmtNum(row.task.qty)} pcs`),
+    icon('chevron', { size: 17 }));
+}
+
+function machineIssue(go) {
+  for (const machine of MACHINES.filter((item) => !item.queue)) {
+    const update = shiftUpdateFor(machine.key);
+    if (!update?.down && !update?.staleDown) continue;
+    const note = update.notes?.[0] || (update.staleDown
+      ? `Down status carried from ${fmtDate(update.staleDown)}` : 'Reported down in the latest shift update.');
+    return el('button.overview-watch-row.warn', {
+      onclick: () => go(GROUP_PAGE[machine.group]),
+      'aria-label': `Open ${machineConfig(machine).label}`,
+    },
+      el('span.overview-watch-icon', {}, icon('gear', { size: 20 })),
+      el('span.overview-watch-label', {}, 'Machine issue'),
+      el('span.overview-watch-main', {},
+        el('strong', {}, machineConfig(machine).label),
+        el('span', {}, note)),
+      el('span.overview-watch-qty', {}, 'Down'),
+      icon('chevron', { size: 17 }));
+  }
+  return null;
+}
+
+function band(step, title, hint, tone, body) {
+  return el('section.overview-band.' + tone, {},
+    el('header.overview-band-head', {},
+      el('span.overview-step', {}, String(step)),
+      el('h2', {}, title),
+      el('span', {}, hint)),
+    body);
+}
+
+function quickStart(label, detail, iconName, page, go, on) {
+  return el('button.overview-quick' + (on ? '.on' : ''), {
+    onclick: () => go(page),
+  },
+    el('span.overview-quick-icon', {}, icon(iconName, { size: 24 })),
+    el('span', {}, el('strong', {}, label), el('small', {}, detail)),
+    icon('chevron', { size: 18 }));
+}
+
+export function renderOverview(rerender, go) {
+  const ref = today();
+  const shiftContext = currentShift();
+  const handoff = previousHandoff(shiftContext.date, shiftContext.key);
+  const shift = shiftContext.shift;
+  const crew = shift.crew ? `${shift.crew} operators` : 'Full crew';
+
+  const all = tasksInScope().map((task) => rowFor(task, ref));
+  const open = all.filter((row) => row.status.key !== 'DONE').sort(urgency);
+  const done = all.length - open.length;
+  const donePct = all.length ? Math.round((done / all.length) * 100) : 0;
+
+  const board = hasTasks() ? todayBoard(ref) : {
+    overdue: [], rushNow: [], dueToday: [], running: [], backOrders: [], finishedToday: [],
+  };
+  const urgent = uniqueRows([
+    ...board.overdue, ...board.rushNow, ...board.dueToday, ...board.running,
+  ]).sort(urgency);
+  const first = urgent[0] || open[0] || null;
+  const firstKey = first ? taskStatusKey(first.task) : null;
+  const coming = open
+    .filter((row) => taskStatusKey(row.task) !== firstKey)
+    .filter((row) => !row.task.cuttingDate || row.task.cuttingDate >= ref)
+    .slice(0, 2);
+  const backOrder = board.backOrders.find((row) => taskStatusKey(row.task) !== firstKey) || null;
+  const rush = board.rushNow.find((row) => taskStatusKey(row.task) !== firstKey) || null;
+
+  const handoffCard = el('section.overview-handoff' + (handoff.log ? '' : '.empty'), {},
+    el('div.overview-handoff-title', {}, `Handoff from ${handoff.label}`),
+    handoff.log ? el('div.overview-handoff-by', {},
+      el('strong', {}, handoff.log.by || 'Previous shift'),
+      el('span', {}, fmtWhen(handoff.log.at))) : null,
+    el('p', {}, handoff.text),
+    el('button.ghost', { onclick: () => go('shift') },
+      handoff.log ? 'View full handoff' : 'Write a handoff', icon('chevron', { size: 16 })));
+
+  const brief = el('header.overview-brief', {},
+    el('div.overview-intro', {},
+      el('div.overview-date', {}, longDate(shiftContext.date)),
+      el('div.overview-shift', {},
+        el('strong', {}, `${shift.label} shift`),
+        el('span', {}, `· ${String(shift.from).padStart(2, '0')}:00–${String(shift.to).padStart(2, '0')}:00`)),
+      el('div.overview-crew', {}, icon('dot', { size: 12 }), crew, me() ? ` · ${me()}` : ''),
+      el('div.overview-complete', {},
+        el('strong', {}, `${donePct}%`),
+        el('span', {}, 'schedule complete'),
+        el('i', {}),
+        el('b.mono', {}, `${fmtNum(done)} / ${fmtNum(all.length)} lines done`))),
+    handoffCard);
+
+  const quick = el('aside.overview-quickstarts', {},
+    el('h2', {}, 'Quick starts'),
+    quickStart('Today', 'View today’s plan', 'calendar', 'today', go),
+    quickStart('Stage material', 'Prepare upcoming work', 'staging', 'staging', go),
+    quickStart('Die lookup', 'Search dies and components', 'search', 'dies', go),
+    quickStart('Write shift update', 'Share notes for the next crew', 'pencil', 'shift', go,
+      !state.shiftLogs?.[`${shiftContext.date}|${shiftContext.key}`]));
+
+  if (!hasTasks()) {
+    return el('div.overview', {},
+      brief,
+      el('div.overview-layout', {},
+        el('div.overview-main', {},
+          el('section.overview-no-data', {},
+            icon('upload', { size: 30 }),
+            el('h2', {}, 'Load the schedules to start the briefing'),
+            el('p', {}, 'The cover page will show the most urgent work, upcoming handoffs, rush lines and shortages.'),
+            el('button.primary', { onclick: () => go('setup') }, 'Go to Setup'))),
+        quick));
+  }
+
+  const keepWatch = [
+    watchTask('Back order', backOrder, 'bad', 'alert', go),
+    watchTask('Rush line', rush, 'warn', 'bolt', go),
+    machineIssue(go),
+  ].filter(Boolean);
+
+  return el('div.overview', {},
+    brief,
+    el('div.overview-layout', {},
+      el('div.overview-main', {},
+        band(1, 'Do now', 'One thing to focus on first.', 'work', primaryWork(first, ref, go)),
+        band(2, 'Coming next', 'Scheduled handoffs to keep the floor moving.', 'accent',
+          coming.length
+            ? el('div.overview-upcoming', {}, ...coming.map((row) => upcomingRow(row, ref, go)))
+            : el('div.overview-empty', {}, icon('check', { size: 22 }), 'No additional work is due next.')),
+        band(3, 'Keep an eye on', 'Items that may affect the shift.', 'bad',
+          keepWatch.length
+            ? el('div.overview-watch', {}, ...keepWatch)
+            : el('div.overview-empty', {}, icon('check', { size: 22 }), 'No active rush, shortage or machine issue.'))),
+      quick));
+}

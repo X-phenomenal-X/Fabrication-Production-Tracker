@@ -46,6 +46,24 @@ function stateFor(group) {
   return viewState.get(group);
 }
 
+/* A cover-page work order opens exactly where it can be acted on: the right
+   centre, the right machine, filtered to the stable work order and already
+   selected in the inspector. This is transient view state, not another
+   overlay on the imported line. */
+export function focusCentreTask(task) {
+  const machineKey = assignedMachine(task);
+  const machine = MACHINE_BY_KEY[machineKey];
+  if (!machine?.group) return null;
+  const vs = stateFor(machine.group);
+  vs.machine = machineKey;
+  vs.q = String(task.wo || '');
+  vs.filter = 'ALL';
+  vs.showDone = false;
+  vs.selected.clear();
+  vs.active = taskStatusKey(task);
+  return { Rolling: 'rolling', FOM: 'fom', CNC: 'cnc', Punch: 'punch' }[machine.group] || null;
+}
+
 const STATUS_ICON = { NOT_STARTED: 'dot', IN_PROGRESS: 'play', DONE: 'check' };
 
 /* ---------- one line ---------- */

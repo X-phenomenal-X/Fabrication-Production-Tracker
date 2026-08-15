@@ -157,6 +157,7 @@ export function download(filename, text, type = 'application/json') {
    without making the offline build fetch a font, sprite or runtime package.
    Every mark uses the same 24px grid, weight and optical proportions. */
 const ICON_PATHS = {
+  home: 'M3 11.5 12 4l9 7.5M5 10v10h14V10M9 20v-6h6v6',
   check: 'M20 6 9 17l-5-5',
   play: 'M6 4l14 8-14 8z',
   dot: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',

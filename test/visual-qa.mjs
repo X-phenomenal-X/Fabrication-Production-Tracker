@@ -59,6 +59,7 @@ const VIEWPORTS = [
 ];
 
 const SCREENS = [
+  { hash: 'overview', name: 'overview' },
   { hash: 'today', name: 'today' },
   { hash: 'staging', name: 'staging' },
   { hash: 'rolling', name: 'rolling' },
