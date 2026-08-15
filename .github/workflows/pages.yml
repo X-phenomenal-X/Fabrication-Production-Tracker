@@ -59,6 +59,7 @@ jobs:
         run: |
           mkdir -p _site
           cp Cutting-Tracker.html _site/index.html
+          cp cover-options.html _site/cover-options.html
           cp manifest.webmanifest _site/manifest.webmanifest
           # The worker's cache name is stamped with the commit, so a deploy
           # retires the previous cache instead of sitting alongside it.
