@@ -1,11 +1,12 @@
 /* Shell: tabs, the identity picker, and the render loop. */
 
-import { el, clear, chip, icon } from './ui.js';
+import { el, chip, icon, fmtWhen, modal, toast } from './ui.js';
 import { allRush, allBackOrders, hasTasks, openTodos, openCountFor } from './model.js';
 import { machinesByGroup } from './machines.js';
 import {
-  state, loadLocal, save, onChange, me, sharedFileName, cloudEnabled, cloudHost,
-  initCloud, pullCloud, pullSharedFile, storageStatus,
+  state, loadLocal, save, onChange, me, sharedFileName, cloudEnabled,
+  initCloud, storageStatus, cloudStatus, sharedFileStatus, retrySync,
+  hasUnsyncedChanges,
 } from './store.js';
 import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
@@ -134,19 +135,117 @@ function tabButton(t) {
     tabBadge(t));
 }
 
+function latestSyncAt(...values) {
+  return values.filter(Boolean).sort().at(-1) || null;
+}
+
+function syncViewState() {
+  const cloud = cloudStatus();
+  const file = sharedFileStatus();
+  const configured = cloud.on || file.on;
+  // One operator action queues the same snapshot to both transports. Taking
+  // the maximum reports unsent actions without calling one edit "two pending"
+  // when a device happens to have cloud and a shared file connected together.
+  const pending = Math.max(cloud.pending || 0, file.pending || 0);
+  const active = cloud.pushing || cloud.pulling || file.writing;
+  const error = cloud.error || file.error;
+  const at = latestSyncAt(cloud.at, file.at);
+
+  if (!isOnline()) return {
+    cloud, file, configured, pending, active: false, at, error,
+    label: pending ? `offline · ${pending} pending` : 'offline', tone: 'warn', icon: 'cloud',
+    detail: pending
+      ? `${pending} saved change${pending === 1 ? '' : 's'} will sync when the connection returns.`
+      : 'No connection. Everything still saves on this device.',
+  };
+  if (error) return {
+    cloud, file, configured, pending, active, at, error,
+    label: pending ? `sync error · ${pending} pending` : 'sync error', tone: 'bad', icon: 'alert',
+    detail: error,
+  };
+  if (active) return {
+    cloud, file, configured, pending, active, at, error,
+    label: pending ? `syncing · ${pending} pending` : 'syncing', tone: 'work', icon: 'cloud',
+    detail: 'Sending and checking for updates now.',
+  };
+  if (pending) return {
+    cloud, file, configured, pending, active, at, error,
+    label: `${pending} pending`, tone: 'warn', icon: 'clock',
+    detail: `${pending} change${pending === 1 ? '' : 's'} saved here and waiting to sync.`,
+  };
+  if (configured) return {
+    cloud, file, configured, pending, active, at, error,
+    label: at ? `synced · ${fmtWhen(at)}` : 'connecting', tone: at ? 'ok' : 'work', icon: 'check',
+    detail: at ? `Last successful sync ${fmtWhen(at)}.` : 'Checking the shared copy now.',
+  };
+  return {
+    cloud, file, configured, pending, active, at, error,
+    label: 'this device only', tone: 'mute', icon: 'cloud',
+    detail: 'Not syncing — updates stay on this device. Set it up under Setup.',
+  };
+}
+
+function diagnosticCard(label, st) {
+  if (!st.on) return null;
+  const stateLabel = st.error ? 'Needs attention'
+    : st.pushing || st.pulling || st.writing ? 'Working now'
+      : st.pending ? `${st.pending} pending` : 'Up to date';
+  return el('div.sync-diagnostic-card', {},
+    el('div.sync-diagnostic-head', {},
+      el('strong', {}, label),
+      chip(stateLabel, st.error ? 'bad' : st.pending ? 'warn' : 'ok')),
+    el('dl.sync-facts', {},
+      el('div', {}, el('dt', {}, 'Destination'), el('dd', {}, st.where || 'Connected')),
+      el('div', {}, el('dt', {}, 'Last success'), el('dd', {}, st.at ? fmtWhen(st.at) : 'Not yet')),
+      el('div', {}, el('dt', {}, 'Pending changes'), el('dd.mono', {}, String(st.pending || 0)))),
+    st.error ? el('div.banner.bad.sync-error', { role: 'alert' },
+      el('div', {}, el('strong', {}, 'Last error: '), st.error)) : null);
+}
+
+function openSyncDetails() {
+  const view = syncViewState();
+  const body = el('div.sync-diagnostics', {},
+    el('div.sync-summary.' + view.tone, {},
+      el('span.sync-summary-icon', {}, icon(view.icon, { size: 20 })),
+      el('div', {}, el('strong', {}, view.label), el('div.small', {}, view.detail))),
+    view.configured
+      ? el('div.sync-diagnostic-list', {},
+          diagnosticCard('Cloud', view.cloud),
+          diagnosticCard('Shared file', view.file))
+      : el('p.muted', {},
+          'This device is saving locally, but its updates are not being shared with another device.'));
+
+  const actions = view.configured ? [
+    {
+      label: 'Retry now', class: 'primary', onClick: async (dlg) => {
+        const btn = dlg.querySelector('footer .primary');
+        if (btn) { btn.disabled = true; btn.textContent = 'Retrying…'; }
+        const ok = await retrySync();
+        dlg.close();
+        toast(ok ? 'Sync complete' : 'Sync still needs attention');
+        scheduleRender();
+      },
+    },
+    { label: 'Open Setup', onClick: (dlg) => { dlg.close(); go('setup'); } },
+  ] : [
+    { label: 'Set up sync', class: 'primary', onClick: (dlg) => { dlg.close(); go('setup'); } },
+  ];
+  modal('Sync status', body, { actions });
+}
+
+function syncIndicator() {
+  const view = syncViewState();
+  return el(`button.chip.sync-chip.${view.tone}${view.active ? '.is-active' : ''}`, {
+    type: 'button',
+    title: `${view.detail} Open sync details.`,
+    'aria-label': `${view.label}. ${view.detail} Open sync details.`,
+    'aria-live': 'polite',
+    onclick: openSyncDetails,
+  }, icon(view.icon, { size: 14 }), el('span', {}, view.label));
+}
+
 function header() {
   const shift = SHIFTS[shiftAt()];
-  const shared = sharedFileName();
-  const sync = !isOnline()
-    ? chip('offline', 'warn',
-        'No connection. Everything still saves on this device and syncs when it comes back.')
-    : cloudEnabled()
-      ? chip('synced', 'ok', 'Syncing across devices via ' + cloudHost())
-      : shared
-        ? chip('shared file', 'ok', 'Connected to ' + shared)
-        : chip('this device only', 'mute',
-            'Not syncing — updates stay on this device. Set it up under Setup.');
-  sync.classList.add('sync-chip');
 
   return el('header.top', {},
     el('div.hdr-id', {},
@@ -157,7 +256,7 @@ function header() {
       // Offline outranks the sync state: "synced" next to a dead connection
       // is the one thing the header must never say. Updates still save
       // locally and go up when the signal comes back.
-      sync),
+      syncIndicator()),
 
     el('nav.tabs', { 'aria-label': 'Pages' },
       el('div.tabgroup.centres', { role: 'group', 'aria-label': 'Production centres' },
@@ -307,10 +406,21 @@ watchConnection(scheduleRender);
 initSharedFile(render);
 initCloud();
 
+// Browsers intentionally ignore custom before-close wording, but setting
+// returnValue still produces their standard warning while an outbound snapshot
+// is pending. Locally saved, device-only work does not warn: it is already safe.
+window.addEventListener('beforeunload', (e) => {
+  if (!hasUnsyncedChanges()) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+// Do not wait up to thirty seconds after the shop Wi-Fi comes back.
+window.addEventListener('online', () => { retrySync(); });
+
 // Pick up other people's edits when the tab regains focus — coming back to the
 // app on a phone is exactly the moment its copy is most likely to be stale.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
-  if (sharedFileName()) pullSharedFile();
-  if (cloudEnabled()) pullCloud({ parts: ['work'] });
+  if (sharedFileName() || cloudEnabled()) retrySync();
 });

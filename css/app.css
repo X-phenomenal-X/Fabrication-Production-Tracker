@@ -2419,3 +2419,63 @@ nav.tabs button[aria-current="true"] .nav-icon {
   letter-spacing: .06em; text-transform: uppercase;
 }
 .setup-health-card strong { font-size: var(--t-sm); overflow-wrap: anywhere; }
+
+/* ---------- sync confidence ---------- */
+
+/* This is a status readout and a control. It keeps the compact chip language,
+   but gets a real touch target because its details and retry action must be
+   reachable from every page, including with gloves on a phone. */
+button.sync-chip {
+  min-height: 40px; padding: var(--s2) var(--s3); cursor: pointer; font: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 12%, transparent);
+  transition: transform .14s, box-shadow .14s, background .14s;
+}
+button.sync-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 24%, transparent), var(--shadow-1); }
+button.sync-chip:active { transform: translateY(1px); }
+.sync-chip .ui-icon { flex-shrink: 0; }
+.sync-chip.is-active .ui-icon { animation: sync-breathe 1s ease-in-out infinite alternate; }
+@keyframes sync-breathe { from { opacity: .42; transform: scale(.88); } to { opacity: 1; transform: scale(1.06); } }
+
+.sync-diagnostics { display: grid; gap: var(--s4); min-width: min(520px, 75vw); }
+.sync-summary {
+  display: flex; align-items: flex-start; gap: var(--s3); padding: var(--s4);
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel-2);
+}
+.sync-summary.ok { color: var(--ok); background: var(--ok-soft); }
+.sync-summary.warn { color: var(--warn); background: var(--warn-soft); }
+.sync-summary.bad { color: var(--bad); background: var(--bad-soft); }
+.sync-summary.work { color: var(--work); background: var(--work-soft); }
+.sync-summary.mute { color: var(--ink-2); }
+.sync-summary .small { margin-top: var(--s1); color: currentColor; opacity: .86; line-height: 1.45; }
+.sync-summary-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--r-sm);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.sync-diagnostic-list { display: grid; gap: var(--s3); }
+.sync-diagnostic-card { padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-md); }
+.sync-diagnostic-head { display: flex; align-items: center; gap: var(--s3); justify-content: space-between; }
+.sync-facts { display: grid; gap: var(--s2); margin: var(--s3) 0 0; }
+.sync-facts > div {
+  display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--s3);
+  padding-top: var(--s2); border-top: 1px solid var(--line-soft);
+}
+.sync-facts dt { color: var(--ink-3); font-size: var(--t-sm); }
+.sync-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: var(--t-sm); }
+.sync-error { margin-top: var(--s3); }
+
+@media (max-width: 720px) {
+  /* The phone shell has two rows in a 96px budget. The sync readout stays a
+     compact status chip in row one; the full-size Retry control is one tap
+     away in its dialog, while Die Lookup and Setup keep the 44px action row. */
+  header.top { padding-top: 9px; padding-bottom: 0; }
+  button.sync-chip {
+    height: var(--tap); min-height: var(--tap); padding: 1px 7px;
+    /* Its painted/tappable box is 44px; negative block margins keep the flex
+       row's footprint at 26px. With 9px top padding the box remains entirely
+       on-screen and only meets the next row at its edge. */
+    margin-block: -9px;
+  }
+  .sync-diagnostics { min-width: 0; }
+  .sync-facts > div { grid-template-columns: 105px minmax(0, 1fr); }
+}

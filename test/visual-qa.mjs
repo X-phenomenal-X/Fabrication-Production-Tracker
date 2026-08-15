@@ -229,7 +229,6 @@ for (const theme of ['light', 'dark']) {
         fail(`${screen.name} @ ${vp.name}/${theme}: ${unnamed.length} control(s) with no accessible name`
           + ` — e.g. ${unnamed[0]}`);
       }
-
       /* The phone header once hid both quick actions to buy nav width. That
          made the section-book pictures and Setup unreachable even though both
          features were still bundled. Assert visibility, then open the lookup
@@ -332,6 +331,11 @@ for (const theme of ['light', 'dark']) {
   // Use a real keyboard move. Programmatic .focus() inherits the last input
   // modality, so after the phone lookup test clicks a button Chrome correctly
   // suppresses :focus-visible and a good focus rule looks broken.
+  // Put the browser inside the page's tab order first. Headless Chrome can
+  // otherwise keep keyboard events on its own chrome and report <body> here.
+  // The following real Tab is what switches to keyboard modality and must
+  // produce the app's :focus-visible treatment.
+  await page.locator('button:visible').first().focus();
   await page.keyboard.press('Tab');
   const focusRing = await page.evaluate(() => {
     const btn = document.activeElement;
@@ -347,7 +351,6 @@ for (const theme of ['light', 'dark']) {
     fail(`keyboard focus is invisible on ${focusRing.tag || 'the first control'} `
       + `(box-shadow "${focusRing.after}", outline "${focusRing.outline}")`);
   }
-
   // --- bulk actions clear the browser's safe area ---
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${base}/#fom`);

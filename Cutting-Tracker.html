@@ -2435,6 +2435,66 @@ nav.tabs button[aria-current="true"] .nav-icon {
 }
 .setup-health-card strong { font-size: var(--t-sm); overflow-wrap: anywhere; }
 
+/* ---------- sync confidence ---------- */
+
+/* This is a status readout and a control. It keeps the compact chip language,
+   but gets a real touch target because its details and retry action must be
+   reachable from every page, including with gloves on a phone. */
+button.sync-chip {
+  min-height: 40px; padding: var(--s2) var(--s3); cursor: pointer; font: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 12%, transparent);
+  transition: transform .14s, box-shadow .14s, background .14s;
+}
+button.sync-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 24%, transparent), var(--shadow-1); }
+button.sync-chip:active { transform: translateY(1px); }
+.sync-chip .ui-icon { flex-shrink: 0; }
+.sync-chip.is-active .ui-icon { animation: sync-breathe 1s ease-in-out infinite alternate; }
+@keyframes sync-breathe { from { opacity: .42; transform: scale(.88); } to { opacity: 1; transform: scale(1.06); } }
+
+.sync-diagnostics { display: grid; gap: var(--s4); min-width: min(520px, 75vw); }
+.sync-summary {
+  display: flex; align-items: flex-start; gap: var(--s3); padding: var(--s4);
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel-2);
+}
+.sync-summary.ok { color: var(--ok); background: var(--ok-soft); }
+.sync-summary.warn { color: var(--warn); background: var(--warn-soft); }
+.sync-summary.bad { color: var(--bad); background: var(--bad-soft); }
+.sync-summary.work { color: var(--work); background: var(--work-soft); }
+.sync-summary.mute { color: var(--ink-2); }
+.sync-summary .small { margin-top: var(--s1); color: currentColor; opacity: .86; line-height: 1.45; }
+.sync-summary-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--r-sm);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.sync-diagnostic-list { display: grid; gap: var(--s3); }
+.sync-diagnostic-card { padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-md); }
+.sync-diagnostic-head { display: flex; align-items: center; gap: var(--s3); justify-content: space-between; }
+.sync-facts { display: grid; gap: var(--s2); margin: var(--s3) 0 0; }
+.sync-facts > div {
+  display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--s3);
+  padding-top: var(--s2); border-top: 1px solid var(--line-soft);
+}
+.sync-facts dt { color: var(--ink-3); font-size: var(--t-sm); }
+.sync-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: var(--t-sm); }
+.sync-error { margin-top: var(--s3); }
+
+@media (max-width: 720px) {
+  /* The phone shell has two rows in a 96px budget. The sync readout stays a
+     compact status chip in row one; the full-size Retry control is one tap
+     away in its dialog, while Die Lookup and Setup keep the 44px action row. */
+  header.top { padding-top: 9px; padding-bottom: 0; }
+  button.sync-chip {
+    height: var(--tap); min-height: var(--tap); padding: 1px 7px;
+    /* Its painted/tappable box is 44px; negative block margins keep the flex
+       row's footprint at 26px. With 9px top padding the box remains entirely
+       on-screen and only meets the next row at its edge. */
+    margin-block: -9px;
+  }
+  .sync-diagnostics { min-width: 0; }
+  .sync-facts > div { grid-template-columns: 105px minmax(0, 1fr); }
+}
+
 </style>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#9986;</text></svg>">
 </head>
@@ -2920,7 +2980,6 @@ nav.tabs button[aria-current="true"] .nav-icon {
     people: [],
     settings: { me: null }
   };
-  var saveTimer = null;
   var listeners = /* @__PURE__ */ new Set();
   var localSaveProblem = null;
   function onChange(fn) {
@@ -3296,7 +3355,7 @@ nav.tabs button[aria-current="true"] .nav-icon {
     };
     if (shiftUpdate) state.shiftUpdate = { ...shiftUpdate, importedAt: report.importedAt };
     save();
-    queueCloudPush({ base: true });
+    queueCloudPush({ base: true, change: false });
   }
   function snapshot() {
     return {
@@ -3360,9 +3419,9 @@ nav.tabs button[aria-current="true"] .nav-icon {
   }
   function save() {
     persistLocal();
-    emit();
     if (fileHandle) queueFileSave();
     queueCloudPush();
+    emit();
   }
   function loadLocal() {
     try {
@@ -3383,8 +3442,25 @@ nav.tabs button[aria-current="true"] .nav-icon {
     }
   }
   var fileHandle = null;
+  var fileTimer = null;
+  var fileWritePromise = null;
+  var fileChangeId = 0;
+  var fileAckId = 0;
+  var fileState = { at: null, error: null, writing: false };
   function sharedFileName() {
     return fileHandle ? fileHandle.name : null;
+  }
+  function sharedFileStatus() {
+    return {
+      ...fileState,
+      on: !!fileHandle,
+      where: sharedFileName(),
+      pending: Math.max(0, fileChangeId - fileAckId)
+    };
+  }
+  function setFileState(patch) {
+    fileState = { ...fileState, ...patch };
+    emit();
   }
   function supportsSharedFile() {
     return typeof window !== "undefined" && "showOpenFilePicker" in window;
@@ -3511,8 +3587,8 @@ nav.tabs button[aria-current="true"] .nav-icon {
       const remote = await readHandle(handle);
       mergeSnapshot(remote);
     }
-    await writeSharedFile();
-    emit();
+    fileChangeId++;
+    await flushSharedFile();
     return handle.name;
   }
   async function reconnectSharedFile() {
@@ -3537,10 +3613,11 @@ nav.tabs button[aria-current="true"] .nav-icon {
       const remote = await readHandle(fileHandle);
       mergeSnapshot(remote);
       persistLocal();
-      emit();
+      setFileState({ at: now(), error: null });
       return true;
     } catch (e) {
       console.warn("could not read shared file", e);
+      setFileState({ error: e?.message || "Could not read the shared file." });
       return false;
     }
   }
@@ -3555,6 +3632,35 @@ nav.tabs button[aria-current="true"] .nav-icon {
     await w.write(JSON.stringify(snapshot()));
     await w.close();
   }
+  async function flushSharedFile() {
+    if (!fileHandle) return false;
+    if (fileWritePromise) return fileWritePromise;
+    clearTimeout(fileTimer);
+    fileWritePromise = (async () => {
+      setFileState({ writing: true });
+      let ok = true;
+      try {
+        do {
+          const sending = fileChangeId;
+          await writeSharedFile();
+          fileAckId = Math.max(fileAckId, sending);
+          setFileState({ at: now(), error: null });
+        } while (fileChangeId > fileAckId);
+      } catch (e) {
+        ok = false;
+        console.warn("shared file write failed", e);
+        setFileState({ error: e?.message || "Could not write to the shared file." });
+      } finally {
+        setFileState({ writing: false });
+      }
+      return ok;
+    })();
+    try {
+      return await fileWritePromise;
+    } finally {
+      fileWritePromise = null;
+    }
+  }
   var CLOUD_BASE_KEYS = ["tasks", "machineMeta", "shiftUpdate"];
   function cloudDoc(part) {
     const snap = snapshot();
@@ -3565,9 +3671,17 @@ nav.tabs button[aria-current="true"] .nav-icon {
   var cloudTimer = null;
   var cloudPoll = null;
   var cloudBusy = false;
-  var cloudState = { on: false, at: null, error: null, pushing: false };
+  var cloudPushPromise = null;
+  var cloudChangeId = 0;
+  var cloudAckId = 0;
+  var cloudState = { on: false, at: null, error: null, pushing: false, pulling: false };
   function cloudStatus() {
-    return { ...cloudState, on: cloudEnabled(), where: cloudHost() };
+    return {
+      ...cloudState,
+      on: cloudEnabled(),
+      where: cloudHost(),
+      pending: Math.max(0, cloudChangeId - cloudAckId)
+    };
   }
   function setCloudState(patch) {
     cloudState = { ...cloudState, ...patch };
@@ -3576,6 +3690,7 @@ nav.tabs button[aria-current="true"] .nav-icon {
   async function pullCloud({ parts = CLOUD_PARTS } = {}) {
     if (!cloudEnabled() || cloudBusy) return false;
     cloudBusy = true;
+    setCloudState({ pulling: true });
     try {
       const remote = await cloudPull(parts);
       if (remote?.work) mergeSnapshot(remote.work);
@@ -3588,32 +3703,57 @@ nav.tabs button[aria-current="true"] .nav-icon {
       return false;
     } finally {
       cloudBusy = false;
-    }
-  }
-  async function pushCloud(withBase) {
-    if (!cloudEnabled()) return;
-    setCloudState({ pushing: true });
-    try {
-      const remote = await cloudPull(withBase ? CLOUD_PARTS : ["work"]);
-      if (remote?.work) mergeSnapshot(remote.work);
-      if (withBase && remote?.base) mergeSnapshot(remote.base);
-      const docs = { work: cloudDoc("work") };
-      if (withBase) docs.base = cloudDoc("base");
-      await cloudPush(docs);
-      persistLocal();
-      setCloudState({ at: now(), error: null, pushing: false });
-    } catch (e) {
-      setCloudState({ error: e.message, pushing: false });
+      setCloudState({ pulling: false });
     }
   }
   var cloudBaseDirty = false;
-  function queueCloudPush({ base = false } = {}) {
+  async function pushCloud(withBase = false) {
+    if (!cloudEnabled()) return false;
+    if (withBase) cloudBaseDirty = true;
+    if (cloudPushPromise) return cloudPushPromise;
+    clearTimeout(cloudTimer);
+    cloudPushPromise = (async () => {
+      setCloudState({ pushing: true });
+      let ok = true;
+      let attemptedBase = false;
+      try {
+        do {
+          const sending = cloudChangeId;
+          const includeBase = cloudBaseDirty;
+          attemptedBase = includeBase;
+          cloudBaseDirty = false;
+          const remote = await cloudPull(includeBase ? CLOUD_PARTS : ["work"]);
+          if (remote?.work) mergeSnapshot(remote.work);
+          if (includeBase && remote?.base) mergeSnapshot(remote.base);
+          const docs = { work: cloudDoc("work") };
+          if (includeBase) docs.base = cloudDoc("base");
+          await cloudPush(docs);
+          cloudAckId = Math.max(cloudAckId, sending);
+          persistLocal();
+          setCloudState({ at: now(), error: null });
+        } while (cloudChangeId > cloudAckId || cloudBaseDirty);
+      } catch (e) {
+        ok = false;
+        if (attemptedBase) cloudBaseDirty = true;
+        setCloudState({ error: e.message });
+      } finally {
+        setCloudState({ pushing: false });
+      }
+      return ok;
+    })();
+    try {
+      return await cloudPushPromise;
+    } finally {
+      cloudPushPromise = null;
+    }
+  }
+  function queueCloudPush({ base = false, change = true } = {}) {
     if (!cloudEnabled()) return;
+    if (change) cloudChangeId++;
     if (base) cloudBaseDirty = true;
     clearTimeout(cloudTimer);
     cloudTimer = setTimeout(() => {
       const withBase = cloudBaseDirty;
-      cloudBaseDirty = false;
       pushCloud(withBase);
     }, base ? 400 : 2500);
   }
@@ -3634,30 +3774,56 @@ nav.tabs button[aria-current="true"] .nav-icon {
     clearInterval(cloudPoll);
     cloudPoll = null;
     clearTimeout(cloudTimer);
+    cloudChangeId = 0;
+    cloudAckId = 0;
+    cloudBaseDirty = false;
     setCloudState({ on: false, at: null, error: null });
   }
   function startCloudPolling() {
     clearInterval(cloudPoll);
     if (!cloudEnabled()) return;
     cloudPoll = setInterval(() => {
-      if (document.visibilityState === "visible") pullCloud({ parts: ["work"] });
+      if (document.visibilityState === "visible") retrySync();
     }, 3e4);
   }
   async function initCloud() {
     if (!cloudEnabled()) return null;
     setCloudState({ on: true });
     await pullCloud();
+    await pushCloud();
     startCloudPolling();
     return cloudHost();
   }
   function queueFileSave() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      writeSharedFile().catch((e) => console.warn("shared file write failed", e));
+    fileChangeId++;
+    clearTimeout(fileTimer);
+    fileTimer = setTimeout(() => {
+      flushSharedFile();
     }, 1200);
+  }
+  async function retrySync() {
+    clearTimeout(cloudTimer);
+    clearTimeout(fileTimer);
+    const work = [];
+    if (cloudEnabled()) {
+      work.push(cloudChangeId > cloudAckId || cloudBaseDirty || cloudState.error ? pushCloud() : pullCloud({ parts: ["work"] }));
+    }
+    if (fileHandle) {
+      work.push(fileChangeId > fileAckId || fileState.error ? flushSharedFile() : pullSharedFile());
+    }
+    if (!work.length) return false;
+    const results = await Promise.all(work);
+    return results.every(Boolean);
+  }
+  function hasUnsyncedChanges() {
+    return cloudChangeId > cloudAckId || fileChangeId > fileAckId || cloudBaseDirty;
   }
   function disconnectSharedFile() {
     fileHandle = null;
+    clearTimeout(fileTimer);
+    fileChangeId = 0;
+    fileAckId = 0;
+    fileState = { at: null, error: null, writing: false };
     emit();
   }
   function exportJson() {
@@ -9839,19 +10005,21 @@ create policy "tracker update" on tracker_state for update using (true) with che
     const cfg = cloudConfig();
     const body = el("div.body", {});
     if (st.on) {
+      const busy = st.pushing || st.pulling;
+      const attention = st.error || st.pending;
       body.append(
         el(
-          "div.banner" + (st.error ? ".bad" : ".ok"),
+          "div.banner" + (st.error ? ".bad" : attention ? ".warn" : ".ok"),
           { style: { marginBottom: "12px" } },
           el(
             "div",
             {},
-            el("strong", {}, st.error ? "Sync problem: " : "Syncing: "),
-            st.error || st.where,
+            el("strong", {}, st.error ? "Sync problem: " : busy ? "Syncing now: " : st.pending ? "Waiting to sync: " : "Up to date: "),
+            st.error || (st.pending ? `${st.pending} pending change${st.pending === 1 ? "" : "s"}` : st.where),
             el(
               "div.small",
               { style: { marginTop: "4px" } },
-              st.error ? "Your work is still saved on this device and will go up once this is fixed." : `Open the same address on your phone and sign in as yourself.${st.at ? ` Last synced ${fmtWhen(st.at)}.` : ""}`
+              st.error ? "Your work is still saved on this device and will go up once this is fixed." : `${st.where}.${st.at ? ` Last successful sync ${fmtWhen(st.at)}.` : " Connecting for the first time."}`
             )
           )
         ),
@@ -9860,11 +10028,11 @@ create policy "tracker update" on tracker_state for update using (true) with che
           {},
           el("button", {
             onclick: async () => {
-              await pullCloud();
-              toast("Refreshed");
+              const ok = await retrySync();
+              toast(ok ? "Sync complete" : "Sync still needs attention");
               rerender();
             }
-          }, icon("cloud", { size: 14 }), " Refresh now"),
+          }, icon(st.error ? "alert" : "cloud", { size: 14 }), st.error || st.pending ? " Retry now" : " Check now"),
           el("button", { onclick: sqlDialog }, "Show setup SQL"),
           el("button.ghost", {
             onclick: async () => {
@@ -10035,6 +10203,7 @@ create policy "tracker update" on tracker_state for update using (true) with che
   function renderData(rerender) {
     const mm = state.machineMeta || {};
     const sharing = cloudStatus().on || !!sharedFileName();
+    const sharingProblem = cloudStatus().error || sharedFileStatus().error;
     const storage = storageStatus();
     const slot = (label, key, node) => el(
       "div",
@@ -10329,9 +10498,9 @@ create policy "tracker update" on tracker_state for update using (true) with che
       },
       {
         label: "Sharing",
-        ok: sharing,
-        icon: "cloud",
-        value: cloudStatus().on ? "Cloud sync connected" : sharedFileName() ? "Shared file connected" : "This device only"
+        ok: sharing && !sharingProblem,
+        icon: sharingProblem ? "alert" : "cloud",
+        value: sharingProblem ? "Sync needs attention" : cloudStatus().on ? "Cloud sync connected" : sharedFileName() ? "Shared file connected" : "This device only"
       },
       {
         label: "Device storage",
@@ -10551,19 +10720,184 @@ create policy "tracker update" on tracker_state for update using (true) with che
       tabBadge(t)
     );
   }
+  function latestSyncAt(...values) {
+    return values.filter(Boolean).sort().at(-1) || null;
+  }
+  function syncViewState() {
+    const cloud = cloudStatus();
+    const file = sharedFileStatus();
+    const configured = cloud.on || file.on;
+    const pending = Math.max(cloud.pending || 0, file.pending || 0);
+    const active = cloud.pushing || cloud.pulling || file.writing;
+    const error = cloud.error || file.error;
+    const at = latestSyncAt(cloud.at, file.at);
+    if (!isOnline()) return {
+      cloud,
+      file,
+      configured,
+      pending,
+      active: false,
+      at,
+      error,
+      label: pending ? `offline \xB7 ${pending} pending` : "offline",
+      tone: "warn",
+      icon: "cloud",
+      detail: pending ? `${pending} saved change${pending === 1 ? "" : "s"} will sync when the connection returns.` : "No connection. Everything still saves on this device."
+    };
+    if (error) return {
+      cloud,
+      file,
+      configured,
+      pending,
+      active,
+      at,
+      error,
+      label: pending ? `sync error \xB7 ${pending} pending` : "sync error",
+      tone: "bad",
+      icon: "alert",
+      detail: error
+    };
+    if (active) return {
+      cloud,
+      file,
+      configured,
+      pending,
+      active,
+      at,
+      error,
+      label: pending ? `syncing \xB7 ${pending} pending` : "syncing",
+      tone: "work",
+      icon: "cloud",
+      detail: "Sending and checking for updates now."
+    };
+    if (pending) return {
+      cloud,
+      file,
+      configured,
+      pending,
+      active,
+      at,
+      error,
+      label: `${pending} pending`,
+      tone: "warn",
+      icon: "clock",
+      detail: `${pending} change${pending === 1 ? "" : "s"} saved here and waiting to sync.`
+    };
+    if (configured) return {
+      cloud,
+      file,
+      configured,
+      pending,
+      active,
+      at,
+      error,
+      label: at ? `synced \xB7 ${fmtWhen(at)}` : "connecting",
+      tone: at ? "ok" : "work",
+      icon: "check",
+      detail: at ? `Last successful sync ${fmtWhen(at)}.` : "Checking the shared copy now."
+    };
+    return {
+      cloud,
+      file,
+      configured,
+      pending,
+      active,
+      at,
+      error,
+      label: "this device only",
+      tone: "mute",
+      icon: "cloud",
+      detail: "Not syncing \u2014 updates stay on this device. Set it up under Setup."
+    };
+  }
+  function diagnosticCard(label, st) {
+    if (!st.on) return null;
+    const stateLabel = st.error ? "Needs attention" : st.pushing || st.pulling || st.writing ? "Working now" : st.pending ? `${st.pending} pending` : "Up to date";
+    return el(
+      "div.sync-diagnostic-card",
+      {},
+      el(
+        "div.sync-diagnostic-head",
+        {},
+        el("strong", {}, label),
+        chip(stateLabel, st.error ? "bad" : st.pending ? "warn" : "ok")
+      ),
+      el(
+        "dl.sync-facts",
+        {},
+        el("div", {}, el("dt", {}, "Destination"), el("dd", {}, st.where || "Connected")),
+        el("div", {}, el("dt", {}, "Last success"), el("dd", {}, st.at ? fmtWhen(st.at) : "Not yet")),
+        el("div", {}, el("dt", {}, "Pending changes"), el("dd.mono", {}, String(st.pending || 0)))
+      ),
+      st.error ? el(
+        "div.banner.bad.sync-error",
+        { role: "alert" },
+        el("div", {}, el("strong", {}, "Last error: "), st.error)
+      ) : null
+    );
+  }
+  function openSyncDetails() {
+    const view2 = syncViewState();
+    const body = el(
+      "div.sync-diagnostics",
+      {},
+      el(
+        "div.sync-summary." + view2.tone,
+        {},
+        el("span.sync-summary-icon", {}, icon(view2.icon, { size: 20 })),
+        el("div", {}, el("strong", {}, view2.label), el("div.small", {}, view2.detail))
+      ),
+      view2.configured ? el(
+        "div.sync-diagnostic-list",
+        {},
+        diagnosticCard("Cloud", view2.cloud),
+        diagnosticCard("Shared file", view2.file)
+      ) : el(
+        "p.muted",
+        {},
+        "This device is saving locally, but its updates are not being shared with another device."
+      )
+    );
+    const actions = view2.configured ? [
+      {
+        label: "Retry now",
+        class: "primary",
+        onClick: async (dlg) => {
+          const btn = dlg.querySelector("footer .primary");
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = "Retrying\u2026";
+          }
+          const ok = await retrySync();
+          dlg.close();
+          toast(ok ? "Sync complete" : "Sync still needs attention");
+          scheduleRender();
+        }
+      },
+      { label: "Open Setup", onClick: (dlg) => {
+        dlg.close();
+        go("setup");
+      } }
+    ] : [
+      { label: "Set up sync", class: "primary", onClick: (dlg) => {
+        dlg.close();
+        go("setup");
+      } }
+    ];
+    modal("Sync status", body, { actions });
+  }
+  function syncIndicator() {
+    const view2 = syncViewState();
+    return el(`button.chip.sync-chip.${view2.tone}${view2.active ? ".is-active" : ""}`, {
+      type: "button",
+      title: `${view2.detail} Open sync details.`,
+      "aria-label": `${view2.label}. ${view2.detail} Open sync details.`,
+      "aria-live": "polite",
+      onclick: openSyncDetails
+    }, icon(view2.icon, { size: 14 }), el("span", {}, view2.label));
+  }
   function header() {
     const shift = SHIFTS[shiftAt()];
-    const shared = sharedFileName();
-    const sync = !isOnline() ? chip(
-      "offline",
-      "warn",
-      "No connection. Everything still saves on this device and syncs when it comes back."
-    ) : cloudEnabled() ? chip("synced", "ok", "Syncing across devices via " + cloudHost()) : shared ? chip("shared file", "ok", "Connected to " + shared) : chip(
-      "this device only",
-      "mute",
-      "Not syncing \u2014 updates stay on this device. Set it up under Setup."
-    );
-    sync.classList.add("sync-chip");
     return el(
       "header.top",
       {},
@@ -10584,7 +10918,7 @@ create policy "tracker update" on tracker_state for update using (true) with che
         // Offline outranks the sync state: "synced" next to a dead connection
         // is the one thing the header must never say. Updates still save
         // locally and go up when the signal comes back.
-        sync
+        syncIndicator()
       ),
       el(
         "nav.tabs",
@@ -10727,10 +11061,17 @@ create policy "tracker update" on tracker_state for update using (true) with che
   watchConnection(scheduleRender);
   initSharedFile(render);
   initCloud();
+  window.addEventListener("beforeunload", (e) => {
+    if (!hasUnsyncedChanges()) return;
+    e.preventDefault();
+    e.returnValue = "";
+  });
+  window.addEventListener("online", () => {
+    retrySync();
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
-    if (sharedFileName()) pullSharedFile();
-    if (cloudEnabled()) pullCloud({ parts: ["work"] });
+    if (sharedFileName() || cloudEnabled()) retrySync();
   });
 })();
 

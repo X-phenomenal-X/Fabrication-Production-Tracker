@@ -56,7 +56,6 @@ export const state = {
   settings: { me: null },
 };
 
-let saveTimer = null;
 const listeners = new Set();
 let localSaveProblem = null;
 
@@ -571,7 +570,7 @@ export function setMachineImport({ tasks, shiftUpdate, report }) {
   save();
   // The imported workbooks are the only thing that puts the heavy half of the
   // snapshot out of date, so this is the one place it gets pushed.
-  queueCloudPush({ base: true });
+  queueCloudPush({ base: true, change: false });
 }
 
 /* ---------- local persistence ---------- */
@@ -649,9 +648,12 @@ function persistLocal(data = snapshot()) {
 
 export function save() {
   persistLocal();
-  emit();
   if (fileHandle) queueFileSave();
   queueCloudPush();
+  // Queueing first makes the render caused by this save see the pending work.
+  // Otherwise the header briefly says "synced" after the operator has changed
+  // something, until the debounce starts the upload several seconds later.
+  emit();
 }
 
 export function loadLocal() {
@@ -678,9 +680,28 @@ export function loadLocal() {
 /* ---------- shared file ---------- */
 
 let fileHandle = null;
+let fileTimer = null;
+let fileWritePromise = null;
+let fileChangeId = 0;
+let fileAckId = 0;
+let fileState = { at: null, error: null, writing: false };
 
 export function sharedFileName() {
   return fileHandle ? fileHandle.name : null;
+}
+
+export function sharedFileStatus() {
+  return {
+    ...fileState,
+    on: !!fileHandle,
+    where: sharedFileName(),
+    pending: Math.max(0, fileChangeId - fileAckId),
+  };
+}
+
+function setFileState(patch) {
+  fileState = { ...fileState, ...patch };
+  emit();
 }
 
 export function supportsSharedFile() {
@@ -837,8 +858,8 @@ export async function connectSharedFile({ create = false } = {}) {
     const remote = await readHandle(handle);
     mergeSnapshot(remote);
   }
-  await writeSharedFile();
-  emit();
+  fileChangeId++;
+  await flushSharedFile();
   return handle.name;
 }
 
@@ -866,10 +887,11 @@ export async function pullSharedFile() {
     const remote = await readHandle(fileHandle);
     mergeSnapshot(remote);
     persistLocal();
-    emit();
+    setFileState({ at: now(), error: null });
     return true;
   } catch (e) {
     console.warn('could not read shared file', e);
+    setFileState({ error: e?.message || 'Could not read the shared file.' });
     return false;
   }
 }
@@ -885,6 +907,39 @@ async function writeSharedFile() {
   const w = await fileHandle.createWritable();
   await w.write(JSON.stringify(snapshot()));
   await w.close();
+}
+
+/* Serialise writes and acknowledge only the edits included in each snapshot.
+   If somebody changes another line while a network-drive write is in flight,
+   the loop takes a second snapshot instead of letting the first completion
+   falsely clear the pending indicator. */
+async function flushSharedFile() {
+  if (!fileHandle) return false;
+  if (fileWritePromise) return fileWritePromise;
+  clearTimeout(fileTimer);
+
+  fileWritePromise = (async () => {
+    setFileState({ writing: true });
+    let ok = true;
+    try {
+      do {
+        const sending = fileChangeId;
+        await writeSharedFile();
+        fileAckId = Math.max(fileAckId, sending);
+        setFileState({ at: now(), error: null });
+      } while (fileChangeId > fileAckId);
+    } catch (e) {
+      ok = false;
+      console.warn('shared file write failed', e);
+      setFileState({ error: e?.message || 'Could not write to the shared file.' });
+    } finally {
+      setFileState({ writing: false });
+    }
+    return ok;
+  })();
+
+  try { return await fileWritePromise; }
+  finally { fileWritePromise = null; }
 }
 
 /* ---------- cloud sync ---------- */
@@ -909,10 +964,18 @@ function cloudDoc(part) {
 let cloudTimer = null;
 let cloudPoll = null;
 let cloudBusy = false;
-let cloudState = { on: false, at: null, error: null, pushing: false };
+let cloudPushPromise = null;
+let cloudChangeId = 0;
+let cloudAckId = 0;
+let cloudState = { on: false, at: null, error: null, pushing: false, pulling: false };
 
 export function cloudStatus() {
-  return { ...cloudState, on: cloudEnabled(), where: cloudHost() };
+  return {
+    ...cloudState,
+    on: cloudEnabled(),
+    where: cloudHost(),
+    pending: Math.max(0, cloudChangeId - cloudAckId),
+  };
 }
 
 function setCloudState(patch) {
@@ -924,6 +987,7 @@ function setCloudState(patch) {
 export async function pullCloud({ parts = CLOUD_PARTS } = {}) {
   if (!cloudEnabled() || cloudBusy) return false;
   cloudBusy = true;
+  setCloudState({ pulling: true });
   try {
     const remote = await cloudPull(parts);
     // Each document is a partial snapshot; mergeSnapshot ignores absent keys.
@@ -937,39 +1001,69 @@ export async function pullCloud({ parts = CLOUD_PARTS } = {}) {
     return false;
   } finally {
     cloudBusy = false;
+    setCloudState({ pulling: false });
   }
 }
 
 /** Push, merging the cloud's copy in first so a concurrent edit is not lost.
     `base` rides along only when this device imported more recently. */
-async function pushCloud(withBase) {
-  if (!cloudEnabled()) return;
-  setCloudState({ pushing: true });
-  try {
-    const remote = await cloudPull(withBase ? CLOUD_PARTS : ['work']);
-    if (remote?.work) mergeSnapshot(remote.work);
-    if (withBase && remote?.base) mergeSnapshot(remote.base);
-
-    const docs = { work: cloudDoc('work') };
-    if (withBase) docs.base = cloudDoc('base');
-    await cloudPush(docs);
-
-    persistLocal();
-    setCloudState({ at: now(), error: null, pushing: false });
-  } catch (e) {
-    setCloudState({ error: e.message, pushing: false });
-  }
-}
-
 let cloudBaseDirty = false;
 
-function queueCloudPush({ base = false } = {}) {
+async function pushCloud(withBase = false) {
+  if (!cloudEnabled()) return false;
+  if (withBase) cloudBaseDirty = true;
+  if (cloudPushPromise) return cloudPushPromise;
+  clearTimeout(cloudTimer);
+
+  /* A completion acknowledges the edit generation it actually sent, not the
+     current generation. This matters when a second tap lands during the fetch:
+     that tap stays pending and the loop sends a fresh snapshot immediately. */
+  cloudPushPromise = (async () => {
+    setCloudState({ pushing: true });
+    let ok = true;
+    let attemptedBase = false;
+    try {
+      do {
+        const sending = cloudChangeId;
+        const includeBase = cloudBaseDirty;
+        attemptedBase = includeBase;
+        cloudBaseDirty = false;
+
+        const remote = await cloudPull(includeBase ? CLOUD_PARTS : ['work']);
+        if (remote?.work) mergeSnapshot(remote.work);
+        if (includeBase && remote?.base) mergeSnapshot(remote.base);
+
+        const docs = { work: cloudDoc('work') };
+        if (includeBase) docs.base = cloudDoc('base');
+        await cloudPush(docs);
+
+        cloudAckId = Math.max(cloudAckId, sending);
+        persistLocal();
+        setCloudState({ at: now(), error: null });
+      } while (cloudChangeId > cloudAckId || cloudBaseDirty);
+    } catch (e) {
+      ok = false;
+      // If a base upload failed, the next retry still has to carry it. The
+      // work half is always sent, so its pending generation remains unacked.
+      if (attemptedBase) cloudBaseDirty = true;
+      setCloudState({ error: e.message });
+    } finally {
+      setCloudState({ pushing: false });
+    }
+    return ok;
+  })();
+
+  try { return await cloudPushPromise; }
+  finally { cloudPushPromise = null; }
+}
+
+function queueCloudPush({ base = false, change = true } = {}) {
   if (!cloudEnabled()) return;
+  if (change) cloudChangeId++;
   if (base) cloudBaseDirty = true;
   clearTimeout(cloudTimer);
   cloudTimer = setTimeout(() => {
     const withBase = cloudBaseDirty;
-    cloudBaseDirty = false;
     pushCloud(withBase);
   }, base ? 400 : 2500);
 }
@@ -995,6 +1089,9 @@ export function disconnectCloud() {
   clearInterval(cloudPoll);
   cloudPoll = null;
   clearTimeout(cloudTimer);
+  cloudChangeId = 0;
+  cloudAckId = 0;
+  cloudBaseDirty = false;
   setCloudState({ on: false, at: null, error: null });
 }
 
@@ -1005,7 +1102,7 @@ function startCloudPolling() {
   clearInterval(cloudPoll);
   if (!cloudEnabled()) return;
   cloudPoll = setInterval(() => {
-    if (document.visibilityState === 'visible') pullCloud({ parts: ['work'] });
+    if (document.visibilityState === 'visible') retrySync();
   }, 30000);
 }
 
@@ -1014,19 +1111,51 @@ export async function initCloud() {
   if (!cloudEnabled()) return null;
   setCloudState({ on: true });
   await pullCloud();
+  // The local copy may contain work recorded offline before a reload. A small
+  // merge-first work push on boot is the only reliable way to flush it without
+  // waiting for somebody to make another edit.
+  await pushCloud();
   startCloudPolling();
   return cloudHost();
 }
 
 function queueFileSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    writeSharedFile().catch((e) => console.warn('shared file write failed', e));
-  }, 1200);
+  fileChangeId++;
+  clearTimeout(fileTimer);
+  fileTimer = setTimeout(() => { flushSharedFile(); }, 1200);
+}
+
+/** Retry every configured transport. Used by the header, Setup, reconnect and
+    the 30-second poll. A pending upload goes out; otherwise this is a refresh. */
+export async function retrySync() {
+  clearTimeout(cloudTimer);
+  clearTimeout(fileTimer);
+  const work = [];
+  if (cloudEnabled()) {
+    work.push(cloudChangeId > cloudAckId || cloudBaseDirty || cloudState.error
+      ? pushCloud()
+      : pullCloud({ parts: ['work'] }));
+  }
+  if (fileHandle) {
+    work.push(fileChangeId > fileAckId || fileState.error
+      ? flushSharedFile()
+      : pullSharedFile());
+  }
+  if (!work.length) return false;
+  const results = await Promise.all(work);
+  return results.every(Boolean);
+}
+
+export function hasUnsyncedChanges() {
+  return cloudChangeId > cloudAckId || fileChangeId > fileAckId || cloudBaseDirty;
 }
 
 export function disconnectSharedFile() {
   fileHandle = null;
+  clearTimeout(fileTimer);
+  fileChangeId = 0;
+  fileAckId = 0;
+  fileState = { at: null, error: null, writing: false };
   emit();
 }
 

@@ -6,8 +6,8 @@ import {
   state, setMachineImport, save, exportJson, importJson, resetAll,
   connectSharedFile, reconnectSharedFile, grantSharedFile, pullSharedFile,
   supportsSharedFile, sharedFileName, disconnectSharedFile, me,
-  connectCloud, disconnectCloud, pullCloud, cloudStatus, cloudConfig,
-  storageStatus,
+  connectCloud, disconnectCloud, cloudStatus, cloudConfig, retrySync,
+  sharedFileStatus, storageStatus,
 } from '../store.js';
 import { importMachineWorkbook } from '../import-machines.js';
 import { staleImports } from '../model.js';
@@ -167,19 +167,25 @@ function cloudSection(rerender) {
   const body = el('div.body', {});
 
   if (st.on) {
+    const busy = st.pushing || st.pulling;
+    const attention = st.error || st.pending;
     body.append(
-      el('div.banner' + (st.error ? '.bad' : '.ok'), { style: { marginBottom: '12px' } },
+      el('div.banner' + (st.error ? '.bad' : attention ? '.warn' : '.ok'), { style: { marginBottom: '12px' } },
         el('div', {},
-          el('strong', {}, st.error ? 'Sync problem: ' : 'Syncing: '),
-          st.error || st.where,
+          el('strong', {}, st.error ? 'Sync problem: ' : busy ? 'Syncing now: ' : st.pending ? 'Waiting to sync: ' : 'Up to date: '),
+          st.error || (st.pending ? `${st.pending} pending change${st.pending === 1 ? '' : 's'}` : st.where),
           el('div.small', { style: { marginTop: '4px' } },
             st.error
               ? 'Your work is still saved on this device and will go up once this is fixed.'
-              : `Open the same address on your phone and sign in as yourself.${st.at ? ` Last synced ${fmtWhen(st.at)}.` : ''}`))),
+              : `${st.where}.${st.at ? ` Last successful sync ${fmtWhen(st.at)}.` : ' Connecting for the first time.'}`))),
       el('div.row', {},
         el('button', {
-          onclick: async () => { await pullCloud(); toast('Refreshed'); rerender(); },
-        }, icon('cloud', { size: 14 }), ' Refresh now'),
+          onclick: async () => {
+            const ok = await retrySync();
+            toast(ok ? 'Sync complete' : 'Sync still needs attention');
+            rerender();
+          },
+        }, icon(st.error ? 'alert' : 'cloud', { size: 14 }), st.error || st.pending ? ' Retry now' : ' Check now'),
         el('button', { onclick: sqlDialog }, 'Show setup SQL'),
         el('button.ghost', {
           onclick: async () => {
@@ -292,6 +298,7 @@ function firstRun(rerender) {
 export function renderData(rerender) {
   const mm = state.machineMeta || {};
   const sharing = cloudStatus().on || !!sharedFileName();
+  const sharingProblem = cloudStatus().error || sharedFileStatus().error;
   const storage = storageStatus();
   const slot = (label, key, node) => el('div', {},
     el('div.row', { style: { marginBottom: '6px' } },
@@ -489,8 +496,9 @@ export function renderData(rerender) {
         : 'Both workbooks are required',
     },
     {
-      label: 'Sharing', ok: sharing, icon: 'cloud',
-      value: cloudStatus().on ? 'Cloud sync connected'
+      label: 'Sharing', ok: sharing && !sharingProblem, icon: sharingProblem ? 'alert' : 'cloud',
+      value: sharingProblem ? 'Sync needs attention'
+        : cloudStatus().on ? 'Cloud sync connected'
         : sharedFileName() ? 'Shared file connected' : 'This device only',
     },
     {

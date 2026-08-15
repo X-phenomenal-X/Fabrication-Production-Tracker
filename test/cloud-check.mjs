@@ -167,10 +167,29 @@ const pcWork = await pc.evaluate(() => import('/js/model.js').then(async (m) => 
 }));
 step(`PC set status + rush + note on ${pcWork.wo}`);
 
+const queued = await pc.evaluate(() => import('/js/store.js').then((s) => ({
+  pending: s.cloudStatus().pending,
+  unsafeToClose: s.hasUnsyncedChanges(),
+})));
+if (queued.pending !== 3) throw new Error(`pending counter lost an edit: ${JSON.stringify(queued)}`);
+if (!queued.unsafeToClose) throw new Error('pending cloud work would not warn before close');
+await pc.waitForFunction(() => document.querySelector('.sync-chip')?.textContent.includes('pending'));
+
 // Wait for the debounced push rather than forcing one, so the debounce is
 // part of what is being tested.
-await pc.waitForFunction(() => import('/js/store.js').then((m) => !!m.cloudStatus().at));
-await pc.waitForTimeout(3000);
+await pc.waitForFunction(() => import('/js/store.js').then((m) => {
+  const st = m.cloudStatus();
+  return st.pending === 0 && !st.pushing && !m.hasUnsyncedChanges();
+}));
+await pc.waitForFunction(() => /^synced/.test(document.querySelector('.sync-chip')?.textContent || ''));
+
+await pc.click('.sync-chip');
+const diagnostics = await pc.locator('dialog[open]').textContent();
+if (!/Sync status/.test(diagnostics) || !/Pending changes\s*0/.test(diagnostics)) {
+  throw new Error('header sync diagnostics are incomplete: ' + diagnostics);
+}
+await pc.click('dialog[open] header button');
+await pc.waitForSelector('dialog[open]', { state: 'detached' });
 step(`cloud now holds: ${[...table.keys()].join(', ')}`);
 if (!table.has('cutting|base')) throw new Error('the imported workbooks never reached the cloud');
 if (!table.has('cutting|work')) throw new Error('the work overlay never reached the cloud');
