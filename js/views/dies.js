@@ -8,10 +8,13 @@
 
    The second is staging's question. The first is everyone else's. */
 
-import { el, chip, icon, toast, modal } from '../ui.js';
+import { el, chip, icon, modal } from '../ui.js';
 import {
-  lookupDie, searchDies, componentsOf, dieForms, drawingFor, SUBASSEMBLIES,
+  lookupDie, searchDies, componentsOf, drawingFor, drawingCount, SUBASSEMBLIES,
 } from '../dies.js';
+import { openExtrusionSection } from './extrusions.js';
+
+let sectionQuery = '';
 
 function componentRow(c, open) {
   return el('button.diepart', {
@@ -25,7 +28,7 @@ function componentRow(c, open) {
     icon('chevron', { size: 13, cls: 'diepart-go' }));
 }
 
-function detail(result, open) {
+function detail(result, open, openComponent = open) {
   const { assembly, usedIn, forms } = result;
 
   if (!assembly && !usedIn.length) {
@@ -74,7 +77,7 @@ function detail(result, open) {
       componentsOf(assembly).length
         ? el('div.dieparts', {},
             el('div.su-label', {}, 'Rolled from'),
-            ...componentsOf(assembly).map((c) => componentRow(c, open)))
+            ...componentsOf(assembly).map((c) => componentRow(c, openComponent)))
         : el('div.small.muted', { style: { marginTop: '10px' } },
             'The book lists no component extrusions against this one.')) : null,
 
@@ -91,21 +94,21 @@ function detail(result, open) {
         ? el('div.small.muted', {}, `and ${usedIn.length - 40} more`) : null) : null);
 }
 
-/** Open the lookup. `initial` is a die to show straight away, if any. */
-export function dieDialog(initial = '') {
-  let dlg = null;
-
+function lookupContent(initial = '', onQuery = () => {}, openComponent = null) {
   const body = el('div.dielookup', {});
   const input = el('input', {
     type: 'search',
-    placeholder: 'Die number, or anything from its description…',
+    placeholder: 'S80.106, SA80.106, component, or description…',
     'aria-label': 'Search the section book',
     value: initial || '',
+    autocomplete: 'off',
+    spellcheck: false,
   });
   const results = el('div.dieresults', {});
 
   const show = (die) => {
     input.value = die;
+    onQuery(die);
     render();
   };
 
@@ -117,14 +120,15 @@ export function dieDialog(initial = '') {
       results.append(el('div.empty', {},
         el('div.empty-icon', {}, icon('search', { size: 26 })),
         el('h3', {}, `${SUBASSEMBLIES.length} sub-assemblies`),
-        el('div', {}, 'Type a die number — S80.106 or 80-105 — or part of a '
+        el('div', {}, 'Type a schedule number like S80.106, its section-book '
+          + 'form SA80.106 or SA80-106, a component like 80-105, or part of a '
           + 'description like "male mullion".')));
       return;
     }
 
     const exact = lookupDie(q);
     if (exact.assembly || exact.usedIn.length) {
-      results.append(detail(exact, show));
+      results.append(detail(exact, show, openComponent || show));
     }
 
     // Anything else that matches, so a partial number or a description still
@@ -142,12 +146,13 @@ export function dieDialog(initial = '') {
     }
 
     if (!exact.assembly && !exact.usedIn.length && !others.length) {
-      results.append(detail(exact, show));
+      results.append(detail(exact, show, openComponent || show));
     }
   }
 
   let t = null;
   input.addEventListener('input', () => {
+    onQuery(input.value);
     clearTimeout(t);
     t = setTimeout(render, 120);
   });
@@ -155,14 +160,49 @@ export function dieDialog(initial = '') {
   body.append(
     el('p.small.muted', { style: { marginTop: 0 } },
       'From the Sub-Assembly Section Book. A rolled die is an exterior, an '
-      + 'interior and a thermal break top and bottom.'),
-    el('div.searchwrap.diesearch', {},
+      + 'interior and a thermal break top and bottom. Schedule and book '
+      + 'spellings return the same assembly.'),
+    el('div.searchwrap.diesearch', { role: 'search' },
       icon('search', { size: 16, cls: 'searchicon' }),
       input),
     results);
 
   render();
-  dlg = modal('Die lookup', body, { wide: true });
+  return { body, input };
+}
+
+/** The full section-book workspace, available as a department tool. */
+export function renderDies(_scheduleRender, go) {
+  const { body } = lookupContent(sectionQuery, (q) => { sectionQuery = q; },
+    (id) => openExtrusionSection(id, go));
+
+  const head = el('div.centre-head', {},
+    el('div.row.centre-title-row', {},
+      el('div.centre-ident', {},
+        el('span.centre-rail', { 'aria-hidden': 'true' }),
+        el('div', {},
+          el('h1.centre-title', {}, 'Die Lookup'),
+          el('div.centre-sub', {},
+            'Sub-Assembly Section Book',
+            el('span.dot-sep', {}, '·'),
+            'profiles, components and where-used'))),
+      el('span.spacer'),
+      el('div.centre-stats', {},
+        el('div.cstat', {},
+          el('b', {}, SUBASSEMBLIES.length.toLocaleString()), el('i', {}, 'assemblies')),
+        el('div.cstat', {},
+          el('b', {}, drawingCount().toLocaleString()), el('i', {}, 'drawings')))));
+
+  return el('div.centre.die-section', {},
+    head,
+    el('div.die-section-body', {},
+      el('section.panel.die-section-panel', { 'aria-label': 'Section book search' }, body)));
+}
+
+/** Open the quick lookup. `initial` is a die to show straight away, if any. */
+export function dieDialog(initial = '') {
+  const { body, input } = lookupContent(initial);
+  const dlg = modal('Die lookup', body, { wide: true });
   setTimeout(() => input.focus(), 30);
   return dlg;
 }

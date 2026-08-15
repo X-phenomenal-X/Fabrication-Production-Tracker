@@ -182,6 +182,7 @@ const ICON_PATHS = {
   punch: 'M12 2v4M12 18v4M2 12h4M18 12h4M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
   calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2zM8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01',
   staging: 'M3 6h18M5 6l1-3h12l1 3M5 6v14h14V6M9 10h6',
+  extrusion: 'M4 4h16v5h-5v6h5v5H4v-5h5V9H4zM9 9h6v6H9z',
   clipboard: 'M9 5h6M9 3h6a2 2 0 0 1 2 2v1h2a2 2 0 0 1 2 2v13H3V8a2 2 0 0 1 2-2h2V5a2 2 0 0 1 2-2zM8 12h8M8 16h8',
 };
 

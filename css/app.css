@@ -1934,7 +1934,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 /* Setup lives with the name picker rather than in the nav — configuration, not
    a page anyone works on. Still shows which page you are on. */
 .hdr-setup { flex-shrink: 0; }
-.hdr-setup.on {
+.hdr-setup.on, .hdr-dies.on {
   background: var(--accent-soft); color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 22%, transparent);
 }
@@ -1955,6 +1955,136 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .dielookup .diesearch { margin-bottom: var(--s4); }
 .dielookup .diesearch input { width: 100%; padding-left: 40px; }
 .dieresults { min-height: 200px; }
+
+/* The header magnifier remains a one-tap route, but the section book now has
+   a real page in Department Tools. The generous canvas lets dimensions stay
+   readable on a monitor while the same content still stacks on a phone. */
+.die-section-body { padding-top: var(--s4); }
+.die-section-panel {
+  width: min(100%, 1040px); margin: 0 auto; padding: var(--s5);
+}
+.die-section .dielookup { width: 100%; }
+.die-section .dieresults { min-height: 420px; }
+.die-section .diecard { background: var(--panel); }
+.die-section .diedrawing { padding: var(--s4); }
+
+/* ---------- individual extrusion library ---------- */
+.extrusion-section-body { padding-top: var(--s4); }
+.extrusion-section-panel {
+  padding: var(--s5); overflow: visible;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--panel) 96%, var(--accent)), var(--panel));
+}
+.extrusion-lookup { width: 100%; }
+.extrusion-search { margin-bottom: var(--s5); }
+.extrusion-output { min-height: 430px; }
+.extrusion-intro { min-height: 210px; }
+.extrusion-series-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3);
+  margin-top: var(--s4);
+}
+.extrusion-series {
+  min-height: 84px; padding: var(--s4); text-align: left;
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px var(--s2);
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+  color: var(--ink); transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+.extrusion-series b { font-size: 1.05rem; }
+.extrusion-series span { grid-column: 1; color: var(--ink-3); font-size: .8rem; }
+.extrusion-series .ui-icon { grid-column: 2; grid-row: 1 / span 2; color: var(--accent); }
+.extrusion-series:hover {
+  transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+  box-shadow: var(--shadow-2);
+}
+.extrusion-workspace {
+  display: grid; grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+  gap: var(--s4); align-items: start;
+}
+.extrusion-match-panel {
+  position: sticky; top: calc(var(--hdr-h) + var(--s3));
+  border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+  background: var(--panel);
+}
+.extrusion-match-count {
+  padding: 11px var(--s3); border-bottom: 1px solid var(--line);
+  color: var(--ink-3); font-size: .75rem; font-weight: 750; text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.extrusion-result-list { max-height: 680px; overflow: auto; }
+.extrusion-result {
+  width: 100%; min-height: 62px; padding: 10px var(--s3); border: 0;
+  border-bottom: 1px solid var(--line); border-radius: 0; background: transparent;
+  color: var(--ink); display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center; gap: var(--s2); text-align: left;
+}
+.extrusion-result:last-child { border-bottom: 0; }
+.extrusion-result > span:first-child { min-width: 0; display: grid; gap: 3px; }
+.extrusion-result small { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.extrusion-result:hover { background: var(--accent-soft); }
+.extrusion-result.on {
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  box-shadow: inset 3px 0 var(--accent);
+}
+.extrusion-card {
+  border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden;
+  background: var(--panel); box-shadow: var(--shadow-2);
+}
+.extrusion-card-head {
+  min-height: 76px; padding: var(--s4); display: flex; align-items: center; gap: var(--s2);
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 8%, var(--panel)), var(--panel) 60%);
+}
+.extrusion-id { font-size: 1.28rem; font-weight: 850; letter-spacing: -.02em; }
+.extrusion-description { margin-top: 3px; color: var(--ink-3); font-size: .88rem; }
+.extrusion-drawing {
+  position: relative; width: 100%; min-height: 280px; padding: var(--s4); border: 0;
+  border-bottom: 1px solid var(--line); border-radius: 0; background: #fff;
+  display: grid; place-items: center; cursor: zoom-in;
+}
+.extrusion-drawing img { display: block; width: 100%; max-height: 610px; object-fit: contain; }
+.extrusion-expand {
+  position: absolute; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 10px; border-radius: 999px; color: #fff; background: rgb(16 36 60 / .86);
+  font-size: .72rem; font-weight: 750; backdrop-filter: blur(5px);
+}
+.extrusion-loading {
+  min-height: 300px; display: flex; align-items: center; justify-content: center; gap: var(--s2);
+  color: var(--ink-3); background: var(--panel-2); border-bottom: 1px solid var(--line);
+}
+.extrusion-fields {
+  padding: var(--s4); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3);
+}
+.extrusion-field {
+  min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--panel-2); display: grid; gap: 3px;
+}
+.extrusion-field span { color: var(--ink-3); font-size: .68rem; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; }
+.extrusion-field b { overflow-wrap: anywhere; font-size: .84rem; }
+.extrusion-source {
+  padding: 0 var(--s4) var(--s4); color: var(--ink-3); display: flex; align-items: center; gap: 7px;
+  font-size: .75rem;
+}
+.extrusion-zoom { background: #fff; border-radius: var(--radius); overflow: auto; }
+.extrusion-zoom img { display: block; width: 100%; min-width: min(760px, 100%); height: auto; }
+
+@media (max-width: 720px) {
+  .die-section-body { padding-top: var(--s3); }
+  .die-section-panel { padding: var(--s4); }
+  .die-section .dieresults { min-height: 300px; }
+  .extrusion-section-body { padding-top: var(--s3); }
+  .extrusion-section-panel { padding: var(--s3); }
+  .extrusion-output { min-height: 320px; }
+  .extrusion-series-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .extrusion-workspace { display: flex; flex-direction: column; }
+  .extrusion-detail { order: 1; width: 100%; }
+  .extrusion-match-panel { order: 2; position: static; width: 100%; }
+  .extrusion-result-list { max-height: 420px; }
+  .extrusion-card-head { align-items: flex-start; flex-wrap: wrap; }
+  .extrusion-card-head .spacer { display: none; }
+  .extrusion-card-head > div:first-child { flex: 1 0 100%; }
+  .extrusion-drawing { min-height: 190px; padding: var(--s2); }
+  .extrusion-fields { grid-template-columns: 1fr; padding: var(--s3); }
+  .extrusion-source { padding: 0 var(--s3) var(--s3); }
+}
 
 .diecard {
   border: 1px solid var(--line); border-radius: var(--radius);

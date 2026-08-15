@@ -76,7 +76,7 @@ step('tabs: ' + tabs.join(', '));
 const setupGear = await page.$$eval('.hdr-setup', (ns) => ns.map((n) => n.getAttribute('aria-label')));
 step('setup control: ' + JSON.stringify(setupGear));
 if (setupGear.length !== 1) throw new Error('Setup is not reachable from the header');
-if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Today,Staging,Rush,Back Orders,Shift Update') {
+if (tabs.join(',') !== 'Rolling,FOM,CNC & FMC,Multi Punch,Today,Staging,Rush,Back Orders,Die Lookup,Extrusions,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -769,6 +769,10 @@ const dieCheck = await page.evaluate(() => import('/js/dies.js').then((d) => {
     parts: d.componentsOf(known.assembly).map((c) => `${c.role}:${c.die}${c.qty > 1 ? '×' + c.qty : ''}`),
     usedInCount: bare.usedIn.length,
     usedIncludes: bare.usedIn.some((r) => r.sa === 'SA80-106'),
+    aliases: ['S80.106', 'SA80.106', 'SA80-106'].map((q) => ({
+      q, sa: d.lookupDie(q).assembly?.sa || null,
+      parts: d.componentsOf(d.lookupDie(q).assembly).map((c) => `${c.role}:${c.die}:${c.qty}`),
+    })),
     missing: d.lookupDie('ZZ9.999').assembly,
   };
 }));
@@ -780,6 +784,10 @@ if (dieCheck.sa !== 'SA80-106') throw new Error('S80.106 did not resolve to SA80
 const want = ['Exterior:80-113', 'Thermal break:84-901×2', 'Interior:80-105'];
 if (JSON.stringify(dieCheck.parts) !== JSON.stringify(want)) {
   throw new Error('components wrong: ' + JSON.stringify(dieCheck.parts));
+}
+if (new Set(dieCheck.aliases.map((x) => JSON.stringify([x.sa, x.parts]))).size !== 1) {
+  throw new Error('schedule and section-book spellings return different results: '
+    + JSON.stringify(dieCheck.aliases));
 }
 if (!dieCheck.usedIncludes) throw new Error('the reverse lookup does not find SA80-106 from 80-105');
 if (dieCheck.missing) throw new Error('an unknown die should resolve to nothing');
@@ -804,7 +812,71 @@ if (drawCheck.newest8000Source !== 'sheet') throw new Error('the new SA80-374 dr
 if (drawCheck.retired8000IsNull !== null) throw new Error('SA80-240 is absent from the replacement Series PDFs');
 if (drawCheck.missingIsNull !== null) throw new Error('an unknown drawing should be null, not a broken image');
 
+// It is also a proper Department Tools page, not only a dialog reached from a
+// line. The book spelling with a dot must return the same complete card.
+await gotoTab('Die Lookup');
+await page.fill('.die-section .diesearch input', 'SA80.106');
+await page.waitForFunction(() => document.querySelector('.die-section .diecard-sa')?.textContent.trim() === 'SA80-106');
+const sectionLookup = await page.evaluate(() => ({
+  title: document.querySelector('.die-section h1')?.textContent.trim(),
+  sa: document.querySelector('.die-section .diecard-sa')?.textContent.trim(),
+  drawing: !!document.querySelector('.die-section .diedrawing img'),
+  parts: [...document.querySelectorAll('.die-section .diepart-die')].map((n) => n.textContent.trim()),
+}));
+step('die lookup section: ' + JSON.stringify(sectionLookup));
+if (sectionLookup.title !== 'Die Lookup' || sectionLookup.sa !== 'SA80-106'
+  || !sectionLookup.drawing || sectionLookup.parts.join(',') !== '80-113,84-901,80-105') {
+  throw new Error('the Die Lookup section did not show the complete SA80.106 result');
+}
+await page.screenshot({ path: path.join(SHOT, 'die-lookup-section.png') });
+
+/* Individual profiles live in their own engineering-master library. This is
+   intentionally not the SA lookup: 80-113 is one extrusion used inside a
+   rolled assembly. Empty numbered template cells must not inflate the count. */
+const extrusionCheck = await page.evaluate(() => import('/js/extrusions.js').then((x) => ({
+  total: x.extrusionCount(),
+  direct: x.lookupExtrusions('80.113').map((r) => r.id),
+  corrected: ['20-016', 'A&P', '87-442', '88-308', '89-087', '89-261', '89-368']
+    .map((id) => [id, x.lookupExtrusions(id).length]),
+  blankPlaceholder: x.lookupExtrusions('80-066').length,
+  finalDie: x.searchExtrusions('S-25422').map((r) => r.id),
+})));
+step('extrusion data: ' + JSON.stringify(extrusionCheck));
+if (extrusionCheck.total !== 1680 || extrusionCheck.direct.join(',') !== '80-113') {
+  throw new Error('the reviewed extrusion library did not load');
+}
+if (extrusionCheck.corrected.some(([, count]) => count < 1)) {
+  throw new Error('a visually reviewed extrusion correction is missing');
+}
+if (extrusionCheck.blankPlaceholder !== 0) {
+  throw new Error('an empty numbered master cell appeared as an extrusion drawing');
+}
+if (!extrusionCheck.finalDie.includes('80-001')) {
+  throw new Error('final die number search did not find its extrusion');
+}
+
+// A component on the SA card leads into the individual profile section, with
+// the large image module loaded only after a result is selected.
+await page.click('.diepart:has-text("80-113")');
+await page.waitForFunction(() => location.hash === '#extrusions'
+  && document.querySelector('.extrusion-id')?.textContent.trim() === '80-113');
+await page.waitForSelector('.extrusion-drawing img', { timeout: 30000 });
+const extrusionSection = await page.evaluate(() => ({
+  title: document.querySelector('.extrusion-section h1')?.textContent.trim(),
+  id: document.querySelector('.extrusion-id')?.textContent.trim(),
+  source: document.querySelector('.extrusion-source')?.textContent.trim(),
+  image: document.querySelector('.extrusion-drawing img')?.src.startsWith('data:image/webp;base64,'),
+}));
+step('extrusion section: ' + JSON.stringify(extrusionSection));
+if (extrusionSection.title !== 'Extrusion Lookup' || extrusionSection.id !== '80-113'
+  || !extrusionSection.image || !extrusionSection.source.includes('8000 Series')) {
+  throw new Error('the individual extrusion section did not show 80-113');
+}
+await page.screenshot({ path: path.join(SHOT, 'extrusion-lookup-section.png') });
+
 // And it opens from a die on a line.
+await gotoTab('Rolling');
+await page.waitForSelector('.line .dielink');
 await page.click('.line .dielink');
 await page.waitForSelector('dialog .diecard');
 const shown = await page.$eval('.diecard-sa', (n) => n.textContent.trim());

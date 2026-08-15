@@ -12,7 +12,8 @@ import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
 import { renderToday } from './views/today.js';
 import { renderStaging } from './views/staging.js';
-import { dieDialog } from './views/dies.js';
+import { renderDies } from './views/dies.js';
+import { renderExtrusions } from './views/extrusions.js';
 import { renderShiftUpdate } from './views/shiftupdate.js';
 import { renderRush } from './views/rush.js';
 import { renderData, initSharedFile } from './views/data.js';
@@ -36,6 +37,8 @@ const TABS = [
   { key: 'staging', label: 'Staging', short: 'Stage', kind: 'tool', icon: 'staging', render: renderStaging },
   { key: 'rush', label: 'Rush', kind: 'tool', icon: 'bolt', render: renderRush },
   { key: 'backorders', label: 'Back Orders', short: 'B/O', kind: 'tool', icon: 'alert', render: renderBackOrders },
+  { key: 'dies', label: 'Die Lookup', short: 'Dies', kind: 'tool', icon: 'search', render: renderDies },
+  { key: 'extrusions', label: 'Extrusions', kind: 'tool', icon: 'extrusion', render: renderExtrusions },
   { key: 'shift', label: 'Shift Update', short: 'Shift', kind: 'tool', icon: 'clipboard', render: renderShiftUpdate },
   { key: 'setup', label: 'Setup', kind: 'tool', icon: 'gear', render: renderData },
 ];
@@ -268,17 +271,17 @@ function header() {
         ...TABS.filter((t) => t.kind === 'tool' && t.key !== 'setup').map(tabButton))),
 
     // Setup is configuration, not a page anyone works on, so it sits with the
-    // name picker as a gear rather than taking a tenth slot in a nav row that
+    // name picker as a gear rather than taking another slot in a nav row that
     // had already run out of width.
     el('div.hdr-right', {},
       whoAmI(),
       el('div.hdr-tools', {},
         // The section book, one tap from anywhere. Staging and rolling both ask
         // "what goes into this" all shift.
-        el('button.iconbtn.hdr-dies', {
+        el('button.iconbtn.hdr-dies' + (current === 'dies' ? '.on' : ''), {
           'aria-label': 'Die lookup',
           title: 'Look up a die in the section book',
-          onclick: () => dieDialog(''),
+          onclick: () => go('dies'),
         }, icon('search', { size: 18 })),
         el('button.iconbtn.hdr-setup' + (current === 'setup' ? '.on' : ''), {
           'aria-label': 'Setup',
@@ -291,7 +294,7 @@ function header() {
 
 /* Keeping the nav usable on a phone.
 
-   Nine pages are about 790px of tabs and a 390px phone gives the scroller
+   Ten pages are about 900px of tabs and a 390px phone gives the scroller
    about 150px of that, so most of the nav is always off-screen — that part is
    forced by the 96px header budget and is not going away. What is not forced
    is landing on Rush and seeing "Rolling  FOM": the header is rebuilt on every

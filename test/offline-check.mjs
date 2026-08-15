@@ -97,7 +97,7 @@ const booted = await page.evaluate(() => ({
   online: navigator.onLine,
 }));
 step('offline boot: ' + JSON.stringify(booted));
-if (booted.tabs !== 9) fail(`the app did not render its nav offline (${booted.tabs} tabs)`);
+if (booted.tabs !== 11) fail(`the app did not render its nav offline (${booted.tabs} tabs)`);
 if (!booted.chip.includes('offline')) fail('the header does not say it is offline: ' + booted.chip.join(', '));
 
 // The day's list is still there, and still writable.
@@ -109,7 +109,10 @@ if (todo !== 'Survives losing the signal') fail('stored data was lost offline');
 
 await page.fill('.todo-add input', 'Written while offline');
 await page.click('.todo-add button.primary');
-await page.waitForTimeout(200);
+await page.waitForFunction(() => {
+  const snap = JSON.parse(localStorage.getItem('bv.cutting.v1'));
+  return Object.values(snap.todos || {}).some((t) => t.text === 'Written while offline');
+}, null, { timeout: 3000 });
 const wrote = await page.evaluate(() => {
   const snap = JSON.parse(localStorage.getItem('bv.cutting.v1'));
   return Object.values(snap.todos).map((t) => t.text);

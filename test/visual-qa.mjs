@@ -67,6 +67,8 @@ const SCREENS = [
   { hash: 'punch', name: 'punch' },
   { hash: 'rush', name: 'rush' },
   { hash: 'backorders', name: 'backorders' },
+  { hash: 'dies', name: 'dies' },
+  { hash: 'extrusions', name: 'extrusions' },
   { hash: 'shift', name: 'shift' },
   { hash: 'setup', name: 'setup' },
 ];
@@ -230,9 +232,9 @@ for (const theme of ['light', 'dark']) {
           + ` — e.g. ${unnamed[0]}`);
       }
       /* The phone header once hid both quick actions to buy nav width. That
-         made the section-book pictures and Setup unreachable even though both
-         features were still bundled. Assert visibility, then open the lookup
-         from the exact control an operator uses. */
+         made the section book and Setup unreachable even though both features
+         were still bundled. Assert visibility, then follow the exact route an
+         operator uses into the full Die Lookup section. */
       if (vp.name === 'phone' && screen.hash === 'rolling') {
         const tools = await page.evaluate(() => Object.fromEntries(
           ['.hdr-dies', '.hdr-setup'].map((sel) => {
@@ -245,10 +247,12 @@ for (const theme of ['light', 'dark']) {
         }
         if (tools['.hdr-dies']) {
           await page.click('.hdr-dies');
-          const lookup = await page.waitForSelector('dialog[open] .dielookup');
-          if (!lookup) fail(`rolling @ phone/${theme}: die lookup did not open from the header`);
-          await page.click('dialog[open] header button');
-          await page.waitForSelector('dialog[open]', { state: 'detached' });
+          await page.waitForFunction(() => location.hash === '#dies'
+            && !!document.querySelector('.die-section .dielookup'));
+          const current = await page.getAttribute('nav.tabs [aria-current="true"]', 'aria-label');
+          if (current !== 'Die Lookup') {
+            fail(`rolling @ phone/${theme}: header search landed on ${current || 'no page'}`);
+          }
         }
       }
     }
