@@ -2393,7 +2393,10 @@ nav.tabs button[aria-current="true"] .nav-icon {
 
 @media (max-width: 720px) {
   .hdr-tools { gap: var(--s1); }
-  .hdr-tools .hdr-dies, .hdr-tools .hdr-setup { display: none; }
+  /* Die lookup and Setup live on the same 44px action row as the name picker.
+     Hiding them saved width but left both features unreachable on a phone;
+     the navigation already scrolls deliberately, so it gives up the width. */
+  .hdr-tools .hdr-dies, .hdr-tools .hdr-setup { display: inline-flex; }
   .line-open { min-width: var(--tap); width: var(--tap); height: var(--tap); }
   .line-inspector { width: 100%; }
   .inspector-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }

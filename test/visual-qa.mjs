@@ -229,6 +229,29 @@ for (const theme of ['light', 'dark']) {
         fail(`${screen.name} @ ${vp.name}/${theme}: ${unnamed.length} control(s) with no accessible name`
           + ` — e.g. ${unnamed[0]}`);
       }
+
+      /* The phone header once hid both quick actions to buy nav width. That
+         made the section-book pictures and Setup unreachable even though both
+         features were still bundled. Assert visibility, then open the lookup
+         from the exact control an operator uses. */
+      if (vp.name === 'phone' && screen.hash === 'rolling') {
+        const tools = await page.evaluate(() => Object.fromEntries(
+          ['.hdr-dies', '.hdr-setup'].map((sel) => {
+            const n = document.querySelector(sel);
+            const r = n?.getBoundingClientRect();
+            return [sel, !!r && r.width >= 44 && r.height >= 44];
+          })));
+        for (const [sel, visible] of Object.entries(tools)) {
+          if (!visible) fail(`rolling @ phone/${theme}: ${sel} is not a visible 44px action`);
+        }
+        if (tools['.hdr-dies']) {
+          await page.click('.hdr-dies');
+          const lookup = await page.waitForSelector('dialog[open] .dielookup');
+          if (!lookup) fail(`rolling @ phone/${theme}: die lookup did not open from the header`);
+          await page.click('dialog[open] header button');
+          await page.waitForSelector('dialog[open]', { state: 'detached' });
+        }
+      }
     }
 
     if (vp.name === 'phone') {
@@ -306,16 +329,24 @@ for (const theme of ['light', 'dark']) {
   if (colourOnly.length) fail(`state shown by colour alone: ${[...new Set(colourOnly)].join(', ')}`);
 
   // --- keyboard focus is visible ---
+  // Use a real keyboard move. Programmatic .focus() inherits the last input
+  // modality, so after the phone lookup test clicks a button Chrome correctly
+  // suppresses :focus-visible and a good focus rule looks broken.
+  await page.keyboard.press('Tab');
   const focusRing = await page.evaluate(() => {
-    const btn = document.querySelector('nav.tabs button:not([aria-current="true"])');
-    const before = getComputedStyle(btn).boxShadow;
-    btn.focus();
-    // :focus-visible only matches keyboard focus, which programmatic .focus()
-    // grants on a button, so this reads the real rule rather than a simulation.
-    const after = getComputedStyle(btn).boxShadow;
-    return { before, after, changed: before !== after && after !== 'none' };
+    const btn = document.activeElement;
+    const style = getComputedStyle(btn);
+    return {
+      after: style.boxShadow,
+      outline: style.outlineStyle,
+      tag: btn?.tagName?.toLowerCase(),
+      changed: style.boxShadow !== 'none' || style.outlineStyle !== 'none',
+    };
   });
-  if (!focusRing.changed) fail(`keyboard focus is invisible (box-shadow stayed "${focusRing.after}")`);
+  if (!focusRing.changed) {
+    fail(`keyboard focus is invisible on ${focusRing.tag || 'the first control'} `
+      + `(box-shadow "${focusRing.after}", outline "${focusRing.outline}")`);
+  }
 
   // --- bulk actions clear the browser's safe area ---
   await page.setViewportSize({ width: 390, height: 844 });
