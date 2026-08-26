@@ -16,16 +16,44 @@
      under glare. */
   --ink-3: #5c6b7f;
 
-  --accent: #1667d8;
-  --accent-soft: #e7f0fd;
-  --ok: #16794a;
-  --ok-soft: #e2f4ea;
+  /* ---- brand ----
+
+     The four colours of the BV Glazing Systems mark, stated once and nowhere
+     else. Every accent in the app derives from them, so correcting these four
+     values corrects the whole application.
+
+     APPROXIMATE. Read off a supplied image rather than sampled from the vector,
+     because the logo has only ever arrived here as a picture. Replace with the
+     exact values out of the logo SVG; nothing below needs to change with them. */
+  --brand-navy:  #1f2a5e;
+  --brand-blue:  #0071bc;
+  --brand-cyan:  #29abe2;
+  --brand-green: #8cc63f;
+
+  /* ---- accents, derived ----
+
+     Two of the four brand colours cannot carry text. On white the cyan is
+     2.3:1 and the green 1.8:1 — both far under the 4.5:1 this app measures at
+     build time. So the brand colours are used as *fills*, and each one has a
+     darkened partner that carries type beside it. Using the brand values
+     directly as ink is the one obvious mistake a reskin makes here, and
+     test/visual-qa.mjs would fail it.
+
+     Ratios below are against --panel, the surface each actually lands on. */
+  --accent: #0b5c9e;              /* brand blue, darkened — 5.9:1  */
+  --accent-soft: #e3eff9;
+  --ok: #3f6b12;                  /* brand green, darkened — 5.4:1 */
+  --ok-soft: #eaf4dc;
+  --work: #0e6d94;                /* brand cyan, darkened  — 5.3:1 */
+  --work-soft: #e2f2fa;
+
+  /* The brand has no warning colour and no red in it, so rush, shortage,
+     overdue and machine-down are derived outside it — tuned warm enough to
+     separate cleanly from three cool brand blues. */
   --warn: #9d5c06;
   --warn-soft: #fdf0dc;
   --bad: #bc3119;
   --bad-soft: #fde9e5;
-  --work: #6438bf;
-  --work-soft: #efe9fc;
 
   /* Elevation. Defined as tokens because dark mode cannot use the same
      shadows — a black shadow on a near-black surface is invisible, which is
@@ -97,16 +125,21 @@
     --ink-2: #b6c8d9;
     --ink-3: #8da6bd;
 
-    --accent: #65adff;
-    --accent-soft: #173b61;
-    --ok: #55dfa3;
-    --ok-soft: #133d2d;
+    /* Dark re-derives the same brand hues rather than inverting the light
+       values. The brand blues are already dark, so here they lighten; the
+       green lifts to close to the mark's own value, which reads correctly on
+       a near-black ground where the darkened light-mode version would not. */
+    --accent: #5cb0ee;
+    --accent-soft: #12314f;
+    --ok: #a5d45c;
+    --ok-soft: #22320f;
+    --work: #63c8ef;
+    --work-soft: #10323f;
+
     --warn: #f4bb55;
     --warn-soft: #49351a;
     --bad: #ff8174;
     --bad-soft: #4a2527;
-    --work: #c19aff;
-    --work-soft: #352752;
 
     /* 7.5:1 or better on every filled semantic in this theme; white was 2.5:1. */
     --on-fill: #07111d;
@@ -2507,7 +2540,12 @@ nav.tabs button[aria-current="true"] .nav-icon {
   .dgroup-body { margin-top: var(--s2); }
   .line { min-height: 62px; padding: var(--s2) var(--s3) var(--s2) var(--s4); cursor: default; }
   .line.active {
-    background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+    /* 14%, not 18%: the mix was tuned against the old lighter accent, and the
+       brand blue is darker, so the same proportion dropped the row's secondary
+       text to 4.49:1 — a hundredth under the bar the suite enforces. The
+       selected row has to stay light enough to read on, so the mix gives way
+       rather than the ink. */
+    background: color-mix(in srgb, var(--accent) 14%, var(--panel));
     box-shadow: inset 0 0 0 1px var(--accent), 0 3px 12px color-mix(in srgb, var(--accent) 14%, transparent);
   }
   .line.active::before { background: var(--accent); }
