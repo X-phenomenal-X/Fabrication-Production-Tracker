@@ -159,11 +159,27 @@ const su = await page.evaluate(() => import('/js/store.js').then((m) => {
 }));
 step('shift update: ' + JSON.stringify(su));
 if (!su || !su.machines.length) throw new Error('Shift Update sheet was not parsed');
-// FMC 1 and FMC 2 only exist in the newer block stacked below the old one in
-// `Shift Update` — proof the stacked-block parse works, not just the sheet
-// being found by its exact name.
-for (const k of ['roll-auto', 'fom1', 'cnc1', 'fmc1', 'fmc2', 'multipunch']) {
+
+/* The sheet is chosen by its exact name, `Shift Update`. The workbook holds
+   four similarly named tabs and the other three are archives that must never
+   be reached for, not even as a fallback when the live one looks thin:
+
+     Shift Update      Afternoon   7 machines   <- the live one
+     Shift Update 2    Day         9 machines
+     Shift Update (3)  Afternoon   7 machines
+     Shift Update Old  -           7 machines
+
+   `Shift Update 2` is the trap. It is the fullest sheet — it is the only one
+   carrying FMC 1 and FMC 2 — so any rule that prefers the sheet with the most
+   on it, or the one with the most machines, lands there and quietly serves an
+   earlier shift. Later shift, fewer machines: the app reports what the live
+   sheet says, including what it does not mention. */
+for (const k of ['roll-auto', 'roll-man', 'fom1', 'fom2', 'fom3', 'cnc1', 'multipunch']) {
   if (!su.machines.includes(k)) throw new Error(`shift update missing ${k}`);
+}
+if (su.shift !== 'Afternoon') {
+  throw new Error(`shift update should be the live sheet's Afternoon block, got ${su.shift}`
+    + ' — reading Shift Update 2 gives Day');
 }
 for (const k of ['cnc2', 'cnc3', 'cnc140']) {
   if (su.machines.includes(k)) throw new Error(`${k} should no longer be a machine`);
@@ -186,12 +202,22 @@ const suSrc = await page.evaluate(() => import('/js/store.js').then(
   (m) => m.state.machineMeta?.cnc && m.state.shiftUpdate));
 if (!suSrc) throw new Error('no shift update parsed');
 
-const suWhen = await page.evaluate(() => import('/js/model.js').then((m) => ({
-  fom1: m.shiftUpdateFor('fom1'), fmc1: m.shiftUpdateFor('fmc1'),
-})).then((r) => Object.fromEntries(
-  Object.entries(r).map(([k, e]) => [k, `${e.label} ${e.date} ${e.shift}`]))));
+/* A machine the live sheet does not mention has no update, and the app has to
+   say so rather than dress up a stale one. FMC 1 and FMC 2 are exactly that
+   case: real machines that only the archived `Shift Update 2` writes about. */
+const suWhen = await page.evaluate(() => import('/js/model.js').then((m) => {
+  const one = (k) => {
+    const e = m.shiftUpdateFor(k);
+    return e ? `${e.date} ${e.shift} (${e.source})` : null;
+  };
+  return { fom1: one('fom1'), fmc1: one('fmc1'), fmc2: one('fmc2') };
+}));
 step('per-machine shift-update source: ' + JSON.stringify(suWhen));
-if (suWhen.fom1 === suWhen.fmc1) throw new Error('entries should carry their own block date/shift');
+if (!suWhen.fom1) throw new Error('FOM 1 is on the live sheet and must have an update');
+if (suWhen.fmc1 || suWhen.fmc2) {
+  throw new Error('FMC 1/2 are not on the live Shift Update sheet, so they must report '
+    + `no update rather than one from an archived tab — got ${suWhen.fmc1}`);
+}
 
 const suPanel = await page.$$eval('.su-title', (ns) => ns.length);
 step('shift update panel rendered on this page: ' + (suPanel ? 'yes' : 'no'));
@@ -968,7 +994,17 @@ if (overruled.shown !== 'IN_PROGRESS' || overruled.implied) {
    append stringifies it, and the word "null" went out on the page for every
    line whose route had no discrepancy to report, which is most of them. */
 await gotoTab('Rolling');
-await page.click('.line .line-iconbtn:nth-of-type(2)');
+/* Two surfaces reach it depending on width: the icon rail on a narrow layout,
+   and the inspector's action list once the workspace is wide enough to show a
+   side panel — which is what this run's 1440px viewport gets. Open it by the
+   route the layout actually offers rather than pinning one. */
+if (await page.locator('.line-tools:visible').count()) {
+  await page.click('.line .line-iconbtn[title*="paperwork"]');
+} else {
+  await page.click('.line .line-open');
+  await page.waitForSelector('.inspector-actions');
+  await page.click('.inspector-actions button:has-text("Route")');
+}
 await page.waitForSelector('dialog .routesteps');
 const route = await page.evaluate(() => {
   const d = document.querySelector('dialog');
