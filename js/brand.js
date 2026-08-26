@@ -1,38 +1,36 @@
 /* The company mark, in one place.
 
-   ⚠ THE MARK BELOW IS A PLACEHOLDER TRACE, NOT THE REAL LOGO.
+   Traced from `assets/bv-logo.png`, the artwork itself, by reading the pixels
+   rather than by eye — every coordinate below comes from the bounding boxes
+   and the row-by-row profile of the shapes in that file. It is kept in the
+   repo beside this so the trace can be checked against its source.
 
-   It was drawn from a picture of the BV Glazing Systems logo, because the logo
-   has only ever reached this project as an image — never as a vector or a
-   colour spec. The proportions and the exact hues are approximations.
+   Three shapes, not four. An earlier version of this drew a 2x2 grid of tiles
+   with a navy one among them; the file disproves it. The mark is a cyan square
+   over a blue square, with a green wedge beside them that tapers from full
+   width at the top to nothing at the bottom. The navy in the logo belongs to
+   the wordmark, not to the mark.
 
-   Replacing it is deliberately a one-file job:
+   Both halves are split by the same horizontal gutter, at rows 15-16 of 32,
+   which is what makes the left pair read as two squares rather than one.
 
-     1. Drop the real artwork in as `MARK` below. If it is an SVG, paste its
-        contents; strip any `width`/`height` and keep the `viewBox` so it
-        scales with the lockup. If it is a PNG, use an `<img>` with a data URI
-        — but a vector is much better on a wall-mounted screen.
-     2. Correct the four `--brand-*` values at the top of css/app.css to the
-        exact hex out of that artwork.
-
-   Nothing else in the app needs to change. Everything coloured is derived from
-   those four values, and every place the mark appears calls `brandMark()`. */
+   If a vector of the logo ever turns up, replacing `MARK` with its contents is
+   the whole job — keep the `viewBox`, drop any `width`/`height`, and use
+   `var(--mark-a|b|c)` for the fills so the dark-ground reversal keeps working. */
 
 import { el } from './ui.js';
 
-/** The four tiles, sheared into a glazed unit seen at an angle.
+/** The mark, on a 32x32 grid taken from the source file's own proportions.
 
-    Colours come from CSS custom properties rather than being hard-coded, so
-    correcting a brand value in one stylesheet corrects the mark too — and so
-    the mark can reverse on a dark ground without a second copy of the artwork. */
+    Colours come from CSS custom properties rather than being baked into the
+    paths, so correcting a brand value in one stylesheet corrects the mark too,
+    and one copy can reverse on a dark ground. */
 const MARK = `
-<svg viewBox="0 0 40 40" role="img" aria-label="BV Glazing Systems" focusable="false">
-  <g transform="skewX(-11) translate(5 0)">
-    <rect x="0"  y="4"  width="13" height="14" fill="var(--mark-a)"/>
-    <rect x="16" y="4"  width="11" height="14" fill="var(--mark-b)"/>
-    <rect x="0"  y="21" width="13" height="14" fill="var(--mark-c)"/>
-    <rect x="16" y="21" width="11" height="14" fill="var(--mark-d)"/>
-  </g>
+<svg viewBox="0 0 32 32" role="img" aria-label="BV Glazing Systems" focusable="false">
+  <rect x="0" y="0"  width="18" height="15" fill="var(--mark-a)"/>
+  <rect x="0" y="17" width="18" height="15" fill="var(--mark-b)"/>
+  <path d="M19 0 H31.5 L25.2 15 H19 Z"   fill="var(--mark-c)"/>
+  <path d="M19 17 H24.4 L19 30 Z"        fill="var(--mark-c)"/>
 </svg>`;
 
 /** The mark on its own, at whatever size the surrounding CSS gives it. */

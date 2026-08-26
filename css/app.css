@@ -25,27 +25,33 @@
      APPROXIMATE. Read off a supplied image rather than sampled from the vector,
      because the logo has only ever arrived here as a picture. Replace with the
      exact values out of the logo SVG; nothing below needs to change with them. */
-  --brand-navy:  #1f2a5e;
-  --brand-blue:  #0071bc;
-  --brand-cyan:  #29abe2;
-  --brand-green: #8cc63f;
+  --brand-navy:  #1c2245;
+  --brand-blue:  #1e71ab;
+  --brand-cyan:  #35bce1;
+  --brand-green: #72b843;
 
   /* ---- accents, derived ----
 
-     Two of the four brand colours cannot carry text. On white the cyan is
-     2.3:1 and the green 1.8:1 — both far under the 4.5:1 this app measures at
-     build time. So the brand colours are used as *fills*, and each one has a
-     darkened partner that carries type beside it. Using the brand values
-     directly as ink is the one obvious mistake a reskin makes here, and
-     test/visual-qa.mjs would fail it.
+     Measured, not guessed: the four values above were sampled out of the logo
+     file, and each one's contrast on white computed from it.
 
-     Ratios below are against --panel, the surface each actually lands on. */
-  --accent: #0b5c9e;              /* brand blue, darkened — 5.9:1  */
-  --accent-soft: #e3eff9;
-  --ok: #3f6b12;                  /* brand green, darkened — 5.4:1 */
-  --ok-soft: #eaf4dc;
-  --work: #0e6d94;                /* brand cyan, darkened  — 5.3:1 */
-  --work-soft: #e2f2fa;
+     On white the navy is 15.39:1 and the blue 5.24:1, so those two can carry
+     text; the cyan at 2.23:1 and the green at 2.43:1 cannot. Using those two
+     directly as ink is the obvious mistake a reskin makes here.
+
+     But white is not the pairing that decides it. Every one of these accents
+     is used as ink *on its own soft fill* — a die chip, a badge, an info
+     banner — and that is a much narrower gap than against the page. The brand
+     blue passes on white at 5.24:1 and fails on its own tint at 4.46:1, which
+     is exactly how the first pass of this got through the arithmetic and
+     failed the suite. So each value below is solved against its own soft fill,
+     and clears on white with room to spare as a side effect. */
+  --accent: #1c6ba2;              /* brand blue,  x0.95 */
+  --accent-soft: #e4eef5;
+  --ok: #48752b;                  /* brand green, x0.64 */
+  --ok-soft: #eaf4e2;
+  --work: #207187;                /* brand cyan,  x0.60 */
+  --work-soft: #dff2f9;
 
   /* The brand has no warning colour and no red in it, so rush, shortage,
      overdue and machine-down are derived outside it — tuned warm enough to
@@ -125,15 +131,16 @@
     --ink-2: #b6c8d9;
     --ink-3: #8da6bd;
 
-    /* Dark re-derives the same brand hues rather than inverting the light
-       values. The brand blues are already dark, so here they lighten; the
-       green lifts to close to the mark's own value, which reads correctly on
-       a near-black ground where the darkened light-mode version would not. */
-    --accent: #5cb0ee;
+    /* Dark re-derives from the same four brand values rather than inverting
+       the light ones — and it turns out the brand cyan and green need no
+       adjustment at all here: on this panel they measure 7.65:1 and 7.02:1,
+       so the mark's own colours are used exactly as printed. Only the blue
+       lifts, because at 3.8:1 it would have been the one failure. */
+    --accent: #2ba2f5;              /* brand blue,  x1.44 — 4.81:1 on its fill */
     --accent-soft: #12314f;
-    --ok: #a5d45c;
+    --ok: var(--brand-green);       /* unmodified         — 5.65:1 on its fill */
     --ok-soft: #22320f;
-    --work: #63c8ef;
+    --work: var(--brand-cyan);      /* unmodified         — 6.08:1 on its fill */
     --work-soft: #10323f;
 
     --warn: #f4bb55;
@@ -208,17 +215,19 @@ header.top {
 
 /* ---------- the company lockup ----------
 
-   The mark takes its four colours from custom properties rather than carrying
-   them in the artwork, which is what lets one copy of it reverse on a dark
-   ground. On a light surface it is the brand as printed; on the navy shell the
-   navy tile would disappear, so that one tile goes white — the standard way a
-   four-colour mark handles a dark lockup. */
+   Three shapes: a cyan square over a blue square, and a green wedge tapering
+   down beside them. The navy in the logo is the wordmark, not part of the
+   mark — worth stating because the first trace of this drew four tiles and a
+   navy one among them, which the file itself disproves.
+
+   The shapes take their colours from custom properties rather than carrying
+   them in the artwork, so one copy can reverse on a dark ground later without
+   a second version of the file. */
 .lockup {
   display: flex; align-items: center; gap: var(--s2); min-width: 0;
   --mark-a: var(--brand-cyan);
-  --mark-b: var(--brand-green);
-  --mark-c: var(--brand-blue);
-  --mark-d: var(--brand-navy);
+  --mark-b: var(--brand-blue);
+  --mark-c: var(--brand-green);
 }
 .brandmark { flex-shrink: 0; display: block; width: 27px; height: 27px; }
 .brandmark svg { display: block; width: 100%; height: 100%; }
