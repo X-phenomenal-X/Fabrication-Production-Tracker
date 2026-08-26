@@ -197,6 +197,32 @@ export function makeFixture({ today = '2026-08-14', volume = 'heavy' } = {}) {
     }
   }
 
+  /* One job at three stations, with the stations disagreeing — which is what
+     the real workbooks look like, because each sheet is kept by a different
+     person and they fall behind at different rates.
+
+     W/O 39001 S80.104 is rolled, cut at FOM 2 and punched. The punch says it
+     is finished; rolling still says it is running and FOM 2 has not been
+     touched at all. Both of those earlier rows are stale, and the app has to
+     work that out rather than count the job as open three times over. */
+  const STALE_WO = '39001';
+  const STALE_DIE = 'S80.104';
+  const staleRow = (machine, status, row) => ({
+    id: `${machine}:${STALE_WO}:${STALE_DIE}:${row}`,
+    machine, sheet: SHEET_OF[machine], row,
+    wo: STALE_WO, project: 'Harbour Point', floor: 'L2',
+    die: STALE_DIE, qty: 88, status,
+    cuttingDate: day(-2), shipDate: day(5),
+    material: null, comments: null, setup: null, rollingEta: null,
+    dayShift: null, shifts: null, pinHole: null,
+    bo: null, boRaw: null, boStat: null, backOrder: false, archived: false,
+  });
+  tasks.push(
+    staleRow('roll-auto', 'IP', 90),      // stale: says still rolling
+    staleRow('fom2', null, 91),           // stale: says never started
+    staleRow('multipunch', 'DONE', 92),   // the one that is right
+  );
+
   // Lines moved off the machine the workbook put them on: the whole CNC queue
   // has to be assigned by hand, and FOM work gets shuffled during a shift.
   const queued = tasks.filter((t) => t.machine === 'cncfmc');

@@ -68,16 +68,154 @@ export function resolveTask(task) {
   return out;
 }
 
-/** What a line actually shows: an operator's own update always wins. Failing
-    that, the imported status collapses to the three tracked buckets. */
+/* ---------- one job, several stations ---------- */
+
+/* A work order and die is one job, and it is worked at more than one station:
+   the material is rolled, then cut, then punched, then machined. The workbooks
+   carry a row per station, and those rows go stale independently — 609 of the
+   3,228 jobs on the current schedules span two or three machines, and 99 of
+   them have a later station finished while an earlier one still reads IP, or
+   nothing at all.
+
+   W/O 30996 S80.104 is the shape of it: `roll-auto: IP`, `fom2: DONE`. It
+   cannot have been cut at FOM 2 without having been rolled first. Rolling's row
+   is simply stale, and every open count, staging list and shift update that
+   reads it is wrong by the same amount.
+
+   So a finished station finishes the ones before it. The stages are the SOP's
+   own order collapsed to the part that is a straight line — every route in
+   SOP-WW-CUT-008 runs rolling, then a cut, then a punch, then machining, and
+   the branches differ only in which station fills each slot. */
+const STAGE = {
+  'roll-auto': 1, 'roll-man': 1,
+  saw: 2, fom1: 2, fom2: 2, fom3: 2,
+  multipunch: 3,
+  cncfmc: 4, cnc1: 4, fmc1: 4, fmc2: 4,
+};
+
+/** One job, wherever it appears. Deliberately not the status key — that is
+    per-station by design, and this is what the stations have in common. */
+function jobKey(t) {
+  const src = t.origin || t;
+  return `${src.wo}|${src.die || ''}`;
+}
+
+/** A line's status before anything is inferred: the operator's own update, or
+    what the workbook says. Kept separate from effectiveTaskStatus so the
+    inference stands on solid ground and cannot feed itself. */
+function baseStatusKey(t) {
+  const override = state.taskStatus[taskStatusKey(t)];
+  if (override?.status && TRACK_STATUS[override.status]) return override.status;
+  if (t.status === 'DONE') return 'DONE';
+  if (t.status === 'IP') return 'IN_PROGRESS';
+  return 'NOT_STARTED';
+}
+
+/* Per job: the furthest stage anybody has finished, and the furthest anybody
+   has started. Both are needed — a finished station downstream is proof the
+   ones before it are finished, while a merely *started* one is only proof they
+   are no longer untouched. */
+let stageCache = null;
+let stageCacheAt = null;
+
+function stages() {
+  const stamp = `${state.tasks?.length || 0}:${Object.keys(state.taskStatus || {}).length}`
+    + `:${Object.keys(state.manualTasks || {}).length}`;
+  if (stageCache && stageCacheAt === stamp) return stageCache;
+
+  const map = new Map();
+  for (const t of tasksInScope()) {
+    const stage = STAGE[t.machine];
+    if (!stage) continue;
+    const status = baseStatusKey(t);
+    if (status === 'NOT_STARTED') continue;
+
+    const k = jobKey(t);
+    let rec = map.get(k);
+    if (!rec) { rec = { done: 0, started: 0, doneAt: null, startedAt: null }; map.set(k, rec); }
+    if (status === 'DONE' && stage > rec.done) { rec.done = stage; rec.doneAt = t.machine; }
+    if (stage > rec.started) { rec.started = stage; rec.startedAt = t.machine; }
+  }
+  stageCache = map;
+  stageCacheAt = stamp;
+  return map;
+}
+
+/** What a later station proves about this one, or null.
+
+    Only ever *forward* along the line, and only from a strictly later stage:
+    two rows at the same station are two real pieces of work — one job can have
+    two FOM 2 rows for different elevations — and neither finishes the other. */
+export function impliedStatus(t) {
+  const stage = STAGE[t.machine];
+  if (!stage) return null;
+  const rec = stages().get(jobKey(t));
+  if (!rec) return null;
+
+  if (rec.done > stage) {
+    return { status: 'DONE', from: rec.doneAt, why: 'finished further down the line' };
+  }
+  /* Started downstream says the material got there, so this station is not
+     untouched — but it does not say this station *finished*, and claiming that
+     would be the same stale-data mistake pointing the other way. */
+  if (rec.started > stage) {
+    return { status: 'IN_PROGRESS', from: rec.startedAt, why: 'already running further down the line' };
+  }
+  return null;
+}
+
+/** Every station this job appears at, and how far each has got.
+
+    The route panel used to shade its steps by position alone — everything
+    before the line's own station drawn as finished, on the assumption that
+    material moves in a straight line and nothing is ever skipped or waiting.
+    This is the same thing measured instead of assumed.
+
+    Where a station has two rows for one job — different elevations, usually —
+    the station is only as far along as its *least* finished row. Calling a
+    station done while half of it is still on the rack is exactly the error
+    this whole section exists to stop. */
+export function jobStations(task) {
+  const k = jobKey(task);
+  const out = {};
+  for (const t of tasksInScope()) {
+    if (jobKey(t) !== k) continue;
+    const s = effectiveTaskStatus(t).key;
+    const prev = out[t.machine];
+    if (!prev || TRACK_STATUS_ORDER.indexOf(s) < TRACK_STATUS_ORDER.indexOf(prev)) {
+      out[t.machine] = s;
+    }
+  }
+  return out;
+}
+
+/** What a line actually shows.
+
+    An operator's own update always wins — somebody looked at the material and
+    said so, and no inference outranks that. Failing that, a later station can
+    finish this one. Failing both, the workbook. */
 export function effectiveTaskStatus(t) {
   const override = state.taskStatus[taskStatusKey(t)];
   if (override?.status && TRACK_STATUS[override.status]) {
     return { ...TRACK_STATUS[override.status], by: override.by, at: override.at, overridden: true };
   }
+
   let bucket = 'NOT_STARTED';
   if (t.status === 'DONE') bucket = 'DONE';
   else if (t.status === 'IP') bucket = 'IN_PROGRESS';
+
+  const implied = impliedStatus(t);
+  // Only ever forward. Where the sheet already says more than the inference
+  // does, the sheet is the better answer and the inference adds nothing.
+  if (implied && TRACK_STATUS_ORDER.indexOf(implied.status) > TRACK_STATUS_ORDER.indexOf(bucket)) {
+    return {
+      ...TRACK_STATUS[implied.status],
+      overridden: false,
+      implied: true,
+      impliedFrom: implied.from,
+      impliedWhy: implied.why,
+    };
+  }
   return { ...TRACK_STATUS[bucket], overridden: false };
 }
 

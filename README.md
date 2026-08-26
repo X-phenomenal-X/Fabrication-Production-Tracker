@@ -321,6 +321,61 @@ its lines are put on it by hand — which is exactly what the learned routing
 above then picks up. Both columns are now read into the task instead of being
 declared and discarded.
 
+## One job, several stations
+
+A work order and die is **one job**, and it is worked at more than one station:
+rolled, then cut, then punched, then machined. The workbooks carry a row per
+station, and those rows go stale independently — different people keep different
+sheets and they fall behind at different rates.
+
+**609 of the 3,228 scheduled jobs span two or three machines, and 99 of them
+have a later station finished while an earlier one does not.** W/O 30996
+S80.104 is the shape of it: `roll-auto: IP`, `fom2: DONE`. It cannot have been
+cut at FOM 2 without being rolled first — rolling's row is simply stale.
+
+So **a finished station finishes the ones before it.** The stages are the
+routing SOP's own order, collapsed to the part that is a straight line:
+
+```
+1 rolling      2 cut                3 punch        4 machining
+  Auto/Manual    Saw · FOM 1/2/3      Multi Punch    CNC 1 · FMC 1/2
+```
+
+On the current schedules this settles **56 lines** — 52 finished by a later
+station, 4 shown as running because a later station is. Open lines drop from
+738 to 686, and the staging list from 183 to 144: **39 jobs were being queued
+for prep that had already been through it.**
+
+Three rules keep it honest:
+
+- **Only ever forward, and only from a strictly later stage.** Rolling being
+  done says nothing about whether FOM 2 has cut it. Two rows at the *same*
+  station are two real pieces of work — one job can have two FOM 2 rows for
+  different elevations — and neither finishes the other.
+- **A merely started station downstream proves less.** It says the material got
+  there, so the earlier station is not untouched; it does not say the earlier
+  station finished. Claiming that would be the same stale-data mistake pointing
+  the other way.
+- **An operator's own update always wins.** They looked at the material; the app
+  only looked at another row.
+
+### It says so on the line
+
+Nothing is written to storage and nothing is attributed to a person. A status
+nobody set carries a dashed **`→ from Multi Punch`** badge, the three-way
+control is outlined rather than filled, and the accessible name says *"Done,
+worked out from a later station"*. A `Done` with no name against it should mean
+somebody looked at the material; here nobody did, and the app says so.
+
+Because it is derived rather than stored it also self-corrects: fix the
+downstream row, or re-import, and the inference follows. Everything reading
+`effectiveTaskStatus` — open counts, the Today board, Rush, Back Orders,
+staging, the shift update — picks it up for free.
+
+`test/app-check.mjs` asserts it on the real W/O 30996, checks that **no
+inference points backwards up the line** across the whole book, and that an
+operator setting a status beats it.
+
 ## Routing — the SOP first, habit second
 
 The department has a written standard for how window wall and vents move:

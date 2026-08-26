@@ -1547,6 +1547,14 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
 /* Stations already behind it are still worth showing — someone checking a job
    wants the whole path — but they are not what to read first. */
 .route-step.past .route-body { opacity: .62; }
+/* Behind where the job has actually got to: something downstream has moved on
+   and this station still reads not started. Marked, because it is either a row
+   nobody updated or a step that was genuinely skipped, and both are worth a
+   second look. */
+.route-step.waiting .route-mark {
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  color: var(--warn);
+}
 .route-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .route-station { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
 .route-station strong { font-size: var(--t-md); }
@@ -1925,6 +1933,30 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   border: 1px solid color-mix(in srgb, var(--ok) 20%, transparent);
 }
 .badge-staged svg { flex-shrink: 0; }
+
+/* A status nobody set — worked out from a station further down the line.
+   Deliberately quieter than the real badges and outlined rather than filled:
+   it is a conclusion, not a record, and it must not read as somebody's
+   signature on the work. Dashed for the same reason the routing suggestion is:
+   in this app, dashed means "the app worked this out". */
+.badge-implied {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+  background: none; color: var(--ink-3);
+  padding: 2px 7px 2px 5px; border-radius: var(--r-xs);
+  border: 1px dashed var(--line);
+}
+.badge-implied svg { flex-shrink: 0; opacity: .7; }
+
+/* The three-way control carries the same doubt. The soft fill stays — it is
+   what makes the label readable, and the contrast pairs are measured against
+   it — so the difference is carried by the ring around it going from solid to
+   dashed, matching the badge and the routing suggestion. */
+.seg.implied .seg-btn.on {
+  box-shadow: none;
+  outline: 1px dashed currentColor;
+  outline-offset: -1px;
+}
 
 @media (max-width: 720px) {
   .stage-actions { flex-basis: 100%; }

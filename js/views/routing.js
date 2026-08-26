@@ -12,7 +12,7 @@
 import { el, chip, icon, modal } from '../ui.js';
 import { routeFor, needsFmc, SOP, SAW_WIDTH_DIES, isHighThermal } from '../routing.js';
 import { MACHINE_BY_KEY } from '../machines.js';
-import { machineConfig } from '../model.js';
+import { machineConfig, jobStations } from '../model.js';
 
 const TRACK = {
   vents: { label: 'Vents', tone: 'work', note: 'a separate entity from window wall' },
@@ -21,20 +21,32 @@ const TRACK = {
   ww: { label: 'Window wall', tone: 'ok', note: 'not split into widths or heights yet' },
 };
 
-function stepRow(step, i, at) {
-  const done = at >= 0 && i < at;
-  const here = i === at;
+function stepRow(step, i, at, stations) {
+  /* Where the schedules actually have this job, not where its position in the
+     list implies it should be. A station with no row for this job at all falls
+     back to position — the SOP says it passes through, the workbook just does
+     not carry it. */
+  const known = step.machine ? stations[step.machine] : undefined;
+  const done = known ? known === 'DONE' : (at >= 0 && i < at);
+  const here = known ? known === 'IN_PROGRESS' : i === at;
+  const waiting = known === 'NOT_STARTED' && i < at;
   const label = step.machine
     ? machineConfig(MACHINE_BY_KEY[step.machine] || { key: step.machine, label: step.station }).label
     : null;
 
-  return el('div.route-step' + (here ? '.here' : '') + (done ? '.past' : ''), {},
+  return el('div.route-step' + (here ? '.here' : '') + (done ? '.past' : '')
+    + (waiting ? '.waiting' : ''), {},
     el('div.route-mark', { 'aria-hidden': 'true' },
       here ? icon('arrow', { size: 13 }) : done ? icon('check', { size: 12 }) : el('span.route-dot', {})),
     el('div.route-body', {},
       el('div.route-station', {},
         el('strong', {}, step.station),
         here ? chip('here now', 'ok') : null,
+        done ? chip('done', 'mute') : null,
+        /* Behind the line's own position: something downstream has moved on
+           and this station has not started. Worth saying out loud — it is
+           either a row nobody updated or a job that genuinely skipped a step. */
+        waiting ? chip('not started', 'warn') : null,
         // The station's own name on the flowchart and the machine's name in
         // the app are not always the same word; say both once rather than
         // leave someone matching them up.
@@ -70,7 +82,11 @@ export function routeDialog(task) {
     return modal('Routing', body, { wide: true });
   }
 
-  body.append(
+  /* Filtered, because `append` is not `el`: el() drops a null child, a raw
+     DOM append stringifies it and puts the word "null" on the page. The
+     discrepancy banner below is null for most lines, which is exactly the
+     common case. */
+  body.append(...[
     // Why the app thinks this is the track it is, said plainly, because the
     // schedules carry no column for it and this is read off the machine.
     el('div.banner' + (r.sure ? '' : '.warn'), {},
@@ -95,10 +111,14 @@ export function routeDialog(task) {
             + `which is not a station on the ${SOP.id} path below.`))
       : null,
 
-    el('div.routesteps', {}, ...r.steps.map((s, i) => stepRow(s, i, r.at))),
+    el('div.routesteps', {}, ...(() => {
+      const stations = jobStations(task);
+      return r.steps.map((s, i) => stepRow(s, i, r.at, stations));
+    })()),
 
     el('div.small.muted.route-src', {},
-      `${SOP.id} v${SOP.version} — ${SOP.title}, effective ${SOP.effective}.`));
+      `${SOP.id} v${SOP.version} — ${SOP.title}, effective ${SOP.effective}.`),
+  ].filter(Boolean));
 
   return modal('Routing', body, { wide: true });
 }

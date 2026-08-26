@@ -75,7 +75,15 @@ function statusControl(row, vs, rerender) {
   const key = taskStatusKey(row.task);
   const cur = row.status.key;
 
-  return el('div.seg', { role: 'group', 'aria-label': 'Status' },
+  return el('div.seg' + (row.status.implied ? '.implied' : ''), {
+    role: 'group',
+    /* Said in the accessible name too, not only in the badge beside it —
+       otherwise a screen reader hears "Done, pressed" with no hint that
+       nobody actually pressed it. */
+    'aria-label': row.status.implied
+      ? `Status — ${row.status.label}, worked out from a later station`
+      : 'Status',
+  },
     ...TRACK_STATUS_ORDER.map((k) => {
       const s = TRACK_STATUS[k];
       const confirming = vs.motion?.type === 'status'
@@ -207,6 +215,18 @@ function taskLine(row, vs, rerender, group) {
         isStaged(t) ? el('span.badge-staged', {
           title: 'Staged and ready for rolling',
         }, icon('check', { size: 10 }), 'staged') : null,
+        /* Nobody pressed Done on this line — a later station finished it and
+           this row is stale. Said outright rather than shown as a plain Done,
+           because "Done" with no name against it should mean somebody looked
+           at the material, and here nobody did. */
+        row.status.implied ? el('span.badge-implied', {
+          title: `Not marked here — ${row.status.impliedWhy}, at `
+            + `${machineConfig(MACHINE_BY_KEY[row.status.impliedFrom]
+              || { label: row.status.impliedFrom }).label}. `
+            + 'Set it by hand to overrule this.',
+        }, icon('arrow', { size: 10 }),
+          `from ${machineConfig(MACHINE_BY_KEY[row.status.impliedFrom]
+            || { label: row.status.impliedFrom }).label}`) : null,
         // What this component usually gets put on. Offered, never applied on
         // its own: routing a line to the wrong machine is a real cost, and the
         // person reading the row is the one who knows whether this time is

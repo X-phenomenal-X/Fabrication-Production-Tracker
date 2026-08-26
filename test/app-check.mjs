@@ -899,6 +899,95 @@ await page.screenshot({ path: path.join(SHOT, 'die-lookup.png') });
 await page.click('dialog header button');
 await page.waitForSelector('dialog', { state: 'detached' });
 
+/* ---------- one job, several stations ---------- */
+
+/* W/O 30996 S80.104 is a real row in the Rolling and CNC workbooks, and the
+   two sheets disagree: rolling says IP, FOM 2 says DONE. It cannot have been
+   cut at FOM 2 without being rolled first — rolling's row is stale, and
+   counting it open means every open count, staging list and shift update that
+   reads it is wrong by the same amount. 99 jobs are in this state. */
+const implied = await page.evaluate(() => Promise.all([
+  import('/js/model.js'), import('/js/store.js'),
+]).then(([M, S]) => {
+  const rows = S.state.tasks.filter((t) => t.wo === '30996' && t.die === 'S80.104');
+  return rows.map((t) => {
+    const e = M.effectiveTaskStatus(t);
+    return { machine: t.machine, sheet: t.status, shown: e.key, implied: !!e.implied, from: e.impliedFrom };
+  });
+}));
+step('30996 S80.104 across stations: '
+  + implied.map((r) => `${r.machine} ${r.sheet || '-'}→${r.shown}${r.implied ? '*' : ''}`).join(' | '));
+
+const at = (m) => implied.find((r) => r.machine === m);
+if (implied.length < 2) throw new Error('expected 30996 S80.104 on more than one machine');
+if (at('roll-auto').shown !== 'DONE' || !at('roll-auto').implied) {
+  throw new Error('rolling should be finished by FOM 2 downstream, not left as IP');
+}
+if (at('roll-auto').from !== 'fom2') throw new Error('the inference has to say which station it came from');
+if (at('fom2').implied) throw new Error('the station actually marked done must not be called implied');
+
+/* Never backwards. Rolling being finished says nothing about whether FOM 2 has
+   cut it yet, and claiming it did would be the same stale-data mistake in the
+   other direction. */
+const backwards = await page.evaluate(() => Promise.all([
+  import('/js/model.js'), import('/js/store.js'),
+]).then(([M, S]) => {
+  const rows = S.state.tasks.filter((t) => M.effectiveTaskStatus(t).implied);
+  const STAGE = { 'roll-auto': 1, 'roll-man': 1, saw: 2, fom1: 2, fom2: 2, fom3: 2, multipunch: 3, cncfmc: 4, cnc1: 4, fmc1: 4, fmc2: 4 };
+  return {
+    total: rows.length,
+    done: rows.filter((t) => M.effectiveTaskStatus(t).key === 'DONE').length,
+    wrongWay: rows.filter((t) => STAGE[M.effectiveTaskStatus(t).impliedFrom] <= STAGE[t.machine]).length,
+  };
+}));
+step('inferred across the whole book: ' + JSON.stringify(backwards));
+if (backwards.wrongWay) throw new Error(`${backwards.wrongWay} inferences point backwards up the line`);
+if (backwards.total < 20) throw new Error('the inference fired on almost nothing — check the stage map');
+
+/* An operator's own call outranks it. They looked at the material; the app only
+   looked at another row. */
+const overruled = await page.evaluate(() => Promise.all([
+  import('/js/model.js'), import('/js/store.js'),
+]).then(([M, S]) => {
+  const t = S.state.tasks.find((x) => x.wo === '30996' && x.die === 'S80.104' && x.machine === 'roll-auto');
+  const k = M.taskStatusKey(t);
+  S.setTaskStatus(k, 'IN_PROGRESS');
+  const e = M.effectiveTaskStatus(t);
+  S.setTaskStatus(k, null);
+  return { shown: e.key, implied: !!e.implied, overridden: !!e.overridden };
+}));
+step('after an operator says otherwise: ' + JSON.stringify(overruled));
+if (overruled.shown !== 'IN_PROGRESS' || overruled.implied) {
+  throw new Error('an operator setting a status must beat the inference');
+}
+
+/* ---------- the routing panel ---------- */
+
+/* Opened from a line, it has to show the SOP's stations with their paperwork —
+   and nothing else. `append` is not `el`: el() drops a null child, a raw DOM
+   append stringifies it, and the word "null" went out on the page for every
+   line whose route had no discrepancy to report, which is most of them. */
+await gotoTab('Rolling');
+await page.click('.line .line-iconbtn:nth-of-type(2)');
+await page.waitForSelector('dialog .routesteps');
+const route = await page.evaluate(() => {
+  const d = document.querySelector('dialog');
+  return {
+    steps: [...d.querySelectorAll('.route-station strong')].map((n) => n.textContent.trim()),
+    paper: [...d.querySelectorAll('.route-paper strong')].length,
+    stray: /(^|\s)(null|undefined|NaN|\[object Object\])(\s|$)/.test(d.textContent),
+    src: /SOP-WW-CUT-008/.test(d.textContent),
+  };
+});
+step('routing panel: ' + JSON.stringify(route));
+if (!route.steps.length) throw new Error('the routing panel showed no stations');
+if (!route.paper) throw new Error('the routing panel showed no paperwork — that is half the SOP');
+if (!route.src) throw new Error('the routing panel does not say which document it is quoting');
+if (route.stray) throw new Error('a null or undefined was rendered as text in the routing panel');
+await page.screenshot({ path: path.join(SHOT, 'route-panel.png') });
+await page.click('dialog header button');
+await page.waitForSelector('dialog', { state: 'detached' });
+
 /* ---------- staging ---------- */
 
 /* The step before the first machine, and the one the department judges itself

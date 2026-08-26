@@ -191,7 +191,12 @@ if (books.synthetic) {
   /* Outside the SOP: the CNC & FMC sheet, FOM 1, and the non-vent work on
      manual rolling. Pinned so that widening the SOP's reach — which would mean
      routing work it does not describe — has to be a deliberate change. */
-  if (real.noRoute !== 696) fail(`expected 696 lines outside the SOP, got ${real.noRoute}`);
+  /* This number moves whenever the importer takes in more work — widening the
+     work-order rule to keep MU2026-012 and DAN 509 added 47 lines and 20 of
+     them landed here. Pinned anyway: it should move because the intake changed
+     and somebody said so, never because the SOP quietly started routing work it
+     does not describe. */
+  if (real.noRoute !== 716) fail(`expected 716 lines outside the SOP, got ${real.noRoute}`);
   else step(`${real.noRoute} lines outside the SOP: the CNC sheet, FOM 1, and door/flashing work`);
 
   /* Lines the schedule puts somewhere the SOP does not route them. All 300 are
