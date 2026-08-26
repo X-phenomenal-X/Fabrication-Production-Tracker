@@ -3,6 +3,7 @@
 import { el, chip, icon, fmtWhen, modal, toast } from './ui.js';
 import { allRush, allBackOrders, hasTasks, openTodos, openCountFor } from './model.js';
 import { machinesByGroup } from './machines.js';
+import { brandLockup } from './brand.js';
 import {
   state, loadLocal, save, onChange, me, sharedFileName, cloudEnabled,
   initCloud, storageStatus, cloudStatus, sharedFileStatus, retrySync,
@@ -254,8 +255,11 @@ function header() {
 
   return el('header.top', {},
     el('div.hdr-id', {},
-      el('div.brand', {}, 'Cutting',
-        el('small', {}, 'BV Glazing · production tracker')),
+      // The company mark first, then what this particular tool is. Before
+      // this the header opened with the word "Cutting" in system type and
+      // nothing on any screen said who made the thing.
+      brandLockup(),
+      el('div.brand', {}, 'Cutting'),
       el('span.chip.shift-chip' + (shift.full ? '' : '.warn'), { title: 'Current shift' },
         shift.label + (shift.full ? '' : ` · ${shift.crew} crew`)),
       // Offline outranks the sync state: "synced" next to a dead connection

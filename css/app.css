@@ -206,18 +206,55 @@ header.top {
    are declared below this point, and an equal-specificity rule that comes
    first simply loses. */
 
+/* ---------- the company lockup ----------
+
+   The mark takes its four colours from custom properties rather than carrying
+   them in the artwork, which is what lets one copy of it reverse on a dark
+   ground. On a light surface it is the brand as printed; on the navy shell the
+   navy tile would disappear, so that one tile goes white — the standard way a
+   four-colour mark handles a dark lockup. */
+.lockup {
+  display: flex; align-items: center; gap: var(--s2); min-width: 0;
+  --mark-a: var(--brand-cyan);
+  --mark-b: var(--brand-green);
+  --mark-c: var(--brand-blue);
+  --mark-d: var(--brand-navy);
+}
+.brandmark { flex-shrink: 0; display: block; width: 27px; height: 27px; }
+.brandmark svg { display: block; width: 100%; height: 100%; }
+
+.lockup-name {
+  display: flex; flex-direction: column; line-height: 1.03; min-width: 0;
+}
+.lockup-name b {
+  font-size: 14px; font-weight: 800; letter-spacing: .03em; color: var(--ink);
+  white-space: nowrap;
+}
+/* Set as a word, not italic — `em` is the element, the styling is the
+   letter-spaced small caps the printed wordmark uses under the name. */
+.lockup-name em {
+  font-style: normal; font-size: 8.5px; font-weight: 600;
+  letter-spacing: .28em; color: var(--ink-3); text-transform: uppercase;
+}
+
+/* Below 1101px the header is a horizontal bar rather than a sidebar, and it is
+   already the tightest space in the app — the nav scroller and the 96px height
+   budget both live there. The wordmark is what gives way: a mark on its own is
+   still the identity, and spelling the company out cost 8px of header height
+   and enough width to push the active tab out of the nav. */
+@media (max-width: 1100px) {
+  .lockup-name { display: none; }
+  .brandmark { width: 24px; height: 24px; }
+}
+
+/* What this particular tool is, said after who made it. */
 .brand {
   font-weight: 700; letter-spacing: -0.015em; font-size: var(--t-md);
-  display: flex; align-items: baseline; gap: var(--s2);
+  display: flex; align-items: center; gap: var(--s2);
+  padding-left: var(--s3); margin-left: var(--s1);
+  border-left: 1px solid var(--line);
+  color: var(--ink-2);
 }
-/* The department name carries a mark in the accent so the header has one
-   fixed point the eye can return to. */
-.brand::before {
-  content: ''; align-self: center;
-  width: 9px; height: 20px; border-radius: 3px; margin-right: 1px;
-  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--work)));
-}
-.brand small { font-weight: 500; color: var(--ink-3); font-size: var(--t-xs); letter-spacing: 0; }
 
 /* Navigation is two jobs, not eight pages. The four production centres are
    what an operator touches all shift and read as a solid segmented control;
@@ -2386,14 +2423,14 @@ nav.tabs button[aria-current="true"] .nav-icon {
     box-shadow: 8px 0 28px rgba(0,0,0,.12), var(--sheen);
   }
   .hdr-id { display: contents; }
+  /* Stacked in the sidebar, so the divider between "who made this" and "what
+     this is" runs underneath both rather than between them. */
+  .lockup { order: 0; padding: 0 var(--s2); }
   .brand {
-    order: 0; min-height: 48px; align-items: center; padding: 0 var(--s2) var(--s3);
+    order: 1; align-items: center; padding: 0 var(--s2) var(--s3);
+    margin-left: 0; border-left: 0;
     border-bottom: 1px solid var(--line-soft); font-size: var(--t-lg);
     text-transform: uppercase; letter-spacing: .025em;
-  }
-  .brand::before {
-    width: 5px; height: 24px; border-radius: 3px; margin-right: var(--s1);
-    background: var(--accent);
   }
   .brand small { display: none; }
 
