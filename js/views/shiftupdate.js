@@ -244,7 +244,9 @@ function card(machine, rerender) {
       }, icon('undo', { size: 11 }), 'Pull last update')
     : null;
 
-  return el('div.sucard' + (filled ? '.filled' : '') + (sheet?.down ? '.down' : ''), {},
+  return el('div.sucard' + (filled ? '.filled' : '') + (sheet?.down ? '.down' : ''), {
+    id: 'su-' + machine.key,
+  },
     // A machine being down is the biggest thing that can be true of it this
     // shift — it outranks everything else on the card and gets its own band
     // rather than a chip lost in a header row.
@@ -304,7 +306,41 @@ function writeView(rerender) {
       el('div.sugrid', {}, ...shown.map((m) => card(m, rerender))));
   });
 
+  /* What is left to write, and a way straight to it.
+
+     `total` and `done` were already being computed here and then thrown away,
+     so the page knew how far along it was and never said. On a 13-machine
+     update that is the whole difficulty: the form is nine thousand pixels
+     tall, and finding the two boxes nobody has filled in meant scrolling all
+     of it. Secondary standing rows are excluded from "left to write" — they
+     are reported occasionally, not every shift, so counting them would make
+     the page permanently unfinished. */
+  const outstanding = all
+    .flatMap((s) => s.rows)
+    .filter((m) => !m.secondary && !hasContent(d.rows[m.key]));
+
+  const jump = (key) => {
+    const card = document.getElementById('su-' + key);
+    if (!card) return;
+    card.scrollIntoView({ block: 'center' });
+    card.querySelector('textarea')?.focus();
+  };
+
   return el('div', {},
+    el('div.su-progress' + (outstanding.length ? '' : '.complete'), {},
+      el('div.su-progress-count', {},
+        el('b', {}, `${done}`), el('span', {}, ` of ${total} written`)),
+      outstanding.length
+        ? el('div.su-progress-left', {},
+            el('span.su-progress-label', {}, 'Still to write'),
+            el('div.su-progress-chips', {}, ...outstanding.map((m) => el('button.su-jump', {
+              title: `Go to ${m.label}`,
+              onclick: () => jump(m.key),
+            }, m.label))))
+        : el('div.su-progress-left', {},
+            icon('check', { size: 14 }),
+            el('span', {}, 'Every machine has something written.'))),
+
     ...blocks,
 
     el('div.panel.su-general', {},
@@ -523,12 +559,12 @@ export function renderShiftUpdate(rerender, go) {
         ? el('span.small.muted', {}, `${posted.length} update${posted.length === 1 ? '' : 's'} on file`)
         : null),
 
+    /* The bar is the at-a-glance proportion; the number and the way to act on
+       it live in the rail below, which also lists what is still missing. Both
+       spelling out "N of M" put the same count twice in adjacent rows. */
     view.mode === 'write' ? el('div.progress', {
       title: `${filled} of ${total} machines written up`,
-    }, el('i', { style: { width: pct + '%' } })) : null,
-    view.mode === 'write'
-      ? el('div.progress-cap', {}, `${filled} of ${total} written up`)
-      : null);
+    }, el('i', { style: { width: pct + '%' } })) : null);
 
   const recent = posted.length ? el('div.panel.su-recent', {},
     el('header', {}, 'Recent updates'),

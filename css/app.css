@@ -1270,10 +1270,51 @@ main.page-enter { animation: page-enter .18s cubic-bezier(.2,.8,.2,1); }
 
 /* One card per machine. Two up on a desk monitor, one up on a tablet at the
    machine — the shift update is written on both. */
+/* auto-fit, not auto-fill. auto-fill keeps the empty tracks it made room for,
+   so a centre with one machine — FOM 3 alone, FMC 2 alone — left half a row of
+   blank grid on a page that is already nine thousand pixels tall. auto-fit
+   collapses the empty track and lets the single card use the width. */
 .sugrid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
   gap: 12px; margin-top: 9px;
 }
+
+/* What is left to write, pinned above the form. The counts were already being
+   worked out and discarded; this is where they go. */
+.su-progress {
+  position: sticky; top: var(--hdr-h); z-index: 15;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s4);
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s3);
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--r-sm); box-shadow: var(--shadow-1), var(--sheen);
+}
+.su-progress.complete { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+.su-progress.complete .su-progress-left { color: var(--ok); font-weight: 600; }
+.su-progress-count { flex-shrink: 0; font-size: var(--t-sm); color: var(--ink-2); }
+.su-progress-count b {
+  font-size: var(--t-xl); font-weight: 800; color: var(--ink);
+  font-variant-numeric: tabular-nums; margin-right: 3px;
+}
+.su-progress-left { display: flex; align-items: center; gap: var(--s2); min-width: 0; flex-wrap: wrap; }
+.su-progress-label {
+  font-size: var(--t-xs); font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.su-progress-chips { display: flex; flex-wrap: wrap; gap: var(--s2); min-width: 0; }
+/* A jump is navigation, not a control that changes anything, so it reads as a
+   quiet chip rather than a button — but it is still a real tap target. */
+.su-jump {
+  /* --tap, not --ctl: this is the one control on the page a phone actually
+     uses to get anywhere, and 40px put it under the floor. */
+  min-height: var(--tap); padding: 4px var(--s3);
+  font-size: var(--t-sm); font-weight: 600;
+  background: var(--warn-soft); color: var(--warn);
+  border: 1px solid color-mix(in srgb, var(--warn) 28%, transparent);
+  border-radius: var(--r-xs); cursor: pointer; box-shadow: none;
+  white-space: nowrap;
+}
+.su-jump:hover { background: color-mix(in srgb, var(--warn) 18%, var(--panel)); }
 
 .sucard {
   position: relative;
