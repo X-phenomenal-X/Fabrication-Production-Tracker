@@ -14,6 +14,10 @@ const CNC = books.cnc;
 
 if (!fs.existsSync(FILE)) throw new Error('Run `node build.mjs` first.');
 
+const built = fs.readFileSync(FILE, 'utf8');
+if (built.includes('../assets/fonts/')) throw new Error('standalone build still references external font files');
+if (!built.includes('data:font/woff2;base64,')) throw new Error('standalone build did not inline the bundled fonts');
+
 const browser = await chromium.launch(chromiumOptions());
 const page = await browser.newPage({ viewport: { width: 1440, height: 950 } });
 
@@ -26,6 +30,16 @@ const step = (s) => console.log('  •', s);
 await page.goto('file://' + FILE);
 await page.waitForSelector('header.top');
 step('opened from file:// — app booted');
+
+await page.evaluate(() => document.fonts.ready);
+const type = await page.evaluate(() => ({
+  sans: getComputedStyle(document.body).fontFamily,
+  mono: getComputedStyle(document.querySelector('.mono')).fontFamily,
+}));
+step('bundled typefaces: ' + JSON.stringify(type));
+if (!type.sans.includes('IBM Plex Sans') || !type.mono.includes('IBM Plex Mono')) {
+  throw new Error('bundled IBM Plex typefaces are not active');
+}
 
 step('secure context: ' + await page.evaluate(() => window.isSecureContext));
 step('localStorage usable: ' + await page.evaluate(() => {

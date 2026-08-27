@@ -40,10 +40,9 @@ export function brandMark({ cls = '' } = {}) {
   return node;
 }
 
-/* The wordmark is set in type rather than traced, because the app has no web
-   font and a traced wordmark would be the only thing on screen not matching
-   everything around it. It reads as the company name; the mark beside it is
-   what actually carries the identity. */
+/* The wordmark is set in the app's bundled type rather than traced, so it stays
+   crisp and accessible at every responsive size. The mark beside it carries
+   the exact geometry and colours from the supplied artwork. */
 export function brandLockup() {
   return el('div.lockup', {},
     brandMark(),

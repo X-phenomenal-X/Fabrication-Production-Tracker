@@ -8,7 +8,7 @@ or at a desk. It is an information-hierarchy and workflow upgrade, not a
 decorative reskin.
 
 The existing product constraints remain fixed: zero runtime dependencies,
-system fonts, inline icons, one offline HTML file, light and dark modes,
+locally bundled fonts, inline icons, one offline HTML file, light and dark modes,
 generous touch targets, short reduced-motion-aware transitions, and the current
 three-way status control.
 

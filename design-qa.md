@@ -13,7 +13,7 @@
 
 ## Fidelity surfaces
 
-- Fonts and typography: the app keeps its offline system stack and established weights. Overview-specific W/O, quantity, shift and action typography was enlarged to match the source hierarchy and remain readable on the floor. No external font was introduced.
+- Fonts and typography: the app uses locally bundled IBM Plex Sans and IBM Plex Mono with established weights. Overview-specific W/O, quantity, shift and action typography remains readable on the floor, and the standalone build inlines every font file.
 - Spacing and layout rhythm: the final desktop uses the source's three-column composition: 232px command rail, 922px briefing/action region and 274px quick-start rail. Cards share the existing 8px app radius and restrained border/elevation tokens.
 - Colors and tokens: the source's navy surfaces and blue, violet, amber and red semantic rails map to the existing dark-mode tokens. Light mode continues to derive from the same token system.
 - Image and icon fidelity: the source contains line icons but no photographic or branded image assets. The implementation uses the app's existing vendored Lucide-compatible icon paths so the single-file offline constraint remains intact; no placeholder, emoji or external asset was added.
@@ -52,6 +52,6 @@ No actionable P0, P1 or P2 findings remain.
 
 - The implementation uses live derived tracker values instead of the concept's static sample data.
 - The mock's unconfigured “Contact your lead” card was not shipped as a false action.
-- Existing app icons and system fonts were retained to preserve the zero-dependency, fully offline build.
+- Existing inline app icons and locally bundled fonts preserve the zero-runtime-dependency, fully offline build.
 
 final result: passed

@@ -437,7 +437,9 @@ Plus a print stylesheet, tabular numerals globally, capped annotation bands,
 translucent sticky headers, and `:active` depress on buttons.
 
 Constraints that bound any *further* redesign:
-- **No web fonts, no external assets.** System font stack only.
+- **No runtime font requests or external assets.** IBM Plex Sans and Mono are
+  checked in under `assets/fonts/` and inlined into `Cutting-Tracker.html` by
+  `build.mjs`, so the standalone file remains genuinely self-contained.
 - Must stay legible **on a shop floor**: gloved taps, glare, phones and desk
   monitors. Touch targets stay generous; the 3-way status control must not
   shrink.

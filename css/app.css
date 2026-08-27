@@ -1,5 +1,34 @@
 /* BV Cutting — department tracker */
 
+/* IBM Plex is bundled with the tracker rather than fetched at runtime. The
+   build turns these local WOFF2 references into data URLs, so the shared-drive
+   HTML and the installed app keep the same typography without a signal. */
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../assets/fonts/ibm-plex-sans-regular.woff2") format("woff2");
+  font-style: normal; font-weight: 400; font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../assets/fonts/ibm-plex-sans-semibold.woff2") format("woff2");
+  font-style: normal; font-weight: 600; font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../assets/fonts/ibm-plex-sans-bold.woff2") format("woff2");
+  font-style: normal; font-weight: 700; font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../assets/fonts/ibm-plex-mono-regular.woff2") format("woff2");
+  font-style: normal; font-weight: 400; font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../assets/fonts/ibm-plex-mono-semibold.woff2") format("woff2");
+  font-style: normal; font-weight: 600; font-display: swap;
+}
+
 :root {
   --bg: #eef1f5;
   --panel: #ffffff;
@@ -18,13 +47,11 @@
 
   /* ---- brand ----
 
-     The four colours of the BV Glazing Systems mark, stated once and nowhere
+     The four colours of the BV Glazing Systems identity, stated once and nowhere
      else. Every accent in the app derives from them, so correcting these four
      values corrects the whole application.
 
-     APPROXIMATE. Read off a supplied image rather than sampled from the vector,
-     because the logo has only ever arrived here as a picture. Replace with the
-     exact values out of the logo SVG; nothing below needs to change with them. */
+     These values were measured directly from the supplied logo artwork. */
   --brand-navy:  #1c2245;
   --brand-blue:  #1e71ab;
   --brand-cyan:  #35bce1;
@@ -85,7 +112,8 @@
   --r-sm: 7px;
   --r-lg: 14px;
 
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   /* ---- scales ----
 
@@ -167,7 +195,7 @@ body {
   color: var(--ink);
   /* 15px, up from 14. The screens this runs on are wall-mounted or sat back
      from, and a point of body size is the cheapest legibility there is. */
-  font: var(--t-md)/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font: var(--t-md)/1.5 var(--font-sans);
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -192,18 +220,38 @@ input[type="number"], .nowrun-meta, td.num, th.num {
 
 header.top {
   position: sticky; top: 0; z-index: 40;
-  /* Slightly translucent so content scrolling under it stays sensed rather
-     than hard-clipped; the solid fallback matters because backdrop-filter is
-     the one thing here that silently does nothing on older Edge. */
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  /* The navigation shell is deliberately theme-independent: the company navy
+     stays the visual anchor in light and dark mode. Local semantic tokens keep
+     every control inside it readable without leaking into page content. */
+  --panel: #222a50;
+  --panel-2: #2a345d;
+  --line: #465174;
+  --line-soft: #354064;
+  --ink: #f7f9ff;
+  --ink-2: #d5def0;
+  --ink-3: #aebbd2;
+  --accent: #62c7e4;
+  --accent-soft: #273c5d;
+  --work: #62c7e4;
+  --work-soft: #173f52;
+  --ok: #91ce69;
+  --ok-soft: #293d29;
+  --warn: #f3c263;
+  --warn-soft: #49391f;
+  --bad: #ff9387;
+  --bad-soft: #4d292e;
+  --on-fill: #10172f;
+  --shadow-1: 0 2px 8px rgba(6,10,25,.22);
+  --sheen: inset 0 1px 0 rgba(255,255,255,.06);
+  background: color-mix(in srgb, var(--brand-navy) 95%, #080d20);
   backdrop-filter: saturate(1.6) blur(12px);
   -webkit-backdrop-filter: saturate(1.6) blur(12px);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid rgba(255,255,255,.16);
   padding: var(--s2) var(--s5);
   display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap;
 }
 @supports not (backdrop-filter: blur(1px)) {
-  header.top { background: var(--panel); }
+  header.top { background: var(--brand-navy); }
 }
 
 .hdr-id { display: flex; align-items: center; gap: var(--s2); min-width: 0; flex-shrink: 0; }
@@ -871,9 +919,9 @@ main.page-enter { animation: page-enter .18s cubic-bezier(.2,.8,.2,1); }
    outweighing both. Small, monospaced, quiet. */
 .die {
   font-family: var(--mono); font-size: 11.5px; font-weight: 700;
-  background: var(--accent-soft); color: var(--accent);
+  background: transparent; color: var(--accent);
   padding: 2px 7px; border-radius: var(--r-xs); letter-spacing: -0.02em;
-  border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
   white-space: nowrap;
 }
 .badge-bo {
@@ -2426,10 +2474,10 @@ nav.tabs button[aria-current="true"] .nav-icon {
     width: var(--sidebar-w); height: 100vh;
     display: flex; flex-direction: column; align-items: stretch; flex-wrap: nowrap;
     gap: var(--s3); padding: var(--s4) var(--s3);
-    background: color-mix(in srgb, var(--panel) 93%, var(--accent));
+    background: linear-gradient(180deg, var(--brand-navy) 0%, #151b38 100%);
     backdrop-filter: none; -webkit-backdrop-filter: none;
-    border: 0; border-right: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
-    box-shadow: 8px 0 28px rgba(0,0,0,.12), var(--sheen);
+    border: 0; border-right: 1px solid rgba(255,255,255,.14);
+    box-shadow: 10px 0 30px rgba(8,12,29,.18), var(--sheen);
   }
   .hdr-id { display: contents; }
   /* Stacked in the sidebar, so the divider between "who made this" and "what

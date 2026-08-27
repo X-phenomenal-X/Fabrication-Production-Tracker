@@ -980,7 +980,8 @@ grounded visual direction before any production styling changes.
 - Numbers use `font-variant-numeric: tabular-nums` globally — quantities down a
   column and counts across the stat strip are read against each other.
 - Icons are inline SVG — nothing is fetched, so the app still runs from a
-  network share with no internet. No web fonts either, for the same reason.
+  network share with no internet. IBM Plex Sans and IBM Plex Mono are bundled
+  into that file, so typography is consistent without a runtime font request.
 - Transitions are short (100–180ms) and are disabled entirely under
   `prefers-reduced-motion`. Buttons depress on `:active`: with gloves on, that
   is most of the confirmation you get that a tap landed.

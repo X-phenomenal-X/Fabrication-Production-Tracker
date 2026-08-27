@@ -6,11 +6,11 @@
   "scope": ".",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f4f6f8",
-  "theme_color": "#1f6feb",
+  "background_color": "#1c2245",
+  "theme_color": "#1c2245",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%231f6feb'/%3E%3Ctext x='256' y='356' font-size='280' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EC%3C/text%3E%3C/svg%3E",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%231c2245'/%3E%3Crect x='128' y='128' width='144' height='120' fill='%2335bce1'/%3E%3Crect x='128' y='264' width='144' height='120' fill='%231e71ab'/%3E%3Cpath d='M280 128h100l-50.4 120H280zM280 264h43.2L280 368z' fill='%2372b843'/%3E%3C/svg%3E",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
