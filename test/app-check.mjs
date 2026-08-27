@@ -327,6 +327,21 @@ const nowRunAll = await page.$$eval('.nowrun-line', (ns) => ns.map((n) => n.quer
 if (!nowRunAll.includes(target.wo)) throw new Error('In-progress line missing from the running-now panel even expanded');
 if (nowRunAll.length !== Number(nowRunCount)) throw new Error('Show more did not reveal every running line');
 
+/* Who set it running. The sheets carry no assigned-operator column, so the
+   nearest true answer is the person whose status update this is — the one the
+   next shift asks about. Only lines someone actually touched have it; a line
+   the workbook already reported as IP shows the elapsed time alone. */
+const nowRunBy = await page.$$eval('.nowrun-line', (ns) => ns.map((n) => ({
+  since: n.querySelector('.nowrun-since')?.textContent.trim() || '',
+  by: n.querySelector('.nowrun-by')?.textContent.replace(/^\s*·\s*/, '') || '',
+})));
+const named = nowRunBy.filter((r) => r.by);
+if (!named.length) throw new Error('no running line shows who set it running');
+for (const r of named) {
+  if (!r.since.includes(r.by)) throw new Error(`"${r.by}" is not inside its running line "${r.since}"`);
+}
+step(`running lines naming who set them: ${named.length}/${nowRunBy.length}, e.g. ${named[0].since}`);
+
 // its quick Done button works the same as the line's own status control
 await page.locator('.nowrun-line').filter({ hasText: target.wo })
   .filter({ hasText: target.die || '—' }).first().locator('.nowrun-done').click();

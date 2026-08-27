@@ -7,7 +7,7 @@ import { brandLockup } from './brand.js';
 import {
   state, loadLocal, save, onChange, me, sharedFileName, cloudEnabled,
   initCloud, storageStatus, cloudStatus, sharedFileStatus, retrySync,
-  hasUnsyncedChanges,
+  hasUnsyncedChanges, applyTheme,
 } from './store.js';
 import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
@@ -461,7 +461,8 @@ if (/(^|[?&])(monitor|display=monitor)(&|$)/.test(location.search.slice(1))) {
 }
 
 loadLocal();
-onChange(scheduleRender);
+applyTheme();
+onChange(() => { applyTheme(); scheduleRender(); });
 render();
 registerServiceWorker();
 watchConnection(scheduleRender);

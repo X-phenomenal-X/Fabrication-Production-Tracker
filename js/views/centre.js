@@ -690,8 +690,14 @@ function nowRunningLine(row, rerender) {
     el('div.nowrun-meta', {},
       el('span.mono', {}, fmtNum(t.qty)),
       el('span.small.muted', {}, 'pcs'),
+      /* Who set it running, where the app saw it happen. Not an "assigned
+         operator" — no such field exists on any sheet — but the person whose
+         update this is, which is the true version of the same question. A
+         line that arrived already marked IP on the workbook has neither. */
       since ? el('span.small.muted.nowrun-since', {},
-        icon('clock', { size: 13 }), `running ${since}`) : null),
+        icon('clock', { size: 13 }),
+        `running ${since}`,
+        row.status.by ? el('span.nowrun-by', {}, ' · ' + row.status.by) : null) : null),
     el('button.nowrun-done', {
       title: 'Mark this line done',
       onclick: (e) => {

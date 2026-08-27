@@ -53,11 +53,33 @@ export const state = {
   staging: {},      // line key -> { staged, stageFor, note, at, by }
   deletions: {},    // `${map}:${key}` -> { at, by } — see forget()
   people: [],
-  settings: { me: null },
+  settings: { me: null, theme: null },   // theme: null = follow the device
 };
 
 const listeners = new Set();
 let localSaveProblem = null;
+
+/* Light or dark, chosen per device rather than taken from the operating system
+   and left there.
+
+   Following the OS is the right default and stays the default. It is not
+   sufficient on its own here: the same account runs on a wall panel in a bay
+   that wants dark, an office PC under strip lighting that wants light, and a
+   phone that follows whatever the person set it to. One global preference
+   cannot serve those, and neither can the OS setting on a shared machine
+   nobody logs out of.
+
+   The stylesheet already resolves all three states — bare :root is light,
+   prefers-color-scheme handles the unset case, and data-theme wins over both —
+   so this only has to set the attribute. */
+export function applyTheme() {
+  const choice = state.settings?.theme;
+  if (choice === 'light' || choice === 'dark') {
+    document.documentElement.dataset.theme = choice;
+  } else {
+    delete document.documentElement.dataset.theme;
+  }
+}
 
 export function onChange(fn) {
   listeners.add(fn);

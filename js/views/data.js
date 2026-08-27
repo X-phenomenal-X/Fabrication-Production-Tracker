@@ -7,7 +7,7 @@ import {
   connectSharedFile, reconnectSharedFile, grantSharedFile, pullSharedFile,
   supportsSharedFile, sharedFileName, disconnectSharedFile, me,
   connectCloud, disconnectCloud, cloudStatus, cloudConfig, retrySync,
-  sharedFileStatus, storageStatus,
+  sharedFileStatus, storageStatus, applyTheme,
 } from '../store.js';
 import { importMachineWorkbook } from '../import-machines.js';
 import { staleImports } from '../model.js';
@@ -433,6 +433,38 @@ export function renderData(rerender) {
 
   const cloudPanel = cloudSection(rerender);
 
+  /* Light or dark, per device.
+
+     Following the operating system is the default and stays it. The reason
+     there is a choice at all is that one account runs on three kinds of screen
+     at once: a wall panel in a bay that wants dark, an office PC under strip
+     lighting that wants light, and a phone that should follow whatever its
+     owner set. A shared machine nobody logs out of has no meaningful OS
+     preference to inherit either. */
+  const themePanel = el('div.panel', {},
+    el('header', {}, 'Appearance'),
+    el('div.body', {},
+      el('div.themepick', { role: 'group', 'aria-label': 'Colour theme' },
+        ...[
+          [null, 'Follow this device', 'Whatever the phone or PC is set to'],
+          ['light', 'Always light', 'Bright bays, strip lighting, glare'],
+          ['dark', 'Always dark', 'Wall panels and dim areas'],
+        ].map(([value, label, why]) => {
+          const on = (state.settings.theme ?? null) === value;
+          return el('button.themeopt' + (on ? '.on' : ''), {
+            'aria-pressed': String(on),
+            onclick: () => {
+              state.settings.theme = value;
+              save();
+              applyTheme();
+              rerender();
+            },
+          }, el('strong', {}, label), el('span.small.muted', {}, why));
+        })),
+      el('p.small.muted', { style: { marginTop: 'var(--s3)' } },
+        'This is stored on this device only — it is not shared with anyone else '
+        + 'on the site, so a wall display and a phone can differ.')));
+
   /* Backup and reset. Kept apart from everything above and folded shut by
      default: these are the rarely-used controls, and one of them wipes the
      device. It should take a deliberate click to even see it. */
@@ -555,7 +587,7 @@ export function renderData(rerender) {
     firstRun(rerender),
     el('div', { style: { marginTop: '16px' } }, importPanel),
     el('div.grid.two', { style: { marginTop: '16px' } },
-      el('div', {}, cloudPanel, sharedPanel),
+      el('div', {}, cloudPanel, sharedPanel, themePanel),
       el('div', {}, peoplePanel)),
     el('div', { style: { marginTop: '16px' } }, backupPanel));
 }

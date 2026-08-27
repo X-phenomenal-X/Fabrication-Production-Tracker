@@ -486,6 +486,117 @@ for (const theme of ['light', 'dark']) {
   await ctx.close();
 }
 
+/* ---------- forced theme ----------
+
+   Dark is reachable two ways: the OS asks for it, or the user picks "Always
+   dark" in Setup and the app stamps data-theme="dark". Those live in two
+   separate blocks of app.css holding the same palette, and a token added to
+   one and not the other is invisible until somebody on a light laptop picks
+   dark and gets half a theme. So: resolve every token both ways and compare
+   the values, rather than trusting the copies stayed in step. */
+{
+  const tokensIn = async (opts, attr) => {
+    const ctx = await browser.newContext({ colorScheme: opts });
+    const page = await ctx.newPage();
+    await page.setViewportSize({ width: 1440, height: 960 });
+    await page.goto(`${base}/`);
+    const got = await page.evaluate((theme) => {
+      if (theme) document.documentElement.dataset.theme = theme;
+      else delete document.documentElement.dataset.theme;
+      // Token names come from the stylesheet itself, so a token that exists in
+      // only one of the two blocks still gets asked for in both.
+      const names = new Set();
+      for (const sheet of document.styleSheets) {
+        let rules; try { rules = sheet.cssRules; } catch { continue; }
+        for (const r of rules) {
+          // Style rules carry an empty `cssRules` of their own now that
+          // Chromium supports nesting, so match on `style` before recursing.
+          const walk = (rr) => {
+            if (rr.style && /:root/.test(rr.selectorText || '')) {
+              for (const prop of rr.style) if (prop.startsWith('--')) names.add(prop);
+            }
+            if (rr.cssRules) for (const k of rr.cssRules) walk(k);
+          };
+          walk(r);
+        }
+      }
+      const st = getComputedStyle(document.documentElement);
+      const out = {};
+      for (const n of [...names].sort()) out[n] = st.getPropertyValue(n).trim();
+      return out;
+    }, attr);
+    await ctx.close();
+    return got;
+  };
+
+  const osDark = await tokensIn('dark', null);
+  const forcedDark = await tokensIn('light', 'dark');
+  const osLight = await tokensIn('light', null);
+  const forcedLight = await tokensIn('dark', 'light');
+
+  if (!Object.keys(osDark).length) fail('forced theme: no :root tokens found to compare');
+  if (osDark['--bg'] === osLight['--bg']) {
+    fail('forced theme: the dark media query is not applying — light and dark --bg match');
+  }
+
+  const drift = Object.keys(osDark).filter((k) => osDark[k] !== forcedDark[k]);
+  if (drift.length) {
+    for (const k of drift) {
+      fail(`forced theme: ${k} is "${osDark[k]}" under OS dark but "${forcedDark[k]}"`
+        + ' under data-theme="dark" — the two dark blocks in app.css have drifted');
+    }
+  } else {
+    note(`forced theme: all ${Object.keys(osDark).length} tokens match between OS dark`
+      + ' and data-theme="dark"');
+  }
+
+  const lightDrift = Object.keys(osLight).filter((k) => osLight[k] !== forcedLight[k]);
+  if (lightDrift.length) fail(`forced theme: data-theme="light" differs on ${lightDrift.join(', ')}`);
+  else note('forced theme: data-theme="light" reproduces the light palette under OS dark');
+}
+
+/* The picker itself, end to end: a stored choice has to survive the boot and
+   actually repaint, not just set an attribute. Deliberately no addInitScript
+   here — that re-seeds on every navigation and would hide a persistence bug. */
+{
+  const ctx = await browser.newContext({ colorScheme: 'light' });
+  const page = await ctx.newPage();
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.goto(`${base}/#setup`);
+  await page.evaluate((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/#setup`);
+  await page.waitForSelector('.themeopt');
+
+  const before = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const dark = await page.$$eval('.themeopt', (btns) =>
+    btns.findIndex((b) => /dark/i.test(b.textContent || '')));
+  if (dark < 0) fail('theme picker: no "Always dark" option in Setup');
+  else {
+    await page.$$eval('.themeopt', (btns, i) => btns[i].click(), dark);
+    await page.waitForTimeout(120);
+    const after = await page.evaluate(() => ({
+      bg: getComputedStyle(document.body).backgroundColor,
+      attr: document.documentElement.dataset.theme,
+    }));
+    if (after.attr !== 'dark') fail(`theme picker: data-theme is "${after.attr}" after choosing dark`);
+    else if (after.bg === before) fail(`theme picker: page did not repaint — body stayed ${before}`);
+    else note(`theme picker: dark repaints ${before} -> ${after.bg}`);
+
+    await page.reload();
+    await page.waitForSelector('.themeopt');
+    const kept = await page.evaluate(() => ({
+      bg: getComputedStyle(document.body).backgroundColor,
+      attr: document.documentElement.dataset.theme,
+    }));
+    if (kept.attr !== 'dark' || kept.bg !== after.bg) {
+      fail(`theme picker: choice lost on reload — data-theme "${kept.attr}", body ${kept.bg}`);
+    } else note('theme picker: choice survives a reload');
+  }
+  await ctx.close();
+}
+
 /* ---------- reduced motion ---------- */
 
 {

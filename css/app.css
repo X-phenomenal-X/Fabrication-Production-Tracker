@@ -148,8 +148,23 @@
   /* Control heights. --ctl is the ordinary one; --ctl-lg is for the actions an
      operator hits with gloves on, all shift; --tap is the floor for anything
      tappable on a phone, per WCAG 2.5.5. */
-  --ctl: 40px;
-  --ctl-lg: 48px;
+  /* Sized for a gloved hand, and deliberately not one number for everything.
+
+     --ctl was 40px, which met nothing: it was under the 44px phone floor and
+     under the 48px a glove wants. It is now 44 everywhere, so an ordinary
+     control is the same size on a tablet at the machine as on a phone.
+
+     --ctl-lg is the Done macro — pressed all shift, in gloves, often without
+     looking. 56px costs nothing, because it is already the largest thing on
+     the row.
+
+     --tap stays 44. Raising the floor to 48 would push the phone header from
+     96px to 104px and add a line to every filter and sub-tab row, which moves
+     the first actual job further down the one screen where that matters most.
+     44 is WCAG 2.5.5 AAA; the extra four pixels are not worth the job that
+     falls off the bottom to pay for them. */
+  --ctl: 44px;
+  --ctl-lg: 56px;
   --tap: 44px;
   --box: 22px;       /* checkboxes — the control itself, inside a --tap label */
 
@@ -197,6 +212,50 @@
     --shadow-3: 0 8px 24px rgba(0,0,0,.5), 0 24px 56px rgba(0,0,0,.36);
     --sheen: inset 0 1px 0 rgba(255,255,255,.045);
   }
+}
+
+/* The same palette again, for when the user has forced dark from Setup.
+   The block above only fires when the OS says dark, so without this one the
+   app could force light but never dark. The two are byte-identical by
+   design and test/visual-qa.mjs compares every resolved token between them —
+   change one, change the other. */
+:root[data-theme="dark"] {
+  --bg: #07111d;
+  --panel: #101d2b;
+  --panel-2: #182a3d;
+  --line: #2a435d;
+  --line-soft: #20364b;
+  --ink: #f1f7fc;
+  --ink-2: #b6c8d9;
+  --ink-3: #8da6bd;
+
+  /* Dark re-derives from the same four brand values rather than inverting
+     the light ones — and it turns out the brand cyan and green need no
+     adjustment at all here: on this panel they measure 7.65:1 and 7.02:1,
+     so the mark's own colours are used exactly as printed. Only the blue
+     lifts, because at 3.8:1 it would have been the one failure. */
+  --accent: #2ba2f5;              /* brand blue,  x1.44 — 4.81:1 on its fill */
+  --accent-soft: #12314f;
+  --ok: var(--brand-green);       /* unmodified         — 5.65:1 on its fill */
+  --ok-soft: #22320f;
+  --work: var(--brand-cyan);      /* unmodified         — 6.08:1 on its fill */
+  --work-soft: #10323f;
+
+  --warn: #f4bb55;
+  --warn-soft: #49351a;
+  --bad: #ff8174;
+  --bad-soft: #4a2527;
+  --sop: #de48f5;                 /* 4.81:1 on its fill */
+  --sop-soft: #33163c;
+
+  /* 7.5:1 or better on every filled semantic in this theme; white was 2.5:1. */
+  --on-fill: #07111d;
+  --on-fill-soft: rgba(7,17,29,.22);
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-2: 0 2px 6px rgba(0,0,0,.45), 0 8px 20px rgba(0,0,0,.32);
+  --shadow-3: 0 8px 24px rgba(0,0,0,.5), 0 24px 56px rgba(0,0,0,.36);
+  --sheen: inset 0 1px 0 rgba(255,255,255,.045);
 }
 
 * { box-sizing: border-box; }
@@ -1602,6 +1661,9 @@ main.page-enter { animation: page-enter .18s cubic-bezier(.2,.8,.2,1); }
   white-space: nowrap; margin-left: var(--s3);
   display: inline-flex; align-items: center; gap: var(--s1);
 }
+/* Whose update it is. A shade stronger than the elapsed time beside it — from
+   across the bay the name is the part worth reading, the minutes are not. */
+.nowrun-by { color: var(--ink-2); font-weight: 600; }
 /* The one action an operator takes over and over, so it is the biggest target
    in the app. */
 .nowrun-done {
@@ -3174,6 +3236,26 @@ button.sync-chip:active { transform: translateY(1px); }
      work order pushes the Done button off the first line. */
   .nowrun-thumb, .nowrun-profile { width: 62px; height: 42px; }
 }
+
+/* Light / dark / follow the device. Three cards rather than a select, because
+   each option needs its reason beside it — "always dark" is right for a wall
+   panel and wrong for a bench under strip lighting, and the label alone does
+   not say which you are. */
+.themepick { display: grid; gap: var(--s2); grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.themeopt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  min-height: var(--ctl-lg); padding: var(--s3);
+  text-align: left; background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  cursor: pointer; box-shadow: none;
+}
+.themeopt strong { font-size: var(--t-md); font-weight: 600; }
+.themeopt:hover { border-color: var(--ink-3); }
+.themeopt.on {
+  background: var(--accent-soft); border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.themeopt.on strong { color: var(--accent); }
 
 /* ---------- monitor mode ----------
 
