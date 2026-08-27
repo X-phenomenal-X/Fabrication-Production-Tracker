@@ -130,7 +130,8 @@ function dropZone({ title, hint, onFile }) {
 
    No `delete` grant. The app only ever GETs and POSTs upserts; a removal is
    recorded as a tombstone row rather than by deleting anything, so DELETE is
-   privilege it would never use. */
+   privilege it would never use. There is no login, so only the anonymous role
+   receives access; the authenticated role remains closed. */
 const SETUP_SQL = `create table if not exists public.tracker_state (
   site text not null,
   part text not null,
@@ -138,24 +139,20 @@ const SETUP_SQL = `create table if not exists public.tracker_state (
   updated_at timestamptz not null default now(),
   primary key (site, part)
 );
-
 alter table public.tracker_state enable row level security;
 
-grant select, insert, update
-  on table public.tracker_state
-  to anon, authenticated;
+revoke all on table public.tracker_state from anon, authenticated;
+grant select, insert, update on table public.tracker_state to anon;
 
+drop policy if exists "tracker read" on public.tracker_state;
+drop policy if exists "tracker insert" on public.tracker_state;
+drop policy if exists "tracker update" on public.tracker_state;
 create policy "tracker read" on public.tracker_state
-  for select to anon, authenticated
-  using (true);
-
+  for select to anon using (true);
 create policy "tracker insert" on public.tracker_state
-  for insert to anon, authenticated
-  with check (true);
-
+  for insert to anon with check (true);
 create policy "tracker update" on public.tracker_state
-  for update to anon, authenticated
-  using (true) with check (true);`;
+  for update to anon using (true) with check (true);`;
 
 function sqlDialog() {
   const box = el('textarea', {
@@ -165,14 +162,14 @@ function sqlDialog() {
   });
   modal('Run this once in Supabase', el('div', {},
     el('p.small.muted', { style: { marginTop: 0 } },
-      'Supabase → SQL Editor → New query → paste → Run. It makes the one table '
-      + 'the tracker syncs through.'),
+      'Supabase → SQL Editor → New query → paste → Run. It makes the one table, '
+      + 'explicit Data API grant and row policies the tracker needs.'),
     box,
     el('div.banner.warn', { style: { marginTop: '12px' } },
       el('div', {},
         el('strong', {}, 'Anyone with the address and the key can read and write this data. '),
-        'There is no login. Keep the key to the department, the same way the network share is kept to the department. '
-        + 'The publishable key is meant to be in a browser; a service_role or secret key never is.'))),
+        'There is no login. Keep the key to the department, the same way the network share is kept to the department. ',
+        el('strong', {}, 'Never use a secret or service_role key here.')))),
     {
       wide: true,
       actions: [{
@@ -229,7 +226,7 @@ function cloudSection(rerender) {
     autocapitalize: 'off', spellcheck: false,
   });
   const key = el('input', {
-    value: cfg?.key || '', placeholder: 'publishable key',
+    value: cfg?.key || '', placeholder: 'sb_publishable_… or legacy anon key',
     autocapitalize: 'off', spellcheck: false,
   });
   const site = el('input', { value: cfg?.site || 'cutting', placeholder: 'cutting' });
@@ -245,7 +242,7 @@ function cloudSection(rerender) {
         el('button.linkbtn', { onclick: sqlDialog }, 'show it'), '.'),
       el('li', {}, 'Copy the Project URL and the ',
         el('strong', {}, 'publishable key'),
-        ' from Settings → API, and paste them here. On an older project the same '
+        ' from Settings → API Keys, and paste them here. On an older project the same '
         + 'field is called the anon public key — either works.'),
       el('li', {}, el('strong', {}, 'Never paste a service_role or secret key here. '),
         'Those bypass every rule on the table, and anything typed into this box '
@@ -254,7 +251,7 @@ function cloudSection(rerender) {
 
     el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: '12px', marginTop: '14px' } },
       el('label.field', {}, el('span', {}, 'Project URL'), url),
-      el('label.field', {}, el('span', {}, 'Anon public key'), key),
+      el('label.field', {}, el('span', {}, 'Publishable key'), key),
       el('label.field', {}, el('span', {}, 'Site name',
         el('em.of-total', {}, 'same on every device')), site)),
 

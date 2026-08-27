@@ -1,11 +1,6 @@
-/* Does the tracker open with no signal?
+/* Does the modular hosted app stay useful with no signal?
 
-   Serves the built site the way GitHub Pages does — Cutting-Tracker.html as
-   index.html, plus the manifest and the worker — then loads it once online,
-   cuts the network, and reloads. The app must boot, keep its data, and say
-   that it is offline.
-
-   Run: node build.mjs && node test/offline-check.mjs */
+   Run: node site-build.mjs && node test/offline-check.mjs */
 
 import { chromium } from 'playwright';
 import http from 'http';
@@ -13,62 +8,84 @@ import fs from 'fs';
 import path from 'path';
 import { ROOT, chromiumOptions } from './env.mjs';
 
-const BUILT = path.join(ROOT, 'Cutting-Tracker.html');
-if (!fs.existsSync(BUILT)) throw new Error('Run `node build.mjs` first.');
+const SITE = path.join(ROOT, '_site');
+const INDEX = path.join(SITE, 'index.html');
+if (!fs.existsSync(INDEX)) throw new Error('Run `node site-build.mjs` first.');
 
-/* The published site, assembled exactly as .github/workflows/pages.yml does. */
-const SITE = {
-  '/': [fs.readFileSync(BUILT), 'text/html'],
-  '/index.html': [fs.readFileSync(BUILT), 'text/html'],
-  '/manifest.webmanifest': [fs.readFileSync(path.join(ROOT, 'manifest.webmanifest')), 'application/manifest+json'],
-  '/sw.js': [
-    Buffer.from(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8').replace('__BUILD__', 'testbuild')),
-    'text/javascript',
-  ],
+const indexSource = fs.readFileSync(INDEX, 'utf8');
+if (!indexSource.includes('src="js/app.js"') || !indexSource.includes('href="css/app.css"')) {
+  throw new Error('The hosted artifact is not modular.');
+}
+if (indexSource.includes('data:font/woff2')) throw new Error('Hosted HTML contains inlined fonts.');
+
+const TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
+  '.woff2': 'font/woff2',
+  '.png': 'image/png',
 };
 
 let requests = 0;
 const server = http.createServer((req, res) => {
   requests += 1;
-  const hit = SITE[req.url.split('?')[0]];
-  if (!hit) { res.writeHead(404); return res.end('not found'); }
-  res.writeHead(200, { 'content-type': hit[1] });
-  res.end(hit[0]);
+  const pathname = decodeURIComponent(req.url.split('?')[0]);
+  const rel = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  const file = path.resolve(SITE, rel);
+  if (!file.startsWith(SITE + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    res.writeHead(404); return res.end('not found');
+  }
+  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
+  res.end(fs.readFileSync(file));
 });
-await new Promise((r) => server.listen(0, r));
+await new Promise((resolve) => server.listen(0, resolve));
 const port = server.address().port;
 const base = `http://127.0.0.1:${port}`;
 
 const errors = [];
-const step = (s) => console.log('  •', s);
-const fail = (m) => { errors.push(m); console.log('  ✗', m); };
+const step = (message) => console.log('  •', message);
+const fail = (message) => { errors.push(message); console.log('  ✗', message); };
 
 const browser = await chromium.launch(chromiumOptions());
-const ctx = await browser.newContext();
-const page = await ctx.newPage();
-page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+const context = await browser.newContext();
+const page = await context.newPage();
+page.on('pageerror', (error) => errors.push('pageerror: ' + error.message));
 
 /* ---------- first visit, online ---------- */
 
 await page.goto(base + '/');
 await page.waitForSelector('header.top');
-step('loaded online');
+step(`loaded modular HTML (${(Buffer.byteLength(indexSource) / 1024).toFixed(1)} KB)`);
 
-// The worker has to be in control before anything can be served from it.
-await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 15000 });
-step('service worker took control');
+const loaded = await page.evaluate(() => performance.getEntriesByType('resource')
+  .map((entry) => new URL(entry.name).pathname));
+if (!loaded.includes('/js/app.js') || !loaded.includes('/css/app.css')) {
+  fail('the browser did not load the modular JS and CSS assets');
+}
+if (loaded.includes('/js/drawings.js') || loaded.includes('/js/extrusion-images.js')) {
+  fail('a heavy drawing library blocked the initial page load');
+}
+step(`initial page used ${loaded.length} separate cacheable resources`);
 
+// Control is claimed only after the generated precache completed.
+await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 20000 });
 const cached = await page.evaluate(async () => {
   const names = await caches.keys();
-  const c = await caches.open(names[0]);
-  return { caches: names, entries: (await c.keys()).map((r) => new URL(r.url).pathname) };
+  const cache = await caches.open(names[0]);
+  return { names, entries: (await cache.keys()).map((request) => new URL(request.url).pathname) };
 });
-step(`cache "${cached.caches.join(', ')}" holds: ${cached.entries.join(', ')}`);
-if (!cached.caches.length) fail('nothing was cached');
+step(`cache "${cached.names.join(', ')}" holds ${cached.entries.length} shell assets`);
+if (!cached.names.length) fail('nothing was cached');
+for (const required of ['/index.html', '/css/app.css', '/js/app.js', '/js/drawings.js']) {
+  if (!cached.entries.includes(required)) fail(`${required} is missing from the offline shell`);
+}
+if (cached.entries.includes('/js/extrusion-images.js')) {
+  fail('the 24 MB extrusion image library was downloaded before it was used');
+}
 
-// Leave something behind, so the offline reload can be checked for real data
-// rather than just an empty shell.
-await page.evaluate(() => import('/js/store.js').catch(() => null));
+// Leave real state behind for the offline reload.
 await page.evaluate(() => {
   const raw = localStorage.getItem('bv.cutting.v1');
   const snap = raw ? JSON.parse(raw) : {};
@@ -80,68 +97,59 @@ await page.evaluate(() => {
 
 /* ---------- pull the plug ---------- */
 
-await ctx.setOffline(true);
-// Chromium may exempt loopback traffic from network emulation. Stop the
-// origin too, so the worker has to take its real cached-fallback path.
-await new Promise((r) => server.close(r));
+await context.setOffline(true);
+await new Promise((resolve) => server.close(resolve));
 const before = requests;
 await page.reload();
 await page.waitForSelector('header.top', { timeout: 15000 });
 await page.waitForFunction(() => [...document.querySelectorAll('.hdr-id .chip')]
-  .some((n) => n.textContent.trim() === 'offline'));
+  .some((node) => node.textContent.trim() === 'offline'));
 step(`reloaded with the network down (server saw ${requests - before} more requests)`);
 
 const booted = await page.evaluate(() => ({
   tabs: [...document.querySelectorAll('nav.tabs button')].length,
-  chip: [...document.querySelectorAll('.hdr-id .chip')].map((n) => n.textContent.trim()),
+  chip: [...document.querySelectorAll('.hdr-id .chip')].map((node) => node.textContent.trim()),
   online: navigator.onLine,
 }));
-step('offline boot: ' + JSON.stringify(booted));
 if (booted.tabs !== 12) fail(`the app did not render its nav offline (${booted.tabs} tabs)`);
-if (!booted.chip.includes('offline')) fail('the header does not say it is offline: ' + booted.chip.join(', '));
+if (!booted.chip.includes('offline')) fail('the header does not say it is offline');
 
-// The day's list is still there, and still writable.
 await page.goto(base + '/#today');
 await page.waitForSelector('.todo-text', { timeout: 15000 });
-const todo = await page.$eval('.todo-text', (n) => n.textContent.trim());
-step('data offline: ' + todo);
+const todo = await page.$eval('.todo-text', (node) => node.textContent.trim());
 if (todo !== 'Survives losing the signal') fail('stored data was lost offline');
 
 await page.fill('.todo-add input', 'Written while offline');
 await page.click('.todo-add button.primary');
-await page.waitForFunction(() => {
-  const snap = JSON.parse(localStorage.getItem('bv.cutting.v1'));
-  return Object.values(snap.todos || {}).some((t) => t.text === 'Written while offline');
-}, null, { timeout: 3000 });
-const wrote = await page.evaluate(() => {
-  const snap = JSON.parse(localStorage.getItem('bv.cutting.v1'));
-  return Object.values(snap.todos).map((t) => t.text);
-});
-step('written offline: ' + JSON.stringify(wrote));
-if (!wrote.includes('Written while offline')) fail('could not record anything while offline');
+await page.waitForFunction(() => Object.values(
+  JSON.parse(localStorage.getItem('bv.cutting.v1')).todos || {},
+).some((item) => item.text === 'Written while offline'));
+step('daily work remained readable and writable offline');
+
+// Die Lookup is part of the warmed operational shell even though it is lazy
+// on the initial page. The much larger individual extrusion images are not.
+await page.goto(base + '/#dies');
+await page.waitForSelector('.die-section .dielookup', { timeout: 15000 });
+step('lazy Die Lookup opened from its offline cache');
 
 /* ---------- and back again ---------- */
 
-await ctx.setOffline(false);
-await new Promise((r) => server.listen(port, r));
+await context.setOffline(false);
+await new Promise((resolve) => server.listen(port, resolve));
 await page.reload();
 await page.waitForSelector('header.top');
 await page.waitForFunction(() => ![...document.querySelectorAll('.hdr-id .chip')]
-  .some((n) => n.textContent.trim() === 'offline'));
-const backChip = await page.$$eval('.hdr-id .chip', (ns) => ns.map((n) => n.textContent.trim()));
-step('back online: ' + backChip.join(', '));
-if (backChip.includes('offline')) fail('still claims to be offline after the network returned');
+  .some((node) => node.textContent.trim() === 'offline'));
+step('returned online without losing the offline edit');
 
 /* ---------- the worker leaves sync alone ---------- */
 
-// Supabase is cross-origin; a cached or stalled answer there would have the
-// app quietly disagreeing with the cloud.
 const passesThrough = await page.evaluate(async () => {
-  const res = await fetch('https://example.invalid/rest/v1/x').catch((e) => e.message);
-  return typeof res === 'string' ? res : 'reached network';
+  const result = await fetch('https://example.invalid/rest/v1/x').catch((error) => error.message);
+  return typeof result === 'string' ? result : 'reached network';
 });
-step('cross-origin request handling: ' + passesThrough);
 if (/from cache|503/i.test(String(passesThrough))) fail('the worker answered a cross-origin request');
+step('cross-origin cloud traffic still bypasses the worker');
 
 await browser.close();
 server.close();

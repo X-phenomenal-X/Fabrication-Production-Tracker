@@ -10,8 +10,9 @@
 
 import { el, chip, icon, modal } from '../ui.js';
 import {
-  lookupDie, searchDies, componentsOf, drawingFor, drawingCount, SUBASSEMBLIES,
+  lookupDie, searchDies, componentsOf, SUBASSEMBLIES,
 } from '../dies.js';
+import { drawingFor, drawingCount } from '../die-drawings.js';
 import { openExtrusionSection } from './extrusions.js';
 
 let sectionQuery = '';

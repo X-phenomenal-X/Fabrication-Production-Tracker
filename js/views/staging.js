@@ -17,7 +17,7 @@ import {
   stagingQueue, hasTasks, machineConfig, taskStatusKey, today, addDays,
 } from '../model.js';
 import { MACHINE_BY_KEY } from '../machines.js';
-import { dieDialog } from './dies.js';
+import { dieDialog } from './die-launcher.js';
 import { SHIFTS, SHIFT_ORDER, shiftAt } from '../shifts.js';
 
 const vs = { q: '', showStaged: true };

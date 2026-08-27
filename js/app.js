@@ -14,13 +14,47 @@ import { renderBackOrders } from './views/backorders.js';
 import { renderToday } from './views/today.js';
 import { renderStaging } from './views/staging.js';
 import { renderOverview } from './views/overview.js';
-import { renderDies } from './views/dies.js';
-import { renderExtrusions } from './views/extrusions.js';
 import { renderShiftUpdate } from './views/shiftupdate.js';
 import { renderRush } from './views/rush.js';
 import { renderData, initSharedFile } from './views/data.js';
 import { SHIFTS, shiftAt } from './shifts.js';
 import { registerServiceWorker, watchConnection, isOnline } from './offline.js';
+
+/* The engineering libraries contain thousands of records and drawings. They
+   are useful, but they are not part of running a machine queue. Loading those
+   routes on demand keeps the first online visit small; the service worker
+   still caches them after use, so a return visit can open them without a
+   signal. The standalone build bundles them exactly as before. */
+function lazyView(load, exportName, label) {
+  let renderer = null;
+  let pending = null;
+  let error = null;
+
+  return (scheduleRender, go) => {
+    if (renderer) return renderer(scheduleRender, go);
+    if (!pending && !error) {
+      pending = load()
+        .then((module) => { renderer = module[exportName]; error = null; })
+        .catch((reason) => { error = reason; })
+        .finally(() => { pending = null; scheduleRender(); });
+    }
+
+    return el('section.panel.lazy-view', { 'aria-live': 'polite' },
+      el('div.body.extrusion-loading', {},
+        error ? icon('alert', { size: 18 }) : el('span.spinner', { 'aria-hidden': 'true' }),
+        el('div', {},
+          el('strong', {}, error ? `${label} is not available yet` : `Loading ${label}…`),
+          error ? el('div.small.muted', {},
+            'Connect once to download this library. Daily production pages remain available offline.') : null),
+        error ? el('button', {
+          onclick: () => { error = null; scheduleRender(); },
+        }, 'Retry') : null));
+  };
+}
+
+const renderDies = lazyView(() => import('./views/dies.js'), 'renderDies', 'die lookup');
+const renderExtrusions = lazyView(
+  () => import('./views/extrusions.js'), 'renderExtrusions', 'extrusion library');
 
 // One page per work centre, so an operator opens their own machine's queue
 // instead of scrolling past everyone else's.

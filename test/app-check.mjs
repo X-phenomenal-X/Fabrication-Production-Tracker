@@ -834,7 +834,7 @@ if (dieCheck.missing) throw new Error('an unknown die should resolve to nothing'
 
 // Drawings ride along with the data, and every caller copes with their
 // absence — the book is a set of PDFs and not all of them are in hand.
-const drawCheck = await page.evaluate(() => import('/js/dies.js').then((d) => ({
+const drawCheck = await page.evaluate(() => import('/js/die-drawings.js').then((d) => ({
   count: d.drawingCount(),
   isImage: (d.drawingFor('SA83-001')?.src || '').startsWith('data:image/webp;base64,'),
   sheetSource: d.drawingFor('SA83-001')?.source,

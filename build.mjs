@@ -36,7 +36,10 @@ const css = cssSource.replace(
 
 const out = html
   .replace('<link rel="stylesheet" href="css/app.css">', `<style>\n${css}\n</style>`)
-  .replace('<script type="module" src="js/app.js"></script>', `<script>\n${js}\n</script>`);
+  .replace('<script type="module" src="js/app.js"></script>', `<script>\n${js}\n</script>`)
+  // esbuild can leave indentation on otherwise empty generated lines. Keep
+  // the committed rollback artifact clean and stable under `git diff --check`.
+  .replace(/[ \t]+$/gm, '');
 
 // esbuild annotates the bundle with `// js/foo.js` comments, so check for the
 // original tags rather than the bare paths.

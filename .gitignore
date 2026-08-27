@@ -3,4 +3,5 @@ node_modules/
 test/screens/
 test/audit/
 test/artifacts/
+_site/
 *.log

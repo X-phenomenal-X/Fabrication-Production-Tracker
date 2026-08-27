@@ -1,10 +1,8 @@
 # Publishes the tracker to GitHub Pages so it can be opened on a phone.
 #
-# The site is the single self-contained Cutting-Tracker.html, served as
-# index.html — the same file that gets copied to the shared drive, so there is
-# only ever one build to trust. It is rebuilt here rather than taken from the
-# repo, so the published copy can never be the stale one somebody forgot to
-# regenerate.
+# The website is the modular PWA assembled in _site. The self-contained
+# Cutting-Tracker.html is still rebuilt and tested as the shared-drive rollback
+# artifact, but it is not forced through the network on every phone launch.
 #
 # Enable it once: repo Settings -> Pages -> Source: GitHub Actions.
 name: Publish tracker
@@ -55,15 +53,8 @@ jobs:
             echo "run \`node build.mjs\` and commit the result." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Assemble the site
-        run: |
-          mkdir -p _site
-          cp Cutting-Tracker.html _site/index.html
-          cp cover-options.html _site/cover-options.html
-          cp manifest.webmanifest _site/manifest.webmanifest
-          # The worker's cache name is stamped with the commit, so a deploy
-          # retires the previous cache instead of sitting alongside it.
-          sed "s/__BUILD__/${GITHUB_SHA::12}/" sw.js > _site/sw.js
+      - name: Assemble the modular online app
+        run: npm run build:site
 
       - uses: actions/upload-pages-artifact@v3
         with:

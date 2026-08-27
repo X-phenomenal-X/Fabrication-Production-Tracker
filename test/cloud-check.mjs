@@ -245,8 +245,10 @@ if (phoneRush !== pcWork.wo) throw new Error('the rushed line is not on the phon
    that is theoretical — it is the normal condition on a shop floor, and the
    whole local-first design exists for it. */
 
+/* The most important phone path is a tap made after Wi-Fi disappears. It must
+   stay pending locally, fail visibly, and flush without another edit when the
+   connection returns. */
 await phone.context().setOffline(true);
-
 const phoneWork = await phone.evaluate(() => import('/js/model.js').then(async (m) => {
   const s = await import('/js/store.js');
   const row = m.tasksForMachine('roll-man').find((r) => r.status.key === 'NOT_STARTED');
@@ -254,7 +256,6 @@ const phoneWork = await phone.evaluate(() => import('/js/model.js').then(async (
   s.setTaskStatus(key, 'DONE');
   return { key, wo: row.task.wo };
 }));
-
 // Saved on the device the instant it was tapped, whatever the network says.
 const savedOffline = await phone.evaluate((k) => import('/js/store.js').then((s) => ({
   local: s.state.taskStatus[k]?.status ?? null,
@@ -288,7 +289,17 @@ await phone.waitForFunction(() => import('/js/store.js').then((s) => {
   const st = s.cloudStatus();
   return st.pending === 0 && !st.error && !st.pushing;
 }), null, { timeout: 20000 });
-step('after reconnect: queue drained, no error');
+let remotePhoneEdit = null;
+for (let attempt = 0; attempt < 100; attempt++) {
+  remotePhoneEdit = table.get('cutting|work')?.data?.taskStatus?.[phoneWork.key] || null;
+  if (remotePhoneEdit?.status === 'DONE') break;
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+if (remotePhoneEdit?.status !== 'DONE') {
+  throw new Error('the pending phone edit did not flush after reconnect: '
+    + JSON.stringify({ key: phoneWork.key, remote: remotePhoneEdit }));
+}
+step('after reconnect: queue drained and the pending edit reached the cloud');
 
 /* ---------- both edit, nothing is lost ---------- */
 

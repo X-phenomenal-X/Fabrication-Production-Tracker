@@ -8,8 +8,8 @@ both sections are complete.
 
 - `npm test` is the single release gate. It covers importer rules, a generated
   sanitized workbook, all app views, two-device cloud convergence, routing,
-  responsive visual checks, the offline build and the standalone `file://`
-  build.
+  responsive visual checks, the modular hosted/offline build and the standalone
+  `file://` rollback.
 - GitHub Pages runs that gate before publishing. A failing test prevents the
   deploy job from receiving the built site.
 - Dependencies are pinned in `package-lock.json`; CI uses `npm ci`.
@@ -49,8 +49,9 @@ The report must also confirm:
 
 ## Owner actions before live use
 
-- Rotate the Supabase anon key that appeared in the setup transcript. Verify
-  the old key fails, then enter the replacement on every approved device.
+- Replace the legacy Supabase anon key that appeared in the setup transcript
+  with a publishable key. Verify the old key fails, then enter the replacement
+  on every approved device. Never use a secret or service_role key in the app.
 - Import both live workbooks on one synced device. On a second device, confirm
   the base task count, latest import names, shift-update date/shift and a test
   work-status change all converge.
@@ -71,5 +72,6 @@ The report must also confirm:
 | After credential or device changes | Tracker owner | Remove obsolete device configuration and repeat two-device convergence checks. |
 
 The Supabase table intentionally has no user accounts. Anyone with the project
-URL and anon key can read and write the site data; credential control and
-regular backups are therefore operational requirements, not optional polish.
+URL and publishable (or legacy anon) key can read and write the site data;
+configuration control and regular backups are therefore operational
+requirements, not optional polish.

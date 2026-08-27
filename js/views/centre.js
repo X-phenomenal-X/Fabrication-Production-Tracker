@@ -25,7 +25,7 @@ import {
 } from '../model.js';
 import { backOrderDialog } from './backorders.js';
 import { manualJobDialog } from './manual.js';
-import { dieDialog } from './dies.js';
+import { dieDialog } from './die-launcher.js';
 import { rushDialog } from './rush.js';
 import { routeDialog } from './routing.js';
 import {

@@ -22,18 +22,20 @@ A production tracker for the **Cutting department at BV Glazing Systems**
 Excel workbooks by hand.
 
 It is a **zero-dependency vanilla-JS app**. No framework, no runtime packages.
-This is a hard constraint, not a style preference:
+The hosted app is the normal production path; a self-contained file remains
+the emergency/shared-drive path:
 
 - It must run from a **network share with no internet** by double-clicking one
-  file (`Cutting-Tracker.html`, built by `node build.mjs`, ~3.6 MB with the
-  inlined die drawings, everything
-  inlined). That rules out CDNs, external fonts, and remote anything.
+  file (`Cutting-Tracker.html`, built by `node build.mjs`, with every module and
+  engineering drawing inlined). That rules out CDNs, external fonts, and
+  runtime dependencies.
 - Which is why there is a **hand-rolled XLSX reader** (`js/xlsx.js`, 246 lines)
   built on `DecompressionStream('deflate-raw')` + `DOMParser`. Do not replace it
   with SheetJS or similar.
 - Icons are inline SVG (`ICON_PATHS` in `js/ui.js`). Nothing is fetched.
 
-Same source also deploys to GitHub Pages so it works on phones (see §6).
+The same source deploys as a modular online-first PWA to GitHub Pages so phones
+do not download the entire standalone artifact on every launch (see §6).
 
 ---
 
@@ -248,9 +250,10 @@ job and whose office it is in. That is on every step of the route panel.
 ```
 index.html                  shell; also the build template
 build.mjs                   esbuild → Cutting-Tracker.html (inlines CSS+JS)
-sw.js                (105)  service worker — network-first, offline fallback
+site-build.mjs              assembles modular _site + stamped precache list
+sw.js                       online-first worker + modular offline fallback
 manifest.webmanifest        Add-to-Home-Screen on phones
-.github/workflows/pages.yml publishes the built file to GitHub Pages
+.github/workflows/pages.yml verifies and publishes modular _site
 
 css/app.css          (1963) design tokens + every component
 js/app.js            (285)  shell: TABS, header, nav scroller, render loop
@@ -265,6 +268,7 @@ js/model.js          (708)  derived views: queues, grouping, resolve*, runningNo
 js/offline.js        (84)   service-worker registration + update prompt
 js/routing.js        (299)  SOP-WW-CUT-008 encoded — see §3
 js/dies.js           (140)  section-book lookup, both directions
+js/die-drawings.js          drawing helpers, loaded behind Die Lookup
 js/subassemblies.js  (gen)  996 sub-assemblies, 84 KB — generated
 js/drawings.js       (gen)  883 die pictures, 3.3 MB — generated
 js/views/centre.js   (819)  THE work-centre page (all 4 centres are this file)
@@ -274,6 +278,7 @@ js/views/rush.js     (250)  rush dialog + Rush page
 js/views/backorders.js(233) back-order dialog + Back Orders page
 js/views/shiftupdate.js(548) Shift Update write/read page
 js/views/dies.js     (168)  die lookup dialog
+js/views/die-launcher.js    lightweight lazy entry from production rows
 js/views/routing.js  (156)  per-line routing + paperwork, and the rules
 js/views/manual.js   (138)  add a job that is in no workbook
 js/views/data.js     (485)  Setup: import, shared file, cloud, people, backup
@@ -290,8 +295,9 @@ All four centre pages are that one file with different data.
 Rush · Back Orders · Shift Update. Setup is the header gear, not a tenth tab —
 the nav had already run out of width.
 
-`Cutting-Tracker.html` is now **~3.6 MB**, almost all of it the die drawings.
-That is deliberate and load-bearing: it still opens offline off a share.
+`Cutting-Tracker.html` is deliberately large because it contains the full
+24 MB extrusion image library as well as every module and font. It remains the
+single-file rollback; GitHub Pages must publish `_site`, not that file.
 
 ---
 
@@ -301,13 +307,14 @@ That is deliberate and load-bearing: it still opens offline off a share.
 npm ci                       # once (pinned esbuild + playwright)
 npm run serve                # http://localhost:8000  (modules need a server)
 npm run build                # regenerate Cutting-Tracker.html
+npm run build:site           # assemble the modular hosted artifact in _site
 npm test                     # the complete release gate below
 
 node test/machines-check.mjs   # parses both workbooks, prints what came out
 node test/app-check.mjs        # full E2E walk of every page  (~2 min)
 node test/cloud-check.mjs      # two devices vs a mock cloud — do they converge?
 node test/routing-check.mjs    # every leaf of the routing SOP, then real data
-node test/offline-check.mjs    # kills the network mid-session, asserts it works
+node site-build.mjs && node test/offline-check.mjs # modular offline/reconnect
 node test/visual-qa.mjs        # 10 screens × 5 widths × 2 themes  (~6 min)
 node build.mjs && node test/standalone-check.mjs   # same over file://
 ```
@@ -342,10 +349,11 @@ with separate localStorage as two people and asserts they converge.
 - **Cloud sync is configured and confirmed working** on the user's phone,
   against a Supabase project, site name `Cutting Dept.`
 - **Credentials are NOT in this repo and must not be.** The repo is **public**.
-  The Supabase URL + anon key live in each device's `localStorage` under
-  `bv.cutting.cloud`, entered via Setup → Sync across devices.
-  ⚠️ The anon key was pasted into a chat transcript during setup — it is worth
-  rotating in Supabase (Settings → API) and re-entering on each device.
+  The Supabase URL + publishable (or legacy anon) key lives in each device's
+  `localStorage` under `bv.cutting.cloud`, entered via Setup → Sync across devices.
+  ⚠️ The legacy anon key was pasted into a chat transcript during setup — it is
+  worth replacing with a publishable key in Supabase (Settings → API Keys) and
+  re-entering it on each device. Never use a secret or service_role key.
 - **Real work orders and customer names must never be committed.** The test
   fixture is sanitized for exactly this reason; sample workbooks stay outside
   the repo.
@@ -360,19 +368,25 @@ with separate localStorage as two people and asserts they converge.
 The Supabase table (created once via the SQL in Setup → Show setup SQL):
 
 ```sql
-create table if not exists tracker_state (
+create table if not exists public.tracker_state (
   site text not null, part text not null,
   data jsonb not null, updated_at timestamptz not null default now(),
   primary key (site, part));
-alter table tracker_state enable row level security;
-create policy "tracker read"   on tracker_state for select using (true);
-create policy "tracker insert" on tracker_state for insert with check (true);
-create policy "tracker update" on tracker_state for update using (true) with check (true);
+alter table public.tracker_state enable row level security;
+revoke all on table public.tracker_state from anon, authenticated;
+grant select, insert, update on table public.tracker_state to anon;
+drop policy if exists "tracker read" on public.tracker_state;
+drop policy if exists "tracker insert" on public.tracker_state;
+drop policy if exists "tracker update" on public.tracker_state;
+create policy "tracker read" on public.tracker_state for select to anon using (true);
+create policy "tracker insert" on public.tracker_state for insert to anon with check (true);
+create policy "tracker update" on public.tracker_state for update to anon using (true) with check (true);
 ```
 
-Those policies mean **anyone with the URL + anon key can read and write the
-data. There is no login.** That is the accepted trade for not running accounts;
-it's documented in the README and surfaced in the SQL dialog.
+That grant and those policies mean **anyone with the URL + publishable or
+legacy anon key can read and write the data. There is no login.** That is the
+accepted trade for not running accounts; it is documented in the README and
+surfaced in the SQL dialog.
 
 ---
 
@@ -401,7 +415,7 @@ All of this is done, tested and deployed. Listed so you don't rebuild it.
 | **Today** | Cross-machine board plus carried-over to-dos. |
 | **Manual jobs** | Add a line that is in no workbook (service orders). Survives re-import. |
 | **Routing SOP** | §3 above. `js/routing.js` + the per-line route/paperwork panel. |
-| **Offline** | Service worker, update prompt, `test/offline-check.mjs`. |
+| **Online-first PWA** | Modular Pages artifact, lazy engineering libraries, service worker, update prompt and `test/offline-check.mjs`. |
 | **Tombstones** | Deletes that don't resurrect. |
 | **Visual QA** | `test/visual-qa.mjs` — 10 screens × 5 widths × 2 themes, measured not eyeballed. |
 
@@ -521,9 +535,9 @@ Paste this above the file when handing to ChatGPT or another assistant.
 > I'm continuing work on a production tracker for the Cutting department of a
 > window-and-curtainwall fabricator. It is a **zero-dependency vanilla-JS app** —
 > no framework, no build-time UI library, no runtime packages — that must run
-> **offline from a single self-contained HTML file** double-clicked off a
-> network share, and also deploys to GitHub Pages so it works on phones on the
-> shop floor.
+> as a **modular online-first PWA** on GitHub Pages, while retaining a single
+> self-contained offline HTML rollback that can be double-clicked from a
+> network share.
 >
 > The handoff below covers the architecture, the verified quirks of the two
 > source Excel workbooks, the routing SOP, and the invariants I must not break.

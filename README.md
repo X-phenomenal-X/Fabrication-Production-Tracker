@@ -11,9 +11,14 @@ right first.
 
 ## Running it
 
-**The easy way — no install, no server.** Download `Cutting-Tracker.html` and
-double-click it. One self-contained file: put it on the shared drive and
-anyone can open it. Use Chrome or Edge.
+**Recommended — use the online app.** Open the [hosted Cutting
+Tracker](https://x-phenomenal-x.github.io/Fabrication-Production-Tracker/) in
+Chrome or Edge. It loads as separate cacheable modules, installs from the
+browser and keeps the operational shell available when the signal drops.
+
+**Shared-drive fallback.** Download `Cutting-Tracker.html` and double-click it.
+That self-contained rollback copy needs no server or internet, but it is much
+larger because every module and engineering drawing is embedded in one file.
 
 **For development**, serve the unbundled source (browsers block JavaScript
 modules loaded over `file://`):
@@ -749,18 +754,17 @@ are dropped on load rather than half-rendered.)
 
 ## Working with no signal
 
-The published site is two files — the built `Cutting-Tracker.html` served as
-`index.html`, plus the manifest — so `sw.js` is a much smaller problem than a
-service worker usually is. There is no asset graph to precache and no
-cache-busting to get right.
+GitHub Pages serves a **modular online app** assembled by `site-build.mjs`.
+The initial page loads the production shell and daily work views without
+blocking on the engineering drawing libraries. Die Lookup and Extrusions are
+lazy routes. The 24 MB individual-extrusion image map is fetched and cached
+only after somebody opens a profile drawing.
 
-It is **network-first for everything same-origin**, with the cache as the
-offline fallback, and that is the right way round for this site specifically:
-the whole app is one request, so "always fresh when online" costs a single
-round trip and removes the entire class of bug where somebody is looking at a
-stale build and cannot work out why their change is missing. The cache only
-answers when the network does not, after a 4-second timeout — short enough that
-a phone with one bar in the far bay opens the app rather than hanging.
+The service worker is **network-first for everything same-origin**, with the
+current build's cache as the offline fallback. It warms the operational shell
+in the background—including Die Lookup—but leaves the 24 MB profile-image map
+on demand. A failed network request falls back after four seconds, so a phone
+with one bar does not hang indefinitely.
 
 Two things it deliberately leaves alone: **anything cross-origin**, because
 that is Supabase and a cached answer there would mean the app quietly
@@ -773,17 +777,17 @@ someone who has just arrived, so the reload is gated on the user having asked
 for it.
 
 Registration is skipped entirely on `file://`, where service workers do not
-exist, so the copy on the shared drive is unaffected.
+exist, so the self-contained shared-drive rollback is unaffected.
 
 The header says **offline** when the connection is gone, and that outranks the
 sync chip — "synced" next to a dead connection is the one thing it must never
 say. Everything still saves locally and goes up when the signal returns.
 
-`test/offline-check.mjs` serves the site exactly as the Pages workflow
-assembles it, loads it once, cuts the network, and reloads: the app must boot
-with zero further requests to the server, keep its data, accept new entries,
-and say it is offline. It also checks a cross-origin request still reaches the
-network rather than the worker.
+`test/offline-check.mjs` serves `_site` exactly as Pages does, verifies the
+large profile-image map was not downloaded at startup, cuts the network and
+reloads. The app must boot, keep its data, accept new entries, open Die Lookup
+from cache and say it is offline. It also checks cross-origin sync requests
+still bypass the worker.
 
 ## Deleting, with sync on
 
@@ -833,8 +837,10 @@ same board is open on a phone on the floor and a PC in the office at once.
 
 1. Make a free project at supabase.com.
 2. Run the setup SQL once (Setup shows it, with a copy button). It creates one
-   `tracker_state` table and three policies.
-3. Paste the **Project URL** and the **anon public key** from Settings → API.
+   `tracker_state` table, an explicit Data API grant and three row policies.
+3. Paste the **Project URL** and **publishable key** from Settings → API Keys.
+   A legacy anon key also works. Never paste a secret or `service_role` key
+   into the browser app.
 4. Do the same on every phone and PC, with the same **site name**.
 
 The snapshot is pushed as **two documents, not one**:
@@ -853,19 +859,21 @@ Pulls poll every 30 seconds while the tab is visible, and immediately when you
 come back to the app — which on a phone is exactly when its copy is most likely
 to be stale.
 
-**The trade-off, plainly:** those policies let anyone holding the address and
-the anon key read and write the department's data. There is no login. Keep the
-key to the department, the same way the network share is kept to the
-department. If that is not acceptable, the shared file on the network drive
-gives up phones and keeps everything inside the building.
+**The trade-off, plainly:** the explicit Data API grant and policies let anyone
+holding the address and publishable (or legacy anon) key read and write the
+department's data. There is no login. Keep the configuration to the department,
+the same way the network share is kept to the department. If that is not
+acceptable, the shared file gives up phones and keeps everything inside the
+building.
 
 Without either, the app still works fully, storing data in that browser.
 Export / Import moves it between machines.
 
 ### Putting it on a URL
 
-`.github/workflows/pages.yml` verifies and publishes the built single file to
-GitHub Pages on every push to the repository's default branch. Enable it once
+`.github/workflows/pages.yml` verifies and publishes the modular `_site`
+artifact to GitHub Pages on every push to the repository's default branch.
+The standalone file is still rebuilt and tested as the rollback artifact. Enable Pages once
 in **Settings → Pages → Source: GitHub
 Actions**; the workflow will not do anything until you do. `manifest.webmanifest`
 means **Add to Home Screen** on a phone opens it like an app.
