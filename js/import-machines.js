@@ -223,11 +223,12 @@ function parseMachineSheet(sheet, spec, report) {
    A machine's entry runs from its name row until the next name row.
 
    Blocks also stack *vertically* within this one sheet: an empty leftover Day
-   block sits at the top, and the real one — the only place FMC 1 and FMC 2
-   appear at all — starts at row 57. Both column halves are read, every block
-   within each is found by its own Date header, and entries are merged per
-   machine so a filled-in block always wins over an empty one from earlier in
-   the sheet. */
+   block sits at the top, and the real block starts at row 57. Both column
+   halves are read, every block within each is found by its own Date header,
+   and entries are merged per machine so a filled-in block always wins over an
+   empty one from earlier in the sheet. FMC 1 and FMC 2 appear only on the
+   archived `Shift Update 2` tab, so the live import correctly has no update
+   for them. */
 export const SHIFT_UPDATE_SHEET = 'Shift Update';
 
 /* Sheet labels -> machine keys. Anything not listed (Proline, Notching, the

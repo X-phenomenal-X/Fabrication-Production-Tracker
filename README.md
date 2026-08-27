@@ -709,12 +709,14 @@ fall back to a hidden archive. Exact source ownership is safer than inference.
 
 A block is laid out as two side-by-side halves (columns 1–7 and 9–15), each
 with its own Date/Shift header. Blocks also **stack vertically within that one
-sheet**: an empty leftover template sits at the top, and the live one — the
-only place **FMC 1 and FMC 2 appear at all** — starts at row 57. Both halves
-are read, every block is found by its own Date header, and entries merge per
-machine on one rule: **a block that describes actual work always beats an empty
-one**, and a filled-in `#Ops` headcount with no done/next/notes does not count
-as work. Only when both are equally (un)filled does date+shift decide.
+sheet**: an empty leftover template sits at the top and the live block starts
+at row 57. Both halves are read, every block is found by its own Date header,
+and entries merge per machine on one rule: **a block that describes actual work
+always beats an empty one**, and a filled-in `#Ops` headcount with no
+done/next/notes does not count as work. Only when both are equally (un)filled
+does date+shift decide. FMC 1 and FMC 2 appear only on the archived `Shift
+Update 2` tab, so the live import reports no update for those machines instead
+of borrowing stale data.
 
 **The live block calls the remaining CNC machine `CNC-3`, not `CNC 1`.** Both
 map to the same work centre, so the app shows its real entry rather than the

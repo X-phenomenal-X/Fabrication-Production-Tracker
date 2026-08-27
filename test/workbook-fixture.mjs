@@ -64,8 +64,12 @@ function taskRows(kind, count) {
 
   const special = ['MU2026-012', 'DAN 509', '29038so', 'PARCEL29-SWD', 'TRIMS', 'PREP'];
   for (let i = 0; i < count; i++) {
-    const wo = i < special.length ? special[i] : String(71000 + i + Object.keys(dies).length);
-    const die = dies[i % dies.length];
+    // One deterministic job appears at rolling and FOM 2 so CI exercises the
+    // downstream-status rule without depending on a production work order.
+    const sharedRouteJob = i === 6 && (kind === 'auto' || kind === 'fom2');
+    const wo = sharedRouteJob ? 'TEST-MULTI-001'
+      : i < special.length ? special[i] : String(71000 + i + Object.keys(dies).length);
+    const die = sharedRouteJob ? 'S80.104' : dies[i % dies.length];
     const common = { 1: wo, 2: `Test Project ${1 + (i % 9)}`, 3: `${1 + (i % 30)}A`, 4: die };
     const day = `2026-08-${String(10 + (i % 9)).padStart(2, '0')}`;
 
@@ -80,7 +84,7 @@ function taskRows(kind, count) {
     else if (kind === 'fom2') rows.push({
       1: wo, 2: common[2], 3: common[3], 4: die, 5: i % 4 === 0 ? 'P:Y' : 'P:N',
       6: 10 + i, 7: dateCell(day), 8: i === 4 ? '3 BARS' : null,
-      9: i === 4 ? 'IP BO' : null, 11: 'READY',
+      9: i === 4 ? 'IP BO' : null, 11: sharedRouteJob ? 'DONE' : 'READY',
     });
     else if (kind === 'fom3') rows.push({ ...common, 5: 10 + i, 6: dateCell(day), 10: 'READY' });
     else if (kind === 'punch') rows.push({
@@ -96,6 +100,8 @@ function shiftUpdateRows({ archived = false } = {}) {
     { 1: 'Date', 2: dateCell('2026-01-01'), 6: 'DAY' },
     { 1: 'Machine', 2: '#Ops', 4: 'Work Done / In Progress', 6: 'Next in Schedule', 7: 'Notes' },
     { 1: 'FOM 1', 2: 1, 4: 'ARCHIVED DATA MUST NOT LOAD', 6: 'Old work' },
+    { 1: 'FMC 1', 2: 1, 4: 'ARCHIVED FMC DATA MUST NOT LOAD', 6: 'Old work' },
+    { 1: 'FMC 2', 2: 1, 4: 'ARCHIVED FMC DATA MUST NOT LOAD', 6: 'Old work' },
   ];
 
   return [
@@ -109,8 +115,6 @@ function shiftUpdateRows({ archived = false } = {}) {
     { 1: 'Date', 2: dateCell('2026-08-13'), 6: 'AFTERNOON' },
     { 1: 'Machine', 2: '#Ops', 4: 'Work Done / In Progress', 6: 'Next in Schedule', 7: 'Notes' },
     { 1: 'CNC-3', 2: 1, 4: 'Test Project 2 — K1285', 6: 'Test Project 3' },
-    { 1: 'FMC 1', 2: 1, 4: 'Test Project 4', 6: 'Test Project 5' },
-    { 1: 'FMC 2', 2: 1, 4: 'Test Project 6', 6: 'Test Project 7', 7: 'Short crew' },
     { 1: 'MultiPunch', 2: 1, 4: 'Test Project 8 — 340 run', 6: 'Test Project 9' },
   ];
 }

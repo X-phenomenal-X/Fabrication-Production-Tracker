@@ -39,7 +39,8 @@ difference rather than changing a test to make it green.
 The report must also confirm:
 
 - Shift data came only from the exact `Shift Update` tab in the CNC schedule.
-- Nine machine names resolved; archived shift tabs did not contribute data.
+- Seven machine names resolved from the live tab; FMC 1 and FMC 2 remained
+  without an update, and archived shift tabs did not contribute data.
 - `CNC-3` resolves to the configured CNC 1 machine.
 - Alphanumeric work orders such as `MU2026-012`, `DAN 509`, `29038so`,
   `PARCEL29-SWD`, `TRIMS` and `PREP` survive import.

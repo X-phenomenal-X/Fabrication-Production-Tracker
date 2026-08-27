@@ -177,7 +177,7 @@ if (!su || !su.machines.length) throw new Error('Shift Update sheet was not pars
 for (const k of ['roll-auto', 'roll-man', 'fom1', 'fom2', 'fom3', 'cnc1', 'multipunch']) {
   if (!su.machines.includes(k)) throw new Error(`shift update missing ${k}`);
 }
-if (su.shift !== 'Afternoon') {
+if (String(su.shift).toUpperCase() !== 'AFTERNOON') {
   throw new Error(`shift update should be the live sheet's Afternoon block, got ${su.shift}`
     + ' — reading Shift Update 2 gives Day');
 }
@@ -927,25 +927,28 @@ await page.waitForSelector('dialog', { state: 'detached' });
 
 /* ---------- one job, several stations ---------- */
 
-/* W/O 30996 S80.104 is a real row in the Rolling and CNC workbooks, and the
-   two sheets disagree: rolling says IP, FOM 2 says DONE. It cannot have been
-   cut at FOM 2 without being rolled first — rolling's row is stale, and
-   counting it open means every open count, staging list and shift update that
-   reads it is wrong by the same amount. 99 jobs are in this state. */
-const implied = await page.evaluate(() => Promise.all([
+/* W/O 30996 S80.104 is the production example. The sanitized CI workbook has
+   the equivalent TEST-MULTI-001 S80.104 case: rolling says IP, FOM 2 says
+   DONE. It cannot have been cut at FOM 2 without being rolled first — the
+   rolling row is stale, and counting it open means every open count, staging
+   list and shift update that reads it is wrong by the same amount. */
+const impliedJob = books.synthetic
+  ? { wo: 'TEST-MULTI-001', die: 'S80.104' }
+  : { wo: '30996', die: 'S80.104' };
+const implied = await page.evaluate((job) => Promise.all([
   import('/js/model.js'), import('/js/store.js'),
 ]).then(([M, S]) => {
-  const rows = S.state.tasks.filter((t) => t.wo === '30996' && t.die === 'S80.104');
+  const rows = S.state.tasks.filter((t) => t.wo === job.wo && t.die === job.die);
   return rows.map((t) => {
     const e = M.effectiveTaskStatus(t);
     return { machine: t.machine, sheet: t.status, shown: e.key, implied: !!e.implied, from: e.impliedFrom };
   });
-}));
-step('30996 S80.104 across stations: '
+}), impliedJob);
+step(`${impliedJob.wo} ${impliedJob.die} across stations: `
   + implied.map((r) => `${r.machine} ${r.sheet || '-'}→${r.shown}${r.implied ? '*' : ''}`).join(' | '));
 
 const at = (m) => implied.find((r) => r.machine === m);
-if (implied.length < 2) throw new Error('expected 30996 S80.104 on more than one machine');
+if (implied.length < 2) throw new Error(`expected ${impliedJob.wo} ${impliedJob.die} on more than one machine`);
 if (at('roll-auto').shown !== 'DONE' || !at('roll-auto').implied) {
   throw new Error('rolling should be finished by FOM 2 downstream, not left as IP');
 }
@@ -968,20 +971,22 @@ const backwards = await page.evaluate(() => Promise.all([
 }));
 step('inferred across the whole book: ' + JSON.stringify(backwards));
 if (backwards.wrongWay) throw new Error(`${backwards.wrongWay} inferences point backwards up the line`);
-if (backwards.total < 20) throw new Error('the inference fired on almost nothing — check the stage map');
+if (backwards.total < (books.synthetic ? 1 : 20)) {
+  throw new Error('the inference fired on almost nothing — check the stage map');
+}
 
 /* An operator's own call outranks it. They looked at the material; the app only
    looked at another row. */
-const overruled = await page.evaluate(() => Promise.all([
+const overruled = await page.evaluate((job) => Promise.all([
   import('/js/model.js'), import('/js/store.js'),
 ]).then(([M, S]) => {
-  const t = S.state.tasks.find((x) => x.wo === '30996' && x.die === 'S80.104' && x.machine === 'roll-auto');
+  const t = S.state.tasks.find((x) => x.wo === job.wo && x.die === job.die && x.machine === 'roll-auto');
   const k = M.taskStatusKey(t);
   S.setTaskStatus(k, 'IN_PROGRESS');
   const e = M.effectiveTaskStatus(t);
   S.setTaskStatus(k, null);
   return { shown: e.key, implied: !!e.implied, overridden: !!e.overridden };
-}));
+}), impliedJob);
 step('after an operator says otherwise: ' + JSON.stringify(overruled));
 if (overruled.shown !== 'IN_PROGRESS' || overruled.implied) {
   throw new Error('an operator setting a status must beat the inference');
