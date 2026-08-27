@@ -869,6 +869,15 @@ main.page-enter { animation: page-enter .18s cubic-bezier(.2,.8,.2,1); }
   transition: background .14s, box-shadow .14s, transform .14s;
 }
 .line:last-of-type { border-bottom: 0; }
+
+/* Alternating bands. A queue group runs to 48 rows on Rolling (Auto), and the
+   row is wide enough that the eye loses the line between a work order on the
+   left and a quantity on the right. The tint is deliberately weaker than the
+   hover state — half of panel-2 — so hovering still reads on a banded row, and
+   this rule sits *above* the hover rule because equal specificity means
+   whichever comes last wins. */
+.line:nth-child(even) { background: color-mix(in srgb, var(--panel-2) 55%, var(--panel)); }
+
 .line:hover { background: var(--panel-2); }
 @media (hover: hover) and (pointer: fine) {
   .line:hover { transform: translateX(2px); }
@@ -886,6 +895,15 @@ main.page-enter { animation: page-enter .18s cubic-bezier(.2,.8,.2,1); }
   background: transparent;
 }
 .line.is-edited::before { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+
+/* Running work gets the rail too. Everything else that earns one is an
+   exception — rushed, short, edited — which left the one state an operator is
+   actually in the middle of as the only thing on the page with no mark at all.
+   Read off the status control rather than a class, so no view has to be
+   touched to say it. Rush and shortage are declared after this and still win:
+   a line that is running *and* short is short first. */
+.line:has(.seg-btn.on.work)::before { background: var(--work); }
+
 .line.rush::before { background: var(--warn); }
 .line.is-bo::before { background: var(--bad); }
 .line.sel { background: var(--accent-soft); }
