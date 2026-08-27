@@ -444,6 +444,22 @@ window.addEventListener('hashchange', () => {
   }
 });
 
+/* Monitor mode — the wall display in the bay.
+
+   A shop-floor screen is read from across an aisle by people walking past, and
+   the one thing it must never be is operable: a display within reach of a
+   walkway gets pressed by accident, and a status set by a shoulder is worse
+   than no status at all. So this is the ordinary centre page with its controls
+   removed and its type ladder shifted up, not a second view to keep in step.
+
+   Turned on with `?monitor` in the address, so a wall PC is just a bookmark —
+   nothing to configure on a machine nobody logs into. The flag sits in the
+   query rather than the hash because the hash is the page, and somebody
+   walking the display between centres must not switch it off by doing so. */
+if (/(^|[?&])(monitor|display=monitor)(&|$)/.test(location.search.slice(1))) {
+  document.documentElement.dataset.display = 'monitor';
+}
+
 loadLocal();
 onChange(scheduleRender);
 render();

@@ -3142,3 +3142,80 @@ button.sync-chip:active { transform: translateY(1px); }
   .overview-quickstarts { grid-template-columns: 1fr; padding-top: var(--s3); }
   .overview-quick { min-height: 72px; }
 }
+
+
+/* ---------- monitor mode ----------
+
+   `?monitor` in the address turns a centre page into the wall display for a
+   bay. It is the same page, not a second view: the type ladder shifts up so a
+   work order is readable across an aisle, and everything you would press is
+   removed, because a screen within reach of a walkway gets pressed by accident
+   and a status set by a shoulder is worse than none.
+
+   Deliberately not a separate breakpoint. A wall panel and a desk monitor are
+   often the same pixel width, and the difference between them is how far away
+   the reader is standing — which no media query can measure. */
+
+:root[data-display="monitor"] {
+  --t-sm: 18px;
+  --t-md: 22px;
+  --t-lg: 30px;
+  --t-xl: 34px;
+  --t-2xl: 40px;
+}
+
+/* Nothing to press. The checkbox, the per-line tools, the status control, the
+   filters, the bulk bar and the machine sub-tabs all go — what is left is the
+   work, the state it is in, and when it is due. */
+:root[data-display="monitor"] .line-pick,
+:root[data-display="monitor"] .line-tools,
+:root[data-display="monitor"] .line-status,
+:root[data-display="monitor"] .line-open,
+:root[data-display="monitor"] .centre-filters,
+:root[data-display="monitor"] .bulkbar,
+:root[data-display="monitor"] .dgroup-pick,
+:root[data-display="monitor"] .showmore,
+:root[data-display="monitor"] .hdr-right,
+:root[data-display="monitor"] .su-progress,
+/* The sub-tabs pick which machine the bay is showing — a decision made once
+   when the display is hung, in the bookmark, not by anyone walking past. */
+:root[data-display="monitor"] .subtabs,
+/* Rename and add-a-job live behind these; neither belongs on a wall. */
+:root[data-display="monitor"] .centre-head .iconbtn,
+:root[data-display="monitor"] .centre-head .addbtn,
+/* The inspector is the whole per-line action surface — seven buttons and a
+   status control. It was the largest thing still pressable here. */
+:root[data-display="monitor"] .line-inspector,
+:root[data-display="monitor"] .nowrun .seg,
+:root[data-display="monitor"] .nowrun button { display: none !important; }
+
+/* The group headers stay as headings but stop being toggles — a collapsed
+   group on a wall display is a group nobody can reopen. */
+:root[data-display="monitor"] .dgroup-head button,
+:root[data-display="monitor"] button.sync-chip,
+/* A die chip opens the section book. On a wall that is a modal nobody can
+   reach to close, so the chip stays as the label it looks like. */
+:root[data-display="monitor"] .die.dielink {
+  pointer-events: none;
+}
+
+/* The sidebar keeps the mark and the machine you are looking at, and drops the
+   rest — a display nobody navigates does not need navigation. */
+:root[data-display="monitor"] nav.tabs { display: none; }
+:root[data-display="monitor"] header.top { padding: var(--s4) var(--s5); }
+
+:root[data-display="monitor"] .line {
+  padding: var(--s4) var(--s5);
+  min-height: 0;
+}
+:root[data-display="monitor"] .line:hover { transform: none; background: inherit; }
+:root[data-display="monitor"] .line-id .mono.strong { font-size: 44px; font-weight: 700; letter-spacing: -.02em; }
+:root[data-display="monitor"] .line::before { width: 8px; }
+:root[data-display="monitor"] .die { font-size: 17px; padding: 3px 10px; }
+:root[data-display="monitor"] .line-qty .mono { font-size: 34px; }
+:root[data-display="monitor"] .centre-title { font-size: 46px; }
+:root[data-display="monitor"] .cstat b { font-size: 40px; }
+
+/* Rows are read, not scanned with a finger, so the banding that helps a hand
+   track across a desk row is noise at this distance. The rail carries state. */
+:root[data-display="monitor"] .line:nth-child(even) { background: transparent; }

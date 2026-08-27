@@ -516,6 +516,50 @@ for (const theme of ['light', 'dark']) {
   await ctx.close();
 }
 
+/* ---------- monitor mode ----------
+
+   The wall display in a bay. Two things have to hold, and the second is the
+   one that matters: it has to be readable from across an aisle, and it has to
+   be impossible to operate. A screen within reach of a walkway gets pressed by
+   accident, and a status set by a shoulder is worse than no status at all —
+   so "nothing is pressable" is the assertion, counted rather than assumed. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const page = await ctx.newPage();
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/?monitor#rolling`);
+  await page.waitForSelector('.line');
+  await page.waitForTimeout(200);
+
+  const mon = await page.evaluate(() => {
+    const live = [...document.querySelectorAll('button, input, select, textarea, a[href]')]
+      .filter((n) => {
+        const r = n.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && getComputedStyle(n).pointerEvents !== 'none';
+      })
+      .map((n) => String(n.className || n.tagName).slice(0, 30));
+    const wo = document.querySelector('.line-id .mono.strong');
+    return {
+      mode: document.documentElement.dataset.display || null,
+      live: [...new Set(live)],
+      liveCount: live.length,
+      wo: wo ? Math.round(parseFloat(getComputedStyle(wo).fontSize)) : 0,
+    };
+  });
+
+  note(`monitor mode: ${mon.liveCount} pressable, work order ${mon.wo}px`);
+  if (mon.mode !== 'monitor') fail('?monitor did not put the page in monitor mode');
+  if (mon.liveCount) {
+    fail(`monitor mode leaves ${mon.liveCount} control(s) operable — e.g. ${mon.live[0]}`);
+  }
+  // Read from across a bay, not from a chair.
+  if (mon.wo < 36) fail(`monitor mode work order is ${mon.wo}px — too small to read at distance`);
+  await page.screenshot({ path: path.join(SHOT, 'monitor.png') });
+  await ctx.close();
+}
+
 await browser.close();
 server.close();
 
