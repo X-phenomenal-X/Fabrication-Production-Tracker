@@ -19,8 +19,14 @@ const RETIRED = ['orders', 'wip', 'prep', 'screens', 'progress', 'material', 'hi
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 
+/* Which files the browser actually asked for. The drawing library is 3.8 MB
+   and sits behind a dynamic import so a machine page does not pull it; the
+   only way to know that still holds is to watch the wire. */
+const served = [];
+
 const server = http.createServer((req, res) => {
   const rel = decodeURIComponent(req.url.split('?')[0]);
+  served.push(rel);
   const f = path.join(ROOT, rel === '/' ? '/index.html' : rel);
   if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) {
     res.writeHead(404); return res.end('not found');
@@ -791,6 +797,52 @@ const suFallback = await page.evaluate(() =>
   document.querySelector('.su').classList.contains('written'));
 step('Multi Punch falls back to the workbook: ' + (!suFallback));
 if (suFallback) throw new Error('a machine with no written update claims to have one');
+
+/* ---------- the die profile on Running Now ----------
+
+   An operator at the machine is holding the bar this drawing is of, so the
+   section belongs beside the work order. The library it comes from is 3.8 MB,
+   which is why it was moved behind a feature boundary in the first place —
+   rendering the thumbnail automatically would drag all of it onto the most
+   visited page in the app and undo that. So it is opt-in once, and this
+   asserts both halves: nothing on load, everything after one tap.
+
+   This has to run before the die lookup below, which loads the same library on
+   purpose. Measured after it, the check passes for the wrong reason and would
+   keep passing if the lazy import were replaced with a static one. */
+/* Rolling (Auto) always has lines running in the real book — the panel caps to
+   one card, so the panel is expanded to find one whose die the section book
+   can actually name. A die like K1285 is a real schedule entry and not a
+   sub-assembly at all, so it correctly has no profile to show. */
+await gotoTab('Rolling');
+await page.waitForSelector('.nowrun-line');
+const moreBtn = await page.$('.nowrun-more');
+if (moreBtn) { await moreBtn.click(); await page.waitForTimeout(250); }
+
+const beforeTap = served.some((u) => u.endsWith('/drawings.js'));
+step('drawing library fetched by opening a machine page: ' + beforeTap);
+if (beforeTap) {
+  throw new Error('a machine page pulled the 3.8 MB drawing library — the lazy import is gone');
+}
+
+const profile = await page.$('.nowrun-profile');
+if (!profile) throw new Error('no way to ask for the die profile on a running line');
+await profile.click();
+await page.waitForSelector('.nowrun-thumb img', { timeout: 30000 });
+
+const profileShown = await page.evaluate(() => {
+  const img = document.querySelector('.nowrun-thumb img');
+  return { src: (img?.getAttribute('src') || '').slice(0, 22), alt: img?.getAttribute('alt') };
+});
+step('after one tap: ' + JSON.stringify(profileShown));
+if (!profileShown.src.startsWith('data:image/webp')) throw new Error('the profile is not a drawing');
+if (!served.some((u) => u.endsWith('/drawings.js'))) {
+  throw new Error('the profile rendered without the library being fetched');
+}
+// And the button is gone, because every card can now show its own.
+if (await page.$('.nowrun-profile')) {
+  throw new Error('the profile button stayed after the library loaded');
+}
 
 /* ---------- the die lookup ---------- */
 

@@ -28,6 +28,7 @@ import { manualJobDialog } from './manual.js';
 import { dieDialog } from './die-launcher.js';
 import { rushDialog } from './rush.js';
 import { routeDialog } from './routing.js';
+import { haveDrawings, loadDrawings, thumbFor } from './die-thumb.js';
 import {
   machinesByGroup, assignableIn, hasQueue, canMoveIn, MACHINE_BY_KEY,
 } from '../machines.js';
@@ -662,7 +663,22 @@ function nowRunningLine(row, rerender) {
   const key = taskStatusKey(t);
   const since = row.status.at ? fmtWhen(row.status.at) : null;
 
+  /* The section through the bar this machine is cutting. Free once the library
+     is in memory; before that it is a button, because fetching 3.8 MB is the
+     operator's call and not something a page visit does to them. */
+  const dwg = t.die ? thumbFor(t.die) : null;
+  const profile = !t.die ? null
+    : dwg ? el('div.nowrun-thumb', {},
+        el('img', { src: dwg.src, alt: `Section through ${t.die}`, loading: 'lazy' }))
+    : haveDrawings() ? null
+    : el('button.nowrun-profile', {
+        title: 'Show the section through this die. Downloads the drawing '
+          + 'library once, then every line shows its profile.',
+        onclick: () => loadDrawings(rerender),
+      }, icon('search', { size: 12 }), 'Profile');
+
   return el('div.nowrun-line', {},
+    profile,
     el('div.nowrun-main', {},
       el('div.line-id', {},
         el('span.mono.strong', {}, t.wo),

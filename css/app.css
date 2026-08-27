@@ -3144,6 +3144,37 @@ button.sync-chip:active { transform: translateY(1px); }
 }
 
 
+/* The section through the die, beside the work order it belongs to. Kept to a
+   fixed box so a row does not change height when the library lands and the
+   button becomes a picture. The drawings are 1-bit line art on white and stay
+   on white in dark mode — inverted, they no longer match the paper drawing
+   taped to the machine. */
+.nowrun-thumb {
+  flex-shrink: 0; width: 92px; height: 56px;
+  border-radius: var(--r-xs); border: 1px solid var(--line);
+  background: #fff; overflow: hidden;
+  display: grid; place-items: center;
+}
+.nowrun-thumb img { max-width: 100%; max-height: 100%; display: block; }
+
+.nowrun-profile {
+  flex-shrink: 0; width: 92px; height: 56px;
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; padding: 0;
+  font-size: var(--t-xs); font-weight: 600; letter-spacing: .03em;
+  color: var(--ink-3); background: var(--panel-2);
+  border: 1px dashed var(--line); border-radius: var(--r-xs);
+  cursor: pointer; box-shadow: none;
+}
+.nowrun-profile:hover { color: var(--accent); border-color: var(--accent); }
+.nowrun-profile svg { opacity: .8; }
+
+@media (max-width: 720px) {
+  /* On a phone the card is already three bands tall; a 92px picture beside the
+     work order pushes the Done button off the first line. */
+  .nowrun-thumb, .nowrun-profile { width: 62px; height: 42px; }
+}
+
 /* ---------- monitor mode ----------
 
    `?monitor` in the address turns a centre page into the wall display for a
