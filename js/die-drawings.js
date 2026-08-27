@@ -1,4 +1,4 @@
-/* Heavy section-book drawings live behind the Die Lookup feature boundary.
+/* Heavy section-book drawings live behind the Engineering Lookup feature boundary.
 
    Routing needs the small textual die catalogue on every production page, but
    it never needs four megabytes of embedded drawing images. Keeping these

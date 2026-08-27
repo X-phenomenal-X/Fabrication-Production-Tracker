@@ -50,7 +50,7 @@ re-read.
 4. At the end of the shift, **Shift Update** → Write.
 
 The nav reads **Rolling · FOM · CNC & FMC · Multi Punch · Today · Staging ·
-Rush · Back Orders · Die Lookup · Extrusions · Shift Update**. Setup is the
+Rush · Back Orders · Engineering Lookup · Shift Update**. Setup is the
 gear in the header.
 
 To use it on a phone, set up **Sync across devices** in Setup once — see below.
@@ -192,10 +192,15 @@ extrusion, so both readings are tried and both directions answered:
 - *where does 80-105 go?* → every sub-assembly using it — 16 of them. This is
   staging's question, and the reverse index is the reason it can be asked.
 
-**Die Lookup is a full Department Tools page**, with the section-book search,
-drawings, components and where-used results on one persistent workspace. The
-header magnifier opens that page; tapping a die on a queue or staging line
-still opens the same result as a quick dialog.
+**Engineering Lookup is one Department Tools page** for both rolled assemblies
+and their individual extrusion profiles. One search accepts an assembly number,
+profile number, description, supplier, proposed number or final die number.
+Results stay typed as **Assembly** or **Extrusion**, so combining the search does
+not blur what the record means. Tapping a verified component opens its profile
+in the same workspace; reverse usage leads straight back to each assembly.
+
+The header magnifier opens the page. Tapping a die on a queue or staging line
+opens the same unified lookup as a quick dialog.
 
 `S80.106`, `SA80.106`, and `SA80-106` are accepted as equivalent spellings.
 `test/app-check.mjs` asserts all three resolve to `SA80-106` with exactly
@@ -203,15 +208,23 @@ still opens the same result as a quick dialog.
 lookup finds it from `80-105`, and that an unknown die resolves to nothing
 rather than a wrong guess.
 
-## The extrusion lookup
+### Missing component-number recovery
 
-**Extrusions is its own Department Tools page.** It searches the individual
-profiles that make up assemblies, separately from the rolled `S`/`SA` die
-lookup. Search accepts an internal number such as `80-113`, a description,
-supplier, proposed number, or final die number. Tapping a component in Die
-Lookup opens the same number here.
+The Listings contain 334 assemblies with at least one empty component field.
+The lookup now safely recovers **64 exterior/interior fields across 47
+assemblies** where every matching standard/HT/HTX sibling agrees. Each recovered
+value is visually distinct and names the assembly it came from. Thermal-break
+fields are never inferred because they can legitimately change by variant.
 
-The library is generated from twelve engineering masters: 2000 Series and the
+It also exposes **68 additional extrusion-number references across 66 rows**
+that are present in Listing descriptions but absent from the four component
+columns. Those remain labelled as unassigned references rather than being given
+an invented engineering role.
+
+### Extrusion drawing library
+
+The profile side of the library is generated from twelve engineering masters:
+2000 Series and the
 8000 through 8950 Series. It contains **1,680 reviewed profile drawings**.
 Numbered template cells without an actual profile are deliberately excluded;
 obsolete, discontinued, and cancelled profiles remain available and are
@@ -756,13 +769,13 @@ are dropped on load rather than half-rendered.)
 
 GitHub Pages serves a **modular online app** assembled by `site-build.mjs`.
 The initial page loads the production shell and daily work views without
-blocking on the engineering drawing libraries. Die Lookup and Extrusions are
-lazy routes. The 24 MB individual-extrusion image map is fetched and cached
+blocking on the engineering drawing libraries. Engineering Lookup is a lazy
+route. The 24 MB individual-extrusion image map is fetched and cached
 only after somebody opens a profile drawing.
 
 The service worker is **network-first for everything same-origin**, with the
 current build's cache as the offline fallback. It warms the operational shell
-in the background—including Die Lookup—but leaves the 24 MB profile-image map
+in the background—including Engineering Lookup—but leaves the 24 MB profile-image map
 on demand. A failed network request falls back after four seconds, so a phone
 with one bar does not hang indefinitely.
 
@@ -785,7 +798,7 @@ say. Everything still saves locally and goes up when the signal returns.
 
 `test/offline-check.mjs` serves `_site` exactly as Pages does, verifies the
 large profile-image map was not downloaded at startup, cuts the network and
-reloads. The app must boot, keep its data, accept new entries, open Die Lookup
+reloads. The app must boot, keep its data, accept new entries, open Engineering Lookup
 from cache and say it is offline. It also checks cross-origin sync requests
 still bypass the worker.
 

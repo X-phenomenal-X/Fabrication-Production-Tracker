@@ -17,6 +17,7 @@
 import { SUBASSEMBLIES } from './subassemblies.js';
 
 const PARTS = ['exterior', 'upperTB', 'lowerTB', 'interior'];
+const RECOVERABLE_PARTS = ['exterior', 'interior'];
 
 export const PART_LABEL = {
   exterior: 'Exterior',
@@ -37,22 +38,113 @@ export function dieForms(text) {
 
 const bySa = new Map(SUBASSEMBLIES.map((r) => [r.sa, r]));
 
+/* The Listings are uneven. A few HT / HTX pages carry the aluminium profile
+   numbers while their matching standard page leaves the same cell blank (and
+   sometimes the reverse). Exterior and interior shapes are shared by those
+   variants; the thermal breaks are deliberately *not* recovered because the
+   material changes between standard, HT and HTX assemblies.
+
+   A recovered number is never presented as if it came from the current row.
+   The UI names the sibling it came from, keeping the engineering provenance
+   visible and letting an operator distinguish book data from a safe cross-
+   reference. */
+const variantStem = (sa) => String(sa || '').replace(/(?:HTX|HT)$/, '');
+const byVariant = new Map();
+for (const row of SUBASSEMBLIES) {
+  const stem = variantStem(row.sa);
+  if (!byVariant.has(stem)) byVariant.set(stem, []);
+  byVariant.get(stem).push(row);
+}
+
+export function recoveredComponentsOf(assembly) {
+  if (!assembly) return [];
+  const siblings = (byVariant.get(variantStem(assembly.sa)) || [])
+    .filter((row) => row !== assembly);
+  const recovered = [];
+
+  for (const part of RECOVERABLE_PARTS) {
+    if (assembly[part]) continue;
+    const values = [...new Set(siblings.map((row) => row[part]).filter(Boolean))];
+    if (values.length !== 1) continue;
+    const source = siblings.find((row) => row[part] === values[0]);
+    recovered.push({
+      role: PART_LABEL[part], die: values[0], qty: 1,
+      source: 'variant', sourceSa: source.sa, verified: false,
+    });
+  }
+  return recovered;
+}
+
+/* Some older Listing rows put a component number in the description instead
+   of in one of the four component columns. Those references used to disappear
+   from the lookup entirely. Keep them as references rather than assigning an
+   exterior/interior role the source never stated. */
+export function listingReferencesOf(assembly) {
+  if (!assembly?.desc) return [];
+  const assigned = new Set([
+    ...PARTS.map((part) => assembly[part]).filter(Boolean),
+    ...recoveredComponentsOf(assembly).map((part) => part.die),
+  ]);
+  const refs = assembly.desc.match(/\b\d{2}-\d{3}[A-Z]*\b/g) || [];
+  return [...new Set(refs)]
+    .filter((die) => !assigned.has(die))
+    .map((die) => ({ role: 'Listing reference', die, qty: 1, source: 'description', verified: false }));
+}
+
 /* Which sub-assemblies each component goes into. Built once, on first use —
    the reverse direction is the one staging asks: "where does 80-105 end up". */
+let usageIndex = null;
 let usedIndex = null;
-function usedBy() {
-  if (usedIndex) return usedIndex;
-  usedIndex = new Map();
-  for (const r of SUBASSEMBLIES) {
-    for (const p of PARTS) {
-      const die = r[p];
-      if (!die) continue;
-      if (!usedIndex.has(die)) usedIndex.set(die, []);
-      const list = usedIndex.get(die);
-      if (!list.some((x) => x.sa === r.sa)) list.push(r);
+function indexedUsage() {
+  if (usageIndex) return usageIndex;
+  usageIndex = new Map();
+  const add = (die, usage) => {
+    if (!die) return;
+    if (!usageIndex.has(die)) usageIndex.set(die, []);
+    const list = usageIndex.get(die);
+    const token = `${usage.assembly.sa}|${usage.source}|${usage.role}|${usage.sourceSa || ''}`;
+    if (!list.some((item) => item.token === token)) list.push({ ...usage, token });
+  };
+
+  for (const assembly of SUBASSEMBLIES) {
+    for (const component of componentsOf(assembly)) {
+      add(component.die, {
+        assembly, role: component.role, qty: component.qty,
+        source: 'listing', sourceSa: assembly.sa,
+      });
+    }
+    for (const component of recoveredComponentsOf(assembly)) {
+      add(component.die, {
+        assembly, role: component.role, qty: component.qty,
+        source: component.source, sourceSa: component.sourceSa,
+      });
+    }
+    for (const reference of listingReferencesOf(assembly)) {
+      add(reference.die, {
+        assembly, role: reference.role, qty: 1,
+        source: reference.source, sourceSa: assembly.sa,
+      });
     }
   }
+  return usageIndex;
+}
+
+function usedBy() {
+  if (usedIndex) return usedIndex;
+  const rows = new Map();
+  for (const [die, usages] of indexedUsage()) {
+    rows.set(die, [...new Map(usages.map((usage) =>
+      [usage.assembly.sa, usage.assembly])).values()]);
+  }
+  usedIndex = rows;
   return usedIndex;
+}
+
+/** Provenance-aware reverse usage for an extrusion profile. */
+export function componentUsageOf(text) {
+  const forms = dieForms(text);
+  if (!forms.part) return [];
+  return (indexedUsage().get(forms.part) || []).map(({ token, ...usage }) => usage);
 }
 
 /** Everything the book knows about one die, however it was written. */
@@ -82,6 +174,7 @@ export function searchDies(q, { limit = 60 } = {}) {
   if (!term) return [];
 
   const forms = dieForms(term);
+  const asksForAssembly = /^S(?:A)?\s*\d/i.test(term);
   const loose = term.replace(/[.\-_\s]/g, '');
   const hay = (r) => `${r.sa} ${r.desc || ''} ${PARTS.map((p) => r[p] || '').join(' ')}`.toUpperCase();
 
@@ -89,7 +182,7 @@ export function searchDies(q, { limit = 60 } = {}) {
   for (const r of SUBASSEMBLIES) {
     let score = 0;
     if (forms.sa && r.sa === forms.sa) score = 100;
-    else if (forms.part && PARTS.some((p) => r[p] === forms.part)) score = 80;
+    else if (!asksForAssembly && forms.part && PARTS.some((p) => r[p] === forms.part)) score = 80;
     else if (r.sa.replace(/[-]/g, '').includes(loose)) score = 60;
     else if (hay(r).includes(term)) score = 40;
     if (score) scored.push({ r, score });
@@ -113,6 +206,59 @@ export function componentsOf(assembly) {
   }
   if (assembly.interior) out.push({ role: 'Interior', die: assembly.interior, qty: 1 });
   return out;
+}
+
+/** Verified Listing columns plus conservative, provenance-labelled recovery. */
+export function resolvedComponentsOf(assembly) {
+  return [
+    ...componentsOf(assembly).map((component) => ({
+      ...component, source: 'listing', sourceSa: assembly?.sa || null, verified: true,
+    })),
+    ...recoveredComponentsOf(assembly),
+  ];
+}
+
+/** Coverage facts used by the unified lookup and the data-quality audit. */
+export function componentCoverage(assembly) {
+  if (!assembly) return {
+    verified: 0, recovered: 0, references: 0, missingRoles: [...PARTS], complete: false,
+  };
+  const verified = PARTS.filter((part) => assembly[part]).length;
+  const recovered = recoveredComponentsOf(assembly);
+  const recoveredRoles = new Set(recovered.map((part) => part.role));
+  const missingRoles = PARTS
+    .filter((part) => !assembly[part] && !recoveredRoles.has(PART_LABEL[part]));
+  const references = listingReferencesOf(assembly).length;
+  return {
+    verified, recovered: recovered.length, references, missingRoles,
+    complete: missingRoles.length === 0,
+  };
+}
+
+export function componentAudit() {
+  const audit = {
+    assemblies: SUBASSEMBLIES.length,
+    complete: 0,
+    incomplete: 0,
+    recoveredRows: 0,
+    recoveredFields: 0,
+    listingReferenceRows: 0,
+    listingReferences: 0,
+  };
+  for (const assembly of SUBASSEMBLIES) {
+    const coverage = componentCoverage(assembly);
+    if (coverage.complete) audit.complete += 1;
+    else audit.incomplete += 1;
+    if (coverage.recovered) {
+      audit.recoveredRows += 1;
+      audit.recoveredFields += coverage.recovered;
+    }
+    if (coverage.references) {
+      audit.listingReferenceRows += 1;
+      audit.listingReferences += coverage.references;
+    }
+  }
+  return audit;
 }
 
 export { SUBASSEMBLIES };

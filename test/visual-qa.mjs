@@ -69,7 +69,6 @@ const SCREENS = [
   { hash: 'rush', name: 'rush' },
   { hash: 'backorders', name: 'backorders' },
   { hash: 'dies', name: 'dies' },
-  { hash: 'extrusions', name: 'extrusions' },
   { hash: 'shift', name: 'shift' },
   { hash: 'setup', name: 'setup' },
 ];
@@ -235,7 +234,7 @@ for (const theme of ['light', 'dark']) {
       /* The phone header once hid both quick actions to buy nav width. That
          made the section book and Setup unreachable even though both features
          were still bundled. Assert visibility, then follow the exact route an
-         operator uses into the full Die Lookup section. */
+         operator uses into the full Engineering Lookup section. */
       if (vp.name === 'phone' && screen.hash === 'rolling') {
         const tools = await page.evaluate(() => Object.fromEntries(
           ['.hdr-dies', '.hdr-setup'].map((sel) => {
@@ -251,7 +250,7 @@ for (const theme of ['light', 'dark']) {
           await page.waitForFunction(() => location.hash === '#dies'
             && !!document.querySelector('.die-section .dielookup'));
           const current = await page.getAttribute('nav.tabs [aria-current="true"]', 'aria-label');
-          if (current !== 'Die Lookup') {
+          if (current !== 'Engineering Lookup') {
             fail(`rolling @ phone/${theme}: header search landed on ${current || 'no page'}`);
           }
         }

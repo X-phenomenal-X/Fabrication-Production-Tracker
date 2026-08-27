@@ -267,9 +267,10 @@ js/cloud.js          (177)  Supabase REST transport (dumb; no app knowledge)
 js/model.js          (708)  derived views: queues, grouping, resolve*, runningNow
 js/offline.js        (84)   service-worker registration + update prompt
 js/routing.js        (299)  SOP-WW-CUT-008 encoded — see §3
-js/dies.js           (140)  section-book lookup, both directions
-js/die-drawings.js          drawing helpers, loaded behind Die Lookup
-js/subassemblies.js  (gen)  996 sub-assemblies, 84 KB — generated
+js/dies.js                  section-book lookup, recovery audit, both directions
+js/die-drawings.js          drawing helpers, loaded behind Engineering Lookup
+js/extrusions.js            reviewed profile search and series index
+js/subassemblies.js  (gen)  997 sub-assemblies, 84 KB — generated
 js/drawings.js       (gen)  883 die pictures, 3.3 MB — generated
 js/views/centre.js   (819)  THE work-centre page (all 4 centres are this file)
 js/views/today.js    (235)  Today: to-dos + the cross-machine board
@@ -277,7 +278,7 @@ js/views/staging.js  (190)  Staging — an overlay on the rolling lines
 js/views/rush.js     (250)  rush dialog + Rush page
 js/views/backorders.js(233) back-order dialog + Back Orders page
 js/views/shiftupdate.js(548) Shift Update write/read page
-js/views/dies.js     (168)  die lookup dialog
+js/views/dies.js            unified assembly/profile Engineering Lookup
 js/views/die-launcher.js    lightweight lazy entry from production rows
 js/views/routing.js  (156)  per-line routing + paperwork, and the rules
 js/views/manual.js   (138)  add a job that is in no workbook

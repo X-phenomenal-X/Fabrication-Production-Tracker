@@ -82,7 +82,7 @@ step('tabs: ' + tabs.join(', '));
 const setupGear = await page.$$eval('.hdr-setup', (ns) => ns.map((n) => n.getAttribute('aria-label')));
 step('setup control: ' + JSON.stringify(setupGear));
 if (setupGear.length !== 1) throw new Error('Setup is not reachable from the header');
-if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Today,Staging,Rush,Back Orders,Die Lookup,Extrusions,Shift Update') {
+if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Today,Staging,Rush,Back Orders,Engineering Lookup,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -881,6 +881,13 @@ const dieCheck = await page.evaluate(() => import('/js/dies.js').then((d) => {
       parts: d.componentsOf(d.lookupDie(q).assembly).map((c) => `${c.role}:${c.die}:${c.qty}`),
     })),
     missing: d.lookupDie('ZZ9.999').assembly,
+    audit: d.componentAudit(),
+    recovered: d.recoveredComponentsOf(d.lookupDie('S80.113').assembly),
+    listingReferences: d.listingReferencesOf(d.lookupDie('SA89-051').assembly),
+    recoveredUsage: d.componentUsageOf('80-112')
+      .filter((usage) => usage.assembly.sa === 'SA80-113'),
+    descriptionUsage: d.componentUsageOf('84-901')
+      .filter((usage) => usage.assembly.sa === 'SA89-051'),
   };
 }));
 step('die lookup: ' + JSON.stringify(dieCheck));
@@ -898,6 +905,24 @@ if (new Set(dieCheck.aliases.map((x) => JSON.stringify([x.sa, x.parts]))).size !
 }
 if (!dieCheck.usedIncludes) throw new Error('the reverse lookup does not find SA80-106 from 80-105');
 if (dieCheck.missing) throw new Error('an unknown die should resolve to nothing');
+if (dieCheck.audit.recoveredRows < 47 || dieCheck.audit.recoveredFields < 64) {
+  throw new Error('the conservative component recovery audit regressed: '
+    + JSON.stringify(dieCheck.audit));
+}
+if (!dieCheck.recovered.some((part) => part.role === 'Exterior'
+  && part.die === '80-112' && part.sourceSa === 'SA80-113HTX')) {
+  throw new Error('SA80-113 did not recover its exterior from the matching HTX variant');
+}
+if (!dieCheck.listingReferences.some((part) => part.die === '84-901')) {
+  throw new Error('an extrusion number present in listing text was not surfaced');
+}
+if (!dieCheck.recoveredUsage.some((usage) => usage.source === 'variant'
+  && usage.sourceSa === 'SA80-113HTX')) {
+  throw new Error('reverse usage omitted a safely recovered component mapping');
+}
+if (!dieCheck.descriptionUsage.some((usage) => usage.source === 'description')) {
+  throw new Error('reverse usage omitted a listing-description reference');
+}
 
 // Drawings ride along with the data, and every caller copes with their
 // absence — the book is a set of PDFs and not all of them are in hand.
@@ -921,19 +946,21 @@ if (drawCheck.missingIsNull !== null) throw new Error('an unknown drawing should
 
 // It is also a proper Department Tools page, not only a dialog reached from a
 // line. The book spelling with a dot must return the same complete card.
-await gotoTab('Die Lookup');
+await gotoTab('Engineering Lookup');
 await page.fill('.die-section .diesearch input', 'SA80.106');
 await page.waitForFunction(() => document.querySelector('.die-section .diecard-sa')?.textContent.trim() === 'SA80-106');
 const sectionLookup = await page.evaluate(() => ({
   title: document.querySelector('.die-section h1')?.textContent.trim(),
   sa: document.querySelector('.die-section .diecard-sa')?.textContent.trim(),
   drawing: !!document.querySelector('.die-section .diedrawing img'),
+  results: document.querySelectorAll('.die-section .lookup-result').length,
   parts: [...document.querySelectorAll('.die-section .diepart-die')].map((n) => n.textContent.trim()),
 }));
 step('die lookup section: ' + JSON.stringify(sectionLookup));
-if (sectionLookup.title !== 'Die Lookup' || sectionLookup.sa !== 'SA80-106'
-  || !sectionLookup.drawing || sectionLookup.parts.join(',') !== '80-113,84-901,80-105') {
-  throw new Error('the Die Lookup section did not show the complete SA80.106 result');
+if (sectionLookup.title !== 'Engineering Lookup' || sectionLookup.sa !== 'SA80-106'
+  || !sectionLookup.drawing || sectionLookup.results !== 3
+  || sectionLookup.parts.join(',') !== '80-113,84-901,80-105') {
+  throw new Error('the Engineering Lookup section did not show the complete SA80.106 result');
 }
 await page.screenshot({ path: path.join(SHOT, 'die-lookup-section.png') });
 
@@ -962,24 +989,35 @@ if (!extrusionCheck.finalDie.includes('80-001')) {
   throw new Error('final die number search did not find its extrusion');
 }
 
-// A component on the SA card leads into the individual profile section, with
-// the large image module loaded only after a result is selected.
+// A component on the SA card opens the individual profile in the same unified
+// workspace, with the large image module loaded only after a result is selected.
 await page.click('.diepart:has-text("80-113")');
-await page.waitForFunction(() => location.hash === '#extrusions'
+await page.waitForFunction(() => location.hash === '#dies'
   && document.querySelector('.extrusion-id')?.textContent.trim() === '80-113');
 await page.waitForSelector('.extrusion-drawing img', { timeout: 30000 });
 const extrusionSection = await page.evaluate(() => ({
-  title: document.querySelector('.extrusion-section h1')?.textContent.trim(),
+  title: document.querySelector('.engineering-section h1')?.textContent.trim(),
   id: document.querySelector('.extrusion-id')?.textContent.trim(),
   source: document.querySelector('.extrusion-source')?.textContent.trim(),
   image: document.querySelector('.extrusion-drawing img')?.src.startsWith('data:image/webp;base64,'),
 }));
 step('extrusion section: ' + JSON.stringify(extrusionSection));
-if (extrusionSection.title !== 'Extrusion Lookup' || extrusionSection.id !== '80-113'
+if (extrusionSection.title !== 'Engineering Lookup' || extrusionSection.id !== '80-113'
   || !extrusionSection.image || !extrusionSection.source.includes('8000 Series')) {
-  throw new Error('the individual extrusion section did not show 80-113');
+  throw new Error('the unified engineering workspace did not show extrusion 80-113');
 }
 await page.screenshot({ path: path.join(SHOT, 'extrusion-lookup-section.png') });
+
+// Recovered mappings remain visibly distinct from source-verified components.
+await page.fill('.die-section .diesearch input', 'SA80.113');
+await page.waitForFunction(() => document.querySelector('.die-section .diecard-sa')?.textContent.trim() === 'SA80-113');
+const recoveredSection = await page.evaluate(() => ({
+  die: document.querySelector('.die-component-group.recovered .diepart-die')?.textContent.trim(),
+  provenance: document.querySelector('.die-component-group.recovered .diepart-source')?.textContent.trim(),
+}));
+if (recoveredSection.die !== '80-112' || !recoveredSection.provenance.includes('SA80-113HTX')) {
+  throw new Error('the UI did not label a recovered extrusion mapping with its provenance');
+}
 
 // And it opens from a die on a line.
 await gotoTab('Rolling');

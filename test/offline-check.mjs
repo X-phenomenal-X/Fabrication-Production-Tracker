@@ -111,7 +111,7 @@ const booted = await page.evaluate(() => ({
   chip: [...document.querySelectorAll('.hdr-id .chip')].map((node) => node.textContent.trim()),
   online: navigator.onLine,
 }));
-if (booted.tabs !== 12) fail(`the app did not render its nav offline (${booted.tabs} tabs)`);
+if (booted.tabs !== 11) fail(`the app did not render its nav offline (${booted.tabs} tabs)`);
 if (!booted.chip.includes('offline')) fail('the header does not say it is offline');
 
 await page.goto(base + '/#today');
@@ -126,11 +126,11 @@ await page.waitForFunction(() => Object.values(
 ).some((item) => item.text === 'Written while offline'));
 step('daily work remained readable and writable offline');
 
-// Die Lookup is part of the warmed operational shell even though it is lazy
+// Engineering Lookup is part of the warmed operational shell even though it is lazy
 // on the initial page. The much larger individual extrusion images are not.
 await page.goto(base + '/#dies');
 await page.waitForSelector('.die-section .dielookup', { timeout: 15000 });
-step('lazy Die Lookup opened from its offline cache');
+step('lazy Engineering Lookup opened from its offline cache');
 
 /* ---------- and back again ---------- */
 

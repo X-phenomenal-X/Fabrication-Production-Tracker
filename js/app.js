@@ -52,9 +52,7 @@ function lazyView(load, exportName, label) {
   };
 }
 
-const renderDies = lazyView(() => import('./views/dies.js'), 'renderDies', 'die lookup');
-const renderExtrusions = lazyView(
-  () => import('./views/extrusions.js'), 'renderExtrusions', 'extrusion library');
+const renderDies = lazyView(() => import('./views/dies.js'), 'renderDies', 'engineering lookup');
 
 // One page per work centre, so an operator opens their own machine's queue
 // instead of scrolling past everyone else's.
@@ -74,13 +72,18 @@ const TABS = [
   { key: 'staging', label: 'Staging', short: 'Stage', kind: 'tool', icon: 'staging', render: renderStaging },
   { key: 'rush', label: 'Rush', kind: 'tool', icon: 'bolt', render: renderRush },
   { key: 'backorders', label: 'Back Orders', short: 'B/O', kind: 'tool', icon: 'alert', render: renderBackOrders },
-  { key: 'dies', label: 'Die Lookup', short: 'Dies', kind: 'tool', icon: 'search', render: renderDies },
-  { key: 'extrusions', label: 'Extrusions', kind: 'tool', icon: 'extrusion', render: renderExtrusions },
+  { key: 'dies', label: 'Engineering Lookup', short: 'Lookup', kind: 'tool', icon: 'search', render: renderDies },
   { key: 'shift', label: 'Shift Update', short: 'Shift', kind: 'tool', icon: 'clipboard', render: renderShiftUpdate },
   { key: 'setup', label: 'Setup', kind: 'tool', icon: 'gear', render: renderData },
 ];
 
 let current = location.hash.slice(1) || 'overview';
+// Keep old bookmarks working after Die Lookup and Extrusions became one
+// engineering workspace.
+if (current === 'extrusions') {
+  current = 'dies';
+  history.replaceState(null, '', '#dies');
+}
 if (!TABS.some((t) => t.key === current)) current = 'overview';
 
 const root = document.getElementById('app');
@@ -322,8 +325,8 @@ function header() {
         // The section book, one tap from anywhere. Staging and rolling both ask
         // "what goes into this" all shift.
         el('button.iconbtn.hdr-dies' + (current === 'dies' ? '.on' : ''), {
-          'aria-label': 'Die lookup',
-          title: 'Look up a die in the section book',
+          'aria-label': 'Engineering lookup',
+          title: 'Search assemblies, extrusion profiles and drawings',
           onclick: () => go('dies'),
         }, icon('search', { size: 18 })),
         el('button.iconbtn.hdr-setup' + (current === 'setup' ? '.on' : ''), {

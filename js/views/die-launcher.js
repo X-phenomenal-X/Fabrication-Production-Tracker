@@ -9,14 +9,14 @@ let feature = null;
 export async function dieDialog(initial = '') {
   try {
     if (!feature) {
-      toast('Loading die lookup…');
+      toast('Loading engineering lookup…');
       feature = import('./dies.js');
     }
     const module = await feature;
     return module.dieDialog(initial);
   } catch {
     feature = null;
-    toast('Die lookup needs a connection the first time');
+    toast('Engineering lookup needs a connection the first time');
     return null;
   }
 }
