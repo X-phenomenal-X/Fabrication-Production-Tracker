@@ -103,7 +103,7 @@ export function routeDialog(task) {
        disagree about this job, and the person looking at the row is the one
        who can say which is right. */
     r.at < 0 && r.steps.some((s) => s.machine)
-      ? el('div.banner.bad', {},
+      ? el('div.banner.sop', {},
           el('div', {},
             el('strong', {}, 'Not on its route. '),
             `The schedule has this on `

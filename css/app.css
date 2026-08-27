@@ -88,6 +88,16 @@
   --bad: #bc3119;
   --bad-soft: #fde9e5;
 
+  /* A routing deviation is not a shortage, and it was wearing the same red.
+     Red already means short of material, overdue, or a machine down — three
+     things an operator acts on immediately. A job sitting off its SOP route is
+     a disagreement between the schedule and the standard, which somebody has
+     to judge rather than run to. It gets a hue reserved for that one meaning,
+     so violet anywhere on a screen says exactly one thing. Solved against its
+     own fill, like every other ink here. */
+  --sop: #a234b2;
+  --sop-soft: #f7e6fb;
+
   /* Elevation. Defined as tokens because dark mode cannot use the same
      shadows — a black shadow on a near-black surface is invisible, which is
      why the dark theme used to read completely flat. */
@@ -175,6 +185,8 @@
     --warn-soft: #49351a;
     --bad: #ff8174;
     --bad-soft: #4a2527;
+    --sop: #de48f5;                 /* 4.81:1 on its fill */
+    --sop-soft: #33163c;
 
     /* 7.5:1 or better on every filled semantic in this theme; white was 2.5:1. */
     --on-fill: #07111d;
@@ -1696,9 +1708,23 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
    means "this is where it goes". */
 .badge-route.sop {
   border-style: solid;
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--sop) 55%, transparent);
+  background: var(--sop-soft);
+  color: var(--sop);
 }
+.badge-route.sop:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sop) 16%, var(--panel));
+  border-color: var(--sop);
+}
+
+/* The same hue on the route panel's deviation banner, so the badge on the row
+   and the explanation behind it are recognisably the same subject. */
+.banner.sop {
+  background: var(--sop-soft);
+  border-color: color-mix(in srgb, var(--sop) 34%, transparent);
+  color: var(--ink);
+}
+.banner.sop strong { color: var(--sop); }
 
 /* ---------- the routing SOP, for one line ---------- */
 
