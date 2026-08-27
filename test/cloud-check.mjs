@@ -114,10 +114,13 @@ async function device(name, viewport) {
   const ctx = await browser.newContext({ viewport });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`${name} pageerror: ${e.message}`));
-  // The last check deliberately sends a wrong key, so its 401 is the test
-  // working rather than the app failing.
+  /* Two kinds of console error here are the test working rather than the app
+     failing: the last check deliberately sends a wrong key, and the offline
+     section deliberately pulls the network out from under a push. Everything
+     else is a real fault and fails the run. */
+  const DELIBERATE = /401 \(Unauthorized\)|ERR_INTERNET_DISCONNECTED|status of 503/;
   page.on('console', (m) => {
-    if (m.type() === 'error' && !/401 \(Unauthorized\)/.test(m.text())) {
+    if (m.type() === 'error' && !DELIBERATE.test(m.text())) {
       errors.push(`${name} console: ${m.text()}`);
     }
   });
@@ -234,7 +237,15 @@ const phoneRush = await phone.$eval('.rush-line .mono.strong', (n) => n.textCont
 step('phone Rush page shows: ' + phoneRush);
 if (phoneRush !== pcWork.wo) throw new Error('the rushed line is not on the phone Rush page');
 
-/* ---------- both edit, nothing is lost ---------- */
+/* ---------- the phone loses signal mid-shift ----------
+
+   The case this app actually lives in: an operator marks a line done on a
+   phone standing next to a running machine, the WiFi drops, and the edit has
+   to survive and go up by itself when the signal comes back. Nothing about
+   that is theoretical — it is the normal condition on a shop floor, and the
+   whole local-first design exists for it. */
+
+await phone.context().setOffline(true);
 
 const phoneWork = await phone.evaluate(() => import('/js/model.js').then(async (m) => {
   const s = await import('/js/store.js');
@@ -243,7 +254,43 @@ const phoneWork = await phone.evaluate(() => import('/js/model.js').then(async (
   s.setTaskStatus(key, 'DONE');
   return { key, wo: row.task.wo };
 }));
+
+// Saved on the device the instant it was tapped, whatever the network says.
+const savedOffline = await phone.evaluate((k) => import('/js/store.js').then((s) => ({
+  local: s.state.taskStatus[k]?.status ?? null,
+  pending: s.cloudStatus().pending,
+})), phoneWork.key);
+step('phone edit while offline: ' + JSON.stringify(savedOffline));
+if (savedOffline.local !== 'DONE') throw new Error('an offline edit did not save locally');
+if (!savedOffline.pending) throw new Error('an offline edit was not queued for the cloud');
+
+// Past the push debounce, and still nothing has reached the cloud.
 await phone.waitForTimeout(3500);
+const heldBack = await phone.evaluate(() => import('/js/store.js').then((s) => {
+  const st = s.cloudStatus();
+  return { pending: st.pending, error: !!st.error };
+}));
+// The mock cloud is a plain Map in this process, so "did it get there" is a
+// direct question rather than something inferred from the app's own state.
+const cloudHas = (key) => [...table.values()]
+  .some((row) => JSON.stringify(row.data).includes(key));
+step('after the debounce, offline: ' + JSON.stringify(heldBack)
+  + ' | cloud has the edit: ' + cloudHas(phoneWork.key));
+if (!heldBack.pending) throw new Error('the queue emptied while offline — the edit would be lost');
+if (cloudHas(phoneWork.key)) throw new Error('an offline edit reached the cloud somehow');
+
+/* Back on the network. The app listens for `online` and retries; Playwright
+   does not always fire it when the context flips, so it is dispatched here
+   rather than left to chance. */
+await phone.context().setOffline(false);
+await phone.evaluate(() => window.dispatchEvent(new Event('online')));
+await phone.waitForFunction(() => import('/js/store.js').then((s) => {
+  const st = s.cloudStatus();
+  return st.pending === 0 && !st.error && !st.pushing;
+}), null, { timeout: 20000 });
+step('after reconnect: queue drained, no error');
+
+/* ---------- both edit, nothing is lost ---------- */
 
 // Meanwhile the PC assigns a CNC line — a different record entirely.
 const pcAssign = await pc.evaluate(() => import('/js/model.js').then(async (m) => {

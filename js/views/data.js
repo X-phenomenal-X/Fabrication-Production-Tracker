@@ -121,17 +121,41 @@ function dropZone({ title, hint, onFile }) {
    has. This is the same sync over HTTPS, so the tracker can be open on a phone
    on the floor and a PC in the office at the same time. */
 
-const SETUP_SQL = `create table if not exists tracker_state (
+/* Row-level security decides *which rows* a caller may touch; the table grant
+   decides whether it may reach the table at all. Both are needed — a new
+   project can have working policies and still refuse every request, because
+   the Data API was never granted the table. Policies name their roles
+   explicitly for the same reason: a policy with no `to` clause applies to
+   `public`, which is broader than this needs to be.
+
+   No `delete` grant. The app only ever GETs and POSTs upserts; a removal is
+   recorded as a tombstone row rather than by deleting anything, so DELETE is
+   privilege it would never use. */
+const SETUP_SQL = `create table if not exists public.tracker_state (
   site text not null,
   part text not null,
   data jsonb not null,
   updated_at timestamptz not null default now(),
   primary key (site, part)
 );
-alter table tracker_state enable row level security;
-create policy "tracker read"   on tracker_state for select using (true);
-create policy "tracker insert" on tracker_state for insert with check (true);
-create policy "tracker update" on tracker_state for update using (true) with check (true);`;
+
+alter table public.tracker_state enable row level security;
+
+grant select, insert, update
+  on table public.tracker_state
+  to anon, authenticated;
+
+create policy "tracker read" on public.tracker_state
+  for select to anon, authenticated
+  using (true);
+
+create policy "tracker insert" on public.tracker_state
+  for insert to anon, authenticated
+  with check (true);
+
+create policy "tracker update" on public.tracker_state
+  for update to anon, authenticated
+  using (true) with check (true);`;
 
 function sqlDialog() {
   const box = el('textarea', {
@@ -147,7 +171,8 @@ function sqlDialog() {
     el('div.banner.warn', { style: { marginTop: '12px' } },
       el('div', {},
         el('strong', {}, 'Anyone with the address and the key can read and write this data. '),
-        'There is no login. Keep the key to the department, the same way the network share is kept to the department.'))),
+        'There is no login. Keep the key to the department, the same way the network share is kept to the department. '
+        + 'The publishable key is meant to be in a browser; a service_role or secret key never is.'))),
     {
       wide: true,
       actions: [{
@@ -204,7 +229,7 @@ function cloudSection(rerender) {
     autocapitalize: 'off', spellcheck: false,
   });
   const key = el('input', {
-    value: cfg?.key || '', placeholder: 'anon public key',
+    value: cfg?.key || '', placeholder: 'publishable key',
     autocapitalize: 'off', spellcheck: false,
   });
   const site = el('input', { value: cfg?.site || 'cutting', placeholder: 'cutting' });
@@ -218,7 +243,13 @@ function cloudSection(rerender) {
       el('li', {}, 'Make a free project at supabase.com.'),
       el('li', {}, 'Run the setup SQL once — ',
         el('button.linkbtn', { onclick: sqlDialog }, 'show it'), '.'),
-      el('li', {}, 'Copy the Project URL and the anon public key from Settings → API, and paste them here.'),
+      el('li', {}, 'Copy the Project URL and the ',
+        el('strong', {}, 'publishable key'),
+        ' from Settings → API, and paste them here. On an older project the same '
+        + 'field is called the anon public key — either works.'),
+      el('li', {}, el('strong', {}, 'Never paste a service_role or secret key here. '),
+        'Those bypass every rule on the table, and anything typed into this box '
+        + 'ends up in a browser where anyone using the tracker can read it.'),
       el('li', {}, 'Do the same on every phone and PC, with the same site name.')),
 
     el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: '12px', marginTop: '14px' } },

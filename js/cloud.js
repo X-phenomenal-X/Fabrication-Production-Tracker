@@ -28,7 +28,7 @@
      create policy "tracker insert" on tracker_state for insert with check (true);
      create policy "tracker update" on tracker_state for update using (true) with check (true);
 
-   Those policies let anyone holding the URL and the anon key read and write
+   Those policies let anyone holding the URL and the publishable key read and write
    the department's data. That is the trade for not running a login — keep the
    key to the team, the same way the network share is kept to the team. */
 
@@ -93,7 +93,8 @@ async function explain(res) {
 
   if (res.status === 401 || res.status === 403) {
     return new Error(
-      'The cloud rejected the key. Check the anon key, and that the three '
+      'The cloud rejected the key. Check the publishable key (the anon public '
+      + 'key on an older project), and that the grant and the three '
       + `policies in the setup SQL were created.${detail ? ` (${detail})` : ''}`);
   }
   if (res.status === 404) {
@@ -166,7 +167,7 @@ export async function cloudStamps(cfg = cloudConfig()) {
 /** Check a config before saving it, so a typo is caught at setup rather than
     silently failing every sync afterwards. */
 export async function cloudTest(cfg) {
-  if (!cfg?.url || !cfg?.key) throw new Error('Both the project URL and the anon key are needed.');
+  if (!cfg?.url || !cfg?.key) throw new Error('Both the project URL and the publishable key are needed.');
   try {
     new URL(cfg.url);
   } catch {
