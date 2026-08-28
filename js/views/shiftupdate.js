@@ -22,7 +22,9 @@ import {
   inProgressLines,
 } from '../model.js';
 import { machinesByGroup, STANDING_ROWS } from '../machines.js';
-import { SHIFTS, SHIFT_ORDER, shiftAt } from '../shifts.js';
+import {
+  SHIFTS, SHIFT_ORDER, breakRanges, normalizeShift, shiftAt, shiftLabel,
+} from '../shifts.js';
 
 /* Centres in the order the sheet prints them. Only these four are tracked,
    so only these four are reported on. */
@@ -39,7 +41,22 @@ const FIELDS = [
   ['notes', 'Notes'],
 ];
 
-const view = { date: today(), shift: shiftAt(), mode: 'write', onlyIncomplete: false };
+const view = { date: today(), shift: shiftAt() || 'DAY', mode: 'write', onlyIncomplete: false };
+
+function shiftDef(value = view.shift) {
+  return SHIFTS[normalizeShift(value)] || {
+    key: value, label: String(value || 'Unknown'), range: '', breaks: [], full: true,
+  };
+}
+
+function operationalShift(value = view.shift) {
+  return SHIFT_ORDER.includes(normalizeShift(value));
+}
+
+function shiftSortRank(value) {
+  const i = SHIFT_ORDER.indexOf(normalizeShift(value));
+  return i >= 0 ? i : SHIFT_ORDER.length;
+}
 
 /* Edits live here until saved, so typing in one box never triggers a re-render
    that would steal focus from it. Changing date or shift drops the draft. */
@@ -363,7 +380,7 @@ function writeView(rerender) {
         onclick: async () => {
           const ok = await confirmDialog(
             'Delete this shift update?',
-            `The ${SHIFTS[view.shift].label} update for ${fmtDate(view.date, { withDay: true })} will be removed for everyone.`,
+            `The ${shiftDef().label} update for ${fmtDate(view.date, { withDay: true })} will be removed for everyone.`,
             { confirmLabel: 'Delete', danger: true });
           if (!ok) return;
           deleteShiftLog(logKey(view.date, view.shift));
@@ -393,7 +410,7 @@ function writeView(rerender) {
 
 /** The update as plain text, for pasting into an email or a chat. */
 function asText(log) {
-  const out = [`${SHIFTS[log.shift]?.label || log.shift} shift — ${fmtDate(log.date, { withDay: true })}`, ''];
+  const out = [`${shiftLabel(log.shift)} shift — ${fmtDate(log.date, { withDay: true })}`, ''];
   for (const s of sections()) {
     const rows = s.rows.filter((m) => hasContent(log.rows[m.key]));
     if (!rows.length) continue;
@@ -446,7 +463,7 @@ function printShiftUpdate(log, { draft: isDraft = false } = {}) {
       isDraft ? `Draft prepared by ${me()}` : `Written by ${log.by || '—'}${log.at ? ` · ${fmtWhen(log.at)}` : ''}`));
 
   printDocument({
-    title: `${SHIFTS[log.shift]?.label || log.shift} shift update`,
+    title: `${shiftLabel(log.shift)} shift update`,
     subtitle: fmtDate(log.date, { withDay: true }),
     meta: [isDraft ? 'DRAFT — NOT SAVED' : 'Saved shift record'],
     body,
@@ -482,16 +499,19 @@ function printCurrentShiftUpdate() {
 
 function readView(rerender) {
   const log = currentLog();
+  const selected = shiftDef();
+  const canWrite = operationalShift();
 
   if (!log) {
     return el('div.panel', {}, el('div.empty', {},
       el('div.empty-icon', {}, icon('note', { size: 28 })),
       el('h3', {}, 'Nothing written for this shift'),
-      el('p', {}, `No ${SHIFTS[view.shift].label.toLowerCase()} update for ${fmtDate(view.date, { withDay: true })}.`),
-      el('button.primary', {
+      el('p', {}, `No ${selected.label.toLowerCase()} update for ${fmtDate(view.date, { withDay: true })}.`),
+      canWrite ? el('button.primary', {
         style: { marginTop: '12px' },
         onclick: () => { view.mode = 'write'; rerender(); },
-      }, 'Write the update')));
+      }, 'Write the update') : el('p.small.muted', {},
+        'This is a historical shift. New updates are available only for Day and Afternoon.')));
   }
 
   const blocks = sections().map((s) => {
@@ -543,9 +563,9 @@ function readView(rerender) {
           }
         },
       }, icon('note', { size: 14 }), 'Copy as text'),
-      el('button.primary', {
+      canWrite ? el('button.primary', {
         onclick: () => { view.mode = 'write'; rerender(); },
-      }, icon('pencil', { size: 14 }), 'Edit')));
+      }, icon('pencil', { size: 14 }), 'Edit') : chip('historical · read only', 'mute')));
 }
 
 /* ---------- page ---------- */
@@ -561,8 +581,9 @@ export function renderShiftUpdate(rerender, go) {
   }
 
   const posted = Object.values(state.shiftLogs || {})
-    .sort((a, b) => ((a.date + SHIFT_ORDER.indexOf(a.shift)) < (b.date + SHIFT_ORDER.indexOf(b.shift)) ? 1 : -1));
+    .sort((a, b) => ((a.date + shiftSortRank(a.shift)) < (b.date + shiftSortRank(b.shift)) ? 1 : -1));
   const saved = currentLog();
+  const selectedShift = shiftDef();
 
   // How far through the update the writer is. The same count the footer shows,
   // but at the top where it answers "is this nearly done" before scrolling.
@@ -583,14 +604,16 @@ export function renderShiftUpdate(rerender, go) {
           el('div.centre-sub', {},
             fmtDate(view.date, { withDay: true }),
             el('span.dot-sep', {}, '·'),
-            SHIFTS[view.shift].label,
+            selectedShift.label,
+            selectedShift.range ? el('span.dot-sep', {}, '·') : null,
+            selectedShift.range || null,
             el('span.dot-sep', {}, '·'),
             view.mode === 'read' ? 'Reading' : `Writing as ${me()}`))),
       el('span.spacer'),
       el('button.print-action', {
         type: 'button', disabled: !canPrint,
         title: canPrint
-          ? `Print the ${SHIFTS[view.shift].label.toLowerCase()} shift update`
+          ? `Print the ${selectedShift.label.toLowerCase()} shift update`
           : 'Add or open a shift update before printing',
         onclick: printCurrentShiftUpdate,
       }, icon('print', { size: 16 }), el('span', {}, 'Print update')),
@@ -605,7 +628,7 @@ export function renderShiftUpdate(rerender, go) {
         }),
         el('div.subtabs', {}, ...SHIFT_ORDER.map((k) => el('button', {
           'aria-current': String(view.shift === k),
-          title: SHIFTS[k].full ? 'Full crew' : `${SHIFTS[k].crew}-person crew`,
+          title: `${SHIFTS[k].label} · ${SHIFTS[k].range} · Breaks: ${breakRanges(k).join(', ')}`,
           onclick: () => { view.shift = k; dropDraft(); rerender(); },
         }, SHIFTS[k].label))))),
 
@@ -619,7 +642,7 @@ export function renderShiftUpdate(rerender, go) {
             onclick: () => { view.mode = k; rerender(); },
           }, icon(ic, { size: 15 }), el('span', {}, label)))),
       saved ? chip('saved', 'ok') : chip('not written yet', 'warn'),
-      SHIFTS[view.shift].full ? null : chip(`${SHIFTS[view.shift].crew}-person crew`, 'mute'),
+      selectedShift.legacy ? chip('historical shift · read only', 'mute') : null,
       view.mode === 'write' ? el('label.row.small.donetoggle', {},
         el('input', {
           type: 'checkbox', checked: view.onlyIncomplete,
@@ -630,6 +653,11 @@ export function renderShiftUpdate(rerender, go) {
       posted.length
         ? el('span.small.muted', {}, `${posted.length} update${posted.length === 1 ? '' : 's'} on file`)
         : null),
+
+    !selectedShift.legacy ? el('div.su-breaks', {},
+      icon('clock', { size: 14 }),
+      el('strong', {}, `${selectedShift.label} breaks`),
+      el('span', {}, breakRanges(view.shift).join(' · '))) : null,
 
     /* The bar is the at-a-glance proportion; the number and the way to act on
        it live in the rail below, which also lists what is still missing. Both
@@ -651,7 +679,7 @@ export function renderShiftUpdate(rerender, go) {
           rerender();
         },
       },
-        chip(SHIFTS[l.shift]?.label || l.shift, SHIFTS[l.shift]?.full ? 'mute' : 'warn'),
+        chip(shiftLabel(l.shift), shiftDef(l.shift).legacy ? 'warn' : 'mute'),
         el('strong', {}, fmtDate(l.date, { withDay: true })),
         el('span.muted.small', {},
           `${Object.keys(l.rows || {}).length} machine${Object.keys(l.rows || {}).length === 1 ? '' : 's'}`),

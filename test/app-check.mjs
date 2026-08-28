@@ -834,6 +834,26 @@ if (!/web address/.test(cloud.badUrl)) throw new Error('bad URL not explained in
 await gotoTab('Shift Update');
 await page.waitForSelector('.sucard');
 
+const shiftChoices = await page.$$eval('.su-when .subtabs button', (ns) =>
+  ns.map((n) => n.textContent.trim()));
+step('active shifts: ' + shiftChoices.join(' | '));
+if (shiftChoices.join(',') !== 'Day,Afternoon') {
+  throw new Error('Shift Update still offers an inactive shift: ' + shiftChoices.join(','));
+}
+await page.click('.su-when .subtabs button:has-text("Day")');
+await page.waitForFunction(() => document.querySelector('.su-breaks')?.textContent.includes('09:15'));
+const dayBreaks = await page.$eval('.su-breaks', (n) => n.textContent.replace(/\s+/g, ' ').trim());
+await page.click('.su-when .subtabs button:has-text("Afternoon")');
+await page.waitForFunction(() => document.querySelector('.su-breaks')?.textContent.includes('18:00'));
+const aftBreaks = await page.$eval('.su-breaks', (n) => n.textContent.replace(/\s+/g, ' ').trim());
+step(`break schedules — ${dayBreaks} | ${aftBreaks}`);
+if (!dayBreaks.includes('09:15–09:30 · 12:30–13:00 · 14:15–14:30')
+    || !aftBreaks.includes('18:00–18:15 · 20:00–20:30 · 23:00–23:15')) {
+  throw new Error('Shift Update does not show the stated break schedules');
+}
+await page.click('.su-when .subtabs button:has-text("Day")');
+await page.waitForFunction(() => document.querySelector('.su-breaks')?.textContent.includes('09:15'));
+
 const suCards = await page.$$eval('.sucard-name', (ns) => ns.map((n) => n.textContent.trim()));
 const suGroups = await page.$$eval('.dgroup-label', (ns) => ns.map((n) => n.textContent.trim()));
 step(`shift update — groups [${suGroups.join(' ')}] | ${suCards.length} cards: ${suCards.join(', ')}`);
@@ -869,7 +889,7 @@ if (chipCount) {
 await suFom1.locator('.sucard-ops input').fill('2');
 await suFom1.locator('textarea').nth(2).fill('Blade change at 18:00');
 
-await page.locator('.su-general textarea').fill('Three on midnights. Skid of 8560 due tomorrow.');
+await page.locator('.su-general textarea').fill('Afternoon crew confirmed. Skid of 8560 due tomorrow.');
 await page.screenshot({ path: path.join(SHOT, 'shift-write.png'), fullPage: true });
 
 await page.click('.su-head-page .print-action');
@@ -891,7 +911,7 @@ const suSaved = await page.evaluate(() => import('/js/store.js').then((m) => {
 step('saved: ' + JSON.stringify(suSaved));
 if (suSaved.ops !== '2') throw new Error('#Ops not saved against FOM 1');
 if (suSaved.by !== 'Abhay' || !suSaved.at) throw new Error('shift update missing who/when');
-if (!suSaved.notes.startsWith('Three on midnights')) throw new Error('general notes not saved');
+if (!suSaved.notes.startsWith('Afternoon crew confirmed')) throw new Error('general notes not saved');
 
 const readNames = await page.$$eval('.suread-name strong', (ns) => ns.map((n) => n.textContent.trim()));
 step('read view shows: ' + readNames.join(', '));
@@ -905,7 +925,7 @@ const shiftPrint = await page.evaluate(() => window.__printCaptures.at(-1));
 step('shift print: ' + JSON.stringify({ ...shiftPrint, text: shiftPrint.text.slice(0, 90) + '…' }));
 if (!shiftPrint.title.includes('shift update') || shiftPrint.rows < 1
   || !shiftPrint.text.includes('Blade change at 18:00')
-  || !shiftPrint.text.includes('Three on midnights')) {
+  || !shiftPrint.text.includes('Afternoon crew confirmed')) {
   throw new Error('saved shift update did not produce the complete paper handoff');
 }
 
@@ -1585,7 +1605,7 @@ const stagedRec = await page.evaluate(() => import('/js/store.js').then((m) => {
 }));
 step('staged: ' + JSON.stringify(stagedRec));
 if (!stagedRec?.staged || !stagedRec.stageFor) throw new Error('staging for a shift recorded nothing');
-if (!/\|(DAY|AFT|NIGHT)$/.test(stagedRec.stageFor)) {
+if (!/\|(DAY|AFT)$/.test(stagedRec.stageFor)) {
   throw new Error('stage-for should be a shift: ' + stagedRec.stageFor);
 }
 

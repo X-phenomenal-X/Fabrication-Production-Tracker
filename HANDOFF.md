@@ -118,9 +118,10 @@ row number, because they stack.
 - Work orders are **not** numeric-only. `MU2026-012`, `DAN 509`, `29038so`,
   `PARCEL29-SWD`, `TRIMS`, `PREP` are all legitimate. An early numeric-only rule
   discarded 274 real orders.
-- Shifts: **Day 07:00–15:00, Afternoon 15:00–23:00, Midnight 23:00–07:00**
-  (Midnight crosses into the next day). Afternoon is full crew; **Midnight runs
-  only 3 operators**.
+- Active shifts: **Day 07:00–15:30** and **Afternoon 15:30–00:00** only.
+  Day breaks are 09:15–09:30, 12:30–13:00 and 14:15–14:30. Afternoon breaks
+  are 18:00–18:15, 20:00–20:30 and 23:00–23:15. Midnight is retained only as
+  a read-only legacy label for historical saved updates.
 - **Panels belong to another department. Louvres belong to Cutting.**
 - 8560 vents need hinges (rule noted by the user; not currently implemented).
 

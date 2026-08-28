@@ -33,6 +33,7 @@ import { dieDialog } from './die-launcher.js';
 import { rushDialog } from './rush.js';
 import { routeDialog } from './routing.js';
 import { haveDrawings, loadDrawings, thumbFor } from './die-thumb.js';
+import { shiftLabel } from '../shifts.js';
 import {
   machinesByGroup, assignableIn, hasQueue, canMoveIn, MACHINE_BY_KEY,
 } from '../machines.js';
@@ -816,7 +817,7 @@ function shiftUpdatePanel(machineKey) {
       el('span.su-title', {},
         icon(written ? 'pencil' : 'note', { size: 12 }),
         written ? 'Shift update — written here' : 'Shift update — from the workbook'),
-      su.date ? chip(`${su.shift || ''} ${fmtDate(su.date)}`.trim(), 'mute') : null,
+      su.date ? chip(`${shiftLabel(su.shift)} ${fmtDate(su.date)}`.trim(), 'mute') : null,
       // Age, not just the date: a reader should not have to work out what
       // "Aug 13" means relative to today before trusting what is under it.
       age ? chip(age.label, age.tone) : null,

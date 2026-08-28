@@ -14,7 +14,7 @@ import {
   state, me, saveMaterialOrders, setMaterialOrderStatus, deleteMaterialOrder,
 } from '../store.js';
 import {
-  allBackOrders, taskStatusKey, hasTasks, tasksInScope, resolveTask, machineConfig,
+  allBackOrders, taskStatusKey, hasTasks, tasksInScope, resolveTask, machineConfig, today,
 } from '../model.js';
 import { MACHINE_BY_KEY } from '../machines.js';
 import {
@@ -32,10 +32,6 @@ const REASONS = [
 let mode = 'shortages';
 let mineOnly = false;
 const expandedOwners = new Set();
-
-function today() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function machineLabel(key) {
   const machine = MACHINE_BY_KEY[key];

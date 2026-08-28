@@ -17,7 +17,7 @@ import { renderOverview } from './views/overview.js';
 import { renderShiftUpdate } from './views/shiftupdate.js';
 import { renderRush } from './views/rush.js';
 import { renderData, initSharedFile } from './views/data.js';
-import { SHIFTS, shiftAt } from './shifts.js';
+import { shiftStatusAt } from './shifts.js';
 import { registerServiceWorker, watchConnection, isOnline } from './offline.js';
 
 /* The engineering libraries contain thousands of records and drawings. They
@@ -293,7 +293,7 @@ function syncIndicator() {
 }
 
 function header() {
-  const shift = SHIFTS[shiftAt()];
+  const shift = shiftStatusAt();
 
   return el('header.top', {},
     el('div.hdr-id', {},
@@ -302,8 +302,10 @@ function header() {
       // nothing on any screen said who made the thing.
       brandLockup(),
       el('div.brand', {}, 'Cutting'),
-      el('span.chip.shift-chip' + (shift.full ? '' : '.warn'), { title: 'Current shift' },
-        shift.label + (shift.full ? '' : ` · ${shift.crew} crew`)),
+      el('span.chip.shift-chip' + (shift.onBreak ? '.warn' : shift.key ? '' : '.mute'), {
+        title: shift.detail,
+        'aria-label': shift.detail,
+      }, shift.label),
       // Offline outranks the sync state: "synced" next to a dead connection
       // is the one thing the header must never say. Updates still save
       // locally and go up when the signal comes back.
@@ -436,6 +438,26 @@ function scheduleRender() {
   requestAnimationFrame(() => { scheduled = false; render(); });
 }
 
+/* Shift and break boundaries can pass while a wall monitor sits untouched.
+   Update only the header chip at the next minute boundary; re-rendering the
+   whole page every minute would replace a textarea while somebody is writing
+   the shift handoff. */
+function refreshShiftChip() {
+  const node = root.querySelector('.shift-chip');
+  if (!node) return;
+  const shift = shiftStatusAt();
+  node.classList.toggle('warn', shift.onBreak);
+  node.classList.toggle('mute', !shift.key);
+  node.title = shift.detail;
+  node.setAttribute('aria-label', shift.detail);
+  node.textContent = shift.label;
+}
+
+function armShiftClock() {
+  const wait = 60000 - (Date.now() % 60000) + 50;
+  setTimeout(() => { refreshShiftChip(); armShiftClock(); }, wait);
+}
+
 // Rotating a phone changes how much of the nav fits, and nothing else about
 // the app needs to redraw for that.
 window.addEventListener('resize', () => {
@@ -472,6 +494,7 @@ loadLocal();
 applyTheme();
 onChange(() => { applyTheme(); scheduleRender(); });
 render();
+armShiftClock();
 registerServiceWorker();
 watchConnection(scheduleRender);
 initSharedFile(render);

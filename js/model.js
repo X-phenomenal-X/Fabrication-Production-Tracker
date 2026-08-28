@@ -6,12 +6,16 @@ import { state, EDITABLE_FIELDS, stateRev } from './store.js';
 import { PARSER_VERSION } from './import-machines.js';
 import { MACHINES } from './machines.js';
 import { sopMachine } from './routing.js';
+import { SHIFTS, normalizeShift } from './shifts.js';
 
 /* machineKey -> centre, for keeping a learned route inside its own centre. */
 const MACHINE_GROUP = Object.fromEntries(MACHINES.map((m) => [m.key, m.group]));
 
-export function today() {
-  return new Date().toISOString().slice(0, 10);
+export function today(date = new Date()) {
+  // Operational dates are Toronto shop dates, not UTC dates. During the
+  // Afternoon shift, UTC crosses midnight hours before the crew does.
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    + `-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 export function addDays(iso, n) {
@@ -757,10 +761,10 @@ function sheetShiftUpdateFor(machineKey) {
 /* Shift updates written on the Shift Update page are stored as one record per
    (date, shift) with a text box per machine. This pulls one machine's entry
    back out of the newest one that actually says something about it. */
-const SHIFT_RANK = { DAY: 0, AFT: 1, AFTERNOON: 1, NIGHT: 2, MIDNIGHT: 2 };
+const SHIFT_RANK = { DAY: 0, AFT: 1, NIGHT: 2 };
 
 function rank(date, shift) {
-  return `${date || ''}#${SHIFT_RANK[shift] ?? 0}`;
+  return `${date || ''}#${SHIFT_RANK[normalizeShift(shift)] ?? 0}`;
 }
 
 function lines(v) {
@@ -829,17 +833,19 @@ export function shiftUpdateAge(date, ref = today()) {
 
 /* ---------- shift windows ---------- */
 
-/* Day 07:00-15:00, Afternoon 15:00-23:00, Midnight 23:00-07:00 — the last
-   crosses into the next day. Times are local, matching how the floor talks. */
+/* The active schedule is Day 07:00–15:30 and Afternoon 15:30–00:00. The
+   historical NIGHT definition is retained only so old saved logs still have
+   the correct window. Times are local, matching how the floor talks. */
 export function shiftWindow(date, shift) {
-  const mk = (d, h) => {
+  const mk = (d, minutes) => {
     const x = new Date(d + 'T00:00:00');
-    x.setHours(h, 0, 0, 0);
+    x.setMinutes(minutes, 0, 0);
     return x.getTime();
   };
-  if (shift === 'DAY') return [mk(date, 7), mk(date, 15)];
-  if (shift === 'AFT') return [mk(date, 15), mk(date, 23)];
-  return [mk(date, 23), mk(addDays(date, 1), 7)];
+  const key = normalizeShift(shift);
+  const selected = SHIFTS[key] || SHIFTS.DAY;
+  const endDate = selected.end <= selected.start ? addDays(date, 1) : date;
+  return [mk(date, selected.start), mk(endDate, selected.end)];
 }
 
 /** Look a line up by its stable key, so history entries can be shown as work. */

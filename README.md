@@ -743,8 +743,9 @@ it is the one filled in every shift. **Service Orders** and **K1285 Pulls**
 fold behind a `＋ Service Orders and K1285 Pulls` link, and open themselves
 whenever they already carry something, so nothing written is ever hidden.
 
-Pick the **date** and the **shift** (Day · Afternoon · Midnight), then **Write**
-or **Read**.
+Pick the **date** and the **shift** (Day · Afternoon), then **Write** or
+**Read**. Midnight is no longer an active shift; old Midnight records remain
+readable as historical entries.
 
 **Writing is mostly picking, not typing.** Every card offers two sources:
 
@@ -758,9 +759,14 @@ or **Read**.
   turns green and stops being offered.
 
 A card with anything in it gets a green spine, and the section header counts
-`3/5`, so what is still blank is obvious without reading any of it. Shift
-windows are Day 07:00–15:00, Afternoon 15:00–23:00, Midnight 23:00–07:00 —
-the last crossing into the next day.
+`3/5`, so what is still blank is obvious without reading any of it. The two
+active shift windows and breaks are shown directly on the page:
+
+- **Day 07:00–15:30:** 09:15–09:30, 12:30–13:00, 14:15–14:30.
+- **Afternoon 15:30–00:00:** 18:00–18:15, 20:00–20:30, 23:00–23:15.
+
+The header marks the active shift, changes to **Break** during those exact
+windows, and reads **Off shift** between midnight and 07:00.
 
 **Reading** is a clean block per machine, plus **Copy as text**, which lays the
 whole update out as plain text for pasting into an email or a chat. Recent
