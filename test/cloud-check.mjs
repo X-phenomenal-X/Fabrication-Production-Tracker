@@ -209,36 +209,8 @@ if (workKb > baseKb / 5) {
 if (table.get('cutting|work').data.tasks !== undefined) {
   throw new Error('the work document is carrying the imported tasks');
 }
-
-// Material requests are operational records too. They must ride in the small
-// work document and merge across devices, never in the imported-workbook base.
-const postsBeforeMaterial = seen.post;
-const materialId = await pc.evaluate(() => import('/js/store.js').then((s) =>
-  s.saveMaterialOrders([{
-    requestDate: '2026-08-28', requiredBy: '2026-08-30',
-    workOrder: 'TEST-MAT-001', project: 'Test Project', floor: 'L2',
-    die: '80.195', stockLength: '18', finish: 'K11704', bars: 2,
-    reason: 'PROD - Production', note: 'Cloud sync fixture',
-    requestedBy: 'Abhay', status: 'READY',
-  }])[0]));
-const materialPending = await pc.evaluate(() => import('/js/store.js').then((m) => m.cloudStatus().pending));
-if (materialPending < 1) throw new Error('material request was not queued for cloud sync');
-const materialDeadline = Date.now() + 10000;
-while (seen.post === postsBeforeMaterial && Date.now() < materialDeadline) {
-  await new Promise((resolve) => setTimeout(resolve, 50));
-}
-if (seen.post === postsBeforeMaterial) throw new Error('material request never triggered a cloud upload');
-await pc.waitForFunction(() => import('/js/store.js').then((m) => {
-  const st = m.cloudStatus();
-  return st.pending === 0 && !st.pushing;
-}));
-const localMaterialIds = await pc.evaluate(() => import('/js/store.js').then((m) =>
-  Object.keys(m.state.materialOrders || {})));
-step('work keys after material: ' + Object.keys(table.get('cutting|work').data).join(', '));
-step(`material id ${materialId}; posts ${postsBeforeMaterial}->${seen.post}; local ids: ${localMaterialIds.join(', ')}; cloud ids: `
-  + Object.keys(table.get('cutting|work').data.materialOrders || {}).join(', '));
-if (!table.get('cutting|work').data.materialOrders?.[materialId]) {
-  throw new Error('material request did not reach the work document');
+if (table.get('cutting|work').data.materialOrders !== undefined) {
+  throw new Error('the retired purchasing map is still being synced');
 }
 
 /* ---------- the phone picks it all up ---------- */
@@ -251,7 +223,6 @@ const onPhone = await phone.evaluate((key) => import('/js/store.js').then((s) =>
     status: s.state.taskStatus[key]?.status ?? null,
     rush: s.state.rush[key]?.reason ?? null,
     note: s.state.taskNote[key]?.text ?? null,
-    material: Object.values(s.state.materialOrders || {})[0] || null,
     rushPage: m.allRush().length,
     who: s.state.taskStatus[key]?.by ?? null,
   }))), pcWork.key);
@@ -260,9 +231,6 @@ if (!onPhone.tasks) throw new Error('the phone did not receive the imported sche
 if (onPhone.status !== 'IN_PROGRESS') throw new Error('status did not reach the phone');
 if (!onPhone.rush) throw new Error('rush did not reach the phone');
 if (!onPhone.note) throw new Error('note did not reach the phone');
-if (onPhone.material?.die !== '80.195' || onPhone.material?.status !== 'READY') {
-  throw new Error('material request did not reach the phone');
-}
 if (onPhone.who !== 'Abhay') throw new Error('the update lost who made it');
 
 // The phone should be able to work without importing anything itself.

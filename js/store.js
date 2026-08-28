@@ -27,7 +27,7 @@ const IDB_STORE = 'handles';
 const RETIRED_KEYS = [
   'meta', 'orders', 'wip', 'prep', 'screens', 'progress', 'material',
   'history', 'manualOrders', 'plan', 'guide', 'audit',
-  'lastImportReport',
+  'lastImportReport', 'materialOrders',
 ];
 
 export const state = {
@@ -38,7 +38,6 @@ export const state = {
   taskNote: {},     // `${machine}|${wo}|${die}` -> { text, at, by }
   taskEdit: {},     // same key -> { fields: {...}, at, by } — corrections to the sheet
   backOrder: {},    // same key -> { flagged, qty, assignee, note, at, by }
-  materialOrders: {}, // id -> order-ready Material Requests row, drafted from a shortage or by hand
   rush: {},         // same key -> { on, needBy, assignee, reason, at, by }
   /* Lines nobody intends to run: a job cancelled, a die remade under another
      work order, an elevation that changed. The workbook goes on listing them
@@ -195,7 +194,7 @@ function changed(fields, { at = now(), by = me() } = {}) {
    is right, because that is somebody re-flagging a rush after you cleared it. */
 const DELETABLE = [
   'taskStatus', 'taskNote', 'taskEdit', 'backOrder', 'rush', 'taskAssign', 'parked',
-  'manualTasks', 'todos', 'shiftLogs', 'machineConfig', 'staging', 'materialOrders',
+  'manualTasks', 'todos', 'shiftLogs', 'machineConfig', 'staging',
 ];
 
 function forget(map, key) {
@@ -368,64 +367,6 @@ export function clearBackOrder(key) {
     if (cur[f] != null && cur[f] !== '') logChange(key, 'backorder', f, cur[f], null);
   }
   forget('backOrder', key);
-  save();
-}
-
-/* ---------- material order drafts ---------- */
-
-/** Save one or several rows in the exact business shape used by the shared
-    Material Requests workbook. A row is intentionally an extrusion, never a
-    rolled S/SA subassembly; the Materials view owns that guarded expansion. */
-export function saveMaterialOrders(rows) {
-  const ids = [];
-  const at = now();
-  const by = me();
-  for (const row of rows || []) {
-    const id = row.id || uid();
-    const cur = state.materialOrders?.[id] || {};
-    state.materialOrders = {
-      ...state.materialOrders,
-      [id]: changed({
-        ...cur,
-        ...row,
-        id,
-        requestedBy: String(row.requestedBy || cur.requestedBy || by).trim(),
-      }, { at, by }),
-    };
-    logChange(row.sourceTaskKey || `material:${id}`, 'material-order', null,
-      cur.status || null, row.status || 'DRAFT');
-    ids.push(id);
-  }
-  if (ids.length) save();
-  return ids;
-}
-
-export function setMaterialOrderStatus(id, status) {
-  const cur = state.materialOrders?.[id];
-  if (!cur) return false;
-  if (!['DRAFT', 'READY', 'ENTERED'].includes(status)) {
-    throw new Error(`Unknown material-order status: ${status}`);
-  }
-  // "Entered" means somebody has put this row in the shared workbook. An
-  // incomplete draft cannot skip the Ready guardrail and acquire that claim.
-  if (status === 'ENTERED' && cur.status !== 'READY') return false;
-  const next = {
-    ...cur,
-    status,
-    enteredAt: status === 'ENTERED' ? now() : null,
-    enteredBy: status === 'ENTERED' ? me() : null,
-  };
-  state.materialOrders = { ...state.materialOrders, [id]: changed(next) };
-  logChange(cur.sourceTaskKey || `material:${id}`, 'material-order', 'status', cur.status || null, status);
-  save();
-  return true;
-}
-
-export function deleteMaterialOrder(id) {
-  const cur = state.materialOrders?.[id];
-  if (!cur) return;
-  forget('materialOrders', id);
-  logChange(cur.sourceTaskKey || `material:${id}`, 'material-order', null, cur.status || 'DRAFT', null);
   save();
 }
 
@@ -741,7 +682,6 @@ function snapshot() {
     taskNote: state.taskNote,
     taskEdit: state.taskEdit,
     backOrder: state.backOrder,
-    materialOrders: state.materialOrders,
     rush: state.rush,
     taskAssign: state.taskAssign,
     parked: state.parked,
@@ -764,10 +704,22 @@ function apply(data) {
     if (data[k] !== undefined) state[k] = data[k];
   }
   state.shiftLogs = onlyShiftLogs(state.shiftLogs);
+  discardRetiredRecords();
   observeSnapshot(state);
   // Replacing state wholesale — a boot, a restored backup, a cloud pull — is
   // the one path that does not reach emit() on its own.
   rev++;
+}
+
+/* Purchasing was briefly added and then removed by explicit product scope.
+   Old devices and cloud documents can still carry its history and tombstones
+   after the top-level map is ignored, so strip those traces too. Otherwise a
+   removed workflow keeps occupying synced state forever. */
+function discardRetiredRecords() {
+  state.taskHistory = (state.taskHistory || [])
+    .filter((entry) => entry?.kind !== 'material-order');
+  state.deletions = Object.fromEntries(Object.entries(state.deletions || {})
+    .filter(([key]) => !key.startsWith('materialOrders:')));
 }
 
 /* An earlier version of the app also wrote `shiftLogs`, in a different shape.
@@ -825,7 +777,10 @@ export function loadLocal() {
     apply(data);
     // Rewrite immediately if the payload still carries retired fields, so the
     // cleanup is visible now rather than waiting for the next incidental save.
-    if (RETIRED_KEYS.some((k) => data[k] !== undefined)) {
+    const hasRetiredRecords = (data.taskHistory || [])
+      .some((entry) => entry?.kind === 'material-order')
+      || Object.keys(data.deletions || {}).some((key) => key.startsWith('materialOrders:'));
+    if (RETIRED_KEYS.some((k) => data[k] !== undefined) || hasRetiredRecords) {
       persistLocal();
     }
   } catch (e) {
@@ -958,7 +913,6 @@ function mergeSnapshot(remote) {
   state.taskNote = mergeRecords(state.taskNote, remote.taskNote);
   state.taskEdit = mergeRecords(state.taskEdit, remote.taskEdit);
   state.backOrder = mergeRecords(state.backOrder, remote.backOrder);
-  state.materialOrders = mergeRecords(state.materialOrders, remote.materialOrders);
   state.rush = mergeRecords(state.rush, remote.rush);
   state.taskAssign = mergeRecords(state.taskAssign, remote.taskAssign);
   state.parked = mergeRecords(state.parked, remote.parked);
@@ -976,6 +930,7 @@ function mergeSnapshot(remote) {
   // Merge the tombstones, then re-apply them: a record the other device
   // still holds must not walk back in after being deleted here.
   state.deletions = mergeRecords(state.deletions, remote.deletions);
+  discardRetiredRecords();
   applyDeletions();
   state.people = Array.from(new Set([...(state.people || []), ...(remote.people || [])]));
 

@@ -7,8 +7,8 @@ In Progress → Done.
 
 The scope stays operational rather than becoming a general ERP: no Daily
 Schedule and no inventory ledger. It does include the actions the cutting
-floor needs around the queues — staging, rush work, shortages, guarded
-material-request drafts, engineering lookup and shift handoff.
+floor needs around the queues — staging, rush work, back-order chasing,
+engineering lookup and shift handoff.
 
 ## Running it
 
@@ -51,7 +51,7 @@ re-read.
 4. At the end of the shift, **Shift Update** → Write.
 
 The nav reads **Overview · Rolling · FOM · CNC & FMC · Multi Punch · Jobs ·
-Today · Staging · Rush · Materials · Engineering Lookup · Shift Update**.
+Today · Staging · Rush · Back Orders · Engineering Lookup · Shift Update**.
 Setup is the gear in the header.
 
 To use it on a phone, set up **Sync across devices** in Setup once — see below.
@@ -87,10 +87,6 @@ screen chrome to the printer:
   then choose **Print**. Assembly sheets include the drawing, component map,
   missing-role state and recovery provenance. Extrusion sheets include the
   profile card, engineering numbers and reverse assembly usage.
-- **Material requests:** open **Materials → Order drafts** and choose **Print
-  open**. The landscape request list carries the workbook fields, notes and
-  draft/ready state without printing any interactive controls.
-
 The browser's normal print dialog still chooses the printer, copies or **Save
 as PDF**. Machine schedules and shift updates use landscape Letter; engineering
 records use portrait Letter. Every paper header uses the exact same three-shape
@@ -638,7 +634,7 @@ opens the same dialog as the line does.
 Every field change is logged to the line's history with who and when, the same
 as everything else.
 
-## Materials — shortages and order requests
+## Back Orders — operational shortage chasing
 
 The workbook's flag is only the starting point. Any line can be opened from its
 B/O icon to record **how many pieces are short, who is chasing it, and why** —
@@ -651,45 +647,21 @@ ticked it flags a line the sheet does not; unticked it records that a shortage
 the sheet still reports has been *resolved*. Without that third state there is
 no way to close out a shortage the workbook keeps asserting.
 
-The **Materials** page cuts across all four centres and keeps two jobs together:
-
-- **Shortages** groups the chase list by assignee, Unassigned last, with an
-  "only mine" toggle. Each group initially shows two lines and expands on
-  demand, so the page stays an overview even when the workbook reports dozens
-  of shortages. Clicking the row still edits the shortage record.
-- **8560 Hinges** reads only FOM 2 rows explicitly marked `8560` or `8560 HT`.
-  The scheduled quantity is the vent count and the confirmed department rule
-  applies **one hinge per vent**. Ordinary `P:Y` pin-hole rows are excluded.
-  The result stays separate from extrusion requests and has dedicated copy and
-  print actions, so hinge pieces are never mislabeled as bars.
-- **Order drafts** holds request rows prepared from those shortages or added by
-  hand. A complete row is marked `READY`; missing length, finish, bar count or
-  request context remains visibly `DRAFT`. Ready rows copy as tab-separated
-  **Date → Reason** cells for pasting into the shared Material Requests
-  workbook. The operator marks them `ENTERED` only after that workbook is
-  saved; the tracker does not claim a draft was submitted.
-
-The workflow carries the rules recovered from the separate Material Order
-Helper project. Any number beginning `S` or `SA` is treated as a rolled
-subassembly, never as an orderable extrusion. The form expands it through the
-engineering listing and requires the operator to choose the component that is
-actually short. Verified and conservatively recovered component sources remain
-labelled, incomplete listings raise a guardrail, and ambiguous listing-text
-references are shown only as references rather than order choices.
-
-The request row keeps **work order, project, floor, extrusion, stock length,
-finish, bars, reason, note and requester**. It also blocks duplicate open rows
-for the same work order/extrusion/length/finish combination.
+The **Back Orders** page cuts across all four centres and groups the chase list
+by assignee, with Unassigned last and an "only mine" toggle. Clicking a row
+edits the same shortage record shown on its machine queue. This remains an
+operational follow-up surface; it does not prepare purchase requests, count
+bars to buy or submit anything to a purchasing workbook.
 
 One thing to know about the schedule's own `B/O` column: it counts **bars**,
 not pieces, and FOM 2 / FOM 3 write it as text (`3 BARS`, `1 BAR MISSING`). It
-is kept and shown as context beside the manually recorded piece count. The
-order form may suggest that explicit bar value, but it never converts pieces
-short into bars to buy.
+is kept and shown as context beside the manually recorded piece count. The app
+does not convert either figure into an order.
 
-The hinge calculation is equally conservative: a blank vent quantity stays
-visibly uncounted rather than becoming zero, and completed or parked schedule
-rows leave the open requirement list.
+FOM 2 rows explicitly marked `8560` or `8560 HT` carry a production badge with
+the confirmed **one hinge per vent** requirement. Ordinary `P:Y` pin-hole rows
+are excluded. A blank vent quantity stays visibly uncounted rather than
+becoming zero.
 
 ## Editing a line
 
@@ -852,11 +824,11 @@ and maps to the `cnc1` work centre; whether the visible label should say
 ## What was removed
 
 Everything driven by the Daily Schedule: order-level tracking, profile types
-and per-profile material, the hinge/8560 rule, process guide, verification
+and per-profile material, purchasing workflows, process guide, verification
 screen, and the old dashboard. Manual jobs, history and shift-update posting
 were later rebuilt against the machine-schedule model and are current features.
-The 8560 rule has also returned in Materials, now derived directly from FOM 2
-and applying the confirmed one-hinge-per-vent requirement.
+The 8560 rule is derived directly from FOM 2 and shown on the affected
+production line; it is not a purchase request.
 
 The stored data went with it. On first load the app rewrites its saved payload
 without the retired fields, so an existing install — and the shared JSON on the
@@ -965,7 +937,7 @@ The snapshot is pushed as **two documents, not one**:
 | | what | size on the real data | pushed |
 |---|---|---|---|
 | `base` | the imported workbooks | ~1.6 MB | only on re-import |
-| `work` | statuses, notes, edits, rush, shortages, material requests, assignments, parked decisions, shift updates, history | starts at a few KB and grows with work | debounced, on every change |
+| `work` | statuses, notes, edits, rush, shortages, assignments, parked decisions, shift updates, history | starts at a few KB and grows with work | debounced, on every change |
 
 Together that would mean a phone uploading the workbooks every time somebody
 taps Done. Split, a tap sends only the work document. `test/cloud-check.mjs` asserts the
@@ -1115,13 +1087,13 @@ grounded visual direction before any production styling changes.
 - **Navigation is two groups, not one undifferentiated row.** The four production
   centres read as a solid segmented control; the six department tools sit past a
   divider, quieter, because they are visited rather than lived in. Rush and
-  Materials carry an outstanding count on the tab, so nobody has to open a
+  Back Orders carry an outstanding count on the tab, so nobody has to open a
   page to learn there is nothing on it.
 - **On a phone the header is two rows and 95px.** Row one is identity only —
   brand, shift, sync — and carries no tap target, because a third 44px control
   there is what put the old header at 121px. Row two is the centre scroller
   with the name picker pinned beside it. At 1280px and below the tools fall
-  back to short labels (`MAT`, `Shift`) rather than letting Setup slide off
+  back to short labels (`B/O`, `Shift`) rather than letting Setup slide off
   the end of the nav.
 - **The machine header clears the app header** rather than sliding under it:
   `app.js` measures the header into `--hdr-h` on every render, and the sticky

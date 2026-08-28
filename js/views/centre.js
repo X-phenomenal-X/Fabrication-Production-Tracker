@@ -34,6 +34,7 @@ import { rushDialog } from './rush.js';
 import { routeDialog } from './routing.js';
 import { haveDrawings, loadDrawings, thumbFor } from './die-thumb.js';
 import { shiftLabel } from '../shifts.js';
+import { hingeRequirement } from '../material-rules.js';
 import {
   machinesByGroup, assignableIn, hasQueue, canMoveIn, MACHINE_BY_KEY,
 } from '../machines.js';
@@ -162,6 +163,7 @@ function noteEditor(row, rerender) {
 
 function taskLine(row, vs, rerender, group) {
   const t = row.task;
+  const hinge = hingeRequirement(t);
   const key = taskStatusKey(t);
   const note = taskNoteFor(key);
   const bo = resolveBackOrder(t);
@@ -220,6 +222,12 @@ function taskLine(row, vs, rerender, group) {
           title: bo.qty != null ? `${bo.qty} pieces short` : 'Back order — short of material',
         }, icon('alert', { size: 11 }),
           bo.qty != null ? `B/O ${fmtNum(bo.qty)}` : 'B/O') : null,
+        hinge ? el('span.badge-hinge', {
+          title: hinge.hinges == null
+            ? '8560 vent — quantity missing, so the hinge requirement cannot be counted'
+            : `${fmtNum(hinge.vents)} 8560 vents require ${fmtNum(hinge.hinges)} hinges`,
+        }, icon('bolt', { size: 11 }),
+          hinge.hinges == null ? '8560 · hinges ?' : `${fmtNum(hinge.hinges)} hinges`) : null,
         /* Only ever seen through the Parked filter, since a parked line is out
            of every other view — but seen there it has to say what it is, or
            the filter looks like an ordinary queue. */
@@ -701,6 +709,7 @@ function dateGroup(group, vs, rerender, centre) {
    queue below. */
 function nowRunningLine(row, rerender) {
   const t = row.task;
+  const hinge = hingeRequirement(t);
   const key = taskStatusKey(t);
   const since = row.status.at ? fmtWhen(row.status.at) : null;
 
@@ -724,7 +733,8 @@ function nowRunningLine(row, rerender) {
       el('div.line-id', {},
         el('span.mono.strong', {}, t.wo),
         t.die ? el('span.die', {}, t.die) : null,
-        row.rush.on ? chip('rush', 'warn') : null),
+        row.rush.on ? chip('rush', 'warn') : null,
+        hinge ? chip(hinge.hinges == null ? '8560 · hinges ?' : `${fmtNum(hinge.hinges)} hinges`, 'warn') : null),
       el('div.line-where', {},
         el('span', {}, t.project || '—'),
         t.floor ? el('span.muted', {}, ' · ' + t.floor) : null)),
@@ -954,10 +964,12 @@ function printMachineSchedule(machine, groups, sum, vs) {
     const task = row.task;
     const bo = resolveBackOrder(task);
     const rush = row.rush || resolveRush(task);
+    const hinge = hingeRequirement(task);
     const note = taskNoteFor(taskStatusKey(task));
     const flags = [
       rush.on ? `RUSH${rush.needBy ? ` ${fmtDate(rush.needBy)}` : ''}` : null,
       bo.on ? `B/O${bo.qty != null ? ` ${fmtNum(bo.qty)} short` : ''}` : null,
+      hinge ? (hinge.hinges == null ? '8560 · hinges uncounted' : `${fmtNum(hinge.hinges)} hinges`) : null,
       isStaged(task) ? 'Staged' : null,
       isAssigned(task) ? `Moved from ${machineConfig(MACHINE_BY_KEY[task.machine]
         || { label: task.machine }).label}` : null,

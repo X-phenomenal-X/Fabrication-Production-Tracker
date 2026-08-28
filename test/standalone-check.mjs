@@ -53,7 +53,7 @@ step('File System Access available: ' + await page.evaluate(() => 'showOpenFileP
 const tabs = await page.$$eval('nav.tabs button', (ns) =>
   ns.map((n) => (n.getAttribute('aria-label') || n.textContent).trim()));
 step('tabs: ' + tabs.join(', '));
-if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Staging,Rush,Materials,Engineering Lookup,Shift Update') {
+if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Staging,Rush,Back Orders,Engineering Lookup,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 

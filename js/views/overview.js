@@ -312,9 +312,8 @@ export function renderOverview(rerender, go) {
   }
 
   const keepWatch = [
-    // A shortage is acted on in Materials, where it can become a guarded
-    // extrusion request; opening only its machine queue leaves that action a
-    // second navigation away.
+    // A shortage is acted on in the department-wide chase list; opening only
+    // its machine queue leaves ownership and the other shortages out of view.
     watchTask('Back order', backOrder, 'bad', 'alert', go, 'backorders'),
     watchTask('Rush line', rush, 'warn', 'bolt', go),
     machineIssue(go),

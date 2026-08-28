@@ -15,7 +15,7 @@ const CNC = books.cnc;
 const SHOT = path.join(ROOT, 'test', 'screens');
 
 const RETIRED = ['orders', 'wip', 'prep', 'screens', 'progress', 'material', 'history',
-  'manualOrders', 'plan', 'guide', 'audit'];
+  'manualOrders', 'plan', 'guide', 'audit', 'materialOrders'];
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 
@@ -105,7 +105,7 @@ step('tabs: ' + tabs.join(', '));
 const setupGear = await page.$$eval('.hdr-setup', (ns) => ns.map((n) => n.getAttribute('aria-label')));
 step('setup control: ' + JSON.stringify(setupGear));
 if (setupGear.length !== 1) throw new Error('Setup is not reachable from the header');
-if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Staging,Rush,Materials,Engineering Lookup,Shift Update') {
+if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Staging,Rush,Back Orders,Engineering Lookup,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -129,6 +129,33 @@ const seeded = await page.evaluate((retired) => import('/js/store.js').then((m) 
 step('retired keys — in state: ' + (seeded.inState.join(',') || 'none') +
   ' | in storage: ' + (seeded.inStorage.join(',') || 'none'));
 if (seeded.inState.length || seeded.inStorage.length) throw new Error('old data is still present');
+
+// A device that used the short-lived purchasing workspace must shed its rows,
+// related history and tombstones on upgrade. Keeping only the top-level map out
+// of state is not enough: those secondary records also sync between devices.
+await page.evaluate(() => {
+  const key = 'bv.cutting.v1';
+  const data = JSON.parse(localStorage.getItem(key));
+  data.materialOrders = { retired: { id: 'retired', die: '80.195', status: 'READY' } };
+  data.taskHistory = [...(data.taskHistory || []), {
+    id: 'retired-history', key: 'material:retired', kind: 'material-order', at: '2026-08-28T12:00:00Z',
+  }];
+  data.deletions = { ...(data.deletions || {}), 'materialOrders:old': { at: '2026-08-28T12:00:00Z' } };
+  localStorage.setItem(key, JSON.stringify(data));
+});
+await page.reload();
+await page.waitForSelector('header.top');
+const retiredPurchasing = await page.evaluate(() => import('/js/store.js').then((m) => {
+  const raw = JSON.parse(localStorage.getItem('bv.cutting.v1'));
+  return {
+    stateMap: m.state.materialOrders !== undefined,
+    storedMap: raw.materialOrders !== undefined,
+    history: (m.state.taskHistory || []).some((entry) => entry.kind === 'material-order'),
+    tombstone: Object.keys(m.state.deletions || {}).some((key) => key.startsWith('materialOrders:')),
+  };
+}));
+step('retired purchasing cleanup: ' + JSON.stringify(retiredPurchasing));
+if (Object.values(retiredPurchasing).some(Boolean)) throw new Error('retired purchasing data survived upgrade');
 
 // import both workbooks
 await page.click('.hdr-setup');
@@ -498,176 +525,79 @@ step('line badge: ' + badge);
 if (!badge.includes('12')) throw new Error('badge does not show the piece count');
 await (await page.$('.line')).screenshot({ path: path.join(SHOT, 'bo-line.png') });
 
-// The Materials page keeps shortages and order preparation in one focused
-// workspace. It still groups the chase list by owner.
-await page.click('nav.tabs button:has-text("Materials")');
+// Back Orders stays an operational chase list: who owns the shortage, how many
+// pieces are missing, and what the latest note says. It does not prepare or
+// submit purchasing records.
+await gotoTab('Back Orders');
 await page.waitForSelector('.bo-who');
 const owners = await page.$$eval('.bo-who', (ns) => ns.map((n) => n.textContent.trim()));
 const boStats = await page.$$eval('.cstat', (ns) =>
   ns.map((n) => n.querySelector('i').textContent + '=' + n.querySelector('b').textContent));
-step('materials shortages — owners: ' + owners.join(', ') + ' | ' + boStats.join(' '));
-if (!owners.includes('Abhay')) throw new Error('assignee group missing from Materials page');
-await page.screenshot({ path: path.join(SHOT, 'materials-shortages.png'), fullPage: true });
+step('back orders — owners: ' + owners.join(', ') + ' | ' + boStats.join(' '));
+if (!owners.includes('Abhay')) throw new Error('assignee group missing from Back Orders page');
+if (await page.locator('text=Prepare order').count() || await page.locator('text=Order drafts').count()) {
+  throw new Error('purchasing controls remain on the Back Orders page');
+}
+await page.screenshot({ path: path.join(SHOT, 'back-orders.png'), fullPage: true });
 
-/* One hinge per 8560 vent, counted off FOM 2's explicit marker.
-
-   The assertion is on the rule, not on a number: the page has to agree with
-   the model about which rows qualify, and hinges have to equal vents. That
-   holds whether there are twelve such rows or none.
-
-   None is the live case, and worth stating plainly — across 1,271 FOM 2 rows
-   in the current Rolling and CNC workbooks not one carries an 8560 marker in
-   its pin-hole column, only P:Y, P:N and blanks. The generated CI workbook
-   carries a single "8560 HT" row precisely so the arithmetic is still
-   exercised somewhere. Asserting the CI row's numbers against the real books
-   is how this started failing the moment it met them. */
-await page.getByRole('tab', { name: /8560 Hinges/ }).click();
-await page.waitForTimeout(400);
-
-const hinges = await page.evaluate(async () => {
-  const M = await import('/js/model.js');
-  const R = await import('/js/material-rules.js');
-  const qualifying = M.tasksInScope().map(M.resolveTask)
-    .filter((t) => R.is8560VentTask(t) && !M.isParked(t)
-      && M.effectiveTaskStatus(t).key !== 'DONE')
-    .map(R.hingeRequirement).filter(Boolean);
+/* One hinge is required per explicitly marked 8560 vent. This belongs on the
+   FOM 2 production line and its printed schedule, not in a purchasing page.
+   Assert the rule rather than one fixture quantity so the same check is valid
+   against both sanitized and live workbooks. */
+const hingeAudit = await page.evaluate(async () => {
+  const model = await import('/js/model.js');
+  const rules = await import('/js/material-rules.js');
+  const qualifying = model.tasksInScope().map(model.resolveTask)
+    .filter((task) => rules.is8560VentTask(task) && !model.isParked(task)
+      && model.effectiveTaskStatus(task).key !== 'DONE')
+    .map((task) => ({ task, requirement: rules.hingeRequirement(task) }))
+    .filter((row) => row.requirement);
   return {
-    expected: qualifying.length,
-    shown: document.querySelectorAll('.material-hinge-card').length,
-    arithmetic: qualifying.map((r) => ({ vents: r.vents, hinges: r.hinges })),
-    fom2Rows: M.tasksInScope().filter((t) => t.machine === 'fom2').length,
-    text: document.querySelector('.material-hinge-card')?.textContent.replace(/\s+/g, ' ').trim() || null,
+    fom2Rows: model.tasksInScope().filter((task) => task.machine === 'fom2').length,
+    rows: qualifying.map(({ task, requirement }) => ({
+      wo: task.wo,
+      vents: requirement.vents,
+      hinges: requirement.hinges,
+    })),
   };
 });
-step(`8560 hinges: ${hinges.shown} shown, ${hinges.expected} qualifying`
-  + ` of ${hinges.fom2Rows} FOM 2 rows${hinges.text ? ' · ' + hinges.text : ''}`);
-
-if (hinges.shown !== hinges.expected) {
-  throw new Error(`the hinge list shows ${hinges.shown} rows, the rule finds ${hinges.expected}`);
+step(`8560 hinges: ${hingeAudit.rows.length} qualifying of ${hingeAudit.fom2Rows} FOM 2 rows`);
+for (const row of hingeAudit.rows) {
+  if (row.vents != null && row.hinges !== row.vents) {
+    throw new Error(`${row.vents} vents produced ${row.hinges} hinges, not 1:1`);
+  }
 }
-for (const { vents, hinges: n } of hinges.arithmetic) {
-  if (vents != null && n !== vents) throw new Error(`${vents} vents produced ${n} hinges, not 1:1`);
-}
-if (books.synthetic && hinges.expected !== 1) {
+if (books.synthetic && hingeAudit.rows.length !== 1) {
   throw new Error('the generated workbook should carry exactly one 8560 row to pin the rule');
 }
-if (hinges.expected && !/vents/.test(hinges.text || '')) {
-  throw new Error('a hinge row rendered without saying how many vents it is for');
-}
 
-/* Copying and printing only mean something when there is a row. With none, the
-   right behaviour is a disabled control rather than an empty table on somebody's
-   clipboard or a blank sheet out of the printer — so that is what is asserted
-   against the live books, and the full round trip against the generated one. */
-const hingeCopy = page.getByRole('button', { name: 'Copy list' });
-const hingePrintBtn = page.getByRole('button', { name: 'Print list' });
-
-if (!hinges.expected) {
-  const enabled = await hingeCopy.isEnabled() || await hingePrintBtn.isEnabled();
-  if (enabled) throw new Error('Copy/Print stayed live with no hinge requirements to act on');
-  step('no 8560 rows in these workbooks — copy and print are correctly disabled');
+await gotoTab('FOM');
+await page.click('.subtabs button:has-text("FOM 2")');
+const hingeRow = hingeAudit.rows[0] || null;
+if (hingeRow) {
+  await page.locator('input[type="search"]').fill(hingeRow.wo);
+  await page.waitForTimeout(200);
+  const hingeBadge = await page.locator('.badge-hinge').first().textContent();
+  step(`8560 production requirement: ${hingeBadge.trim()}`);
+  if (!hingeBadge.includes(`${hingeRow.hinges} hinges`)) {
+    throw new Error('the 1:1 hinge requirement is not visible on FOM 2');
+  }
+  const hingeSchedulePrints = await page.evaluate(() => window.__printCaptures.length);
+  await page.getByRole('button', { name: 'Print schedule' }).click();
+  await page.waitForFunction((count) => window.__printCaptures.length > count, hingeSchedulePrints);
+  const hingeSchedule = await page.evaluate(() => window.__printCaptures.at(-1));
+  if (!hingeSchedule.text.includes(`${hingeRow.hinges} hinges`)) {
+    throw new Error('the 8560 hinge requirement is missing from the printed machine schedule');
+  }
+  await page.locator('input[type="search"]').fill('');
 } else {
-  await hingeCopy.click();
-  await page.waitForTimeout(100);
-  const copiedHinges = await page.evaluate(() => navigator.clipboard.readText());
-  if (!copiedHinges.includes('8560 vents\tHinges required')) {
-    throw new Error('the copied 8560 hinge list has no header row');
-  }
-  const pair = hinges.arithmetic[0];
-  if (pair.vents != null && !copiedHinges.includes(`\t${pair.vents}\t${pair.hinges}\t`)) {
-    throw new Error('the copied list does not carry the vent and hinge counts');
-  }
-  const hingePrintCount = await page.evaluate(() => window.__printCaptures.length);
-  await hingePrintBtn.click();
-  await page.waitForFunction((count) => window.__printCaptures.length > count, hingePrintCount);
-  const hingePrint = await page.evaluate(() => window.__printCaptures.at(-1));
-  if (hingePrint.title !== '8560 Hinge Requirements'
-      || (pair.vents != null && !hingePrint.text.includes(String(pair.vents)))) {
-    throw new Error('the printable 8560 hinge list is incomplete');
-  }
-  step(`8560 list copied and printed: ${hinges.expected} row(s)`);
+  step('no explicit 8560 markers in these workbooks — no hinge badge is inferred');
 }
-await page.getByRole('tab', { name: /Shortages/ }).click();
-await page.waitForSelector('.material-shortage-line');
+await page.click('.subtabs button:has-text("FOM 1")');
+await page.waitForTimeout(120);
 
-// A scheduled S-number is not an orderable die. Preparing it must expose the
-// engineering components, require a choice, and save the selected extrusion
-// in the dotted format used by the Material Requests workbook.
-const materialTarget = await page.evaluate(async () => {
-  const store = await import('/js/store.js');
-  const model = await import('/js/model.js');
-  const task = model.tasksInScope().find((row) => /^S80\.104$/i.test(row.die || ''));
-  if (!task) return null;
-  const key = model.taskStatusKey(task);
-  store.setBackOrder(key, {
-    flagged: true, qty: 8, assignee: 'Abhay',
-    note: 'Extrusion component needs material review.',
-  });
-  return { key, wo: task.wo };
-});
-if (!materialTarget) throw new Error('no S80.104 line available for material-order test');
-await page.waitForTimeout(250);
-const materialLine = page.locator('.material-shortage-line').filter({ hasText: materialTarget.wo }).first();
-await materialLine.getByRole('button', { name: 'Prepare order' }).click();
-await page.waitForSelector('dialog .material-component-list');
-const assemblyGuard = await page.locator('dialog .material-guardrail').allTextContents();
-const componentRows = await page.locator('dialog .material-component').count();
-step(`material guardrail: ${componentRows} components · ${assemblyGuard.join(' ')}`);
-if (componentRows < 2 || !assemblyGuard.join(' ').includes('S/SA number itself')) {
-  throw new Error('subassembly order guardrail or component expansion is missing');
-}
-const firstComponent = page.locator('dialog .material-component').first();
-const pickComponent = firstComponent.locator('input[type="checkbox"]');
-if (!(await pickComponent.isChecked())) await pickComponent.check();
-await firstComponent.getByLabel(/Stock length/).fill('18');
-await firstComponent.getByLabel(/Finish/).fill('K11704');
-await firstComponent.getByLabel(/Bars to order/).fill('2');
-await page.click('dialog footer button.primary');
-await page.waitForSelector('.material-order-card');
-const materialSaved = await page.evaluate(() => import('/js/store.js').then((m) =>
-  Object.values(m.state.materialOrders)[0] || null));
-step('material request saved: ' + JSON.stringify(materialSaved));
-if (!materialSaved || materialSaved.status !== 'READY' || materialSaved.bars !== 2
-    || materialSaved.stockLength !== '18' || materialSaved.finish !== 'K11704'
-    || /^S/i.test(materialSaved.die)) {
-  throw new Error('material request was not saved as an order-ready extrusion');
-}
-
-await page.getByRole('button', { name: /Copy ready/ }).click();
-await page.waitForTimeout(100);
-const copiedMaterial = await page.evaluate(() => navigator.clipboard.readText());
-step('material workbook row: ' + copiedMaterial.replace(/\t/g, ' | '));
-if (!copiedMaterial.includes(`\t${materialSaved.die}\t18\tK11704\t2\tPROD - Production`)) {
-  throw new Error('copied material row does not match the workbook Date-to-Reason layout');
-}
-
-const materialPrintCount = await page.evaluate(() => window.__printCaptures.length);
-await page.getByRole('button', { name: 'Print open' }).click();
-await page.waitForFunction((count) => window.__printCaptures.length > count, materialPrintCount);
-const materialPrint = await page.evaluate(() => window.__printCaptures.at(-1));
-step('material print: ' + JSON.stringify(materialPrint));
-if (!materialPrint.classes.includes('landscape') || !materialPrint.text.includes(materialSaved.die)) {
-  throw new Error('material request print sheet is incomplete');
-}
-await page.screenshot({ path: path.join(SHOT, 'materials-orders.png'), fullPage: true });
-
-await page.reload();
-await page.waitForSelector('header.top');
-await gotoTab('Materials');
-await page.getByRole('tab', { name: /Order drafts/ }).click();
-await page.waitForSelector('.material-order-card');
-const materialAfterReload = await page.evaluate(() => import('/js/store.js').then((m) =>
-  Object.values(m.state.materialOrders)[0] || null));
-step('material request after reload: ' + JSON.stringify({
-  die: materialAfterReload?.die, status: materialAfterReload?.status,
-}));
-if (materialAfterReload?.die !== materialSaved.die || materialAfterReload?.status !== 'READY') {
-  throw new Error('material request did not survive a reload');
-}
-
-// Return to the shortage list for the tri-state check below.
-await page.getByRole('tab', { name: /Shortages/ }).click();
-await page.waitForSelector('.material-shortage-line');
+await gotoTab('Back Orders');
+await page.waitForSelector('.bo-line');
 
 // tri-state: clearing a sheet-reported shortage drops it from the count
 const beforeClear = await page.$$eval('.bo-line', (n) => n.length);
