@@ -162,11 +162,11 @@ function upcomingRow(row, ref, go) {
     icon('chevron', { size: 17 }));
 }
 
-function watchTask(label, row, tone, iconName, go) {
+function watchTask(label, row, tone, iconName, go, targetPage = null) {
   if (!row) return null;
   const context = taskContext(row);
   return el('button.overview-watch-row.' + tone, {
-    onclick: () => openTask(row, go),
+    onclick: () => targetPage ? go(targetPage) : openTask(row, go),
     'aria-label': `${label}: open work order ${row.task.wo}`,
   },
     el('span.overview-watch-icon', {}, icon(iconName, { size: 20 })),
@@ -289,7 +289,10 @@ export function renderOverview(rerender, go) {
   }
 
   const keepWatch = [
-    watchTask('Back order', backOrder, 'bad', 'alert', go),
+    // A shortage is acted on in Materials, where it can become a guarded
+    // extrusion request; opening only its machine queue leaves that action a
+    // second navigation away.
+    watchTask('Back order', backOrder, 'bad', 'alert', go, 'backorders'),
     watchTask('Rush line', rush, 'warn', 'bolt', go),
     machineIssue(go),
   ].filter(Boolean);

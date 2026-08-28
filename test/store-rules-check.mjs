@@ -1,7 +1,9 @@
 /* Sync rules that do not need a browser or the real schedules.
    Run: node test/store-rules-check.mjs */
 
-import { mergeRecords } from '../js/store.js';
+import {
+  mergeRecords, state, saveMaterialOrders, setMaterialOrderStatus, deleteMaterialOrder,
+} from '../js/store.js';
 
 // Device B's wall clock is years behind, but it observed A's revision before
 // editing. The logical revision, not the displayed timestamp, must win.
@@ -26,5 +28,21 @@ const migrated = mergeRecords(
   { line: { status: 'STALE', at: '2099-01-01T00:00:00.000Z' } },
 );
 if (migrated.line.status !== 'CURRENT') throw new Error('a legacy record beat a revisioned record');
+
+// A draft is not a submitted request. The status mutation itself enforces the
+// guardrail so another view cannot accidentally bypass it.
+const draftId = saveMaterialOrders([{
+  workOrder: 'TEST', die: '80.195', status: 'DRAFT', requestedBy: 'Test',
+}])[0];
+if (setMaterialOrderStatus(draftId, 'ENTERED') !== false
+    || state.materialOrders[draftId].status !== 'DRAFT') {
+  throw new Error('an incomplete material draft was marked entered');
+}
+saveMaterialOrders([{ ...state.materialOrders[draftId], id: draftId, status: 'READY' }]);
+if (!setMaterialOrderStatus(draftId, 'ENTERED')
+    || state.materialOrders[draftId].status !== 'ENTERED') {
+  throw new Error('a ready material request could not be marked entered');
+}
+deleteMaterialOrder(draftId);
 
 console.log('Store rules: OK');

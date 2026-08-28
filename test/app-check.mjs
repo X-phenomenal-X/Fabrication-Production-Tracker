@@ -43,6 +43,14 @@ const browser = await chromium.launch(chromiumOptions());
 const page = await browser.newPage({ viewport: { width: 1440, height: 950 } });
 await page.addInitScript(() => {
   window.__printCaptures = [];
+  window.__clipboardText = '';
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: async (text) => { window.__clipboardText = String(text); },
+      readText: async () => window.__clipboardText,
+    },
+  });
   window.print = () => {
     const sheet = document.querySelector('.print-sheet');
     window.__printCaptures.push({
@@ -95,7 +103,7 @@ step('tabs: ' + tabs.join(', '));
 const setupGear = await page.$$eval('.hdr-setup', (ns) => ns.map((n) => n.getAttribute('aria-label')));
 step('setup control: ' + JSON.stringify(setupGear));
 if (setupGear.length !== 1) throw new Error('Setup is not reachable from the header');
-if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Today,Staging,Rush,Back Orders,Engineering Lookup,Shift Update') {
+if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Today,Staging,Rush,Materials,Engineering Lookup,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -485,15 +493,95 @@ step('line badge: ' + badge);
 if (!badge.includes('12')) throw new Error('badge does not show the piece count');
 await (await page.$('.line')).screenshot({ path: path.join(SHOT, 'bo-line.png') });
 
-// the Back Orders page lists it under the right person
-await page.click('nav.tabs button:has-text("Back Orders")');
+// The Materials page keeps shortages and order preparation in one focused
+// workspace. It still groups the chase list by owner.
+await page.click('nav.tabs button:has-text("Materials")');
 await page.waitForSelector('.bo-who');
 const owners = await page.$$eval('.bo-who', (ns) => ns.map((n) => n.textContent.trim()));
 const boStats = await page.$$eval('.cstat', (ns) =>
   ns.map((n) => n.querySelector('i').textContent + '=' + n.querySelector('b').textContent));
-step('back orders page — owners: ' + owners.join(', ') + ' | ' + boStats.join(' '));
-if (!owners.includes('Abhay')) throw new Error('assignee group missing from Back Orders page');
-await page.screenshot({ path: path.join(SHOT, 'backorders.png'), fullPage: true });
+step('materials shortages — owners: ' + owners.join(', ') + ' | ' + boStats.join(' '));
+if (!owners.includes('Abhay')) throw new Error('assignee group missing from Materials page');
+await page.screenshot({ path: path.join(SHOT, 'materials-shortages.png'), fullPage: true });
+
+// A scheduled S-number is not an orderable die. Preparing it must expose the
+// engineering components, require a choice, and save the selected extrusion
+// in the dotted format used by the Material Requests workbook.
+const materialTarget = await page.evaluate(async () => {
+  const store = await import('/js/store.js');
+  const model = await import('/js/model.js');
+  const task = model.tasksInScope().find((row) => /^S80\.104$/i.test(row.die || ''));
+  if (!task) return null;
+  const key = model.taskStatusKey(task);
+  store.setBackOrder(key, {
+    flagged: true, qty: 8, assignee: 'Abhay',
+    note: 'Extrusion component needs material review.',
+  });
+  return { key, wo: task.wo };
+});
+if (!materialTarget) throw new Error('no S80.104 line available for material-order test');
+await page.waitForTimeout(250);
+const materialLine = page.locator('.material-shortage-line').filter({ hasText: materialTarget.wo }).first();
+await materialLine.getByRole('button', { name: 'Prepare order' }).click();
+await page.waitForSelector('dialog .material-component-list');
+const assemblyGuard = await page.locator('dialog .material-guardrail').allTextContents();
+const componentRows = await page.locator('dialog .material-component').count();
+step(`material guardrail: ${componentRows} components · ${assemblyGuard.join(' ')}`);
+if (componentRows < 2 || !assemblyGuard.join(' ').includes('S/SA number itself')) {
+  throw new Error('subassembly order guardrail or component expansion is missing');
+}
+const firstComponent = page.locator('dialog .material-component').first();
+const pickComponent = firstComponent.locator('input[type="checkbox"]');
+if (!(await pickComponent.isChecked())) await pickComponent.check();
+await firstComponent.getByLabel(/Stock length/).fill('18');
+await firstComponent.getByLabel(/Finish/).fill('K11704');
+await firstComponent.getByLabel(/Bars to order/).fill('2');
+await page.click('dialog footer button.primary');
+await page.waitForSelector('.material-order-card');
+const materialSaved = await page.evaluate(() => import('/js/store.js').then((m) =>
+  Object.values(m.state.materialOrders)[0] || null));
+step('material request saved: ' + JSON.stringify(materialSaved));
+if (!materialSaved || materialSaved.status !== 'READY' || materialSaved.bars !== 2
+    || materialSaved.stockLength !== '18' || materialSaved.finish !== 'K11704'
+    || /^S/i.test(materialSaved.die)) {
+  throw new Error('material request was not saved as an order-ready extrusion');
+}
+
+await page.getByRole('button', { name: /Copy ready/ }).click();
+await page.waitForTimeout(100);
+const copiedMaterial = await page.evaluate(() => navigator.clipboard.readText());
+step('material workbook row: ' + copiedMaterial.replace(/\t/g, ' | '));
+if (!copiedMaterial.includes(`\t${materialSaved.die}\t18\tK11704\t2\tPROD - Production`)) {
+  throw new Error('copied material row does not match the workbook Date-to-Reason layout');
+}
+
+const materialPrintCount = await page.evaluate(() => window.__printCaptures.length);
+await page.getByRole('button', { name: 'Print open' }).click();
+await page.waitForFunction((count) => window.__printCaptures.length > count, materialPrintCount);
+const materialPrint = await page.evaluate(() => window.__printCaptures.at(-1));
+step('material print: ' + JSON.stringify(materialPrint));
+if (!materialPrint.classes.includes('landscape') || !materialPrint.text.includes(materialSaved.die)) {
+  throw new Error('material request print sheet is incomplete');
+}
+await page.screenshot({ path: path.join(SHOT, 'materials-orders.png'), fullPage: true });
+
+await page.reload();
+await page.waitForSelector('header.top');
+await gotoTab('Materials');
+await page.getByRole('tab', { name: /Order drafts/ }).click();
+await page.waitForSelector('.material-order-card');
+const materialAfterReload = await page.evaluate(() => import('/js/store.js').then((m) =>
+  Object.values(m.state.materialOrders)[0] || null));
+step('material request after reload: ' + JSON.stringify({
+  die: materialAfterReload?.die, status: materialAfterReload?.status,
+}));
+if (materialAfterReload?.die !== materialSaved.die || materialAfterReload?.status !== 'READY') {
+  throw new Error('material request did not survive a reload');
+}
+
+// Return to the shortage list for the tri-state check below.
+await page.getByRole('tab', { name: /Shortages/ }).click();
+await page.waitForSelector('.material-shortage-line');
 
 // tri-state: clearing a sheet-reported shortage drops it from the count
 const beforeClear = await page.$$eval('.bo-line', (n) => n.length);

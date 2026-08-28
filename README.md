@@ -5,9 +5,10 @@ schedule workbooks. Each page shows that machine's open lines grouped by
 cutting date, with a single click to move a line through Not started →
 In Progress → Done.
 
-Nothing else is in here. No Daily Schedule, no order-level material tracking,
-no dashboards — that scope was removed deliberately so this piece can be got
-right first.
+The scope stays operational rather than becoming a general ERP: no Daily
+Schedule and no inventory ledger. It does include the actions the cutting
+floor needs around the queues — staging, rush work, shortages, guarded
+material-request drafts, engineering lookup and shift handoff.
 
 ## Running it
 
@@ -50,7 +51,7 @@ re-read.
 4. At the end of the shift, **Shift Update** → Write.
 
 The nav reads **Rolling · FOM · CNC & FMC · Multi Punch · Today · Staging ·
-Rush · Back Orders · Engineering Lookup · Shift Update**. Setup is the
+Rush · Materials · Engineering Lookup · Shift Update**. Setup is the
 gear in the header.
 
 To use it on a phone, set up **Sync across devices** in Setup once — see below.
@@ -83,6 +84,9 @@ screen chrome to the printer:
   then choose **Print**. Assembly sheets include the drawing, component map,
   missing-role state and recovery provenance. Extrusion sheets include the
   profile card, engineering numbers and reverse assembly usage.
+- **Material requests:** open **Materials → Order drafts** and choose **Print
+  open**. The landscape request list carries the workbook fields, notes and
+  draft/ready state without printing any interactive controls.
 
 The browser's normal print dialog still chooses the printer, copies or **Save
 as PDF**. Machine schedules and shift updates use landscape Letter; engineering
@@ -592,7 +596,7 @@ opens the same dialog as the line does.
 Every field change is logged to the line's history with who and when, the same
 as everything else.
 
-## Back orders
+## Materials — shortages and order requests
 
 The workbook's flag is only the starting point. Any line can be opened from its
 B/O icon to record **how many pieces are short, who is chasing it, and why** —
@@ -605,16 +609,36 @@ ticked it flags a line the sheet does not; unticked it records that a shortage
 the sheet still reports has been *resolved*. Without that third state there is
 no way to close out a shortage the workbook keeps asserting.
 
-The **Back Orders** page cuts across all four centres and groups by assignee,
-Unassigned last, with a running total of lines and pieces short and an
-"only mine" toggle — whoever chases material does not care which machine the
-shortage sits on. Clicking a row opens the same dialog as the line does, so a
-shortage is recorded in exactly one place.
+The **Materials** page cuts across all four centres and keeps two jobs together:
 
-One thing to know about the sheet's own `B/O` column: it counts **bars**, not
-pieces, and FOM 2 / FOM 3 write it as text (`3 BARS`, `1 BAR MISSING`). It is
-kept and shown as context beside the piece count rather than being forced into
-a number.
+- **Shortages** groups the chase list by assignee, Unassigned last, with an
+  "only mine" toggle. Each group initially shows two lines and expands on
+  demand, so the page stays an overview even when the workbook reports dozens
+  of shortages. Clicking the row still edits the shortage record.
+- **Order drafts** holds request rows prepared from those shortages or added by
+  hand. A complete row is marked `READY`; missing length, finish, bar count or
+  request context remains visibly `DRAFT`. Ready rows copy as tab-separated
+  **Date → Reason** cells for pasting into the shared Material Requests
+  workbook. The operator marks them `ENTERED` only after that workbook is
+  saved; the tracker does not claim a draft was submitted.
+
+The workflow carries the rules recovered from the separate Material Order
+Helper project. Any number beginning `S` or `SA` is treated as a rolled
+subassembly, never as an orderable extrusion. The form expands it through the
+engineering listing and requires the operator to choose the component that is
+actually short. Verified and conservatively recovered component sources remain
+labelled, incomplete listings raise a guardrail, and ambiguous listing-text
+references are shown only as references rather than order choices.
+
+The request row keeps **work order, project, floor, extrusion, stock length,
+finish, bars, reason, note and requester**. It also blocks duplicate open rows
+for the same work order/extrusion/length/finish combination.
+
+One thing to know about the schedule's own `B/O` column: it counts **bars**,
+not pieces, and FOM 2 / FOM 3 write it as text (`3 BARS`, `1 BAR MISSING`). It
+is kept and shown as context beside the manually recorded piece count. The
+order form may suggest that explicit bar value, but it never converts pieces
+short into bars to buy.
 
 ## Editing a line
 
@@ -1032,13 +1056,13 @@ grounded visual direction before any production styling changes.
 - **Navigation is two groups, not one undifferentiated row.** The four production
   centres read as a solid segmented control; the six department tools sit past a
   divider, quieter, because they are visited rather than lived in. Rush and
-  Back Orders carry an outstanding count on the tab, so nobody has to open a
+  Materials carry an outstanding count on the tab, so nobody has to open a
   page to learn there is nothing on it.
 - **On a phone the header is two rows and 95px.** Row one is identity only —
   brand, shift, sync — and carries no tap target, because a third 44px control
   there is what put the old header at 121px. Row two is the centre scroller
   with the name picker pinned beside it. At 1280px and below the tools fall
-  back to short labels (`B/O`, `Shift`) rather than letting Setup slide off
+  back to short labels (`MAT`, `Shift`) rather than letting Setup slide off
   the end of the nav.
 - **The machine header clears the app header** rather than sliding under it:
   `app.js` measures the header into `--hdr-h` on every render, and the sticky

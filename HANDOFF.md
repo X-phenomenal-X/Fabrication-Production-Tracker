@@ -10,7 +10,7 @@ the real workbooks, not assumed.
 **Live:** https://x-phenomenal-x.github.io/Fabrication-Production-Tracker/
 **Deploy:** every push to the default branch builds and publishes to Pages
 automatically. There is no separate deploy step.
-**Reviewed:** 14 Aug 2026. This file is versioned with the code; use
+**Reviewed:** 28 Aug 2026. This file is versioned with the code; use
 `git log -1 --oneline` for the exact revision rather than trusting a copied SHA.
 
 ---
@@ -276,7 +276,8 @@ js/views/centre.js   (819)  THE work-centre page (all 4 centres are this file)
 js/views/today.js    (235)  Today: to-dos + the cross-machine board
 js/views/staging.js  (190)  Staging — an overlay on the rolling lines
 js/views/rush.js     (250)  rush dialog + Rush page
-js/views/backorders.js(233) back-order dialog + Back Orders page
+js/views/backorders.js      shared back-order dialog + legacy list renderer
+js/views/materials.js       shortage overview + guarded material-order drafts
 js/views/shiftupdate.js(548) Shift Update write/read page
 js/views/dies.js            unified assembly/profile Engineering Lookup
 js/views/die-launcher.js    lightweight lazy entry from production rows
@@ -292,9 +293,10 @@ tools/extract-listing-thumbs.py Listing thumbnails → thumbs.json (gap filler)
 `js/views/centre.js` is parameterised by centre — `makeCentreView('FOM')`.
 All four centre pages are that one file with different data.
 
-**Nine nav pages:** Rolling · FOM · CNC & FMC · Multi Punch · Today · Staging ·
-Rush · Back Orders · Shift Update. Setup is the header gear, not a tenth tab —
-the nav had already run out of width.
+**Eleven nav pages:** Overview · Rolling · FOM · CNC & FMC · Multi Punch ·
+Today · Staging · Rush · Materials · Engineering Lookup · Shift Update. Setup
+is the header gear rather than another operational page. Materials retains the
+`#backorders` hash so existing bookmarks keep working.
 
 `Cutting-Tracker.html` is deliberately large because it contains the full
 24 MB extrusion image library as well as every module and font. It remains the
@@ -407,7 +409,9 @@ surfaced in the SQL dialog.
 
 ## 8. What landed since the first handoff
 
-All of this is done, tested and deployed. Listed so you don't rebuild it.
+All of this is implemented and covered by the release gate. Check `git status`,
+the latest commit and the Pages workflow before assuming the newest local work
+has been deployed. Listed so you don't rebuild it.
 
 | | |
 |---|---|
@@ -419,6 +423,7 @@ All of this is done, tested and deployed. Listed so you don't rebuild it.
 | **Online-first PWA** | Modular Pages artifact, lazy engineering libraries, service worker, update prompt and `test/offline-check.mjs`. |
 | **Tombstones** | Deletes that don't resurrect. |
 | **Visual QA** | `test/visual-qa.mjs` — 10 screens × 5 widths × 2 themes, measured not eyeballed. |
+| **Materials** | The former Back Orders page is now a shortage-to-request workspace. It expands S/SA assemblies through the engineering listing, keeps pieces and bars separate, saves synced Draft/Ready/Entered rows, blocks duplicate open requests, copies the live workbook's Date→Reason columns and prints an open request list. It does not write the private SharePoint workbook or claim a draft was submitted. |
 
 ### Open questions worth putting to the user
 
@@ -465,7 +470,7 @@ Constraints that bound any *further* redesign:
 - Transitions stay short (120–180 ms) and are disabled under
   `prefers-reduced-motion`.
 - Every `.centre` page shares one stylesheet; changes hit all four centres,
-  Rush, Back Orders and Shift Update at once.
+  Rush, Materials and Shift Update at once.
 - **Do not rename selectors casually.** The browser suite asserts on structure
   (`.cstat i`, `.seg-btn[aria-pressed]`, `.nowrun-count`, `.line`, `.dgroup-*`).
   CSS-only changes are safe; class renames are not.

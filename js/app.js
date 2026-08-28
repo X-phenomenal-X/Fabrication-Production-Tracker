@@ -10,7 +10,6 @@ import {
   hasUnsyncedChanges, applyTheme,
 } from './store.js';
 import { makeCentreView } from './views/centre.js';
-import { renderBackOrders } from './views/backorders.js';
 import { renderToday } from './views/today.js';
 import { renderStaging } from './views/staging.js';
 import { renderOverview } from './views/overview.js';
@@ -53,6 +52,7 @@ function lazyView(load, exportName, label) {
 }
 
 const renderDies = lazyView(() => import('./views/dies.js'), 'renderDies', 'engineering lookup');
+const renderMaterials = lazyView(() => import('./views/materials.js'), 'renderMaterials', 'materials workspace');
 
 // One page per work centre, so an operator opens their own machine's queue
 // instead of scrolling past everyone else's.
@@ -71,7 +71,7 @@ const TABS = [
   { key: 'today', label: 'Today', kind: 'tool', icon: 'calendar', render: renderToday },
   { key: 'staging', label: 'Staging', short: 'Stage', kind: 'tool', icon: 'staging', render: renderStaging },
   { key: 'rush', label: 'Rush', kind: 'tool', icon: 'bolt', render: renderRush },
-  { key: 'backorders', label: 'Back Orders', short: 'B/O', kind: 'tool', icon: 'alert', render: renderBackOrders },
+  { key: 'backorders', label: 'Materials', short: 'MAT', kind: 'tool', icon: 'alert', render: renderMaterials },
   { key: 'dies', label: 'Engineering Lookup', short: 'Lookup', kind: 'tool', icon: 'search', render: renderDies },
   { key: 'shift', label: 'Shift Update', short: 'Shift', kind: 'tool', icon: 'clipboard', render: renderShiftUpdate },
   { key: 'setup', label: 'Setup', kind: 'tool', icon: 'gear', render: renderData },
