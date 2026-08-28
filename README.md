@@ -67,6 +67,27 @@ To use it on a phone, set up **Sync across devices** in Setup once — see below
 Machines with no lines scheduled still appear — a machine that is idle should
 look different from one that does not exist.
 
+## Printing
+
+The app now builds clean paper documents instead of sending the interactive
+screen chrome to the printer:
+
+- **Machine schedule:** open the machine tab and choose **Print schedule**. It
+  prints every row in the current search/filter view, including rows hidden by
+  collapsed groups or the on-screen display cap. The heading records whether
+  completed lines, a status filter, or a search were applied.
+- **Shift update:** choose **Print update** from either Write or Read. A draft
+  is clearly marked `DRAFT — NOT SAVED`; a saved update carries its author and
+  timestamp. Empty updates cannot be printed.
+- **Assembly or extrusion:** search in **Engineering Lookup**, open a record,
+  then choose **Print**. Assembly sheets include the drawing, component map,
+  missing-role state and recovery provenance. Extrusion sheets include the
+  profile card, engineering numbers and reverse assembly usage.
+
+The browser's normal print dialog still chooses the printer, copies or **Save
+as PDF**. Machine schedules and shift updates use landscape Letter; engineering
+records use portrait Letter. Print actions stay hidden in wall-monitor mode.
+
 ## Moving jobs between machines
 
 **Any centre with more than one machine lets you move a job to another one** —
@@ -1022,7 +1043,7 @@ grounded visual direction before any production styling changes.
 - **The machine header clears the app header** rather than sliding under it:
   `app.js` measures the header into `--hdr-h` on every render, and the sticky
   centre header offsets by it.
-- **There is a print stylesheet.** Printing a queue or a shift update for the
-  floor is a real thing people do with a page like this; it hides the nav,
-  sticky headers, per-line tools and the action bar, and keeps rows from
-  breaking across pages.
+- **Printing uses purpose-built paper documents.** Machine schedules, saved or
+  draft shift updates, assembly drawings/component maps and extrusion profile
+  records each have a dedicated action and Letter-size layout. The interactive
+  nav and controls never enter the document; rows and cards avoid page breaks.

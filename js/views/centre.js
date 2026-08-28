@@ -9,6 +9,7 @@
 
 import {
   el, chip, icon, fmtDate, fmtNum, fmtWhen, toast, toastAction, modal, flash,
+  printDocument,
 } from '../ui.js';
 import {
   setTaskStatus, setTaskStatusMany, restoreTaskStatus, setTaskNote,
@@ -885,6 +886,76 @@ const FILTERS = [
   { key: 'BO', label: 'Back order' },
 ];
 
+/** A paper schedule is generated from the queue model, not from the collapsed
+    screen rows, so every line in the current machine/filter view is included. */
+function printMachineSchedule(machine, groups, sum, vs) {
+  const filter = FILTERS.find((item) => item.key === vs.filter)?.label || vs.filter;
+  const visible = groups.reduce((count, group) => count + group.rows.length, 0);
+  const context = [
+    vs.showDone ? 'Including completed lines' : 'Open lines only',
+    vs.filter !== 'ALL' ? `Filter: ${filter}` : null,
+    vs.q ? `Search: “${vs.q}”` : null,
+  ].filter(Boolean).join(' · ');
+
+  const rowsFor = (group) => group.rows.map((row) => {
+    const task = row.task;
+    const bo = resolveBackOrder(task);
+    const rush = row.rush || resolveRush(task);
+    const note = taskNoteFor(taskStatusKey(task));
+    const flags = [
+      rush.on ? `RUSH${rush.needBy ? ` ${fmtDate(rush.needBy)}` : ''}` : null,
+      bo.on ? `B/O${bo.qty != null ? ` ${fmtNum(bo.qty)} short` : ''}` : null,
+      isStaged(task) ? 'Staged' : null,
+      isAssigned(task) ? `Moved from ${machineConfig(MACHINE_BY_KEY[task.machine]
+        || { label: task.machine }).label}` : null,
+      task.manual ? 'Added here' : null,
+    ].filter(Boolean);
+    const notes = [task.comments, bo.note || bo.sheetShort, note?.text].filter(Boolean);
+
+    return el('tr', {},
+      el('td.mono.print-wo', {}, task.wo || '—'),
+      el('td', {},
+        el('strong', {}, task.project || '—'),
+        task.floor ? el('small', {}, task.floor) : null),
+      el('td.mono', {}, task.die || '—'),
+      el('td.mono.num', {}, fmtNum(task.qty)),
+      el('td', {}, fmtDate(task.cuttingDate)),
+      el(`td.print-status.${row.status.key.toLowerCase()}`, {},
+        row.status.label,
+        row.status.implied ? el('small', {}, 'inferred') : null),
+      el('td.print-flags', {},
+        flags.length ? el('strong', {}, flags.join(' · ')) : null,
+        notes.length ? el('small', {}, notes.join(' — ')) : null));
+  });
+
+  const body = el('div.print-machine-schedule', {},
+    el('div.print-stat-grid', {},
+      ...[
+        [visible, 'lines printed'],
+        [sum.inProgress, 'running'],
+        [sum.overdue, 'overdue'],
+        [sum.rush, 'rush'],
+        [sum.backOrder, 'back orders'],
+      ].map(([value, label]) => el('div', {}, el('b', {}, fmtNum(value)), el('span', {}, label)))),
+    groups.length
+      ? groups.map((group) => el('section.print-table-group', {},
+          el('h2', {}, group.label, el('span', {}, `${group.rows.length} line${group.rows.length === 1 ? '' : 's'}`)),
+          el('table.print-table', {},
+            el('thead', {}, el('tr', {},
+              ...['Work order', 'Project / floor', 'Die', 'Qty', 'Cut date', 'Status', 'Flags / notes']
+                .map((label) => el('th', {}, label)))),
+            el('tbody', {}, ...rowsFor(group)))))
+      : el('div.print-empty', {}, 'No lines match this machine view.'));
+
+  printDocument({
+    title: `${machine.label} schedule`,
+    subtitle: machine.note || 'Machine production queue',
+    meta: [context, `${fmtNum(sum.done)} of ${fmtNum(sum.total)} complete`],
+    body,
+    landscape: true,
+  });
+}
+
 export function makeCentreView(group) {
   return function renderCentre(rerender, go) {
     if (!hasTasks()) {
@@ -951,7 +1022,7 @@ export function makeCentreView(group) {
         `Show done${sum.done ? ` (${fmtNum(sum.done)})` : ''}`));
 
     const head = el('div.centre-head', {},
-      el('div.row.centre-title-row', {},
+      el('div.row.centre-title-row.printable-title-row', {},
         el('div.centre-ident', {},
           el('span.centre-rail', { 'aria-hidden': 'true' }),
           el('div', {},
@@ -970,7 +1041,11 @@ export function makeCentreView(group) {
             el('div.centre-sub', {},
               machine.note || '',
               machine.ops != null ? `${machine.note ? ' · ' : ''}${machine.ops} operator${machine.ops === 1 ? '' : 's'}` : ''))),
-        el('span.spacer')),
+        el('span.spacer'),
+        el('button.print-action', {
+          type: 'button', title: `Print ${machine.label} schedule`,
+          onclick: () => printMachineSchedule(machine, groups, sum, vs),
+        }, icon('print', { size: 16 }), el('span', {}, 'Print schedule'))),
 
       tabs,
       // Keep the machine choice ahead of its numbers. The operator first says

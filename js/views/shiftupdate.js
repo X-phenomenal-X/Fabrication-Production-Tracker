@@ -14,7 +14,7 @@
    update is mostly assembled from what the app already saw happen. */
 
 import {
-  el, chip, icon, fmtDate, fmtWhen, toast, confirmDialog,
+  el, chip, icon, fmtDate, fmtWhen, toast, confirmDialog, printDocument,
 } from '../ui.js';
 import { state, saveShiftLog, deleteShiftLog, me } from '../store.js';
 import {
@@ -416,6 +416,70 @@ function asText(log) {
   return out.join('\n');
 }
 
+function printShiftUpdate(log, { draft: isDraft = false } = {}) {
+  const blocks = sections().map((section) => {
+    const rows = section.rows.filter((machine) => hasContent(log.rows?.[machine.key]));
+    if (!rows.length) return null;
+    return el('section.print-table-group.print-shift-group', {},
+      el('h2', {}, section.label, el('span', {}, `${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}`)),
+      el('table.print-table.print-shift-table', {},
+        el('thead', {}, el('tr', {},
+          ...['Machine', '# Ops', 'Work done / in progress', 'Next in schedule', 'Notes']
+            .map((label) => el('th', {}, label)))),
+        el('tbody', {}, ...rows.map((machine) => {
+          const row = log.rows[machine.key];
+          return el('tr', {},
+            el('td', {}, el('strong', {}, machine.label),
+              machine.note ? el('small', {}, machine.note) : null),
+            el('td.mono.num', {}, row.ops || '—'),
+            el('td.preline', {}, row.done || '—'),
+            el('td.preline', {}, row.next || '—'),
+            el('td.preline', {}, row.notes || '—'));
+        }))));
+  }).filter(Boolean);
+
+  const body = el('div.print-shift-update', {},
+    ...blocks,
+    log.notes ? el('section.print-general-notes', {},
+      el('h2', {}, 'General notes'), el('p.preline', {}, log.notes)) : null,
+    el('footer.print-signoff', {},
+      isDraft ? `Draft prepared by ${me()}` : `Written by ${log.by || '—'}${log.at ? ` · ${fmtWhen(log.at)}` : ''}`));
+
+  printDocument({
+    title: `${SHIFTS[log.shift]?.label || log.shift} shift update`,
+    subtitle: fmtDate(log.date, { withDay: true }),
+    meta: [isDraft ? 'DRAFT — NOT SAVED' : 'Saved shift record'],
+    body,
+    landscape: true,
+  });
+}
+
+function printCurrentShiftUpdate() {
+  if (view.mode === 'read') {
+    const saved = currentLog();
+    if (!saved) {
+      toast('There is no saved update to print');
+      return;
+    }
+    printShiftUpdate(saved);
+    return;
+  }
+
+  // Textareas update the draft object without re-rendering, so derive this at
+  // click time rather than freezing an empty snapshot when the header renders.
+  const current = loadDraft();
+  const rows = Object.fromEntries(
+    Object.entries(current.rows).filter(([, row]) => hasContent(row)));
+  const notes = current.notes.trim();
+  if (!Object.keys(rows).length && !notes) {
+    toast('Fill in at least one machine before printing');
+    return;
+  }
+  printShiftUpdate({
+    date: view.date, shift: view.shift, rows, notes, by: me(), at: null,
+  }, { draft: true });
+}
+
 function readView(rerender) {
   const log = currentLog();
 
@@ -508,9 +572,10 @@ export function renderShiftUpdate(rerender, go) {
   const filled = allRows.reduce(
     (a, s) => a + s.rows.filter((m) => hasContent(draft.rows[m.key])).length, 0);
   const pct = total ? Math.round((filled / total) * 100) : 0;
+  const canPrint = view.mode === 'write' || !!saved;
 
   const head = el('div.centre-head.su-head-page' + (view.mode === 'read' ? '.reading' : ''), {},
-    el('div.row.centre-title-row', {},
+    el('div.row.centre-title-row.printable-title-row', {},
       el('div.centre-ident', {},
         el('span.centre-rail', { 'aria-hidden': 'true' }),
         el('div', {},
@@ -522,6 +587,13 @@ export function renderShiftUpdate(rerender, go) {
             el('span.dot-sep', {}, '·'),
             view.mode === 'read' ? 'Reading' : `Writing as ${me()}`))),
       el('span.spacer'),
+      el('button.print-action', {
+        type: 'button', disabled: !canPrint,
+        title: canPrint
+          ? `Print the ${SHIFTS[view.shift].label.toLowerCase()} shift update`
+          : 'Add or open a shift update before printing',
+        onclick: printCurrentShiftUpdate,
+      }, icon('print', { size: 16 }), el('span', {}, 'Print update')),
       el('div.su-when', {},
         el('input.su-date', {
           type: 'date', value: view.date, 'aria-label': 'Shift date',

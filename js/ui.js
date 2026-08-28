@@ -151,6 +151,54 @@ export function download(filename, text, type = 'application/json') {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+/** Print one purpose-built paper sheet without exposing the app chrome.
+
+    The browser's native print dialog remains in charge of printer, copies and
+    PDF output. Callers supply a compact semantic document instead of asking
+    the browser to print whichever interactive controls happen to be open. */
+export function printDocument({
+  title, subtitle = '', meta = [], body, landscape = false,
+}) {
+  const previousTitle = document.title;
+  const generated = new Date().toLocaleString([], {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  });
+  const sheet = el(`section.print-sheet${landscape ? '.landscape' : ''}`, {
+    'aria-label': `Print preview — ${title}`,
+  },
+    el('header.print-sheet-head', {},
+      el('div.print-brand', {},
+        el('span.print-brand-mark', { 'aria-hidden': 'true' }),
+        el('span', {}, el('b', {}, 'BV GLAZING'), el('em', {}, 'CUTTING DEPARTMENT'))),
+      el('div.print-heading', {},
+        el('div.print-eyebrow', {}, 'Production tracker'),
+        el('h1', {}, title),
+        subtitle ? el('p', {}, subtitle) : null),
+      el('div.print-meta', {},
+        ...meta.filter(Boolean).map((item) => el('span', {}, item)),
+        el('span', {}, `Printed ${generated}`))),
+    el('div.print-sheet-body', {}, body));
+
+  const cleanup = () => {
+    sheet.remove();
+    document.documentElement.classList.remove('print-mode');
+    document.title = previousTitle;
+  };
+
+  document.body.append(sheet);
+  document.documentElement.classList.add('print-mode');
+  document.title = `${title} — BV Glazing`;
+  try {
+    window.print();
+  } finally {
+    // Native print() blocks until the dialog closes. A zero-delay cleanup also
+    // keeps tests and embedded webviews that replace print() deterministic.
+    setTimeout(cleanup, 0);
+  }
+  return sheet;
+}
+
 /* ---------- icons ---------- */
 
 /* A vendored, Lucide-compatible subset keeps the icon language consistent
@@ -185,6 +233,7 @@ const ICON_PATHS = {
   staging: 'M3 6h18M5 6l1-3h12l1 3M5 6v14h14V6M9 10h6',
   extrusion: 'M4 4h16v5h-5v6h5v5H4v-5h5V9H4zM9 9h6v6H9z',
   clipboard: 'M9 5h6M9 3h6a2 2 0 0 1 2 2v1h2a2 2 0 0 1 2 2v13H3V8a2 2 0 0 1 2-2h2V5a2 2 0 0 1 2-2zM8 12h8M8 16h8',
+  print: 'M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6zM18 12h.01',
 };
 
 export function icon(name, { size = 16, cls = '' } = {}) {

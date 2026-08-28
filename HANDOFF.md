@@ -448,8 +448,10 @@ corrections rather than taste, and are worth not regressing:
 - **Phone header** collapses to one row via `order` on `nav.tabs` plus hiding
   `.brand small`, reclaiming ~100px.
 
-Plus a print stylesheet, tabular numerals globally, capped annotation bands,
-translucent sticky headers, and `:active` depress on buttons.
+Plus purpose-built print documents for each machine schedule, Shift Update,
+assembly/component map and extrusion profile record; tabular numerals globally,
+capped annotation bands, translucent sticky headers, and `:active` depress on
+buttons. Print actions use the browser dialog and remain hidden in monitor mode.
 
 Constraints that bound any *further* redesign:
 - **No runtime font requests or external assets.** IBM Plex Sans and Mono are

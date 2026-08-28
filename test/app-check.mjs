@@ -41,6 +41,19 @@ fs.mkdirSync(SHOT, { recursive: true });
 
 const browser = await chromium.launch(chromiumOptions());
 const page = await browser.newPage({ viewport: { width: 1440, height: 950 } });
+await page.addInitScript(() => {
+  window.__printCaptures = [];
+  window.print = () => {
+    const sheet = document.querySelector('.print-sheet');
+    window.__printCaptures.push({
+      title: sheet?.querySelector('.print-heading h1')?.textContent.trim() || '',
+      text: sheet?.textContent.replace(/\s+/g, ' ').trim() || '',
+      classes: sheet?.className || '',
+      rows: sheet?.querySelectorAll('tbody tr').length || 0,
+      images: sheet?.querySelectorAll('img').length || 0,
+    });
+  };
+});
 
 const errors = [];
 // The cloud check deliberately points at an unreachable host, so its network
@@ -662,6 +675,17 @@ if (!suChips.some((c) => /yesterday|days old|today/.test(c))) {
   throw new Error('shift-update panel does not say how old the entry is');
 }
 
+// Printing a machine schedule uses all rows in the current machine/filter
+// model, not only the collapsed or capped rows currently mounted on screen.
+await page.click('.centre-head .print-action');
+await page.waitForFunction(() => window.__printCaptures.length > 0);
+const machinePrint = await page.evaluate(() => window.__printCaptures.at(-1));
+step('machine print: ' + JSON.stringify({ ...machinePrint, text: machinePrint.text.slice(0, 90) + '…' }));
+if (machinePrint.title !== 'Multi Punch schedule' || machinePrint.rows !== 52
+  || !machinePrint.classes.includes('landscape') || !machinePrint.text.includes('Open lines only')) {
+  throw new Error('machine schedule did not produce the complete paper queue');
+}
+
 // ---------- stale-import warning ----------
 // Exactly the situation that bit in practice: data already loaded, then a
 // parsing fix ships. The stored result does not re-parse itself, so the app
@@ -757,6 +781,15 @@ await suFom1.locator('textarea').nth(2).fill('Blade change at 18:00');
 await page.locator('.su-general textarea').fill('Three on midnights. Skid of 8560 due tomorrow.');
 await page.screenshot({ path: path.join(SHOT, 'shift-write.png'), fullPage: true });
 
+await page.click('.su-head-page .print-action');
+await page.waitForFunction(() => window.__printCaptures.some((capture) => capture.text.includes('DRAFT — NOT SAVED')));
+const draftPrint = await page.evaluate(() => window.__printCaptures.at(-1));
+step('draft shift print: ' + JSON.stringify({ ...draftPrint, text: draftPrint.text.slice(0, 90) + '…' }));
+if (!draftPrint.text.includes('DRAFT — NOT SAVED')
+  || !draftPrint.text.includes('Blade change at 18:00')) {
+  throw new Error('unsaved shift-update fields were not included in the draft print');
+}
+
 await page.click('.su-actions button.primary');
 await page.waitForSelector('.suread');
 const suSaved = await page.evaluate(() => import('/js/store.js').then((m) => {
@@ -773,6 +806,17 @@ const readNames = await page.$$eval('.suread-name strong', (ns) => ns.map((n) =>
 step('read view shows: ' + readNames.join(', '));
 if (!readNames.includes('FOM 1')) throw new Error('saved machine missing from the read view');
 await page.screenshot({ path: path.join(SHOT, 'shift-read.png'), fullPage: true });
+
+const shiftPrintCount = await page.evaluate(() => window.__printCaptures.length);
+await page.click('.su-head-page .print-action');
+await page.waitForFunction((count) => window.__printCaptures.length > count, shiftPrintCount);
+const shiftPrint = await page.evaluate(() => window.__printCaptures.at(-1));
+step('shift print: ' + JSON.stringify({ ...shiftPrint, text: shiftPrint.text.slice(0, 90) + '…' }));
+if (!shiftPrint.title.includes('shift update') || shiftPrint.rows < 1
+  || !shiftPrint.text.includes('Blade change at 18:00')
+  || !shiftPrint.text.includes('Three on midnights')) {
+  throw new Error('saved shift update did not produce the complete paper handoff');
+}
 
 // it survives a reload, and the recent list points back at it
 await page.reload();
@@ -964,6 +1008,15 @@ if (sectionLookup.title !== 'Engineering Lookup' || sectionLookup.sa !== 'SA80-1
 }
 await page.screenshot({ path: path.join(SHOT, 'die-lookup-section.png') });
 
+await page.click('.diecard .record-print');
+await page.waitForFunction(() => window.__printCaptures.some((capture) => capture.title === 'SA80-106'));
+const diePrint = await page.evaluate(() => window.__printCaptures.at(-1));
+step('assembly print: ' + JSON.stringify({ ...diePrint, text: diePrint.text.slice(0, 90) + '…' }));
+if (diePrint.title !== 'SA80-106' || diePrint.images !== 1 || diePrint.rows !== 3
+  || !diePrint.text.includes('Verified in listing columns')) {
+  throw new Error('assembly print omitted its drawing or component map');
+}
+
 /* Individual profiles live in their own engineering-master library. This is
    intentionally not the SA lookup: 80-113 is one extrusion used inside a
    rolled assembly. Empty numbered template cells must not inflate the count. */
@@ -1007,6 +1060,15 @@ if (extrusionSection.title !== 'Engineering Lookup' || extrusionSection.id !== '
   throw new Error('the unified engineering workspace did not show extrusion 80-113');
 }
 await page.screenshot({ path: path.join(SHOT, 'extrusion-lookup-section.png') });
+
+await page.click('.extrusion-card .record-print');
+await page.waitForFunction(() => window.__printCaptures.some((capture) => capture.title === '80-113'));
+const profilePrint = await page.evaluate(() => window.__printCaptures.at(-1));
+step('profile print: ' + JSON.stringify({ ...profilePrint, text: profilePrint.text.slice(0, 90) + '…' }));
+if (profilePrint.title !== '80-113' || profilePrint.images !== 1 || profilePrint.rows < 1
+  || !profilePrint.text.includes('Used in rolled assemblies')) {
+  throw new Error('extrusion print omitted its profile drawing or reverse usage');
+}
 
 // Recovered mappings remain visibly distinct from source-verified components.
 await page.fill('.die-section .diesearch input', 'SA80.113');

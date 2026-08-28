@@ -6,7 +6,7 @@
    where a component is used. This workspace searches both libraries and keeps
    the distinction visible in the result type and engineering provenance. */
 
-import { el, chip, icon, modal } from '../ui.js';
+import { el, chip, icon, modal, printDocument } from '../ui.js';
 import {
   lookupDie, searchDies, componentsOf, recoveredComponentsOf,
   listingReferencesOf, componentCoverage, componentAudit, componentUsageOf, dieForms,
@@ -141,13 +141,115 @@ function profileField(label, value) {
   return el('div.extrusion-field', {}, el('span', {}, label), el('b', {}, value));
 }
 
-function componentRow(component, chooseProfile) {
-  const profiles = lookupExtrusions(component.die);
-  const source = component.source === 'variant'
+function componentSourceLabel(component) {
+  return component.source === 'variant'
     ? `Recovered from ${component.sourceSa}`
     : component.source === 'description'
       ? 'Found in listing text'
       : 'Verified in listing columns';
+}
+
+function usageSourceLabel(usage) {
+  return usage.source === 'variant'
+    ? `Recovered for ${usage.assembly.sa} from ${usage.sourceSa}`
+    : usage.source === 'description'
+      ? 'Referenced in listing text'
+      : `Verified ${usage.role.toLowerCase()}`;
+}
+
+function printAssembly(assembly) {
+  const verified = componentsOf(assembly).map((component) => ({
+    ...component, source: 'listing', sourceSa: assembly.sa, verified: true,
+  }));
+  const recovered = recoveredComponentsOf(assembly);
+  const references = listingReferencesOf(assembly);
+  const components = [...verified, ...recovered, ...references];
+  const coverage = componentCoverage(assembly);
+  const drawing = drawingFor(assembly.sa);
+  const roleLabel = {
+    exterior: 'Exterior', upperTB: 'Upper T-break',
+    lowerTB: 'Lower T-break', interior: 'Interior',
+  };
+
+  const componentRows = components.length
+    ? components.map((component) => el('tr', {},
+        el('td', {}, component.role),
+        el('td.mono.print-wo', {}, component.die),
+        el('td.mono.num', {}, component.qty > 1 ? `×${component.qty}` : '1'),
+        el('td', {}, componentSourceLabel(component))))
+    : [el('tr', {}, el('td', { colspan: '4' }, 'No verified extrusion numbers'))];
+
+  const drawingNode = drawing ? el('figure.print-drawing', {},
+    el('img', { src: drawing.src, alt: `Section through ${assembly.sa}` }),
+    el('figcaption', {}, drawing.source === 'listing'
+      ? 'Listing assembly diagram' : 'Dimensioned drawing sheet'))
+    : el('div.print-empty.print-drawing-missing', {}, 'Assembly drawing not available');
+
+  const componentMap = el('div', {},
+    el('div.print-record-status', {},
+      el('b', {}, coverage.complete ? 'Component map complete' : 'Component map needs review'),
+      coverage.missingRoles.length ? el('span', {},
+        `Unverified: ${coverage.missingRoles.map((role) => roleLabel[role]).join(', ')}`) : null),
+    el('table.print-table.print-component-table', {},
+      el('thead', {}, el('tr', {},
+        ...['Role', 'Extrusion', 'Qty', 'Source'].map((label) => el('th', {}, label)))),
+      el('tbody', {}, ...componentRows)));
+
+  const body = el('div.print-engineering-record', {},
+    el('div.print-engineering-grid', {}, drawingNode, componentMap),
+    assembly.note ? el('div.print-record-note', {}, el('b', {}, 'Listing note'), assembly.note) : null,
+    recovered.length || references.length ? el('div.print-provenance', {},
+      'Recovered values are cross-referenced from a matching standard, HT or HTX variant. '
+      + 'Thermal-break values are never inferred; description references remain unassigned.') : null);
+
+  printDocument({
+    title: assembly.sa,
+    subtitle: assembly.desc || 'Rolled sub-assembly',
+    meta: [`${assembly.series} Series`, drawing
+      ? (drawing.source === 'listing' ? 'Listing diagram' : 'Drawing sheet')
+      : 'No drawing'],
+    body,
+  });
+}
+
+function printProfile(record) {
+  const imageBody = imageMap?.[record.key];
+  const usages = componentUsageOf(record.id);
+  const body = el('div.print-engineering-record.print-profile-record', {},
+    imageBody ? el('figure.print-drawing.print-profile-drawing', {},
+      el('img', { src: imagePrefix + imageBody, alt: `Engineering profile card for ${record.id}` }),
+      el('figcaption', {}, `${record.series} Series Extrusions master · page ${record.page}`))
+      : el('div.print-empty.print-drawing-missing', {}, 'Profile drawing unavailable'),
+    el('div.print-stat-grid.print-profile-fields', {},
+      ...[
+        ['Supplier', record.supplier],
+        ['Proposed die', record.proposed],
+        ['Final die', record.finalDie],
+        ['Status', record.status],
+      ].filter(([, value]) => value).map(([label, value]) =>
+        el('div', {}, el('b', {}, value), el('span', {}, label)))),
+    el('section.print-table-group', {},
+      el('h2', {}, 'Used in rolled assemblies', el('span', {}, `${usages.length} usage${usages.length === 1 ? '' : 's'}`)),
+      usages.length ? el('table.print-table', {},
+        el('thead', {}, el('tr', {},
+          ...['Assembly', 'Description', 'Component relationship'].map((label) => el('th', {}, label)))),
+        el('tbody', {}, ...usages.map((usage) => el('tr', {},
+          el('td.mono.print-wo', {}, usage.assembly.sa),
+          el('td', {}, usage.assembly.desc || '—'),
+          el('td', {}, usageSourceLabel(usage))))))
+        : el('div.print-empty', {}, 'No section-book usage found.')));
+
+  printDocument({
+    title: record.id,
+    subtitle: record.description || 'Individual extrusion profile',
+    meta: [`${record.series} Series`, record.status],
+    body,
+  });
+}
+
+function componentRow(component, chooseProfile) {
+  const profiles = lookupExtrusions(component.die);
+  const source = componentSourceLabel(component);
   return el('button.diepart' + (component.verified ? '' : '.recovered'), {
     type: 'button',
     title: profiles.length ? `Open extrusion ${component.die}` : `${component.die} has no reviewed master drawing`,
@@ -193,6 +295,10 @@ function assemblyDetail(assembly, chooseAssembly, chooseProfile) {
         el('span.mono.diecard-sa', {}, assembly.sa),
         assembly.desc ? el('div.diecard-desc', {}, assembly.desc) : null),
       el('span.spacer'),
+      el('button.print-action.record-print', {
+        type: 'button', title: `Print ${assembly.sa} drawing and component map`,
+        onclick: () => printAssembly(assembly),
+      }, icon('print', { size: 15 }), el('span', {}, 'Print')),
       chip(`${assembly.series} series`, 'mute')),
 
     el('div.die-assembly-grid', {},
@@ -255,11 +361,6 @@ function profileDetail(record, rerender, chooseAssembly) {
   const body = imageMap?.[record.key];
   if (!imageMap) ensureExtrusionImages(rerender);
   const usages = componentUsageOf(record.id);
-  const sourceLabel = (usage) => usage.source === 'variant'
-    ? `Recovered for ${usage.assembly.sa} from ${usage.sourceSa}`
-    : usage.source === 'description'
-      ? 'Referenced in listing text'
-      : `Verified ${usage.role.toLowerCase()}`;
 
   return el('article.extrusion-card.lookup-detail-enter', {},
     el('div.extrusion-card-head', {},
@@ -267,7 +368,13 @@ function profileDetail(record, rerender, chooseAssembly) {
         el('div.lookup-kind', {}, icon('extrusion', { size: 14 }), 'Individual extrusion'),
         el('div.mono.extrusion-id', {}, record.id),
         el('div.extrusion-description', {}, record.description || 'Engineering profile')),
-      el('span.spacer'), statusChip(record.status), chip(`${record.series} series`, 'mute')),
+      el('span.spacer'),
+      el('button.print-action.record-print', {
+        type: 'button', disabled: !imageMap,
+        title: imageMap ? `Print ${record.id} profile record` : 'Drawing is still loading',
+        onclick: () => printProfile(record),
+      }, icon('print', { size: 15 }), el('span', {}, 'Print')),
+      statusChip(record.status), chip(`${record.series} series`, 'mute')),
     body
       ? el('button.extrusion-drawing', {
           type: 'button', title: 'Open larger drawing', onclick: () => openExtrusionDrawing(record),
@@ -297,7 +404,7 @@ function profileDetail(record, rerender, chooseAssembly) {
         type: 'button', onclick: () => chooseAssembly(usage.assembly),
       }, el('b.mono', {}, usage.assembly.sa),
       el('span', {}, usage.assembly.desc || ''),
-      el('em', {}, sourceLabel(usage)),
+      el('em', {}, usageSourceLabel(usage)),
       icon('chevron', { size: 13 }))))
         : el('p.small.muted', {}, 'The profile has a reviewed master drawing but is not referenced by a parsed sub-assembly row.')));
 }

@@ -1726,9 +1726,21 @@ input:focus, select:focus, textarea:focus { background: var(--panel); }
 /* Printing a shift update or a queue for the floor is a real thing people do
    with a page like this; without help it prints the nav, the sticky headers
    and the action bar over the top of the content. */
+.print-action {
+  min-height: var(--tap); padding: 8px var(--s3); display: inline-flex;
+  align-items: center; justify-content: center; gap: var(--s2); flex-shrink: 0;
+  color: var(--accent); background: var(--panel); border-color: var(--line);
+  box-shadow: var(--shadow-1); white-space: nowrap;
+  transition: transform .14s ease, border-color .14s ease, background .14s ease;
+}
+.print-action:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
+.print-action:active:not(:disabled) { transform: translateY(1px); }
+.record-print { min-height: 40px; padding-inline: var(--s3); }
+.print-sheet { display: none; }
+
 @media print {
   header.top, nav.tabs, .bulkbar, .toast, .line-tools, .line-pick,
-  .centre-filters, .subtabs, .su-actions, .showmore { display: none !important; }
+  .centre-filters, .subtabs, .su-actions, .showmore, .print-action { display: none !important; }
   .centre-head { position: static; backdrop-filter: none; }
   body { background: #fff; }
   .panel, .dgroup-body, .nowrun, .su, .sucard { box-shadow: none; break-inside: avoid; }
@@ -2967,6 +2979,10 @@ nav.tabs button[aria-current="true"] .nav-icon {
     background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none;
   }
   .centre-title-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); }
+  .centre-title-row.printable-title-row { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+  .su-head-page .centre-title-row.printable-title-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
   .centre-title-row > .spacer { display: none; }
   .centre-title { font-size: 28px; }
   .centre-stats {
@@ -3082,6 +3098,139 @@ nav.tabs button[aria-current="true"] .nav-icon {
   main { width: 100% !important; margin: 0 !important; padding: 0 !important; }
   .line-inspector, .line-open { display: none !important; }
   .centre-workspace, .centre-workspace.with-inspector { display: block !important; }
+}
+
+/* ---------- purpose-built print documents ---------- */
+
+@page bv-portrait { size: letter portrait; margin: .42in; }
+@page bv-landscape { size: letter landscape; margin: .34in; }
+
+@media print {
+  html.print-mode, html.print-mode body {
+    width: auto !important; min-width: 0 !important; margin: 0 !important;
+    background: #fff !important; color: #111827 !important;
+  }
+  html.print-mode body > *:not(.print-sheet) { display: none !important; }
+  html.print-mode body > .print-sheet {
+    display: block !important; page: bv-portrait; width: 100%;
+    color: #111827; background: #fff; font-family: "IBM Plex Sans", Arial, sans-serif;
+    font-size: 9.5pt; line-height: 1.3; print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  html.print-mode body > .print-sheet.landscape { page: bv-landscape; }
+  .print-sheet * { box-sizing: border-box; }
+  .print-sheet-head {
+    display: grid; grid-template-columns: 1.05in minmax(0, 1fr) 2.45in;
+    align-items: end; gap: .2in; padding: 0 0 .16in;
+    border-bottom: 2px solid #1b6f9f;
+  }
+  .print-brand { display: flex; align-items: center; gap: .08in; }
+  .print-brand-mark {
+    width: .27in; height: .27in; flex: 0 0 .27in;
+    background: linear-gradient(135deg, #27a9e1 0 45%, #1b75bb 45% 70%, #72bf44 70% 100%);
+    clip-path: polygon(0 0, 100% 0, 72% 100%, 0 100%);
+  }
+  .print-brand > span:last-child { display: grid; line-height: 1; }
+  .print-brand b { font-size: 8.5pt; letter-spacing: .02em; }
+  .print-brand em {
+    margin-top: 3px; color: #475569; font-size: 5.8pt; font-style: normal;
+    font-weight: 700; letter-spacing: .13em;
+  }
+  .print-heading { min-width: 0; }
+  .print-eyebrow {
+    color: #1b6f9f; font-size: 6.5pt; font-weight: 800;
+    letter-spacing: .12em; text-transform: uppercase;
+  }
+  .print-heading h1 { margin: 1px 0 0; font-size: 20pt; letter-spacing: -.025em; line-height: 1.05; }
+  .print-heading p { margin: 3px 0 0; color: #475569; font-size: 9pt; }
+  .print-meta { display: grid; justify-items: end; gap: 2px; color: #475569; font-size: 7.5pt; text-align: right; }
+  .print-sheet-body { padding-top: .16in; }
+  .print-stat-grid {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin-bottom: .14in; border: 1px solid #cbd5e1;
+  }
+  .print-stat-grid > div { padding: .08in .1in; border-right: 1px solid #cbd5e1; }
+  .print-stat-grid > div:last-child { border-right: 0; }
+  .print-stat-grid b { display: block; font: 700 14pt "IBM Plex Mono", monospace; }
+  .print-stat-grid span {
+    display: block; margin-top: 1px; color: #64748b; font-size: 6.5pt;
+    font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+  }
+  .print-table-group { margin-top: .15in; break-inside: auto; }
+  .print-table-group:first-child { margin-top: 0; }
+  .print-table-group h2 {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin: 0 0 .05in; padding-bottom: .035in; color: #0f3f5d;
+    border-bottom: 1px solid #94a3b8; font-size: 10pt;
+  }
+  .print-table-group h2 span { color: #64748b; font-size: 7pt; font-weight: 500; }
+  .print-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .print-table thead { display: table-header-group; }
+  .print-table tr { break-inside: avoid; }
+  .print-table th {
+    padding: .045in .055in; color: #475569; background: #eef3f7;
+    border: 1px solid #cbd5e1; font-size: 6.3pt; font-weight: 800;
+    letter-spacing: .045em; text-align: left; text-transform: uppercase;
+  }
+  .print-table td {
+    padding: .052in .055in; vertical-align: top; border: 1px solid #cbd5e1;
+    overflow-wrap: anywhere;
+  }
+  .print-table td small { display: block; margin-top: 2px; color: #64748b; font-size: 7pt; }
+  .print-table .mono { font-family: "IBM Plex Mono", monospace; }
+  .print-table .num { text-align: right; }
+  .print-wo { font-weight: 700; white-space: nowrap; }
+  .print-flags strong, .print-flags small { display: block; }
+  .print-flags strong { color: #9a3412; font-size: 7pt; }
+  .print-status { font-weight: 700; }
+  .print-status.in_progress { color: #0369a1; }
+  .print-status.done { color: #047857; }
+  .print-empty { padding: .18in; color: #64748b; border: 1px dashed #94a3b8; text-align: center; }
+  .preline { white-space: pre-line; }
+
+  .print-machine-schedule .print-table th:nth-child(1) { width: 12%; }
+  .print-machine-schedule .print-table th:nth-child(2) { width: 20%; }
+  .print-machine-schedule .print-table th:nth-child(3) { width: 9%; }
+  .print-machine-schedule .print-table th:nth-child(4) { width: 6%; }
+  .print-machine-schedule .print-table th:nth-child(5) { width: 9%; }
+  .print-machine-schedule .print-table th:nth-child(6) { width: 11%; }
+  .print-machine-schedule .print-table th:nth-child(7) { width: 33%; }
+
+  .print-shift-table th:nth-child(1) { width: 16%; }
+  .print-shift-table th:nth-child(2) { width: 6%; }
+  .print-shift-table th:nth-child(3) { width: 28%; }
+  .print-shift-table th:nth-child(4) { width: 25%; }
+  .print-shift-table th:nth-child(5) { width: 25%; }
+  .print-general-notes, .print-record-note, .print-provenance {
+    margin-top: .14in; padding: .1in .12in; border: 1px solid #cbd5e1;
+    break-inside: avoid;
+  }
+  .print-general-notes h2 { margin: 0 0 .05in; font-size: 9pt; }
+  .print-general-notes p { margin: 0; }
+  .print-signoff { margin-top: .14in; color: #64748b; font-size: 7.5pt; text-align: right; }
+
+  .print-engineering-grid {
+    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(2.5in, .85fr);
+    gap: .18in; align-items: start;
+  }
+  .print-drawing {
+    margin: 0; padding: .1in; min-height: 3.4in; display: grid; place-items: center;
+    border: 1px solid #cbd5e1; break-inside: avoid;
+  }
+  .print-drawing img { display: block; max-width: 100%; max-height: 6.4in; object-fit: contain; }
+  .print-drawing figcaption { margin-top: .06in; color: #64748b; font-size: 7pt; }
+  .print-drawing-missing { min-height: 3in; display: grid; place-items: center; }
+  .print-record-status { margin-bottom: .1in; padding: .09in; background: #eef3f7; }
+  .print-record-status b, .print-record-status span { display: block; }
+  .print-record-status span { margin-top: 2px; color: #64748b; font-size: 7.5pt; }
+  .print-component-table th:nth-child(1) { width: 24%; }
+  .print-component-table th:nth-child(2) { width: 22%; }
+  .print-component-table th:nth-child(3) { width: 10%; }
+  .print-component-table th:nth-child(4) { width: 44%; }
+  .print-record-note b { display: block; margin-bottom: 3px; }
+  .print-provenance { color: #475569; font-size: 7.5pt; }
+  .print-profile-record > .print-drawing { min-height: 4.3in; }
+  .print-profile-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: .14in; }
 }
 
 .setup-heading { margin-bottom: var(--s4); }
@@ -3542,6 +3691,7 @@ button.sync-chip:active { transform: translateY(1px); }
 /* Rename and add-a-job live behind these; neither belongs on a wall. */
 :root[data-display="monitor"] .centre-head .iconbtn,
 :root[data-display="monitor"] .centre-head .addbtn,
+:root[data-display="monitor"] .print-action,
 /* The inspector is the whole per-line action surface — seven buttons and a
    status control. It was the largest thing still pressable here. */
 :root[data-display="monitor"] .line-inspector,
