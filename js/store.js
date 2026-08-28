@@ -40,6 +40,13 @@ export const state = {
   backOrder: {},    // same key -> { flagged, qty, assignee, note, at, by }
   materialOrders: {}, // id -> order-ready Material Requests row, drafted from a shortage or by hand
   rush: {},         // same key -> { on, needBy, assignee, reason, at, by }
+  /* Lines nobody intends to run: a job cancelled, a die remade under another
+     work order, an elevation that changed. The workbook goes on listing them
+     — it is a schedule, not a record of decisions — and 62 open lines on the
+     live books are dated December. Parking takes them out of the queue and the
+     counts without deleting anything, because "we decided not to" is worth
+     keeping and a deleted line comes back on the next import. */
+  parked: {},       // same key -> { on, reason, at, by }
   taskAssign: {},   // same key -> { machine, at, by } — which machine took a queued line
   taskHistory: [],  // every change to a line, newest first
   machineConfig: {}, // machineKey -> { label, note, ops, hidden }
@@ -87,7 +94,22 @@ export function onChange(fn) {
   return () => listeners.delete(fn);
 }
 
+/* Every change to state gets a number.
+
+   Derived views cache expensive work — the per-job stage map in model.js is
+   the costly one — and need to know when that work is stale. Counting records
+   is not enough and was actively wrong: setting a line In progress and then
+   Done rewrites an existing key, so every count stays identical while the
+   answer changes completely. An operator starting a station and then finishing
+   it is the ordinary way to work, and it was the exact case that went stale.
+
+   A counter cannot miss that. Every mutator ends at save() -> emit(), and the
+   bulk paths that replace state outright bump it themselves. */
+let rev = 0;
+export function stateRev() { return rev; }
+
 function emit() {
+  rev++;
   for (const fn of listeners) fn();
 }
 
@@ -172,7 +194,7 @@ function changed(fields, { at = now(), by = me() } = {}) {
    the record older than itself, while a genuinely newer edit still wins — which
    is right, because that is somebody re-flagging a rush after you cleared it. */
 const DELETABLE = [
-  'taskStatus', 'taskNote', 'taskEdit', 'backOrder', 'rush', 'taskAssign',
+  'taskStatus', 'taskNote', 'taskEdit', 'backOrder', 'rush', 'taskAssign', 'parked',
   'manualTasks', 'todos', 'shiftLogs', 'machineConfig', 'staging', 'materialOrders',
 ];
 
@@ -434,6 +456,59 @@ export function setRush(key, patch) {
   save();
 }
 
+/** Take a line out of the queue, or put it back. The reason is the point —
+    a parked line with no reason is indistinguishable from one somebody
+    mis-clicked, and the next person to look has no way to tell. */
+export function setParked(key, on, reason = null) {
+  const cur = state.parked[key] || {};
+  const next = !!on;
+  const text = String(reason ?? '').trim() || null;
+  if ((!!cur.on) === next && (cur.reason ?? null) === text) return;
+  if (!!cur.on !== next) logChange(key, 'parked', 'on', !!cur.on, next);
+  if ((cur.reason ?? null) !== text) logChange(key, 'parked', 'reason', cur.reason ?? null, text);
+  if (!next) forget('parked', key);
+  else state.parked[key] = changed({ on: true, reason: text });
+  save();
+}
+
+/** Park or unpark several lines at once, with one reason between them.
+
+    Reviewing a stale pile is a batch job by nature — 62 lines on the live books
+    are dated December and share one reason — and a dialog per line is how a
+    cleanup gets abandoned halfway. Returns what each line was, so the whole
+    batch can be undone in one go. */
+export function setParkedMany(keys, on, reason = null) {
+  const before = keys.map((k) => ({
+    key: k,
+    prev: state.parked[k]?.on ? { on: true, reason: state.parked[k].reason ?? null } : null,
+  }));
+  const at = now();
+  const by = me();
+  const text = String(reason ?? '').trim() || null;
+  for (const { key, prev } of before) {
+    if (!!prev === !!on && (prev?.reason ?? null) === text) continue;
+    if (!!prev !== !!on) logChange(key, 'parked', 'on', !!prev, !!on);
+    if (on && (prev?.reason ?? null) !== text) logChange(key, 'parked', 'reason', prev?.reason ?? null, text);
+    if (!on) forget('parked', key);
+    else state.parked[key] = changed({ on: true, reason: text }, { at, by });
+  }
+  save();
+  return before;
+}
+
+/** Put a parked batch back exactly as it was. */
+export function restoreParked(before) {
+  const at = now();
+  const by = me();
+  for (const { key, prev } of before) {
+    const cur = state.parked[key]?.on ? { on: true, reason: state.parked[key].reason ?? null } : null;
+    if (!prev) forget('parked', key);
+    else state.parked[key] = changed({ on: true, reason: prev.reason }, { at, by });
+    if (!!cur !== !!prev) logChange(key, 'undo', 'parked', !!cur, !!prev);
+  }
+  save();
+}
+
 export function clearRush(key) {
   const cur = state.rush[key];
   if (!cur) return;
@@ -669,6 +744,7 @@ function snapshot() {
     materialOrders: state.materialOrders,
     rush: state.rush,
     taskAssign: state.taskAssign,
+    parked: state.parked,
     taskHistory: state.taskHistory,
     machineConfig: state.machineConfig,
     shiftLogs: state.shiftLogs,
@@ -689,6 +765,9 @@ function apply(data) {
   }
   state.shiftLogs = onlyShiftLogs(state.shiftLogs);
   observeSnapshot(state);
+  // Replacing state wholesale — a boot, a restored backup, a cloud pull — is
+  // the one path that does not reach emit() on its own.
+  rev++;
 }
 
 /* An earlier version of the app also wrote `shiftLogs`, in a different shape.
@@ -882,6 +961,7 @@ function mergeSnapshot(remote) {
   state.materialOrders = mergeRecords(state.materialOrders, remote.materialOrders);
   state.rush = mergeRecords(state.rush, remote.rush);
   state.taskAssign = mergeRecords(state.taskAssign, remote.taskAssign);
+  state.parked = mergeRecords(state.parked, remote.parked);
 
   // History is append-only: merge by id and keep it newest-first.
   const seen = new Set(state.taskHistory.map((h) => h.id));

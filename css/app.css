@@ -1038,7 +1038,16 @@ main.page-enter { animation: page-enter .18s cubic-bezier(.2,.8,.2,1); }
 
 .line-qty { flex-shrink: 0; text-align: right; min-width: 72px; display: flex; align-items: baseline; gap: var(--s1); justify-content: flex-end; }
 .line-qty .mono { font-size: var(--t-lg); font-weight: 800; font-variant-numeric: tabular-nums; }
-.line-date { flex-shrink: 0; width: 74px; font-size: var(--t-sm); color: var(--ink-2); white-space: nowrap; }
+.line-date {
+  flex-shrink: 0; width: 74px; font-size: var(--t-sm); color: var(--ink-2);
+  white-space: nowrap; display: flex; flex-direction: column; line-height: 1.25;
+}
+/* How far past the date. Loud while the line is still worth chasing, and
+   deliberately quiet once it is months old — those are for reviewing, and a
+   column of red numbers nobody acts on is how the board stopped meaning
+   anything in the first place. */
+.line-late { font-size: var(--t-xs); color: var(--bad); font-variant-numeric: tabular-nums; }
+.line-late.cold { color: var(--ink-3); }
 
 /* Five icons per row is a lot of target in a small space. They get real size
    and a gap wide enough that a gloved thumb cannot catch two at once. */
@@ -3850,6 +3859,134 @@ button.sync-chip:active { transform: translateY(1px); }
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 .themeopt.on strong { color: var(--accent); }
+
+/* A parked line: taken out of the queue by a decision, not by a status. Drawn
+   quiet on purpose — it is a note that this line is settled, not an alarm. */
+.badge-parked {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 6px; border-radius: var(--r-pill);
+  background: var(--panel-2); border: 1px dashed var(--line);
+  color: var(--ink-3); font-size: var(--t-xs); font-weight: 600;
+  letter-spacing: .03em;
+}
+
+/* ---------- jobs ----------
+
+   A work order across every station it touches. The page is a list of these
+   collapsed to one row each, because a job runs to 44 lines over five stations
+   and thirty of those opened at once is a wall rather than an answer. The row
+   itself carries the answer: how far along, where it is running, what is short.
+
+   The same body is used inside the dialog opened from a line, so an operator
+   checking whether the station before theirs has finished sees exactly what
+   the scheduler sees. */
+.jcard { padding: 0; overflow: hidden; }
+.jcard + .jcard { margin-top: var(--s2); }
+
+.jhead {
+  display: flex; align-items: center; gap: var(--s3); width: 100%;
+  padding: var(--s3); min-height: var(--ctl-lg);
+  background: none; border: 0; text-align: left; color: inherit;
+  font: inherit; cursor: pointer;
+}
+.jhead:hover { background: var(--panel-2); }
+.jhead-id { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.jhead-where {
+  flex: 1 1 12ch; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jhead-caret { display: inline-flex; color: var(--ink-3); transition: transform .18s ease; }
+.jcard.open .jhead-caret { transform: rotate(90deg); }
+
+.jcard-body { padding: 0 var(--s3) var(--s3); border-top: 1px solid var(--line-soft); }
+.jbody { display: grid; gap: var(--s3); margin-top: var(--s3); }
+.jdates { margin: var(--s2) 0 0; }
+
+/* The header numbers, shared by the row and the dialog. */
+.jstats { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.jstat { display: flex; flex-direction: column; line-height: 1.15; }
+.jstat b { font-size: var(--t-md); font-weight: 650; font-variant-numeric: tabular-nums; }
+.jstat i { font-style: normal; font-size: var(--t-xs); color: var(--ink-3); }
+.jstat.work b { color: var(--work); }
+.jstat.warn b { color: var(--warn); }
+.jstat.bad b { color: var(--bad); }
+.jstat.grow { flex: 1 1 90px; min-width: 90px; gap: 3px; }
+
+/* The route. Each station is a column, in the order material moves, and the
+   count is the reading — "9/12" says what one status word cannot. */
+.jrail {
+  display: grid; gap: var(--s2);
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+.jstation {
+  padding: var(--s2); border: 1px solid var(--line-soft); border-radius: var(--r2);
+  background: var(--panel-2); display: grid; gap: 5px;
+}
+.jstation-head { display: flex; align-items: baseline; gap: var(--s2); }
+.jstation-name {
+  font-size: var(--t-sm); font-weight: 600; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jstation-count { margin-left: auto; font-size: var(--t-sm); }
+.jstation.ok { border-color: var(--ok); background: var(--ok-soft); }
+.jstation.work { border-color: var(--work); background: var(--work-soft); }
+
+/* Dies down the side, stations across. One grid for the header and every row
+   so the columns line up without a table. */
+.jdies { border: 1px solid var(--line-soft); border-radius: var(--r2); overflow: hidden; }
+.jdie {
+  display: grid; align-items: center; gap: var(--s2);
+  grid-template-columns: minmax(0, 1fr) 5ch auto;
+  padding: 7px var(--s2); width: 100%; border: 0; background: none;
+  color: inherit; font: inherit; text-align: left;
+}
+.jdie + .jdie { border-top: 1px solid var(--line-soft); }
+.jdie:not(.head) { cursor: pointer; }
+.jdie:not(.head):hover { background: var(--panel-2); }
+.jdie:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.jdie.head { background: var(--panel-2); }
+.jdie-id { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.jdie-qty { text-align: right; }
+.jdie-cells { display: flex; gap: 4px; }
+
+/* One mark per station. Sized to the 44px row rather than to a finger: this is
+   a readout, and the whole row is the target. */
+.jcell {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 22px; border-radius: var(--r1);
+  border: 1px solid var(--line-soft); background: var(--panel);
+  color: var(--ink-3); font-size: var(--t-xs);
+}
+.jcell.ok { background: var(--ok); border-color: var(--ok); color: var(--on-fill); }
+.jcell.work { background: var(--work); border-color: var(--work); color: var(--on-fill); }
+.jcell.mute { background: var(--panel); border-color: var(--line); }
+/* Inferred rather than reported: the same colour, drawn as an outline, so it
+   reads as "believed finished" and not as somebody's tick. */
+.jcell.ok.implied { background: var(--ok-soft); color: var(--ok); border-style: dashed; }
+.jcell.work.implied { background: var(--work-soft); color: var(--work); border-style: dashed; }
+.jcell.none { border-style: dotted; opacity: .5; }
+.jcell.head {
+  border: 0; background: none; width: 34px;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+
+.jmore { margin: var(--s3) 0 0; text-align: center; }
+
+.jsearch {
+  flex: 1 1 220px; min-width: 0; height: var(--ctl);
+  padding: 0 var(--s3); border: 1px solid var(--line); border-radius: var(--r2);
+  background: var(--panel); color: var(--ink); font: inherit;
+}
+
+/* A phone shows the rail stacked and drops the project line from the row —
+   the work order and the progress are what a person is looking for there. */
+@media (max-width: 640px) {
+  .jrail { grid-template-columns: 1fr 1fr; }
+  .jhead-where { display: none; }
+  .jhead { flex-wrap: wrap; }
+  .jdie { grid-template-columns: minmax(0, 1fr) auto; }
+  .jdie-qty { display: none; }
+}
 
 /* ---------- monitor mode ----------
 

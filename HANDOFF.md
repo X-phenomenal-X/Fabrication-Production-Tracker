@@ -196,7 +196,7 @@ The cloud snapshot is split into **two documents**, which matters a lot:
 | part | contents | size | pushed |
 |---|---|---|---|
 | `base` | `tasks`, `machineMeta`, `shiftUpdate` | **~1.6 MB** | only on re-import |
-| `work` | statuses, notes, edits, rush, back orders, assignments, shift logs, history | starts at a few KB and grows with recorded work | debounced, every change |
+| `work` | statuses, notes, edits, rush, shortages, material requests, assignments, parked decisions, shift logs, history | starts at a few KB and grows with recorded work | debounced, every change |
 
 Together it would mean a phone uploading 1.6 MB every time somebody taps Done.
 
@@ -273,6 +273,8 @@ js/extrusions.js            reviewed profile search and series index
 js/subassemblies.js  (gen)  997 sub-assemblies, 84 KB — generated
 js/drawings.js       (gen)  883 die pictures, 3.3 MB — generated
 js/views/centre.js   (819)  THE work-centre page (all 4 centres are this file)
+js/views/job.js             Jobs page + job dialog across every station
+js/views/park.js            single and bulk parking dialogs
 js/views/today.js    (235)  Today: to-dos + the cross-machine board
 js/views/staging.js  (190)  Staging — an overlay on the rolling lines
 js/views/rush.js     (250)  rush dialog + Rush page
@@ -293,10 +295,10 @@ tools/extract-listing-thumbs.py Listing thumbnails → thumbs.json (gap filler)
 `js/views/centre.js` is parameterised by centre — `makeCentreView('FOM')`.
 All four centre pages are that one file with different data.
 
-**Eleven nav pages:** Overview · Rolling · FOM · CNC & FMC · Multi Punch ·
-Today · Staging · Rush · Materials · Engineering Lookup · Shift Update. Setup
-is the header gear rather than another operational page. Materials retains the
-`#backorders` hash so existing bookmarks keep working.
+**Twelve nav pages:** Overview · Rolling · FOM · CNC & FMC · Multi Punch · Jobs
+· Today · Staging · Rush · Materials · Engineering Lookup · Shift Update.
+Setup is the header gear rather than another operational page. Materials
+retains the `#backorders` hash so existing bookmarks keep working.
 
 `Cutting-Tracker.html` is deliberately large because it contains the full
 24 MB extrusion image library as well as every module and font. It remains the
@@ -418,6 +420,8 @@ has been deployed. Listed so you don't rebuild it.
 | **Die lookup** | 996 sub-assemblies from the Sub-Assembly Section Book, both directions (*what is S80.106* / *where does 80-105 go*), plus **883 die pictures** — 620 full drawing sheets and 263 Assembly Diagram thumbnails pulled from the Listings where a sheet could not be got. 163 of the 164 book-known dies in use have a picture. |
 | **Staging page** | The step before rolling. An overlay on the rolling lines, not a queue of its own, so a staged line is the same line the roller picks up. Lines already running or finished are past staging and drop out. |
 | **Today** | Cross-machine board plus carried-over to-dos. |
+| **Jobs** | One work order across every station it touches, with a progress rail and die-by-station grid. Selecting a die opens its first unfinished line on the right machine; the same view opens from a line inspector. It is entirely derived from the live schedule and overlays. |
+| **Parked work** | Removes cancelled, superseded or otherwise non-running lines from operational counts without calling them Done or deleting them. A reason, author and history remain; single and bulk parking survive re-import and can be undone. |
 | **Manual jobs** | Add a line that is in no workbook (service orders). Survives re-import. |
 | **Routing SOP** | §3 above. `js/routing.js` + the per-line route/paperwork panel. |
 | **Online-first PWA** | Modular Pages artifact, lazy engineering libraries, service worker, update prompt and `test/offline-check.mjs`. |

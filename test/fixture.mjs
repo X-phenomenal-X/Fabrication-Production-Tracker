@@ -21,7 +21,7 @@ const SHEET_OF = {
   'roll-auto': 'Auto', 'roll-man': 'Manual',
   fom1: 'FOM1', fom2: 'FOM2', fom3: 'FOM3',
   cncfmc: 'CNC & FMC', cnc1: 'CNC & FMC', fmc1: 'CNC & FMC', fmc2: 'CNC & FMC',
-  multipunch: 'MultiPunch & SAW',
+  multipunch: 'MultiPunch & SAW', saw: 'MultiPunch & SAW',
 };
 
 /* Invented towers. The last one is deliberately absurd: a real schedule does
@@ -222,6 +222,89 @@ export function makeFixture({ today = '2026-08-14', volume = 'heavy' } = {}) {
     staleRow('fom2', null, 91),           // stale: says never started
     staleRow('multipunch', 'DONE', 92),   // the one that is right
   );
+
+  /* Work orders that run right across the department.
+
+     The loop above gives every machine its own block of work-order numbers, so
+     until this block no job ever appeared at two stations. That is not what the
+     schedules look like: 201 of the 272 live work orders touch more than one
+     centre, covering 3,167 of the 3,521 lines. A fixture without them cannot
+     show a job seen whole, and it quietly excused a stale-cache bug in the
+     inference for as long as it existed.
+
+     Each job takes a route, a handful of dies, and a front — the station the
+     work has reached. Behind the front it is finished, at it running, ahead of
+     it untouched. A share of them are left deliberately out of step, because
+     each sheet is kept by a different person and they fall behind at different
+     rates: that disagreement is the normal case, not the exception. */
+  const ROUTES = [
+    ['roll-auto', 'fom2', 'multipunch'],
+    ['roll-auto', 'fom1', 'cncfmc'],
+    ['roll-man', 'fom3', 'multipunch', 'cnc1'],
+    ['roll-auto', 'saw', 'multipunch'],
+    ['roll-auto', 'fom2', 'multipunch', 'fmc1'],
+    ['roll-auto', 'fom1'],
+  ];
+  const crossJobs = volume === 'heavy' ? 34 : 6;
+  let crossWo = 32800;
+  for (let j = 0; j < crossJobs; j++) {
+    crossWo += 1 + Math.floor(r() * 4);
+    const route = ROUTES[Math.floor(r() * ROUTES.length)];
+    const dieCount = 3 + Math.floor(r() * 10);
+    const project = pick(PROJECTS);
+    const floor = pick(FLOORS);
+    const offset = Math.floor(r() * 15) - 6;
+    const dated = r() > 0.12;
+    // How far down the route this job has got. Beyond the last station means
+    // the whole job is finished, which some of them are.
+    const front = Math.floor(r() * (route.length + 1));
+
+    for (let d = 0; d < dieCount; d++) {
+      const die = DIES[(j * 7 + d * 3) % DIES.length];
+      const qty = 4 + Math.floor(r() * 200);
+      route.forEach((machine, step) => {
+        const t = {
+          id: `${machine}:${crossWo}:${die}:${200 + d}`,
+          machine, sheet: SHEET_OF[machine], row: 200 + d,
+          wo: String(crossWo), project, floor, die, qty,
+          status: null,
+          cuttingDate: dated ? day(offset + step) : null,
+          shipDate: dated ? day(offset + step + 7) : null,
+          material: null, comments: null, setup: null, rollingEta: null,
+          dayShift: null, shifts: null, pinHole: null,
+          bo: null, boRaw: null, boStat: null, backOrder: false, archived: false,
+        };
+        /* One row in seven is left saying less than the station after it has
+           already proved. Those are the rows the inference exists to correct,
+           and without them nothing here would exercise it. */
+        const stale = r() > 0.86;
+        if (step < front && !stale) t.status = 'DONE';
+        else if (step === front && r() > 0.4) t.status = 'IP';
+
+        if (r() > 0.94) { t.backOrder = true; t.bo = 1 + Math.floor(r() * 5); t.boRaw = String(t.bo); }
+        tasks.push(t);
+
+        const k = key(t);
+        if (r() > 0.93) {
+          taskNote[k] = { text: pick(NOTES), at: iso(base - 5400000), by: pick(PEOPLE) };
+        }
+        if (step === front && r() > 0.7) {
+          taskStatus[k] = { status: 'IN_PROGRESS', at: iso(base - Math.floor(r() * 6) * 3600000), by: pick(PEOPLE) };
+        }
+      });
+    }
+    // A rush on some of them, so the job list has something to sort to the top.
+    if (r() > 0.75) {
+      const first = tasks.filter((t) => t.wo === String(crossWo))[0];
+      if (first) {
+        rush[key(first)] = {
+          on: true, needBy: day(Math.floor(r() * 6) - 1),
+          assignee: pick(PEOPLE), reason: 'Crane booked — glass follows Monday.',
+          at: iso(base - 7200000), by: pick(PEOPLE),
+        };
+      }
+    }
+  }
 
   // Lines moved off the machine the workbook put them on: the whole CNC queue
   // has to be assigned by hand, and FOM work gets shuffled during a shift.

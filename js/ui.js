@@ -224,6 +224,8 @@ const ICON_PATHS = {
   cloud: 'M17.5 19a4.5 4.5 0 0 0 .3-9A6.5 6.5 0 0 0 5.3 11 4 4 0 0 0 6 19z',
   plus: 'M12 5v14M5 12h14',
   list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+  // A work order and the stations under it — the shape of the Jobs page.
+  job: 'M9 3h6v4H9zM3 17h6v4H3zM15 17h6v4h-6zM12 7v3M6 17v-3h12v3',
   square: 'M4 4h16v16H4z',
   rollers: 'M5 8h14a3 3 0 0 1 0 6H5a3 3 0 0 1 0-6zM5 8V5h14v3M5 16v3h14v-3',
   factory: 'M3 21V9l6 4V9l6 4V5h6v16zM7 21v-4h3v4M15 17h2M15 13h2',

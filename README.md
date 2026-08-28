@@ -50,9 +50,9 @@ re-read.
 3. Pick your machine from the sub-tabs, and work the queue.
 4. At the end of the shift, **Shift Update** → Write.
 
-The nav reads **Rolling · FOM · CNC & FMC · Multi Punch · Today · Staging ·
-Rush · Materials · Engineering Lookup · Shift Update**. Setup is the
-gear in the header.
+The nav reads **Overview · Rolling · FOM · CNC & FMC · Multi Punch · Jobs ·
+Today · Staging · Rush · Materials · Engineering Lookup · Shift Update**.
+Setup is the gear in the header.
 
 To use it on a phone, set up **Sync across devices** in Setup once — see below.
 
@@ -91,6 +91,19 @@ screen chrome to the printer:
 The browser's normal print dialog still chooses the printer, copies or **Save
 as PDF**. Machine schedules and shift updates use landscape Letter; engineering
 records use portrait Letter. Print actions stay hidden in wall-monitor mode.
+
+## Jobs — one work order across the department
+
+**Jobs** answers the question the machine pages cannot: where a whole work
+order has reached across Rolling, FOM, Punch and CNC/FMC. Each card shows its
+station rail, completed/running/remaining counts, pieces, rushes, shortages and
+parked lines. Expanding it reveals every die against every station it touches;
+an empty cell means the die never visits that station, not that it is waiting.
+
+Choose a die to open the first unfinished line on the correct machine. The same
+job view is available from a line inspector, so an operator can check upstream
+progress without leaving the queue. Jobs is derived from the live lines and
+stores no second copy, so it cannot drift away from machine status.
 
 ## Moving jobs between machines
 
@@ -187,6 +200,19 @@ for a line that is running *and* short of material. Reading that as a single
 status silently loses the back-order half — 67 open lines in the sample data.
 It is parsed into its own flag and shown as a red **B/O** badge beside the
 status, and counted in the header.
+
+### Parking work that will not run
+
+**Park** is for a scheduled line the department has decided not to run: a
+cancelled job, a changed elevation, or a die remade under another work order.
+It is not Done. Parking removes the line from open, overdue, running and Today
+counts while preserving the schedule record, the reason, who made the decision
+and its history. Parked lines remain reachable through the machine's **Parked**
+filter and can be restored.
+
+One line can be parked from its inspector, or a selected group can be parked
+under one shared reason and undone as a batch. The record is a synced overlay,
+so it survives workbook re-imports instead of reappearing as open work.
 
 ## The die lookup
 
@@ -906,7 +932,7 @@ The snapshot is pushed as **two documents, not one**:
 | | what | size on the real data | pushed |
 |---|---|---|---|
 | `base` | the imported workbooks | ~1.6 MB | only on re-import |
-| `work` | statuses, notes, edits, rush, back orders, assignments, shift updates, history | starts at a few KB and grows with work | debounced, on every change |
+| `work` | statuses, notes, edits, rush, shortages, material requests, assignments, parked decisions, shift updates, history | starts at a few KB and grows with work | debounced, on every change |
 
 Together that would mean a phone uploading the workbooks every time somebody
 taps Done. Split, a tap sends only the work document. `test/cloud-check.mjs` asserts the

@@ -103,7 +103,7 @@ step('tabs: ' + tabs.join(', '));
 const setupGear = await page.$$eval('.hdr-setup', (ns) => ns.map((n) => n.getAttribute('aria-label')));
 step('setup control: ' + JSON.stringify(setupGear));
 if (setupGear.length !== 1) throw new Error('Setup is not reachable from the header');
-if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Today,Staging,Rush,Materials,Engineering Lookup,Shift Update') {
+if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Staging,Rush,Materials,Engineering Lookup,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -270,8 +270,11 @@ const target = await page.evaluate(async () => {
 if (!target) throw new Error('no Not-started line on Rolling (Auto) to test with');
 step(`target line: W/O ${target.wo} die ${target.die || '(none)'}`);
 
-// expand every group so the target is reachable regardless of bucket
-await page.$$eval('.dgroup-head[aria-expanded="false"]', (ns) => ns.forEach((n) => n.click()));
+// Expand every group so the target is reachable regardless of bucket. The
+// attribute is on the toggle button inside the header, not on the header —
+// matching the header found nothing, which went unnoticed while the target
+// happened to land in a group that starts open.
+await page.$$eval('.dgroup-toggle[aria-expanded="false"]', (ns) => ns.forEach((n) => n.click()));
 await page.waitForTimeout(250);
 await page.$$eval('.showmore', (ns) => ns.forEach((n) => n.click()));
 await page.waitForTimeout(250);
@@ -1247,6 +1250,275 @@ if (overruled.shown !== 'IN_PROGRESS' || overruled.implied) {
   throw new Error('an operator setting a status must beat the inference');
 }
 
+/* The inference has to survive the way people actually work: start a station,
+   then finish it. Both updates land on the same record, so nothing about the
+   shape of state changes on the second one — only the value. A derived cache
+   that watches record counts sees no difference and keeps serving the answer
+   from before the station was finished, which is the one moment the whole
+   feature exists for. Built from two lines added by hand so the case is the
+   same whichever workbook is in play. */
+const restart = await page.evaluate(() => Promise.all([
+  import('/js/model.js'), import('/js/store.js'),
+]).then(([M, S]) => {
+  const wo = 'CACHE-PROBE-1';
+  S.addManualTask({ machine: 'roll-auto', wo, die: 'SA80-104', qty: 10 });
+  S.addManualTask({ machine: 'fom1', wo, die: 'SA80-104', qty: 10 });
+  const rows = M.tasksInScope().filter((t) => t.wo === wo);
+  const up = rows.find((t) => t.machine === 'roll-auto');
+  const down = rows.find((t) => t.machine === 'fom1');
+  const key = M.taskStatusKey(down);
+  const read = () => M.effectiveTaskStatus(up).key;
+
+  const before = read();
+  S.setTaskStatus(key, 'IN_PROGRESS');   // a new record: every count changes
+  const started = read();
+  S.setTaskStatus(key, 'DONE');          // the same record: no count changes
+  const finished = read();
+
+  for (const t of rows) S.deleteManualTask(M.manualIdFor(t));
+  S.setTaskStatus(key, null);
+  return { before, started, finished };
+}));
+step('downstream started then finished: ' + JSON.stringify(restart));
+if (restart.before !== 'NOT_STARTED') throw new Error('the probe job did not start clean');
+if (restart.started !== 'IN_PROGRESS') {
+  throw new Error('a station running downstream should lift the one before it off Not started');
+}
+if (restart.finished !== 'DONE') {
+  throw new Error('finishing the downstream station did not finish the one before it'
+    + ` — upstream stayed ${restart.finished}, so the derived cache went stale`);
+}
+
+/* ---------- parking a line nobody is going to run ---------- */
+
+/* A schedule lists what was planned, not what was decided. On the live books
+   62 open lines are dated December — cancelled jobs, dies remade under another
+   work order — and until now the only ways to stop counting them were to mark
+   them Done, which is a lie the shift update repeats, or delete them, which the
+   next import undoes. Parking has to take a line out of every count while
+   keeping the record, and it has to survive a re-import. */
+const parked = await page.evaluate(async () => {
+  const M = await import('/js/model.js');
+  const S = await import('/js/store.js');
+  const rows = M.tasksForMachine('roll-auto').filter((r) => r.status.key !== 'DONE');
+  const row = rows.find((r) => !M.isParked(r.task));
+  const key = M.taskStatusKey(row.task);
+  const count = () => {
+    const sum = M.machineSummary('roll-auto');
+    return {
+      open: sum.open, parked: sum.parked, overdue: sum.overdue,
+      openCount: M.openCountFor('roll-auto'),
+      inQueue: M.groupedQueue('roll-auto').reduce((n, g) => n + g.rows.length, 0),
+      inParkedFilter: M.groupedQueue('roll-auto', { filter: 'PARKED' })
+        .reduce((n, g) => n + g.rows.length, 0),
+      running: M.runningNow('roll-auto').length,
+      board: M.todayBoard().overdue.length,
+    };
+  };
+
+  const before = count();
+  S.setParked(key, true, 'Remade under another W/O');
+  const after = count();
+  const rec = M.parkedFor(key);
+  const history = S.state.taskHistory.filter((h) => h.key === key && h.kind === 'parked').length;
+  S.setParked(key, false);
+  const restored = count();
+  return { wo: row.task.wo, key, before, after, restored, rec, history };
+});
+step(`parking W/O ${parked.wo}: open ${parked.before.open} → ${parked.after.open} → ${parked.restored.open}, `
+  + `parked ${parked.before.parked} → ${parked.after.parked}, `
+  + `queue ${parked.before.inQueue} → ${parked.after.inQueue}, `
+  + `parked filter ${parked.after.inParkedFilter}`);
+
+if (parked.after.open !== parked.before.open - 1) throw new Error('parking did not drop the open count');
+if (parked.after.openCount !== parked.before.openCount - 1) throw new Error('openCountFor still counts a parked line');
+if (parked.after.inQueue !== parked.before.inQueue - 1) throw new Error('a parked line is still in the queue');
+if (parked.after.parked !== parked.before.parked + 1) throw new Error('the parked count did not rise');
+if (parked.after.inParkedFilter !== parked.before.inParkedFilter + 1) {
+  throw new Error('a parked line is not reachable through the Parked filter — it would be lost');
+}
+if (parked.after.board >= parked.before.board && parked.before.board > 0
+    && parked.after.overdue >= parked.before.overdue) {
+  // Only meaningful when the line was late to begin with; both counts moving
+  // together is what matters, not the specific figure.
+  step('  (the parked line was not late, so the overdue counts are unchanged)');
+}
+if (parked.rec?.reason !== 'Remade under another W/O') throw new Error('the reason was not stored');
+if (!parked.history) throw new Error('parking left nothing in the line history');
+if (parked.restored.open !== parked.before.open) throw new Error('putting the line back did not restore it');
+
+/* Clearing a stale pile is a batch job by nature — the 62 December lines on
+   the live books are one decision, not 62 — so parking has to work over a
+   selection under a single reason, and the whole batch has to come back in one
+   step. A bulk action nobody can reverse is one nobody will risk using. */
+const bulkPark = await page.evaluate(async () => {
+  const M = await import('/js/model.js');
+  const S = await import('/js/store.js');
+  const keys = M.tasksForMachine('roll-auto')
+    .filter((r) => r.status.key !== 'DONE' && !M.isParked(r.task))
+    .slice(0, 8).map((r) => M.taskStatusKey(r.task));
+  const open = () => M.machineSummary('roll-auto').open;
+
+  const before = open();
+  const undo = S.setParkedMany(keys, true, 'Job cancelled');
+  const parked = { open: open(), all: keys.every((k) => M.parkedFor(k)?.on) };
+  const reasons = new Set(keys.map((k) => M.parkedFor(k)?.reason));
+  S.restoreParked(undo);
+  return { n: keys.length, before, parked, after: open(), reasons: [...reasons] };
+});
+step(`bulk park: open ${bulkPark.before} → ${bulkPark.parked.open} → ${bulkPark.after}, `
+  + `reasons ${JSON.stringify(bulkPark.reasons)}`);
+if (!bulkPark.parked.all) throw new Error('bulk park missed some of the selection');
+if (bulkPark.parked.open !== bulkPark.before - bulkPark.n) {
+  throw new Error('the open count did not drop by the whole batch');
+}
+if (bulkPark.reasons.length !== 1) throw new Error('the batch did not share one reason');
+if (bulkPark.after !== bulkPark.before) throw new Error('undoing the batch did not restore every line');
+
+/* The record is keyed the same way every other overlay is, so a re-import of
+   the workbook leaves it exactly where it was. Deleting the line is what does
+   not survive an import; that is the whole reason parking exists. */
+const parkSurvives = await page.evaluate(async () => {
+  const M = await import('/js/model.js');
+  const S = await import('/js/store.js');
+  const row = M.tasksForMachine('roll-auto').find((r) => r.status.key !== 'DONE');
+  const key = M.taskStatusKey(row.task);
+  S.setParked(key, true, 'Job cancelled');
+  const before = M.isParked(row.task);
+  return { key, before, wo: row.task.wo };
+});
+// Re-import the Rolling workbook through the UI, the same way the stable-key
+// check above does.
+await page.click('.hdr-setup');
+await page.waitForSelector('.drop');
+const chPark = page.waitForEvent('filechooser');
+await page.click('.drop:has-text("Rolling workbook") button');
+await (await chPark).setFiles(ROLLING);
+await page.waitForSelector('dialog .stat', { timeout: 120000 });
+await page.click('dialog header button');
+await page.waitForSelector('dialog', { state: 'detached' });
+const parkAfter = await page.evaluate((key) => import('/js/model.js').then((M) => {
+  const row = M.tasksInScope().find((t) => M.taskStatusKey(t) === key);
+  return { found: !!row, parked: row ? M.isParked(row) : null, reason: M.parkedFor(key)?.reason || null };
+}), parkSurvives.key);
+step(`parked W/O ${parkSurvives.wo} through a re-import: ${JSON.stringify(parkAfter)}`);
+if (!parkAfter.found) throw new Error('the parked line vanished from the re-imported book');
+if (!parkAfter.parked || parkAfter.reason !== 'Job cancelled') {
+  throw new Error('the parking record did not survive a re-import');
+}
+await page.evaluate((key) => import('/js/store.js').then((S) => S.setParked(key, false)), parkSurvives.key);
+
+/* ---------- one work order, seen whole ---------- */
+
+/* The machine pages answer "what is on my machine". Nobody asks that. They ask
+   where a work order has got to, and in the live schedules that is a question
+   about several machines at once — 201 of the 272 work orders touch more than
+   one centre. The Jobs page has to answer it without opening four tabs, and it
+   has to agree with those tabs, because it is derived from the same lines. */
+await gotoTab('Jobs');
+await page.waitForSelector('.jcard');
+
+const jobList = await page.evaluate(() => ({
+  cards: document.querySelectorAll('.jcard').length,
+  spanning: [...document.querySelectorAll('.jcard')].filter((n) => /stations/.test(n.textContent)).length,
+  headline: document.querySelector('.centre-stats')?.textContent.replace(/\s+/g, ' ').trim(),
+}));
+step(`jobs page: ${jobList.cards} cards, ${jobList.spanning} across centres — ${jobList.headline}`);
+if (!jobList.cards) throw new Error('the jobs page listed nothing');
+if (!jobList.spanning) throw new Error('no job spans more than one centre — the page has nothing to answer');
+
+/* Expanding one has to agree with the model, station by station. The rail is
+   the whole point: a station is a count, not a status word, because a station
+   with nine of twelve dies cut is neither started nor finished. */
+const opened = await page.evaluate(async () => {
+  const M = await import('/js/model.js');
+  const cards = [...document.querySelectorAll('.jcard')];
+  const card = cards.find((n) => /stations/.test(n.textContent));
+  const wo = card.querySelector('.mono.strong').textContent.replace(/^W\/O\s*/, '').trim();
+  card.querySelector('.jhead').click();
+  await new Promise((r) => setTimeout(r, 250));
+  const open = document.querySelector('.jcard.open');
+  const job = M.jobFor(wo);
+  return {
+    wo,
+    railShown: [...open.querySelectorAll('.jstation')].map((n) =>
+      n.querySelector('.jstation-count').textContent.trim()),
+    railModel: job.stations.map((st) => `${st.done}/${st.total}`),
+    stationOrder: job.stations.map((st) => st.machine),
+    diesShown: open.querySelectorAll('.jdie:not(.head)').length,
+    diesModel: job.dies.length,
+    headings: [...open.querySelectorAll('.jcell.head')].map((n) => n.textContent.trim()),
+    // A die that is not on a station has to look different from one that is
+    // on it and untouched: "not going there" and "not started" are not the
+    // same answer, and both are read off this grid.
+    absent: open.querySelectorAll('.jcell.none').length,
+  };
+});
+step(`job ${opened.wo}: rail ${opened.railShown.join(' → ')}, `
+  + `${opened.diesShown} dies, columns ${opened.headings.join('/')}`);
+if (opened.railShown.join('|') !== opened.railModel.join('|')) {
+  throw new Error(`the rail says ${opened.railShown.join('|')} but the model says ${opened.railModel.join('|')}`);
+}
+if (opened.diesShown !== opened.diesModel) throw new Error('the die rows do not match the model');
+
+/* Stations run in the order material moves. A rail that lists the punch before
+   rolling is worse than no rail — it reads as the route. */
+const STAGE_OF = { 'roll-auto': 1, 'roll-man': 1, saw: 2, fom1: 2, fom2: 2, fom3: 2, multipunch: 3, cncfmc: 4, cnc1: 4, fmc1: 4, fmc2: 4 };
+const stages = opened.stationOrder.map((m) => STAGE_OF[m]);
+if (stages.some((v, i) => i && v < stages[i - 1])) {
+  throw new Error(`the rail runs backwards: ${opened.stationOrder.join(' → ')}`);
+}
+
+/* Column headings have to name one machine each. Initials collide where it
+   matters — FOM 1 and FMC 1 both reduce to "F1" — and those two land on the
+   same job often enough that a guess would be read as a fact. */
+if (new Set(opened.headings).size !== opened.headings.length) {
+  throw new Error(`two stations share a column heading: ${opened.headings.join('/')}`);
+}
+
+/* Clicking a die goes to the line somebody is asking about — the first station
+   that has not finished it — and that page has to actually show the line. A
+   finished line is hidden by default on a centre page, so following a link to
+   one used to land on an empty queue with a search term in the box. */
+const jumped = await page.evaluate(async () => {
+  const M = await import('/js/model.js');
+  const open = document.querySelector('.jcard.open');
+  const wo = open.querySelector('.mono.strong').textContent.replace(/^W\/O\s*/, '').trim();
+  const dieRow = open.querySelector('.jdie:not(.head)');
+  const die = dieRow.querySelector('.mono.strong').textContent.trim();
+  const lines = M.jobFor(wo).dies.find((d) => d.die === die).lines;
+  const want = lines.find((l) => l.status.key !== 'DONE') || lines[lines.length - 1];
+  dieRow.click();
+  await new Promise((r) => setTimeout(r, 400));
+  return {
+    wo, die, wantMachine: want.machine, wantStatus: want.status.key,
+    hash: location.hash.slice(1),
+    lines: document.querySelectorAll('.line').length,
+    focused: document.querySelector('.line.active .line-id .mono')?.textContent.trim() || null,
+  };
+});
+step(`clicking die ${jumped.die} of ${jumped.wo} → #${jumped.hash}, `
+  + `${jumped.lines} lines, focused ${jumped.focused} (wanted ${jumped.wantMachine}/${jumped.wantStatus})`);
+if (!jumped.lines) throw new Error('following a die from the jobs page landed on an empty queue');
+if (jumped.focused !== jumped.wo) throw new Error(`landed focused on ${jumped.focused}, not ${jumped.wo}`);
+
+/* The same body opens from a line, so an operator can check whether the
+   station before theirs has finished without leaving their own page. */
+await page.click('.line');
+await page.waitForSelector('.line-inspector');
+await page.click('.inspector-action:has-text("Job")');
+await page.waitForSelector('dialog[open] .jrail');
+const jobDlg = await page.evaluate(() => ({
+  title: document.querySelector('dialog[open] header')?.textContent.replace('Close', '').trim(),
+  stations: document.querySelectorAll('dialog[open] .jstation').length,
+  dies: document.querySelectorAll('dialog[open] .jdie:not(.head)').length,
+}));
+step('job dialog from a line: ' + JSON.stringify(jobDlg));
+if (!jobDlg.stations || !jobDlg.dies) throw new Error('the job dialog opened empty');
+await page.screenshot({ path: path.join(SHOT, 'job-dialog.png') });
+await page.keyboard.press('Escape');
+await page.waitForSelector('dialog[open]', { state: 'detached' });
+
 /* ---------- the routing panel ---------- */
 
 /* Opened from a line, it has to show the SOP's stations with their paperwork —
@@ -1254,14 +1526,24 @@ if (overruled.shown !== 'IN_PROGRESS' || overruled.implied) {
    append stringifies it, and the word "null" went out on the page for every
    line whose route had no discrepancy to report, which is most of them. */
 await gotoTab('Rolling');
+/* Jobs deliberately leaves its work-order search and selected line in place
+   when it sends someone to a machine. The line used above can be a trim or
+   another profile outside the Window Wall SOP, so choose a covered assembly
+   explicitly before testing the SOP panel. Reopening the tab must not be
+   expected to erase useful Jobs context. */
+await page.click('.subtabs button:first-child');
+await page.waitForFunction(() => document.querySelector('.centre-title')?.textContent.trim() === 'Etas Line 1');
+await page.fill('.centre-filters input[type="search"]', 'S80.104');
+await page.waitForSelector('.line .die:text-is("S80.104")');
+await page.click('.line:has(.die:text-is("S80.104")) .line-main');
+await page.waitForSelector('.line:has(.die:text-is("S80.104")).active');
 /* Two surfaces reach it depending on width: the icon rail on a narrow layout,
    and the inspector's action list once the workspace is wide enough to show a
    side panel — which is what this run's 1440px viewport gets. Open it by the
    route the layout actually offers rather than pinning one. */
 if (await page.locator('.line-tools:visible').count()) {
-  await page.click('.line .line-iconbtn[title*="paperwork"]');
+  await page.click('.line.active .line-iconbtn[title*="paperwork"]');
 } else {
-  await page.click('.line .line-open');
   await page.waitForSelector('.inspector-actions');
   await page.click('.inspector-actions button:has-text("Route")');
 }
@@ -1435,6 +1717,42 @@ const noSuggestForAssigned = await page.evaluate((k) => import('/js/model.js').t
   mo.suggestedMachine(mo.taskByKey(k))), learn.keys[0]);
 if (noSuggestForAssigned) throw new Error('an assigned line should not be re-suggested');
 step('assigned lines are left alone');
+
+/* The same cache trap, on the other derived table. Where a die usually ends up
+   is counted from what people have already done with it, and moving a line
+   that was *already* assigned — FOM 1 to FOM 2, a routine correction — rewrites
+   one existing record without changing how many there are. The habit has
+   changed; a table keyed on record counts has not noticed, and goes on
+   recommending the machine nobody uses for that die any more. */
+const rerouted = await page.evaluate(() => Promise.all([
+  import('/js/model.js'), import('/js/store.js'),
+]).then(([M, S]) => {
+  const die = 'CACHE-DIE-1';
+  const wos = ['RT-1', 'RT-2', 'RT-3'];
+  for (const wo of wos) S.addManualTask({ machine: 'fom1', wo, die, qty: 5 });
+  const rows = M.tasksInScope().filter((t) => t.die === die);
+  const [a, b, c] = rows;
+  const key = (t) => M.taskStatusKey(t);
+
+  // Two sightings on FOM 2 — new records, so any cache invalidates.
+  S.setTaskMachine(key(a), 'fom2', a.machine);
+  S.setTaskMachine(key(b), 'fom2', b.machine);
+  const first = M.suggestedMachine(c, { minSeen: 2 })?.machine || null;
+
+  // Move the same two to FOM 3 — existing records rewritten, counts identical.
+  S.setTaskMachine(key(a), 'fom3', a.machine);
+  S.setTaskMachine(key(b), 'fom3', b.machine);
+  const second = M.suggestedMachine(c, { minSeen: 2 })?.machine || null;
+
+  for (const t of rows) { S.setTaskMachine(key(t), null, t.machine); S.deleteManualTask(M.manualIdFor(t)); }
+  return { first, second };
+}));
+step('where a die usually goes, after a correction: ' + JSON.stringify(rerouted));
+if (rerouted.first !== 'fom2') throw new Error(`two lines on FOM 2 should suggest fom2, got ${rerouted.first}`);
+if (rerouted.second !== 'fom3') {
+  throw new Error('moving both lines to FOM 3 did not change the suggestion'
+    + ` — still ${rerouted.second}, so the route table went stale`);
+}
 
 /* ---------- a job added by hand ---------- */
 
