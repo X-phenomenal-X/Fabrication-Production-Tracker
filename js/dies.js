@@ -30,7 +30,9 @@ export const PART_LABEL = {
     as a bare component extrusion. */
 export function dieForms(text) {
   const t = String(text || '').trim().toUpperCase().replace(/\s+/g, '');
-  const m = t.match(/^(?:SA|S)?(\d{2})[.\-_](\d{3})([A-Z0-9]*)$/);
+  // The separator is optional because labels and barcode-style entries often
+  // arrive as S80106 / 80106 as well as S80.106 / 80-106.
+  const m = t.match(/^(?:SA|S)?(\d{2})[.\-_]?(\d{3})([A-Z0-9]*)$/);
   if (!m) return { sa: null, part: null, raw: t };
   const [, group, num, suffix] = m;
   return { sa: `SA${group}-${num}${suffix}`, part: `${group}-${num}${suffix}`, raw: t };
@@ -85,10 +87,39 @@ export function listingReferencesOf(assembly) {
     ...PARTS.map((part) => assembly[part]).filter(Boolean),
     ...recoveredComponentsOf(assembly).map((part) => part.die),
   ]);
-  const refs = assembly.desc.match(/\b\d{2}-\d{3}[A-Z]*\b/g) || [];
-  return [...new Set(refs)]
-    .filter((die) => !assigned.has(die))
-    .map((die) => ({ role: 'Listing reference', die, qty: 1, source: 'description', verified: false }));
+  const refs = [...assembly.desc.matchAll(/\b(\d{2})[.\-_ ](\d{3})([A-Z0-9]*)\b/g)]
+    .map((match) => ({
+      die: `${match[1]}-${match[2]}${match[3] || ''}`,
+      index: match.index || 0,
+    }));
+  return [...new Map(refs.map((reference) => [reference.die, reference])).values()]
+    .filter((reference) => !assigned.has(reference.die))
+    .map((reference) => {
+      const lead = assembly.desc.slice(Math.max(0, reference.index - 32), reference.index);
+      const thermal = /THERMAL\s*(?:BREAK|STRUT)\s*$/i.test(lead);
+      const previous = /SECTION\s+CHANGED\s+FROM\s*$/i.test(lead);
+      return {
+        role: thermal ? 'Thermal break' : previous ? 'Previous section' : 'Listing reference',
+        die: reference.die,
+        qty: 1,
+        source: 'description',
+        // This verifies that the source explicitly names the relationship. It
+        // does not fill any of the four assembly roles or make the map complete.
+        verified: thermal || previous,
+      };
+    });
+}
+
+/** A few catalogue rows are not four-part assemblies at all. They are source
+    entries whose description points to one individual extrusion profile — for
+    example SA89-083HT says "Thermal break 84-909" and has no component
+    columns. Treating those as missing assemblies hides a valid reviewed
+    profile and implies four absent parts. */
+export function profileReferenceOf(assembly) {
+  if (!assembly || componentsOf(assembly).length || recoveredComponentsOf(assembly).length) return null;
+  const references = listingReferencesOf(assembly);
+  if (references.length !== 1 || !references[0].verified) return null;
+  return references[0];
 }
 
 /* Which sub-assemblies each component goes into. Built once, on first use —
@@ -221,7 +252,8 @@ export function resolvedComponentsOf(assembly) {
 /** Coverage facts used by the unified lookup and the data-quality audit. */
 export function componentCoverage(assembly) {
   if (!assembly) return {
-    verified: 0, recovered: 0, references: 0, missingRoles: [...PARTS], complete: false,
+    verified: 0, recovered: 0, references: 0, missingRoles: [...PARTS],
+    complete: false, referenceOnly: false,
   };
   const verified = PARTS.filter((part) => assembly[part]).length;
   const recovered = recoveredComponentsOf(assembly);
@@ -232,6 +264,7 @@ export function componentCoverage(assembly) {
   return {
     verified, recovered: recovered.length, references, missingRoles,
     complete: missingRoles.length === 0,
+    referenceOnly: !!profileReferenceOf(assembly),
   };
 }
 
@@ -244,6 +277,7 @@ export function componentAudit() {
     recoveredFields: 0,
     listingReferenceRows: 0,
     listingReferences: 0,
+    profileReferenceRows: 0,
   };
   for (const assembly of SUBASSEMBLIES) {
     const coverage = componentCoverage(assembly);
@@ -257,6 +291,7 @@ export function componentAudit() {
       audit.listingReferenceRows += 1;
       audit.listingReferences += coverage.references;
     }
+    if (coverage.referenceOnly) audit.profileReferenceRows += 1;
   }
   return audit;
 }

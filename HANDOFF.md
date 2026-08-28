@@ -421,7 +421,7 @@ has been deployed. Listed so you don't rebuild it.
 
 | | |
 |---|---|
-| **Die lookup** | 996 sub-assemblies from the Sub-Assembly Section Book, both directions (*what is S80.106* / *where does 80-105 go*), plus **883 die pictures** — 620 full drawing sheets and 263 Assembly Diagram thumbnails pulled from the Listings where a sheet could not be got. 163 of the 164 book-known dies in use have a picture. |
+| **Engineering lookup** | One search across 997 Sub-Assembly Section Book rows and 1,680 reviewed extrusion profiles, both directions (*what is S80.106* / *where does 80-105 go*), plus 883 full assembly sheets. Exact assembly results expose their linked profiles. The 68 extrusion references embedded in Listing descriptions all link to their profile masters; 53 component-only rows are labelled as profile references instead of incomplete assemblies. `S89.083HT` therefore shows and prints its explicit `84-909` thermal-break profile without inventing exterior/interior roles. |
 | **Staging page** | The step before rolling. An overlay on the rolling lines, not a queue of its own, so a staged line is the same line the roller picks up. Lines already running or finished are past staging and drop out. |
 | **Today** | Cross-machine board plus carried-over to-dos. |
 | **Jobs** | One work order across every station it touches, with a progress rail and die-by-station grid. Selecting a die opens its first unfinished line on the right machine; the same view opens from a line inspector. It is entirely derived from the live schedule and overlays. |
@@ -443,8 +443,7 @@ has been deployed. Listed so you don't rebuild it.
 2. **Widths Punch vs Multi Punch.** The SOP draws them as separate stations with
    separate paperwork; the schedules only ever name one punch, and the app has
    one machine. Widths Punch is shown on the route but never assigned to.
-3. **`S89.083HT`** is the one die in use with no picture at all.
-4. Is the CNC machine called **CNC 1 or CNC-3**? (see below)
+3. Is the CNC machine called **CNC 1 or CNC-3**? (see below)
 
 ### The visual upgrade — DONE (commit `25cd719`)
 

@@ -250,22 +250,25 @@ extrusion, so both readings are tried and both directions answered:
 **Engineering Lookup is one Department Tools page** for both rolled assemblies
 and their individual extrusion profiles. One search accepts an assembly number,
 profile number, description, supplier, proposed number or final die number.
-Results stay typed as **Assembly** or **Extrusion**, so combining the search does
-not blur what the record means. Tapping a verified component opens its profile
-in the same workspace; reverse usage leads straight back to each assembly.
+Results stay typed as **Assembly**, **Profile reference**, or **Extrusion**, so
+combining the search does not blur what the record means. An exact assembly
+search also returns its linked individual profiles. Tapping any reviewed
+component opens that drawing in the same workspace; reverse usage leads
+straight back to each assembly.
 
 The header magnifier opens the page. Tapping a die on a queue or staging line
 opens the same unified lookup as a quick dialog.
 
-`S80.106`, `SA80.106`, and `SA80-106` are accepted as equivalent spellings.
-`test/app-check.mjs` asserts all three resolve to `SA80-106` with exactly
+`S80.106`, `SA80.106`, `SA80-106`, and separator-free `S80106` are accepted as
+equivalent spellings.
+`test/app-check.mjs` asserts all four resolve to `SA80-106` with exactly
 `Exterior 80-113 · Thermal break 84-901 ×2 · Interior 80-105`, that the reverse
 lookup finds it from `80-105`, and that an unknown die resolves to nothing
 rather than a wrong guess.
 
 ### Missing component-number recovery
 
-The Listings contain 334 assemblies with at least one empty component field.
+The Listings contain 330 assemblies with at least one empty component field.
 The lookup now safely recovers **64 exterior/interior fields across 47
 assemblies** where every matching standard/HT/HTX sibling agrees. Each recovered
 value is visually distinct and names the assembly it came from. Thermal-break
@@ -273,8 +276,16 @@ fields are never inferred because they can legitimately change by variant.
 
 It also exposes **68 additional extrusion-number references across 66 rows**
 that are present in Listing descriptions but absent from the four component
-columns. Those remain labelled as unassigned references rather than being given
-an invented engineering role.
+columns. All 68 link to reviewed extrusion-master records. Fifty-three are
+explicit component-only rows such as `S89.083HT → Thermal break 84-909`; these
+now show and print the referenced profile drawing instead of an empty assembly
+card. They remain profile references rather than being given invented exterior
+or interior roles.
+
+Nineteen component numbers written directly in verified Listing columns are
+not present in the twelve reviewed extrusion masters. The lookup keeps those
+numbers and says that no reviewed profile drawing is available; it does not
+substitute a similar-looking extrusion.
 
 ### Extrusion drawing library
 
@@ -314,11 +325,12 @@ picture now has dimensions and component callouts. `DRAWING_SOURCE` remains
 able to identify a fallback thumbnail if a future incomplete series needs one,
 but the current build does not use any.
 
-That is **883 full sheets and zero thumbnails**. Against the current schedules,
-164 of the dies in use are sub-assemblies the book carries, and 163 of those
-have a full sheet; the remaining gap is `S89.083HT`.
-`drawingFor()` still returns null rather than a broken image, so the last one
-degrades quietly.
+That is **883 full sheets and zero thumbnails**. `S89.083HT` has no assembly
+sheet because its source row is not a four-part assembly: it explicitly names
+the `84-909` thermal-break profile. Engineering Lookup now resolves that source
+relationship and uses the reviewed `84-909` master drawing on screen and in
+print. `drawingFor('SA89-083HT')` correctly remains null rather than pretending
+the individual profile card is an assembly sheet.
 
 ```
 tools/extract-listing-thumbs.py <dir-of-listing-pdfs> thumbs.json

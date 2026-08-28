@@ -2796,6 +2796,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   border-radius: var(--r-xs); background: var(--panel-2); color: var(--ink-3);
 }
 .lookup-result.on .lookup-result-icon { background: var(--accent); color: var(--on-fill); }
+.lookup-result.reference .lookup-result-icon {
+  background: var(--work-soft); color: var(--work);
+}
+.lookup-result.reference.on .lookup-result-icon { background: var(--work); color: var(--on-fill); }
 .lookup-result-copy { min-width: 0; display: grid; gap: 2px; }
 .lookup-result-copy b { font-size: var(--t-md); }
 .lookup-result-copy small {
@@ -2826,6 +2830,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   color: var(--accent); font-size: 10.5px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .07em;
 }
+.diecard.reference-only .lookup-kind { color: var(--work); }
 .die-assembly-grid {
   display: grid; grid-template-columns: minmax(340px, .95fr) minmax(380px, 1.05fr);
   align-items: start;
@@ -2836,6 +2841,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   border-radius: 0; cursor: zoom-in;
 }
 .lookup-detail .diedrawing img { max-height: 610px; object-fit: contain; }
+.lookup-detail .diedrawing.reference-profile {
+  background: #fff;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--work) 16%, transparent);
+}
+.lookup-detail .diedrawing.reference-profile img { width: 100%; }
+.reference-loading { min-height: 440px; justify-content: center; }
 .drawing-source {
   position: absolute; left: var(--s3); bottom: var(--s3);
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px;
@@ -2852,6 +2863,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   width: 30px; height: 30px; border-radius: var(--r-pill); flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--accent-soft); color: var(--accent);
+}
+.component-coverage.reference-only {
+  background: var(--work-soft);
+  box-shadow: inset 3px 0 0 var(--work);
+}
+.component-coverage.reference-only .component-coverage-icon {
+  background: var(--work); color: var(--on-fill);
 }
 .component-coverage > div { display: grid; gap: 2px; }
 .component-coverage strong { font-size: var(--t-sm); }
@@ -2874,6 +2892,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 .die-component-map .diepart.recovered {
   border-style: dashed; background: color-mix(in srgb, var(--accent-soft) 45%, var(--panel));
+}
+.die-component-group.reference .diepart {
+  border-left: 3px solid var(--work);
+  background: color-mix(in srgb, var(--work-soft) 48%, var(--panel));
 }
 .diepart-source {
   min-width: 0; margin-left: auto; color: var(--ink-3); font-size: 11px;
@@ -3481,8 +3503,11 @@ nav.tabs button[aria-current="true"] .nav-icon {
   }
   .print-drawing img { display: block; max-width: 100%; max-height: 6.4in; object-fit: contain; }
   .print-drawing figcaption { margin-top: .06in; color: #64748b; font-size: 7pt; }
+  .print-reference-drawing { background: #fff; }
+  .print-reference-drawing img { width: 100%; max-height: 5.8in; }
   .print-drawing-missing { min-height: 3in; display: grid; place-items: center; }
   .print-record-status { margin-bottom: .1in; padding: .09in; background: #eef3f7; }
+  .print-record-status.reference-only { border-left: 3px solid #0e7490; background: #ecfeff; }
   .print-record-status b, .print-record-status span { display: block; }
   .print-record-status span { margin-top: 2px; color: #64748b; font-size: 7.5pt; }
   .print-component-table th:nth-child(1) { width: 24%; }

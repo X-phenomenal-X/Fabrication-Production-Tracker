@@ -1077,6 +1077,7 @@ const dieCheck = await page.evaluate(() => import('/js/dies.js').then((d) => {
       q, sa: d.lookupDie(q).assembly?.sa || null,
       parts: d.componentsOf(d.lookupDie(q).assembly).map((c) => `${c.role}:${c.die}:${c.qty}`),
     })),
+    compactAlias: d.lookupDie('S80106').assembly?.sa || null,
     missing: d.lookupDie('ZZ9.999').assembly,
     audit: d.componentAudit(),
     recovered: d.recoveredComponentsOf(d.lookupDie('S80.113').assembly),
@@ -1085,6 +1086,14 @@ const dieCheck = await page.evaluate(() => import('/js/dies.js').then((d) => {
       .filter((usage) => usage.assembly.sa === 'SA80-113'),
     descriptionUsage: d.componentUsageOf('84-901')
       .filter((usage) => usage.assembly.sa === 'SA89-051'),
+    profileReference: (() => {
+      const assembly = d.lookupDie('S89083HT').assembly;
+      return {
+        sa: assembly?.sa || null,
+        reference: d.profileReferenceOf(assembly),
+        coverage: d.componentCoverage(assembly),
+      };
+    })(),
   };
 }));
 step('die lookup: ' + JSON.stringify(dieCheck));
@@ -1099,6 +1108,9 @@ if (JSON.stringify(dieCheck.parts) !== JSON.stringify(want)) {
 if (new Set(dieCheck.aliases.map((x) => JSON.stringify([x.sa, x.parts]))).size !== 1) {
   throw new Error('schedule and section-book spellings return different results: '
     + JSON.stringify(dieCheck.aliases));
+}
+if (dieCheck.compactAlias !== 'SA80-106') {
+  throw new Error('a separator-free schedule die did not resolve');
 }
 if (!dieCheck.usedIncludes) throw new Error('the reverse lookup does not find SA80-106 from 80-105');
 if (dieCheck.missing) throw new Error('an unknown die should resolve to nothing');
@@ -1119,6 +1131,15 @@ if (!dieCheck.recoveredUsage.some((usage) => usage.source === 'variant'
 }
 if (!dieCheck.descriptionUsage.some((usage) => usage.source === 'description')) {
   throw new Error('reverse usage omitted a listing-description reference');
+}
+
+if (dieCheck.profileReference.sa !== 'SA89-083HT'
+    || dieCheck.profileReference.reference?.die !== '84-909'
+    || dieCheck.profileReference.reference?.role !== 'Thermal break'
+    || !dieCheck.profileReference.coverage?.referenceOnly
+    || dieCheck.audit.profileReferenceRows < 53) {
+  throw new Error('component-only listing rows were not resolved safely: '
+    + JSON.stringify(dieCheck.profileReference));
 }
 
 // Drawings ride along with the data, and every caller copes with their
@@ -1151,11 +1172,14 @@ const sectionLookup = await page.evaluate(() => ({
   sa: document.querySelector('.die-section .diecard-sa')?.textContent.trim(),
   drawing: !!document.querySelector('.die-section .diedrawing img'),
   results: document.querySelectorAll('.die-section .lookup-result').length,
+  mappedProfiles: [...document.querySelectorAll('.die-section .lookup-result.profile .lookup-result-copy b')]
+    .map((n) => n.textContent.trim()),
   parts: [...document.querySelectorAll('.die-section .diepart-die')].map((n) => n.textContent.trim()),
 }));
 step('die lookup section: ' + JSON.stringify(sectionLookup));
 if (sectionLookup.title !== 'Engineering Lookup' || sectionLookup.sa !== 'SA80-106'
-  || !sectionLookup.drawing || sectionLookup.results !== 3
+  || !sectionLookup.drawing || sectionLookup.results < 4
+  || !['80-113', '84-901', '80-105'].every((die) => sectionLookup.mappedProfiles.includes(die))
   || sectionLookup.parts.join(',') !== '80-113,84-901,80-105') {
   throw new Error('the Engineering Lookup section did not show the complete SA80.106 result');
 }
@@ -1232,6 +1256,39 @@ const recoveredSection = await page.evaluate(() => ({
 }));
 if (recoveredSection.die !== '80-112' || !recoveredSection.provenance.includes('SA80-113HTX')) {
   throw new Error('the UI did not label a recovered extrusion mapping with its provenance');
+}
+
+// S89.083HT is a component-only source row, not a missing four-part assembly:
+// the listing explicitly says "Thermal break 84-909" and that reviewed profile
+// exists in the 8400 extrusion master. The unified view and paper record must
+// show that real drawing without inventing exterior/interior roles.
+await page.fill('.die-section .diesearch input', 'S89083HT');
+await page.waitForSelector('.diecard.reference-only');
+await page.waitForSelector('.diedrawing.reference-profile img', { timeout: 30000 });
+const referenceSection = await page.evaluate(() => ({
+  sa: document.querySelector('.diecard.reference-only .diecard-sa')?.textContent.trim(),
+  kind: document.querySelector('.diecard.reference-only .lookup-kind')?.textContent.trim(),
+  profile: document.querySelector('.diecard.reference-only .diepart-die')?.textContent.trim(),
+  source: document.querySelector('.diecard.reference-only .drawing-source')?.textContent.trim(),
+  image: document.querySelector('.diedrawing.reference-profile img')?.src.startsWith('data:image/webp;base64,'),
+  mappedProfiles: [...document.querySelectorAll('.lookup-result.profile .lookup-result-copy b')]
+    .map((node) => node.textContent.trim()),
+}));
+step('component-only profile reference: ' + JSON.stringify(referenceSection));
+if (referenceSection.sa !== 'SA89-083HT' || !referenceSection.kind.toUpperCase().includes('PROFILE REFERENCE')
+    || referenceSection.profile !== '84-909' || !referenceSection.source.includes('84-909')
+    || !referenceSection.image || !referenceSection.mappedProfiles.includes('84-909')) {
+  throw new Error('S89.083HT did not resolve to its reviewed 84-909 profile drawing');
+}
+await page.screenshot({ path: path.join(SHOT, 's89-083ht-reference.png'), fullPage: true });
+
+const referencePrintCount = await page.evaluate(() => window.__printCaptures.length);
+await page.click('.diecard.reference-only .record-print');
+await page.waitForFunction((count) => window.__printCaptures.length > count, referencePrintCount);
+const referencePrint = await page.evaluate(() => window.__printCaptures.at(-1));
+if (referencePrint.title !== 'SA89-083HT' || referencePrint.images !== 1
+    || referencePrint.rows !== 1 || !referencePrint.text.includes('Profile reference mapped to 84-909')) {
+  throw new Error('the S89.083HT paper record omitted its mapped profile drawing or provenance');
 }
 
 // And it opens from a die on a line.
