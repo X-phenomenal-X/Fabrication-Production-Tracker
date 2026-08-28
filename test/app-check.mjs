@@ -249,8 +249,11 @@ const target = await page.evaluate(async () => {
 if (!target) throw new Error('no Not-started line on Rolling (Auto) to test with');
 step(`target line: W/O ${target.wo} die ${target.die || '(none)'}`);
 
-// expand every group so the target is reachable regardless of bucket
-await page.$$eval('.dgroup-head[aria-expanded="false"]', (ns) => ns.forEach((n) => n.click()));
+// Expand every group so the target is reachable regardless of bucket. The
+// attribute is on the toggle button inside the header, not on the header —
+// matching the header found nothing, which went unnoticed while the target
+// happened to land in a group that starts open.
+await page.$$eval('.dgroup-toggle[aria-expanded="false"]', (ns) => ns.forEach((n) => n.click()));
 await page.waitForTimeout(250);
 await page.$$eval('.showmore', (ns) => ns.forEach((n) => n.click()));
 await page.waitForTimeout(250);
@@ -1135,6 +1138,97 @@ if (restart.finished !== 'DONE') {
   throw new Error('finishing the downstream station did not finish the one before it'
     + ` — upstream stayed ${restart.finished}, so the derived cache went stale`);
 }
+
+/* ---------- parking a line nobody is going to run ---------- */
+
+/* A schedule lists what was planned, not what was decided. On the live books
+   62 open lines are dated December — cancelled jobs, dies remade under another
+   work order — and until now the only ways to stop counting them were to mark
+   them Done, which is a lie the shift update repeats, or delete them, which the
+   next import undoes. Parking has to take a line out of every count while
+   keeping the record, and it has to survive a re-import. */
+const parked = await page.evaluate(async () => {
+  const M = await import('/js/model.js');
+  const S = await import('/js/store.js');
+  const rows = M.tasksForMachine('roll-auto').filter((r) => r.status.key !== 'DONE');
+  const row = rows.find((r) => !M.isParked(r.task));
+  const key = M.taskStatusKey(row.task);
+  const count = () => {
+    const sum = M.machineSummary('roll-auto');
+    return {
+      open: sum.open, parked: sum.parked, overdue: sum.overdue,
+      openCount: M.openCountFor('roll-auto'),
+      inQueue: M.groupedQueue('roll-auto').reduce((n, g) => n + g.rows.length, 0),
+      inParkedFilter: M.groupedQueue('roll-auto', { filter: 'PARKED' })
+        .reduce((n, g) => n + g.rows.length, 0),
+      running: M.runningNow('roll-auto').length,
+      board: M.todayBoard().overdue.length,
+    };
+  };
+
+  const before = count();
+  S.setParked(key, true, 'Remade under another W/O');
+  const after = count();
+  const rec = M.parkedFor(key);
+  const history = S.state.taskHistory.filter((h) => h.key === key && h.kind === 'parked').length;
+  S.setParked(key, false);
+  const restored = count();
+  return { wo: row.task.wo, key, before, after, restored, rec, history };
+});
+step(`parking W/O ${parked.wo}: open ${parked.before.open} → ${parked.after.open} → ${parked.restored.open}, `
+  + `parked ${parked.before.parked} → ${parked.after.parked}, `
+  + `queue ${parked.before.inQueue} → ${parked.after.inQueue}, `
+  + `parked filter ${parked.after.inParkedFilter}`);
+
+if (parked.after.open !== parked.before.open - 1) throw new Error('parking did not drop the open count');
+if (parked.after.openCount !== parked.before.openCount - 1) throw new Error('openCountFor still counts a parked line');
+if (parked.after.inQueue !== parked.before.inQueue - 1) throw new Error('a parked line is still in the queue');
+if (parked.after.parked !== parked.before.parked + 1) throw new Error('the parked count did not rise');
+if (parked.after.inParkedFilter !== parked.before.inParkedFilter + 1) {
+  throw new Error('a parked line is not reachable through the Parked filter — it would be lost');
+}
+if (parked.after.board >= parked.before.board && parked.before.board > 0
+    && parked.after.overdue >= parked.before.overdue) {
+  // Only meaningful when the line was late to begin with; both counts moving
+  // together is what matters, not the specific figure.
+  step('  (the parked line was not late, so the overdue counts are unchanged)');
+}
+if (parked.rec?.reason !== 'Remade under another W/O') throw new Error('the reason was not stored');
+if (!parked.history) throw new Error('parking left nothing in the line history');
+if (parked.restored.open !== parked.before.open) throw new Error('putting the line back did not restore it');
+
+/* The record is keyed the same way every other overlay is, so a re-import of
+   the workbook leaves it exactly where it was. Deleting the line is what does
+   not survive an import; that is the whole reason parking exists. */
+const parkSurvives = await page.evaluate(async () => {
+  const M = await import('/js/model.js');
+  const S = await import('/js/store.js');
+  const row = M.tasksForMachine('roll-auto').find((r) => r.status.key !== 'DONE');
+  const key = M.taskStatusKey(row.task);
+  S.setParked(key, true, 'Job cancelled');
+  const before = M.isParked(row.task);
+  return { key, before, wo: row.task.wo };
+});
+// Re-import the Rolling workbook through the UI, the same way the stable-key
+// check above does.
+await page.click('.hdr-setup');
+await page.waitForSelector('.drop');
+const chPark = page.waitForEvent('filechooser');
+await page.click('.drop:has-text("Rolling workbook") button');
+await (await chPark).setFiles(ROLLING);
+await page.waitForSelector('dialog .stat', { timeout: 120000 });
+await page.click('dialog header button');
+await page.waitForSelector('dialog', { state: 'detached' });
+const parkAfter = await page.evaluate((key) => import('/js/model.js').then((M) => {
+  const row = M.tasksInScope().find((t) => M.taskStatusKey(t) === key);
+  return { found: !!row, parked: row ? M.isParked(row) : null, reason: M.parkedFor(key)?.reason || null };
+}), parkSurvives.key);
+step(`parked W/O ${parkSurvives.wo} through a re-import: ${JSON.stringify(parkAfter)}`);
+if (!parkAfter.found) throw new Error('the parked line vanished from the re-imported book');
+if (!parkAfter.parked || parkAfter.reason !== 'Job cancelled') {
+  throw new Error('the parking record did not survive a re-import');
+}
+await page.evaluate((key) => import('/js/store.js').then((S) => S.setParked(key, false)), parkSurvives.key);
 
 /* ---------- one work order, seen whole ---------- */
 

@@ -1038,7 +1038,16 @@ main.page-enter { animation: page-enter .18s cubic-bezier(.2,.8,.2,1); }
 
 .line-qty { flex-shrink: 0; text-align: right; min-width: 72px; display: flex; align-items: baseline; gap: var(--s1); justify-content: flex-end; }
 .line-qty .mono { font-size: var(--t-lg); font-weight: 800; font-variant-numeric: tabular-nums; }
-.line-date { flex-shrink: 0; width: 74px; font-size: var(--t-sm); color: var(--ink-2); white-space: nowrap; }
+.line-date {
+  flex-shrink: 0; width: 74px; font-size: var(--t-sm); color: var(--ink-2);
+  white-space: nowrap; display: flex; flex-direction: column; line-height: 1.25;
+}
+/* How far past the date. Loud while the line is still worth chasing, and
+   deliberately quiet once it is months old — those are for reviewing, and a
+   column of red numbers nobody acts on is how the board stopped meaning
+   anything in the first place. */
+.line-late { font-size: var(--t-xs); color: var(--bad); font-variant-numeric: tabular-nums; }
+.line-late.cold { color: var(--ink-3); }
 
 /* Five icons per row is a lot of target in a small space. They get real size
    and a gap wide enough that a gloved thumb cannot catch two at once. */
@@ -3502,6 +3511,16 @@ button.sync-chip:active { transform: translateY(1px); }
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 .themeopt.on strong { color: var(--accent); }
+
+/* A parked line: taken out of the queue by a decision, not by a status. Drawn
+   quiet on purpose — it is a note that this line is settled, not an alarm. */
+.badge-parked {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 6px; border-radius: var(--r-pill);
+  background: var(--panel-2); border: 1px dashed var(--line);
+  color: var(--ink-3); font-size: var(--t-xs); font-weight: 600;
+  letter-spacing: .03em;
+}
 
 /* ---------- jobs ----------
 

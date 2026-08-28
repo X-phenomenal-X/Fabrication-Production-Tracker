@@ -86,6 +86,9 @@ function dieRow(job, d, onPick) {
   if (d.lines.some((l) => l.rush.on)) flags.push(chip('Rush', 'warn'));
   if (d.lines.some((l) => l.bo.on)) flags.push(chip('B/O', 'bad'));
   if (d.lines.some((l) => l.note?.text)) flags.push(icon('note', { size: 13 }));
+  // Parked work is still part of the job. A die whose remaining stations were
+  // all written off would otherwise read as simply unfinished.
+  if (d.lines.some((l) => l.parked)) flags.push(chip('Parked', 'mute'));
 
   /* Opens the line somebody is actually asking about: the first station that
      has not finished this die, or the last one if the whole die is through.
@@ -116,6 +119,7 @@ function jobStats(job) {
     el('div.jstat', {}, el('b', {}, fmtNum(job.pieces)), el('i', {}, 'pieces')),
     job.rush ? el('div.jstat.warn', {}, el('b', {}, fmtNum(job.rush)), el('i', {}, 'rush')) : null,
     job.backOrders ? el('div.jstat.bad', {}, el('b', {}, fmtNum(job.backOrders)), el('i', {}, 'short')) : null,
+    job.parked ? el('div.jstat', {}, el('b', {}, fmtNum(job.parked)), el('i', {}, 'parked')) : null,
     el('div.jstat.grow', {}, bar(pct, job.done === job.total),
       el('i', {}, job.open ? `${job.open} still to do` : 'complete')));
 }

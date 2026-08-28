@@ -39,6 +39,13 @@ export const state = {
   taskEdit: {},     // same key -> { fields: {...}, at, by } — corrections to the sheet
   backOrder: {},    // same key -> { flagged, qty, assignee, note, at, by }
   rush: {},         // same key -> { on, needBy, assignee, reason, at, by }
+  /* Lines nobody intends to run: a job cancelled, a die remade under another
+     work order, an elevation that changed. The workbook goes on listing them
+     — it is a schedule, not a record of decisions — and 62 open lines on the
+     live books are dated December. Parking takes them out of the queue and the
+     counts without deleting anything, because "we decided not to" is worth
+     keeping and a deleted line comes back on the next import. */
+  parked: {},       // same key -> { on, reason, at, by }
   taskAssign: {},   // same key -> { machine, at, by } — which machine took a queued line
   taskHistory: [],  // every change to a line, newest first
   machineConfig: {}, // machineKey -> { label, note, ops, hidden }
@@ -186,7 +193,7 @@ function changed(fields, { at = now(), by = me() } = {}) {
    the record older than itself, while a genuinely newer edit still wins — which
    is right, because that is somebody re-flagging a rush after you cleared it. */
 const DELETABLE = [
-  'taskStatus', 'taskNote', 'taskEdit', 'backOrder', 'rush', 'taskAssign',
+  'taskStatus', 'taskNote', 'taskEdit', 'backOrder', 'rush', 'taskAssign', 'parked',
   'manualTasks', 'todos', 'shiftLogs', 'machineConfig', 'staging',
 ];
 
@@ -387,6 +394,21 @@ export function setRush(key, patch) {
 
   if (!next.on) forget('rush', key);
   else state.rush[key] = changed(next);
+  save();
+}
+
+/** Take a line out of the queue, or put it back. The reason is the point —
+    a parked line with no reason is indistinguishable from one somebody
+    mis-clicked, and the next person to look has no way to tell. */
+export function setParked(key, on, reason = null) {
+  const cur = state.parked[key] || {};
+  const next = !!on;
+  const text = String(reason ?? '').trim() || null;
+  if ((!!cur.on) === next && (cur.reason ?? null) === text) return;
+  if (!!cur.on !== next) logChange(key, 'parked', 'on', !!cur.on, next);
+  if ((cur.reason ?? null) !== text) logChange(key, 'parked', 'reason', cur.reason ?? null, text);
+  if (!next) forget('parked', key);
+  else state.parked[key] = changed({ on: true, reason: text });
   save();
 }
 
@@ -624,6 +646,7 @@ function snapshot() {
     backOrder: state.backOrder,
     rush: state.rush,
     taskAssign: state.taskAssign,
+    parked: state.parked,
     taskHistory: state.taskHistory,
     machineConfig: state.machineConfig,
     shiftLogs: state.shiftLogs,
@@ -839,6 +862,7 @@ function mergeSnapshot(remote) {
   state.backOrder = mergeRecords(state.backOrder, remote.backOrder);
   state.rush = mergeRecords(state.rush, remote.rush);
   state.taskAssign = mergeRecords(state.taskAssign, remote.taskAssign);
+  state.parked = mergeRecords(state.parked, remote.parked);
 
   // History is append-only: merge by id and keep it newest-first.
   const seen = new Set(state.taskHistory.map((h) => h.id));

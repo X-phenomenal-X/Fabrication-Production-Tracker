@@ -22,9 +22,11 @@ import {
   isAssigned, taskByKey, staleImports, shiftUpdateAge, manualIdFor,
   suggestedMachine, suggestionsIn, isStaged,
   assignedMachine, effectiveTaskStatus, TRACK_STATUS_ORDER, TRACK_STATUS, dateGroupOf,
+  daysLate, isParked, parkedFor,
 } from '../model.js';
 import { backOrderDialog } from './backorders.js';
 import { jobDialog } from './job.js';
+import { parkDialog } from './park.js';
 import { manualJobDialog } from './manual.js';
 import { dieDialog } from './die-launcher.js';
 import { rushDialog } from './rush.js';
@@ -216,6 +218,12 @@ function taskLine(row, vs, rerender, group) {
           title: bo.qty != null ? `${bo.qty} pieces short` : 'Back order — short of material',
         }, icon('alert', { size: 11 }),
           bo.qty != null ? `B/O ${fmtNum(bo.qty)}` : 'B/O') : null,
+        /* Only ever seen through the Parked filter, since a parked line is out
+           of every other view — but seen there it has to say what it is, or
+           the filter looks like an ordinary queue. */
+        isParked(t) ? el('span.badge-parked', {
+          title: parkedFor(taskStatusKey(t))?.reason || 'Parked — not going to run',
+        }, icon('square', { size: 11 }), 'PARKED') : null,
         t.editedAt ? el('span.badge-edited', {
           title: `Edited by ${t.editedBy} · ${fmtWhen(t.editedAt)}`,
         }, 'edited') : null,
@@ -299,7 +307,19 @@ function taskLine(row, vs, rerender, group) {
       el('span.mono', {}, fmtNum(t.qty)),
       el('span.small.muted', {}, 'pcs')),
 
-    el('div.line-date.hide-sm', {}, fmtDate(t.cuttingDate)),
+    /* The date, and how far past it. A band tells you which pile a line is in;
+       it cannot tell 15 days apart from 270, and on this schedule both are in
+       the same pile. The number is what decides whether a line gets chased or
+       written off. */
+    el('div.line-date.hide-sm', {}, fmtDate(t.cuttingDate),
+      (() => {
+        const late = daysLate(t);
+        return late > 0
+          ? el('span.line-late' + (late > 60 ? '.cold' : ''), {
+            title: `${late} days past its cutting date`,
+          }, `+${late}d`)
+          : null;
+      })()),
 
     el('button.line-open', {
       'aria-label': `Open details for ${t.wo}`,
@@ -479,7 +499,9 @@ function lineInspector(row, vs, rerender, group) {
   const bo = resolveBackOrder(t);
   const rush = row.rush || resolveRush(t);
   const canMove = canMoveIn(group);
-  const updates = [row.status?.at, note?.at, bo.at, rush.at, t.editedAt].filter(Boolean).sort();
+  const park = parkedFor(key);
+  const parked = !!park?.on;
+  const updates = [row.status?.at, note?.at, bo.at, rush.at, park?.at, t.editedAt].filter(Boolean).sort();
   const last = updates.at(-1);
   const opening = vs.motion?.type === 'select' && vs.motion.key === key;
 
@@ -566,6 +588,7 @@ function lineInspector(row, vs, rerender, group) {
       action('Route', 'list', () => routeDialog(t)),
       action('Rush', 'bolt', () => rushDialog(t, rerender), rush.on ? 'warn' : ''),
       action('Back order', 'alert', () => backOrderDialog(t, rerender), bo.on ? 'bad' : ''),
+      action(parked ? 'Parked' : 'Park', 'square', () => parkDialog(t, rerender), parked ? 'on' : ''),
       action('History', 'clock', () => historyDialog(t))),
   );
 }
@@ -899,6 +922,9 @@ const FILTERS = [
   { key: 'IN_PROGRESS', label: 'Running' },
   { key: 'RUSH', label: 'Rush' },
   { key: 'BO', label: 'Back order' },
+  // Last, and named for what it holds rather than for a state a line is in:
+  // this is the review list, not another way to work the queue.
+  { key: 'PARKED', label: 'Parked' },
 ];
 
 export function makeCentreView(group) {
@@ -995,6 +1021,7 @@ export function makeCentreView(group) {
         stat(sum.inProgress, 'running', 'work', 'play'),
         stat(sum.open, 'open', '', 'list'),
         stat(sum.overdue, 'overdue', 'bad', 'clock'),
+        sum.parked ? stat(sum.parked, 'parked', 'mute', 'square') : null,
         stat(sum.rush + sum.backOrder, 'B/O & rush', 'bad', 'alert')),
       el('div.progress-cap', {}, `${donePct}% complete · ${fmtNum(sum.done)} of ${fmtNum(sum.total)} lines done`));
 

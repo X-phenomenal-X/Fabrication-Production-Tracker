@@ -273,7 +273,7 @@ function jobTable() {
       job = {
         wo, lines: [], dies: [], stations: [], projects: [], floors: [],
         total: 0, done: 0, running: 0, waiting: 0, pieces: 0,
-        rush: 0, backOrders: 0, shortPieces: 0, notes: 0,
+        rush: 0, backOrders: 0, shortPieces: 0, notes: 0, parked: 0,
         firstCut: null, lastCut: null, undated: 0,
       };
       map.set(wo, job);
@@ -284,10 +284,16 @@ function jobTable() {
     const key = taskStatusKey(t);
     const bo = resolveBackOrder(t);
     const rush = resolveRush(t);
-    const row = { task: t, status, machine, key, bo, rush, note: taskNoteFor(key) };
+    const parked = isParked(t);
+    const row = { task: t, status, machine, key, bo, rush, parked, note: taskNoteFor(key) };
 
     job.lines.push(row);
-    countInto(job, status.key, t.qty);
+    /* A parked line still belongs to the job — hiding it would make a job look
+       finished when part of it was written off, which is the opposite of
+       seeing the work order whole. It is counted apart from the work that is
+       still going to happen. */
+    if (parked) job.parked++;
+    else countInto(job, status.key, t.qty);
     if (rush.on) job.rush++;
     if (bo.on) { job.backOrders++; job.shortPieces += bo.qty || 0; }
     if (row.note?.text) job.notes++;
@@ -299,7 +305,7 @@ function jobTable() {
 
     /* Dates come from the lines still to do. A job whose remaining work is due
        next week is not "eight months late" because one finished line was. */
-    if (status.key !== 'DONE') {
+    if (status.key !== 'DONE' && !parked) {
       const cut = t.cuttingDate || null;
       if (!cut) job.undated++;
       else {
@@ -320,19 +326,23 @@ function jobTable() {
       const d = byDie.get(die);
       d.lines.push(row);
       d.qty += row.task.qty || 0;
-      countInto(d, row.status.key, row.task.qty);
+      if (!row.parked) countInto(d, row.status.key, row.task.qty);
       /* Two rows at one station are two real pieces of work — different
          elevations, usually — so the station is only as far along as its least
          finished row. Calling it done while half of it is on the rack is the
          error the whole inference section exists to prevent. */
       const seen = d.stations.get(row.machine);
       const rank = TRACK_STATUS_ORDER.indexOf(row.status.key);
-      if (!seen || rank < TRACK_STATUS_ORDER.indexOf(seen.key)) d.stations.set(row.machine, row.status);
+      // A parked row cannot hold a station back — nobody is waiting on work
+      // that has been written off.
+      if (!row.parked && (!seen || rank < TRACK_STATUS_ORDER.indexOf(seen.key))) {
+        d.stations.set(row.machine, row.status);
+      }
 
       if (!byStation.has(row.machine)) byStation.set(row.machine, blankStation(row.machine));
       const st = byStation.get(row.machine);
       st.lines.push(row);
-      countInto(st, row.status.key, row.task.qty);
+      if (!row.parked) countInto(st, row.status.key, row.task.qty);
     }
 
     /* A die's lines in the order material moves through them, not the order
@@ -454,7 +464,8 @@ export function tasksForMachine(machineKey) {
 }
 
 export function openCountFor(machineKey) {
-  return tasksForMachine(machineKey).filter((r) => r.status.key !== 'DONE').length;
+  return tasksForMachine(machineKey)
+    .filter((r) => !isParked(r.task) && r.status.key !== 'DONE').length;
 }
 
 /** Lines actually running on a machine right now — the answer to "what is
@@ -462,7 +473,8 @@ export function openCountFor(machineKey) {
     found by scrolling the queue. Same order as the queue itself: rush first,
     then soonest cutting date. */
 export function runningNow(machineKey) {
-  return tasksForMachine(machineKey).filter((r) => r.status.key === 'IN_PROGRESS');
+  return tasksForMachine(machineKey)
+    .filter((r) => !isParked(r.task) && r.status.key === 'IN_PROGRESS');
 }
 
 /* ---------- date grouping ---------- */
@@ -471,30 +483,75 @@ export function runningNow(machineKey) {
    `open` decides whether the group starts expanded — the urgent ones do,
    because they are the answer to "what do I run now". `cap` limits rows shown
    before a "Show more"; every group is capped, since the real data puts 74
-   lines in Overdue and 97 in This week on Rolling (Auto) alone. */
+   lines in Overdue and 97 in This week on Rolling (Auto) alone.
+
+   Late work is split three ways rather than tipped into one Overdue bucket.
+   The measured reason: on the live schedules 649 of the 756 open dated lines
+   are past their cutting date — 86%, which is the same as painting the board
+   red and calling it a signal. Split by how late, the same lines separate into
+   271 recently due, 221 weeks behind and 157 months behind, and the last of
+   those includes 62 lines dated December — work nobody is going to run, which
+   was being counted in the same breath as this morning's.
+
+   The boundaries are the data's own shape, not calendar intuition: there is
+   nothing at all between 0 and 11 days, the median is 25, and the tail runs to
+   270. Fourteen and sixty days sit in the gaps.
+
+   MONTHS starts folded shut for the same reason Later does — it is a list to
+   review, not to work from. */
 export const DATE_GROUPS = [
   { key: 'OVERDUE', label: 'Overdue', tone: 'bad', open: true, cap: 25 },
+  { key: 'WEEKS', label: 'Weeks behind', tone: 'bad', open: true, cap: 25 },
+  { key: 'MONTHS', label: 'Months behind', tone: 'mute', open: false, cap: 25 },
   { key: 'TODAY', label: 'Today', tone: 'warn', open: true, cap: 25 },
   { key: 'WEEK', label: 'This week', tone: 'mute', open: true, cap: 25 },
   { key: 'LATER', label: 'Later', tone: 'mute', open: false, cap: 25 },
   { key: 'NODATE', label: 'No date', tone: 'mute', open: false, cap: 25 },
 ];
 
+const WEEKS_BEHIND = 14;
+const MONTHS_BEHIND = 60;
+
+/** How many days past its cutting date a line is. Negative means it is still
+    ahead of it, null when there is no date to be late against. */
+export function daysLate(task, ref = today()) {
+  const d = task.cuttingDate;
+  if (!d) return null;
+  return Math.round((Date.parse(ref + 'T00:00:00Z') - Date.parse(d + 'T00:00:00Z')) / 86400000);
+}
+
 export function dateGroupOf(task, ref = today()) {
   const d = task.cuttingDate;
   if (!d) return 'NODATE';
-  if (d < ref) return 'OVERDUE';
+  if (d < ref) {
+    const late = daysLate(task, ref);
+    if (late > MONTHS_BEHIND) return 'MONTHS';
+    return late > WEEKS_BEHIND ? 'WEEKS' : 'OVERDUE';
+  }
   if (d === ref) return 'TODAY';
   return d <= addDays(ref, 7) ? 'WEEK' : 'LATER';
+}
+
+/** Every bucket that means "past its date". Counts and filters ask this rather
+    than testing one key, so splitting the bucket did not quietly drop two
+    thirds of the overdue count off every summary that reads it. */
+const LATE_GROUPS = new Set(['OVERDUE', 'WEEKS', 'MONTHS']);
+export function isLate(task, ref = today()) {
+  return LATE_GROUPS.has(dateGroupOf(task, ref));
 }
 
 /** A machine's queue, bucketed by cutting date and ready to render. */
 export function groupedQueue(machineKey, { showDone = false, q = '', filter = 'ALL', ref = today() } = {}) {
   const term = q.trim().toLowerCase();
   const rows = tasksForMachine(machineKey)
+    /* Parked lines are out of the queue everywhere except the filter that
+       exists to review them. They are not deleted and not archived — somebody
+       decided they are not going to run, and that decision has to be visible
+       and reversible, which "hidden forever" is not. */
+    .filter((r) => (filter === 'PARKED' ? isParked(r.task) : !isParked(r.task)))
     .filter((r) => showDone || r.status.key !== 'DONE')
     .filter((r) => {
-      if (filter === 'ALL') return true;
+      if (filter === 'ALL' || filter === 'PARKED') return true;
       if (filter === 'BO') return resolveBackOrder(r.task).on;
       if (filter === 'RUSH') return r.rush.on;
       return r.status.key === filter;
@@ -517,13 +574,19 @@ export function groupedQueue(machineKey, { showDone = false, q = '', filter = 'A
 
 /** Headline counts for a machine, for the strip under the sub-tabs. */
 export function machineSummary(machineKey, ref = today()) {
-  const all = tasksForMachine(machineKey);
+  const everything = tasksForMachine(machineKey);
+  const parked = everything.filter((r) => isParked(r.task));
+  // Every count below is of work that is still going to happen, so a parked
+  // line is out of all of them — leaving it in the open count is exactly what
+  // parking is meant to stop.
+  const all = everything.filter((r) => !isParked(r.task));
   const open = all.filter((r) => r.status.key !== 'DONE');
   return {
+    parked: parked.length,
     total: all.length,
     open: open.length,
     inProgress: open.filter((r) => r.status.key === 'IN_PROGRESS').length,
-    overdue: open.filter((r) => dateGroupOf(r.task, ref) === 'OVERDUE').length,
+    overdue: open.filter((r) => isLate(r.task, ref)).length,
     backOrder: open.filter((r) => resolveBackOrder(r.task).on).length,
     rush: open.filter((r) => r.rush.on).length,
     done: all.length - open.length,
@@ -534,6 +597,18 @@ export function machineSummary(machineKey, ref = today()) {
 
 export function rushFor(key) {
   return state.rush?.[key] || null;
+}
+
+/* ---------- parked ---------- */
+
+export function parkedFor(key) {
+  return state.parked?.[key] || null;
+}
+
+/** A line somebody has decided is not going to run. Purely user-owned — the
+    workbook has no opinion about it, and keeps listing the line either way. */
+export function isParked(task) {
+  return !!parkedFor(taskStatusKey(task))?.on;
 }
 
 /** A line's rush marking, plus how close its needed-by date is. `late` and
@@ -607,6 +682,8 @@ export function allBackOrders() {
     const bo = resolveBackOrder(task);
     if (!bo.on) continue;
     if (effectiveTaskStatus(task).key === 'DONE') continue;
+    // Nobody needs to chase material for a line that is not going to run.
+    if (isParked(task)) continue;
     rows.push({ task, bo, machine: assignedMachine(task) });
   }
 
@@ -829,12 +906,18 @@ export function todayBoard(ref = today()) {
       bo: resolveBackOrder(task),
     };
   });
-  const open = rows.filter((r) => r.status.key !== 'DONE');
+  const open = rows.filter((r) => r.status.key !== 'DONE' && !isParked(r.task));
 
   return {
     running: open.filter((r) => r.status.key === 'IN_PROGRESS'),
     dueToday: open.filter((r) => r.task.cuttingDate === ref),
-    overdue: open.filter((r) => r.task.cuttingDate && r.task.cuttingDate < ref),
+    /* The day's list, so "overdue" here means recently due — the work somebody
+       could actually pick up this shift. Everything past its date would be 649
+       lines on the live schedules, most of them weeks or months old, and a
+       briefing that opens with 649 items is not a briefing. The rest is still
+       counted, and named, so nothing goes quietly missing. */
+    overdue: open.filter((r) => dateGroupOf(r.task, ref) === 'OVERDUE'),
+    longOverdue: open.filter((r) => ['WEEKS', 'MONTHS'].includes(dateGroupOf(r.task, ref))),
     rushNow: open.filter((r) => r.rush.on && (!r.rush.needBy || r.rush.needBy <= ref)),
     backOrders: open.filter((r) => r.bo.on),
     finishedToday: rows.filter((r) => r.status.key === 'DONE'
