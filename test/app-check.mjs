@@ -82,7 +82,7 @@ step('tabs: ' + tabs.join(', '));
 const setupGear = await page.$$eval('.hdr-setup', (ns) => ns.map((n) => n.getAttribute('aria-label')));
 step('setup control: ' + JSON.stringify(setupGear));
 if (setupGear.length !== 1) throw new Error('Setup is not reachable from the header');
-if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Today,Staging,Rush,Back Orders,Engineering Lookup,Shift Update') {
+if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Staging,Rush,Back Orders,Engineering Lookup,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -1135,6 +1135,117 @@ if (restart.finished !== 'DONE') {
   throw new Error('finishing the downstream station did not finish the one before it'
     + ` — upstream stayed ${restart.finished}, so the derived cache went stale`);
 }
+
+/* ---------- one work order, seen whole ---------- */
+
+/* The machine pages answer "what is on my machine". Nobody asks that. They ask
+   where a work order has got to, and in the live schedules that is a question
+   about several machines at once — 201 of the 272 work orders touch more than
+   one centre. The Jobs page has to answer it without opening four tabs, and it
+   has to agree with those tabs, because it is derived from the same lines. */
+await gotoTab('Jobs');
+await page.waitForSelector('.jcard');
+
+const jobList = await page.evaluate(() => ({
+  cards: document.querySelectorAll('.jcard').length,
+  spanning: [...document.querySelectorAll('.jcard')].filter((n) => /stations/.test(n.textContent)).length,
+  headline: document.querySelector('.centre-stats')?.textContent.replace(/\s+/g, ' ').trim(),
+}));
+step(`jobs page: ${jobList.cards} cards, ${jobList.spanning} across centres — ${jobList.headline}`);
+if (!jobList.cards) throw new Error('the jobs page listed nothing');
+if (!jobList.spanning) throw new Error('no job spans more than one centre — the page has nothing to answer');
+
+/* Expanding one has to agree with the model, station by station. The rail is
+   the whole point: a station is a count, not a status word, because a station
+   with nine of twelve dies cut is neither started nor finished. */
+const opened = await page.evaluate(async () => {
+  const M = await import('/js/model.js');
+  const cards = [...document.querySelectorAll('.jcard')];
+  const card = cards.find((n) => /stations/.test(n.textContent));
+  const wo = card.querySelector('.mono.strong').textContent.replace(/^W\/O\s*/, '').trim();
+  card.querySelector('.jhead').click();
+  await new Promise((r) => setTimeout(r, 250));
+  const open = document.querySelector('.jcard.open');
+  const job = M.jobFor(wo);
+  return {
+    wo,
+    railShown: [...open.querySelectorAll('.jstation')].map((n) =>
+      n.querySelector('.jstation-count').textContent.trim()),
+    railModel: job.stations.map((st) => `${st.done}/${st.total}`),
+    stationOrder: job.stations.map((st) => st.machine),
+    diesShown: open.querySelectorAll('.jdie:not(.head)').length,
+    diesModel: job.dies.length,
+    headings: [...open.querySelectorAll('.jcell.head')].map((n) => n.textContent.trim()),
+    // A die that is not on a station has to look different from one that is
+    // on it and untouched: "not going there" and "not started" are not the
+    // same answer, and both are read off this grid.
+    absent: open.querySelectorAll('.jcell.none').length,
+  };
+});
+step(`job ${opened.wo}: rail ${opened.railShown.join(' → ')}, `
+  + `${opened.diesShown} dies, columns ${opened.headings.join('/')}`);
+if (opened.railShown.join('|') !== opened.railModel.join('|')) {
+  throw new Error(`the rail says ${opened.railShown.join('|')} but the model says ${opened.railModel.join('|')}`);
+}
+if (opened.diesShown !== opened.diesModel) throw new Error('the die rows do not match the model');
+
+/* Stations run in the order material moves. A rail that lists the punch before
+   rolling is worse than no rail — it reads as the route. */
+const STAGE_OF = { 'roll-auto': 1, 'roll-man': 1, saw: 2, fom1: 2, fom2: 2, fom3: 2, multipunch: 3, cncfmc: 4, cnc1: 4, fmc1: 4, fmc2: 4 };
+const stages = opened.stationOrder.map((m) => STAGE_OF[m]);
+if (stages.some((v, i) => i && v < stages[i - 1])) {
+  throw new Error(`the rail runs backwards: ${opened.stationOrder.join(' → ')}`);
+}
+
+/* Column headings have to name one machine each. Initials collide where it
+   matters — FOM 1 and FMC 1 both reduce to "F1" — and those two land on the
+   same job often enough that a guess would be read as a fact. */
+if (new Set(opened.headings).size !== opened.headings.length) {
+  throw new Error(`two stations share a column heading: ${opened.headings.join('/')}`);
+}
+
+/* Clicking a die goes to the line somebody is asking about — the first station
+   that has not finished it — and that page has to actually show the line. A
+   finished line is hidden by default on a centre page, so following a link to
+   one used to land on an empty queue with a search term in the box. */
+const jumped = await page.evaluate(async () => {
+  const M = await import('/js/model.js');
+  const open = document.querySelector('.jcard.open');
+  const wo = open.querySelector('.mono.strong').textContent.replace(/^W\/O\s*/, '').trim();
+  const dieRow = open.querySelector('.jdie:not(.head)');
+  const die = dieRow.querySelector('.mono.strong').textContent.trim();
+  const lines = M.jobFor(wo).dies.find((d) => d.die === die).lines;
+  const want = lines.find((l) => l.status.key !== 'DONE') || lines[lines.length - 1];
+  dieRow.click();
+  await new Promise((r) => setTimeout(r, 400));
+  return {
+    wo, die, wantMachine: want.machine, wantStatus: want.status.key,
+    hash: location.hash.slice(1),
+    lines: document.querySelectorAll('.line').length,
+    focused: document.querySelector('.line.active .line-id .mono')?.textContent.trim() || null,
+  };
+});
+step(`clicking die ${jumped.die} of ${jumped.wo} → #${jumped.hash}, `
+  + `${jumped.lines} lines, focused ${jumped.focused} (wanted ${jumped.wantMachine}/${jumped.wantStatus})`);
+if (!jumped.lines) throw new Error('following a die from the jobs page landed on an empty queue');
+if (jumped.focused !== jumped.wo) throw new Error(`landed focused on ${jumped.focused}, not ${jumped.wo}`);
+
+/* The same body opens from a line, so an operator can check whether the
+   station before theirs has finished without leaving their own page. */
+await page.click('.line');
+await page.waitForSelector('.line-inspector');
+await page.click('.inspector-action:has-text("Job")');
+await page.waitForSelector('dialog[open] .jrail');
+const jobDlg = await page.evaluate(() => ({
+  title: document.querySelector('dialog[open] header')?.textContent.replace('Close', '').trim(),
+  stations: document.querySelectorAll('dialog[open] .jstation').length,
+  dies: document.querySelectorAll('dialog[open] .jdie:not(.head)').length,
+}));
+step('job dialog from a line: ' + JSON.stringify(jobDlg));
+if (!jobDlg.stations || !jobDlg.dies) throw new Error('the job dialog opened empty');
+await page.screenshot({ path: path.join(SHOT, 'job-dialog.png') });
+await page.keyboard.press('Escape');
+await page.waitForSelector('dialog[open]', { state: 'detached' });
 
 /* ---------- the routing panel ---------- */
 

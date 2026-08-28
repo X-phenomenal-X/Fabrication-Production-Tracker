@@ -21,9 +21,10 @@ import {
   shiftUpdateFor, taskNoteFor, machineConfig, resolveBackOrder, resolveRush,
   isAssigned, taskByKey, staleImports, shiftUpdateAge, manualIdFor,
   suggestedMachine, suggestionsIn, isStaged,
-  assignedMachine, effectiveTaskStatus, TRACK_STATUS_ORDER, TRACK_STATUS,
+  assignedMachine, effectiveTaskStatus, TRACK_STATUS_ORDER, TRACK_STATUS, dateGroupOf,
 } from '../model.js';
 import { backOrderDialog } from './backorders.js';
+import { jobDialog } from './job.js';
 import { manualJobDialog } from './manual.js';
 import { dieDialog } from './die-launcher.js';
 import { rushDialog } from './rush.js';
@@ -59,9 +60,21 @@ export function focusCentreTask(task) {
   vs.machine = machineKey;
   vs.q = String(task.wo || '');
   vs.filter = 'ALL';
-  vs.showDone = false;
+  /* Finished lines are hidden by default, which is right for working a queue
+     and wrong for being sent to one specific line: following a link to a line
+     that turns out to be done should show it, not an empty page with a search
+     term in the box and no explanation. */
+  vs.showDone = effectiveTaskStatus(task).key === 'DONE';
   vs.selected.clear();
   vs.active = taskStatusKey(task);
+  /* Open the date group the line sits in and lift its row cap. "No date" and
+     "Later" are folded shut by default and every group stops at 25 rows, both
+     of which are right when you are working a queue and wrong when you have
+     been sent to one specific line — the page would render the group header
+     and nothing else, with the work order sitting in the search box. */
+  const groupKey = dateGroupOf(task);
+  vs.open[groupKey] = true;
+  vs.expanded[groupKey] = true;
   return { Rolling: 'rolling', FOM: 'fom', CNC: 'cnc', Punch: 'punch' }[machine.group] || null;
 }
 
@@ -547,6 +560,9 @@ function lineInspector(row, vs, rerender, group) {
         : editLine(row, rerender))),
       action(note ? 'Edit note' : 'Note', 'note', () => noteEditor(row, rerender), note ? 'on' : ''),
       canMove ? action(hasQueue(group) ? 'Assign' : 'Move', 'arrow', () => moveDialog([key], group, rerender)) : null,
+      /* Where the rest of this work order has got to. Next to Route on
+         purpose: Route is where it should go, Job is where it is. */
+      action('Job', 'job', () => jobDialog(t)),
       action('Route', 'list', () => routeDialog(t)),
       action('Rush', 'bolt', () => rushDialog(t, rerender), rush.on ? 'warn' : ''),
       action('Back order', 'alert', () => backOrderDialog(t, rerender), bo.on ? 'bad' : ''),

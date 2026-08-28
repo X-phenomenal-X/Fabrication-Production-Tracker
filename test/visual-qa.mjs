@@ -68,6 +68,7 @@ const SCREENS = [
   { hash: 'punch', name: 'punch' },
   { hash: 'rush', name: 'rush' },
   { hash: 'backorders', name: 'backorders' },
+  { hash: 'jobs', name: 'jobs' },
   { hash: 'dies', name: 'dies' },
   { hash: 'shift', name: 'shift' },
   { hash: 'setup', name: 'setup' },

@@ -11,6 +11,7 @@ import {
 } from './store.js';
 import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
+import { renderJobs } from './views/job.js';
 import { renderToday } from './views/today.js';
 import { renderStaging } from './views/staging.js';
 import { renderOverview } from './views/overview.js';
@@ -68,6 +69,10 @@ const TABS = [
   { key: 'fom', label: 'FOM', kind: 'centre', icon: 'factory', render: makeCentreView('FOM') },
   { key: 'cnc', label: 'CNC & FMC', short: 'CNC', kind: 'centre', icon: 'cpu', render: makeCentreView('CNC') },
   { key: 'punch', label: 'Multi Punch', short: 'Punch', kind: 'centre', icon: 'punch', render: makeCentreView('Punch') },
+  /* First among the tools: it is the page you reach for when somebody asks
+     about a work order rather than about a machine, which is most of the
+     time — 201 of the 272 live work orders touch more than one centre. */
+  { key: 'jobs', label: 'Jobs', kind: 'tool', icon: 'job', render: renderJobs },
   { key: 'today', label: 'Today', kind: 'tool', icon: 'calendar', render: renderToday },
   { key: 'staging', label: 'Staging', short: 'Stage', kind: 'tool', icon: 'staging', render: renderStaging },
   { key: 'rush', label: 'Rush', kind: 'tool', icon: 'bolt', render: renderRush },

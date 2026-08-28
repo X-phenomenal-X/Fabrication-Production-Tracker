@@ -222,6 +222,175 @@ export function effectiveTaskStatus(t) {
   return { ...TRACK_STATUS[bucket], overridden: false };
 }
 
+/* ---------- the whole work order ---------- */
+
+/* The app is organised by machine because the workbooks are, and because an
+   operator stands at one. Nobody *asks* about a machine, though. They ask
+   where W/O 31817 has got to, and in the live schedules that is a question
+   about four machines at once: 201 of the 272 work orders touch more than one
+   centre, covering 3,167 of the 3,521 lines. Answering it meant opening four
+   tabs and holding the result in your head.
+
+   Everything below is derived — no new records, nothing stored. A job is just
+   its lines seen together, which is the only way to be sure this page and the
+   centre pages can never disagree. */
+
+/** Stations in the order material moves, not the order the workbooks list
+    them: the stage first, then the department's own machine order inside it.
+    A station with no rows for this job is left out entirely — a job that never
+    goes near the saw should not show an empty saw. */
+const STATION_ORDER = MACHINES.map((m) => m.key)
+  .sort((a, b) => (STAGE[a] || 9) - (STAGE[b] || 9)
+    || MACHINES.findIndex((m) => m.key === a) - MACHINES.findIndex((m) => m.key === b));
+
+function blankStation(machine) {
+  return { machine, lines: [], total: 0, done: 0, running: 0, waiting: 0, pieces: 0 };
+}
+
+function countInto(bucket, statusKey, qty) {
+  bucket.total++;
+  bucket.pieces += qty || 0;
+  if (statusKey === 'DONE') bucket.done++;
+  else if (statusKey === 'IN_PROGRESS') bucket.running++;
+  else bucket.waiting++;
+}
+
+let jobCache = null;
+let jobCacheAt = null;
+
+function jobTable() {
+  const map = new Map();
+
+  for (const t of tasksInScope()) {
+    /* Keyed on the *imported* work order for the same reason taskStatusKey is:
+       correcting a typo in a W/O must not split a job in two, nor silently
+       merge it with another one. */
+    const wo = String((t.origin || t).wo ?? t.wo ?? '').trim();
+    if (!wo) continue;
+
+    let job = map.get(wo);
+    if (!job) {
+      job = {
+        wo, lines: [], dies: [], stations: [], projects: [], floors: [],
+        total: 0, done: 0, running: 0, waiting: 0, pieces: 0,
+        rush: 0, backOrders: 0, shortPieces: 0, notes: 0,
+        firstCut: null, lastCut: null, undated: 0,
+      };
+      map.set(wo, job);
+    }
+
+    const status = effectiveTaskStatus(t);
+    const machine = assignedMachine(t);
+    const key = taskStatusKey(t);
+    const bo = resolveBackOrder(t);
+    const rush = resolveRush(t);
+    const row = { task: t, status, machine, key, bo, rush, note: taskNoteFor(key) };
+
+    job.lines.push(row);
+    countInto(job, status.key, t.qty);
+    if (rush.on) job.rush++;
+    if (bo.on) { job.backOrders++; job.shortPieces += bo.qty || 0; }
+    if (row.note?.text) job.notes++;
+
+    const project = String(t.project || '').trim();
+    if (project && !job.projects.includes(project)) job.projects.push(project);
+    const floor = String(t.floor || '').trim();
+    if (floor && !job.floors.includes(floor)) job.floors.push(floor);
+
+    /* Dates come from the lines still to do. A job whose remaining work is due
+       next week is not "eight months late" because one finished line was. */
+    if (status.key !== 'DONE') {
+      const cut = t.cuttingDate || null;
+      if (!cut) job.undated++;
+      else {
+        if (!job.firstCut || cut < job.firstCut) job.firstCut = cut;
+        if (!job.lastCut || cut > job.lastCut) job.lastCut = cut;
+      }
+    }
+  }
+
+  for (const job of map.values()) {
+    job.open = job.total - job.done;
+
+    const byDie = new Map();
+    const byStation = new Map();
+    for (const row of job.lines) {
+      const die = row.task.die || '';
+      if (!byDie.has(die)) byDie.set(die, { die, lines: [], stations: new Map(), qty: 0, ...blankStation(null) });
+      const d = byDie.get(die);
+      d.lines.push(row);
+      d.qty += row.task.qty || 0;
+      countInto(d, row.status.key, row.task.qty);
+      /* Two rows at one station are two real pieces of work — different
+         elevations, usually — so the station is only as far along as its least
+         finished row. Calling it done while half of it is on the rack is the
+         error the whole inference section exists to prevent. */
+      const seen = d.stations.get(row.machine);
+      const rank = TRACK_STATUS_ORDER.indexOf(row.status.key);
+      if (!seen || rank < TRACK_STATUS_ORDER.indexOf(seen.key)) d.stations.set(row.machine, row.status);
+
+      if (!byStation.has(row.machine)) byStation.set(row.machine, blankStation(row.machine));
+      const st = byStation.get(row.machine);
+      st.lines.push(row);
+      countInto(st, row.status.key, row.task.qty);
+    }
+
+    /* A die's lines in the order material moves through them, not the order
+       the workbooks happened to list them. Anything picking "the next station
+       that has not finished" depends on this being the real sequence. */
+    for (const d of byDie.values()) {
+      d.lines.sort((a, b) => STATION_ORDER.indexOf(a.machine) - STATION_ORDER.indexOf(b.machine));
+    }
+    job.dies = [...byDie.values()].sort((a, b) => a.die.localeCompare(b.die));
+    job.stations = STATION_ORDER.filter((k) => byStation.has(k)).map((k) => byStation.get(k));
+  }
+
+  return map;
+}
+
+function jobs() {
+  const stamp = stateRev();
+  if (jobCache && jobCacheAt === stamp) return jobCache;
+  jobCache = jobTable();
+  jobCacheAt = stamp;
+  return jobCache;
+}
+
+/** One work order seen whole, or null when nothing carries that number. */
+export function jobFor(wo) {
+  return jobs().get(String(wo ?? '').trim()) || null;
+}
+
+/** The job a line belongs to. */
+export function jobOf(task) {
+  return jobFor((task.origin || task).wo ?? task.wo);
+}
+
+/** Every work order, newest work first.
+
+    Sorted by what a scheduler chases: rush, then shortages, then the earliest
+    remaining cutting date. Finished jobs sink whether or not they are shown —
+    they are history, and history does not need to be near the top. */
+export function allJobs({ q = '', openOnly = true } = {}) {
+  let list = [...jobs().values()];
+  if (openOnly) list = list.filter((j) => j.open > 0);
+
+  const needle = String(q || '').trim().toLowerCase();
+  if (needle) {
+    list = list.filter((j) => j.wo.toLowerCase().includes(needle)
+      || j.projects.some((p) => p.toLowerCase().includes(needle))
+      || j.floors.some((f) => f.toLowerCase().includes(needle))
+      || j.dies.some((d) => d.die.toLowerCase().includes(needle)));
+  }
+
+  return list.sort((a, b) =>
+    (b.open > 0) - (a.open > 0)
+    || (b.rush > 0) - (a.rush > 0)
+    || (b.backOrders > 0) - (a.backOrders > 0)
+    || String(a.firstCut || '9999').localeCompare(String(b.firstCut || '9999'))
+    || a.wo.localeCompare(b.wo, undefined, { numeric: true }));
+}
+
 /* ---------- queues ---------- */
 
 /** All machine-schedule lines, excluding the Rolling "Complete" archive
