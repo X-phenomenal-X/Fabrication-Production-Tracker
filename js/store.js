@@ -412,6 +412,44 @@ export function setParked(key, on, reason = null) {
   save();
 }
 
+/** Park or unpark several lines at once, with one reason between them.
+
+    Reviewing a stale pile is a batch job by nature — 62 lines on the live books
+    are dated December and share one reason — and a dialog per line is how a
+    cleanup gets abandoned halfway. Returns what each line was, so the whole
+    batch can be undone in one go. */
+export function setParkedMany(keys, on, reason = null) {
+  const before = keys.map((k) => ({
+    key: k,
+    prev: state.parked[k]?.on ? { on: true, reason: state.parked[k].reason ?? null } : null,
+  }));
+  const at = now();
+  const by = me();
+  const text = String(reason ?? '').trim() || null;
+  for (const { key, prev } of before) {
+    if (!!prev === !!on && (prev?.reason ?? null) === text) continue;
+    if (!!prev !== !!on) logChange(key, 'parked', 'on', !!prev, !!on);
+    if (on && (prev?.reason ?? null) !== text) logChange(key, 'parked', 'reason', prev?.reason ?? null, text);
+    if (!on) forget('parked', key);
+    else state.parked[key] = changed({ on: true, reason: text }, { at, by });
+  }
+  save();
+  return before;
+}
+
+/** Put a parked batch back exactly as it was. */
+export function restoreParked(before) {
+  const at = now();
+  const by = me();
+  for (const { key, prev } of before) {
+    const cur = state.parked[key]?.on ? { on: true, reason: state.parked[key].reason ?? null } : null;
+    if (!prev) forget('parked', key);
+    else state.parked[key] = changed({ on: true, reason: prev.reason }, { at, by });
+    if (!!cur !== !!prev) logChange(key, 'undo', 'parked', !!cur, !!prev);
+  }
+  save();
+}
+
 export function clearRush(key) {
   const cur = state.rush[key];
   if (!cur) return;

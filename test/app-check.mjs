@@ -1197,6 +1197,34 @@ if (parked.rec?.reason !== 'Remade under another W/O') throw new Error('the reas
 if (!parked.history) throw new Error('parking left nothing in the line history');
 if (parked.restored.open !== parked.before.open) throw new Error('putting the line back did not restore it');
 
+/* Clearing a stale pile is a batch job by nature — the 62 December lines on
+   the live books are one decision, not 62 — so parking has to work over a
+   selection under a single reason, and the whole batch has to come back in one
+   step. A bulk action nobody can reverse is one nobody will risk using. */
+const bulkPark = await page.evaluate(async () => {
+  const M = await import('/js/model.js');
+  const S = await import('/js/store.js');
+  const keys = M.tasksForMachine('roll-auto')
+    .filter((r) => r.status.key !== 'DONE' && !M.isParked(r.task))
+    .slice(0, 8).map((r) => M.taskStatusKey(r.task));
+  const open = () => M.machineSummary('roll-auto').open;
+
+  const before = open();
+  const undo = S.setParkedMany(keys, true, 'Job cancelled');
+  const parked = { open: open(), all: keys.every((k) => M.parkedFor(k)?.on) };
+  const reasons = new Set(keys.map((k) => M.parkedFor(k)?.reason));
+  S.restoreParked(undo);
+  return { n: keys.length, before, parked, after: open(), reasons: [...reasons] };
+});
+step(`bulk park: open ${bulkPark.before} → ${bulkPark.parked.open} → ${bulkPark.after}, `
+  + `reasons ${JSON.stringify(bulkPark.reasons)}`);
+if (!bulkPark.parked.all) throw new Error('bulk park missed some of the selection');
+if (bulkPark.parked.open !== bulkPark.before - bulkPark.n) {
+  throw new Error('the open count did not drop by the whole batch');
+}
+if (bulkPark.reasons.length !== 1) throw new Error('the batch did not share one reason');
+if (bulkPark.after !== bulkPark.before) throw new Error('undoing the batch did not restore every line');
+
 /* The record is keyed the same way every other overlay is, so a re-import of
    the workbook leaves it exactly where it was. Deleting the line is what does
    not survive an import; that is the whole reason parking exists. */

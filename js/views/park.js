@@ -14,8 +14,8 @@
    is indistinguishable from a mis-click, and the next person to look has no
    way to tell which it was. */
 
-import { el, icon, modal, toast, fmtWhen } from '../ui.js';
-import { setParked } from '../store.js';
+import { el, icon, modal, toast, toastAction, fmtWhen } from '../ui.js';
+import { setParked, setParkedMany, restoreParked } from '../store.js';
 import { taskStatusKey, parkedFor, daysLate } from '../model.js';
 
 const REASONS = [
@@ -84,4 +84,61 @@ export function parkDialog(task, rerender) {
       },
     ],
   });
+}
+
+
+/* ---------- a batch of them ---------- */
+
+/** Park several lines under one reason.
+
+    Clearing a stale pile is a batch job by nature: the 62 December lines on the
+    live books are one decision, not 62, and a dialog per line is how a cleanup
+    gets abandoned a third of the way through. Undo covers the whole batch,
+    because a bulk action nobody can reverse is one nobody will risk using. */
+export function bulkParkDialog(keys, onDone) {
+  const n = keys.length;
+  const reason = el('textarea', {
+    rows: 2, placeholder: 'Why these lines are not going to run',
+  });
+  const quick = (text) => el('button.linkbtn', {
+    type: 'button',
+    onclick: () => { reason.value = text; reason.focus(); },
+  }, text);
+
+  const body = el('div', {},
+    el('p', { style: { marginTop: 0 } },
+      `Park ${n} line${n === 1 ? '' : 's'}. They leave the queue, the open count `
+      + 'and the shift update. Nothing is deleted, and a re-import will not bring '
+      + 'them back.'),
+    el('label.field', {},
+      el('span', {}, 'Reason'), reason,
+      el('div.rush-quick', {}, ...REASONS.map(quick))));
+
+  modal(`Park ${n} line${n === 1 ? '' : 's'}`, body, {
+    actions: [{
+      label: 'Park them', class: 'primary', onClick: (dlg) => {
+        const why = reason.value.trim();
+        if (!why) { toast('A reason is needed — it is the whole record'); reason.focus(); return; }
+        const before = setParkedMany(keys, true, why);
+        dlg.close();
+        toastAction(`${n} line${n === 1 ? '' : 's'} parked`, 'Undo', () => {
+          restoreParked(before);
+          onDone();
+        });
+        onDone();
+      },
+    }],
+  });
+}
+
+/** Put a batch back in the queue. No dialog — there is nothing to record and
+    nothing to get wrong, and undo covers the misfire. */
+export function bulkUnpark(keys, onDone) {
+  const n = keys.length;
+  const before = setParkedMany(keys, false);
+  toastAction(`${n} line${n === 1 ? '' : 's'} back in the queue`, 'Undo', () => {
+    restoreParked(before);
+    onDone();
+  });
+  onDone();
 }

@@ -26,7 +26,7 @@ import {
 } from '../model.js';
 import { backOrderDialog } from './backorders.js';
 import { jobDialog } from './job.js';
-import { parkDialog } from './park.js';
+import { parkDialog, bulkParkDialog, bulkUnpark } from './park.js';
 import { manualJobDialog } from './manual.js';
 import { dieDialog } from './die-launcher.js';
 import { rushDialog } from './rush.js';
@@ -908,6 +908,16 @@ function bulkBar(vs, rerender, group) {
     canMove ? el('button.bulk-btn', {
       onclick: () => moveDialog(keys, group, () => { vs.selected.clear(); rerender(); }),
     }, icon('arrow', { size: 14 }), 'Move to') : null,
+    /* Reviewing a stale pile is the case this exists for: select the group,
+       give one reason, done. On the Parked filter the same button is the way
+       back out, because a one-way door is one nobody uses. */
+    el('button.bulk-btn', {
+      onclick: () => {
+        const done = () => { vs.selected.clear(); rerender(); };
+        if (vs.filter === 'PARKED') bulkUnpark(keys, done);
+        else bulkParkDialog(keys, done);
+      },
+    }, icon('square', { size: 14 }), vs.filter === 'PARKED' ? 'Put back' : 'Park'),
     el('button.bulk-x', {
       title: 'Clear selection',
       onclick: () => { vs.selected.clear(); rerender(); },
