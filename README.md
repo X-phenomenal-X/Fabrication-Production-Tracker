@@ -80,6 +80,9 @@ screen chrome to the printer:
 - **Shift update:** choose **Print update** from either Write or Read. A draft
   is clearly marked `DRAFT — NOT SAVED`; a saved update carries its author and
   timestamp. Empty updates cannot be printed.
+- **Blank shift update:** choose the date and Day or Afternoon, then use
+  **Print blank**. It prints Back Order and every active machine with the shift
+  hours, break times, handwriting space, general-note lines and signoff.
 - **Assembly or extrusion:** search in **Engineering Lookup**, open a record,
   then choose **Print**. Assembly sheets include the drawing, component map,
   missing-role state and recovery provenance. Extrusion sheets include the
@@ -90,7 +93,8 @@ screen chrome to the printer:
 
 The browser's normal print dialog still chooses the printer, copies or **Save
 as PDF**. Machine schedules and shift updates use landscape Letter; engineering
-records use portrait Letter. Print actions stay hidden in wall-monitor mode.
+records use portrait Letter. Every paper header uses the exact same three-shape
+BV mark as the screen. Print actions stay hidden in wall-monitor mode.
 
 ## Jobs — one work order across the department
 
@@ -641,6 +645,11 @@ The **Materials** page cuts across all four centres and keeps two jobs together:
   "only mine" toggle. Each group initially shows two lines and expands on
   demand, so the page stays an overview even when the workbook reports dozens
   of shortages. Clicking the row still edits the shortage record.
+- **8560 Hinges** reads only FOM 2 rows explicitly marked `8560` or `8560 HT`.
+  The scheduled quantity is the vent count and the confirmed department rule
+  applies **one hinge per vent**. Ordinary `P:Y` pin-hole rows are excluded.
+  The result stays separate from extrusion requests and has dedicated copy and
+  print actions, so hinge pieces are never mislabeled as bars.
 - **Order drafts** holds request rows prepared from those shortages or added by
   hand. A complete row is marked `READY`; missing length, finish, bar count or
   request context remains visibly `DRAFT`. Ready rows copy as tab-separated
@@ -665,6 +674,10 @@ not pieces, and FOM 2 / FOM 3 write it as text (`3 BARS`, `1 BAR MISSING`). It
 is kept and shown as context beside the manually recorded piece count. The
 order form may suggest that explicit bar value, but it never converts pieces
 short into bars to buy.
+
+The hinge calculation is equally conservative: a blank vent quantity stays
+visibly uncounted rather than becoming zero, and completed or parked schedule
+rows leave the open requirement list.
 
 ## Editing a line
 
@@ -830,6 +843,8 @@ Everything driven by the Daily Schedule: order-level tracking, profile types
 and per-profile material, the hinge/8560 rule, process guide, verification
 screen, and the old dashboard. Manual jobs, history and shift-update posting
 were later rebuilt against the machine-schedule model and are current features.
+The 8560 rule has also returned in Materials, now derived directly from FOM 2
+and applying the confirmed one-hinge-per-vent requirement.
 
 The stored data went with it. On first load the app rewrites its saved payload
 without the retired fields, so an existing install — and the shared JSON on the

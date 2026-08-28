@@ -82,7 +82,10 @@ function taskRows(kind, count) {
     else if (kind === 'complete') rows.push({ ...common, 5: 6 + i, 9: dateCell(day), 11: 'DONE' });
     else if (kind === 'fom1') rows.push({ ...common, 5: 10 + i, 8: dateCell(day), 11: 'READY' });
     else if (kind === 'fom2') rows.push({
-      1: wo, 2: common[2], 3: common[3], 4: die, 5: i % 4 === 0 ? 'P:Y' : 'P:N',
+      1: wo, 2: common[2], 3: common[3], 4: die,
+      // One explicit 8560 row pins the 1:1 hinge rule. P:Y remains in the
+      // fixture as the nearby-but-different pin-hole signal it must ignore.
+      5: i === 1 ? '8560 HT' : i % 4 === 0 ? 'P:Y' : 'P:N',
       6: 10 + i, 7: dateCell(day), 8: i === 4 ? '3 BARS' : null,
       9: i === 4 ? 'IP BO' : null, 11: sharedRouteJob ? 'DONE' : 'READY',
     });

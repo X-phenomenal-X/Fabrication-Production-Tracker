@@ -59,6 +59,8 @@ await page.addInitScript(() => {
       classes: sheet?.className || '',
       rows: sheet?.querySelectorAll('tbody tr').length || 0,
       images: sheet?.querySelectorAll('img').length || 0,
+      markRects: sheet?.querySelectorAll('.print-brand-mark svg rect').length || 0,
+      markPaths: sheet?.querySelectorAll('.print-brand-mark svg path').length || 0,
     });
   };
 });
@@ -507,6 +509,32 @@ step('materials shortages — owners: ' + owners.join(', ') + ' | ' + boStats.jo
 if (!owners.includes('Abhay')) throw new Error('assignee group missing from Materials page');
 await page.screenshot({ path: path.join(SHOT, 'materials-shortages.png'), fullPage: true });
 
+// FOM 2's explicit 8560 marker creates one hinge for every scheduled vent.
+// Ordinary P:Y pin-hole rows are deliberately excluded from this list.
+await page.getByRole('tab', { name: /8560 Hinges/ }).click();
+await page.waitForSelector('.material-hinge-card');
+const hingeCards = await page.locator('.material-hinge-card').count();
+const hingeText = await page.locator('.material-hinge-card').first().textContent();
+step(`8560 hinge requirements: ${hingeCards} row · ${hingeText.replace(/\s+/g, ' ').trim()}`);
+if (hingeCards !== 1 || !/11\s*vents/.test(hingeText) || !/11\s*hinges/.test(hingeText)) {
+  throw new Error('the FOM 2 8560 row did not become a 1:1 hinge requirement');
+}
+await page.getByRole('button', { name: 'Copy list' }).click();
+await page.waitForTimeout(100);
+const copiedHinges = await page.evaluate(() => navigator.clipboard.readText());
+if (!copiedHinges.includes('8560 vents\tHinges required') || !copiedHinges.includes('\t11\t11\t')) {
+  throw new Error('the copied 8560 hinge list is incomplete');
+}
+const hingePrintCount = await page.evaluate(() => window.__printCaptures.length);
+await page.getByRole('button', { name: 'Print list' }).click();
+await page.waitForFunction((count) => window.__printCaptures.length > count, hingePrintCount);
+const hingePrint = await page.evaluate(() => window.__printCaptures.at(-1));
+if (hingePrint.title !== '8560 Hinge Requirements' || !hingePrint.text.includes('11')) {
+  throw new Error('the printable 8560 hinge list is incomplete');
+}
+await page.getByRole('tab', { name: /Shortages/ }).click();
+await page.waitForSelector('.material-shortage-line');
+
 // A scheduled S-number is not an orderable die. Preparing it must expose the
 // engineering components, require a choice, and save the selected extrusion
 // in the dotted format used by the Material Requests workbook.
@@ -853,6 +881,20 @@ if (!dayBreaks.includes('09:15–09:30 · 12:30–13:00 · 14:15–14:30')
 }
 await page.click('.su-when .subtabs button:has-text("Day")');
 await page.waitForFunction(() => document.querySelector('.su-breaks')?.textContent.includes('09:15'));
+
+const blankPrintCount = await page.evaluate(() => window.__printCaptures.length);
+await page.getByRole('button', { name: 'Print blank' }).click();
+await page.waitForFunction((count) => window.__printCaptures.length > count, blankPrintCount);
+const blankShiftPrint = await page.evaluate(() => window.__printCaptures.at(-1));
+step('blank shift print: ' + JSON.stringify(blankShiftPrint));
+if (!blankShiftPrint.title.includes('shift update — blank')
+    || !blankShiftPrint.text.includes('BLANK FORM · FILL BY HAND')
+    || blankShiftPrint.rows < 8) {
+  throw new Error('blank handwritten shift-update form is incomplete');
+}
+if (blankShiftPrint.markRects !== 2 || blankShiftPrint.markPaths !== 2) {
+  throw new Error('the print header is not using the exact three-shape BV mark');
+}
 
 const suCards = await page.$$eval('.sucard-name', (ns) => ns.map((n) => n.textContent.trim()));
 const suGroups = await page.$$eval('.dgroup-label', (ns) => ns.map((n) => n.textContent.trim()));

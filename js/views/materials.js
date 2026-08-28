@@ -15,12 +15,14 @@ import {
 } from '../store.js';
 import {
   allBackOrders, taskStatusKey, hasTasks, tasksInScope, resolveTask, machineConfig, today,
+  effectiveTaskStatus, isParked,
 } from '../model.js';
 import { MACHINE_BY_KEY } from '../machines.js';
 import {
   dieForms, lookupDie, resolvedComponentsOf, componentCoverage, listingReferencesOf,
 } from '../dies.js';
 import { backOrderDialog } from './backorders.js';
+import { hingeRequirement, is8560VentTask } from '../material-rules.js';
 
 const REASONS = [
   'PROD - Production',
@@ -69,6 +71,18 @@ function orderRows() {
     if (s) return s;
     return (a.requiredBy || a.requestDate || '9999') < (b.requiredBy || b.requestDate || '9999') ? -1 : 1;
   });
+}
+
+function hingeRows() {
+  return tasksInScope()
+    .map(resolveTask)
+    .filter((task) => is8560VentTask(task)
+      && !isParked(task)
+      && effectiveTaskStatus(task).key !== 'DONE')
+    .map(hingeRequirement)
+    .filter(Boolean)
+    .sort((a, b) => (a.task.cuttingDate || '9999').localeCompare(b.task.cuttingDate || '9999')
+      || String(a.task.wo).localeCompare(String(b.task.wo)));
 }
 
 function projectByWorkOrder() {
@@ -485,6 +499,102 @@ function printOrders(rows) {
   });
 }
 
+function hingeTsv(rows) {
+  const header = ['Work order', 'Project', 'Floor / area', '8560 vents', 'Hinges required', 'Cutting date'];
+  const body = rows.map(({ task, vents, hinges }) => [
+    task.wo, task.project, task.floor, vents ?? '', hinges ?? '', task.cuttingDate || '',
+  ].map(tsvCell).join('\t'));
+  return [header.join('\t'), ...body].join('\n');
+}
+
+async function copyHingeRows(rows) {
+  if (!rows.length) {
+    toast('No open 8560 hinge requirements to copy');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(hingeTsv(rows));
+    toast(`${rows.length} hinge requirement${rows.length === 1 ? '' : 's'} copied`);
+  } catch {
+    toast('Clipboard access was blocked');
+  }
+}
+
+function printHingeRows(rows) {
+  if (!rows.length) {
+    toast('No open 8560 hinge requirements to print');
+    return;
+  }
+  const body = el('div.print-hinge-requirements', {},
+    el('table.print-table', {},
+      el('thead', {}, el('tr', {},
+        ...['Work order / project', 'Floor', '8560 vents', 'Hinges required', 'Cutting date', 'Source']
+          .map((label) => el('th', {}, label)))),
+      el('tbody', {}, ...rows.map(({ task, vents, hinges, source }) => el('tr', {},
+        el('td', {}, el('strong', {}, task.wo || '—'), el('br'), task.project || '—'),
+        el('td', {}, task.floor || '—'),
+        el('td.mono', {}, vents ?? 'Count missing'),
+        el('td.mono', {}, hinges ?? 'Count missing'),
+        el('td', {}, fmtDate(task.cuttingDate)),
+        el('td', {}, source || '8560'))))));
+  printDocument({
+    title: '8560 Hinge Requirements',
+    subtitle: 'One hinge per 8560 vent · sourced from the FOM 2 schedule',
+    meta: [
+      `${rows.length} open schedule line${rows.length === 1 ? '' : 's'}`,
+      `${rows.reduce((sum, row) => sum + (row.hinges || 0), 0)} hinges counted`,
+    ],
+    body,
+    landscape: true,
+  });
+}
+
+function hingesView(rows) {
+  const counted = rows.reduce((sum, row) => sum + (row.hinges || 0), 0);
+  const missing = rows.filter((row) => row.hinges == null).length;
+  const controls = el('div.material-order-toolbar.hinge-toolbar', {},
+    el('div', {},
+      el('strong', {}, 'One hinge per 8560 vent'),
+      el('span', {}, 'Only rows explicitly marked 8560 in FOM 2 are included; ordinary pin-hole rows are not.')),
+    el('div.row', {},
+      el('button.ghost', { disabled: !rows.length, onclick: () => printHingeRows(rows) },
+        icon('print', { size: 16 }), 'Print list'),
+      el('button.primary', { disabled: !rows.length, onclick: () => copyHingeRows(rows) },
+        icon('clipboard', { size: 16 }), 'Copy list')));
+
+  if (!rows.length) {
+    return el('div', {}, controls, el('section.panel', {}, el('div.empty', {},
+      el('div.empty-icon', {}, icon('check', { size: 28 })),
+      el('h3', {}, 'No open 8560 vents'),
+      el('p', {}, 'The current FOM 2 schedule has no open row explicitly marked 8560.'))));
+  }
+
+  return el('div', {}, controls,
+    el('div.hinge-summary', {},
+      el('div', {}, el('span', {}, 'Open 8560 vents'), el('b.mono', {}, fmtNum(counted))),
+      el('span.hinge-equals', { 'aria-hidden': 'true' }, '× 1'),
+      el('div', {}, el('span', {}, 'Hinges required'), el('b.mono', {}, fmtNum(counted))),
+      missing ? chip(`${missing} missing vent count`, 'warn') : chip('1:1 rule applied', 'ok')),
+    el('div.material-hinge-list', {}, ...rows.map(({ task, vents, hinges, source }) =>
+      el('article.material-hinge-card', {},
+        el('div.material-hinge-job', {},
+          el('div.row', {},
+            el('strong.mono', {}, task.wo || '—'),
+            chip('8560', 'work'),
+            chip(machineLabel(task.machine), 'mute')),
+          el('span', {}, task.project || 'Project not set'),
+          task.floor ? el('small', {}, task.floor) : null),
+        el('div.material-hinge-count', {},
+          el('span', {}, el('b.mono', {}, vents ?? '—'), el('small', {}, 'vents')),
+          el('span.hinge-arrow', { 'aria-hidden': 'true' }, '→'),
+          el('span', {}, el('b.mono', {}, hinges ?? '—'), el('small', {}, 'hinges'))),
+        el('div.material-hinge-meta', {},
+          el('span', {}, el('small', {}, 'Cutting date'), el('b', {}, fmtDate(task.cuttingDate))),
+          el('span', {}, el('small', {}, 'Schedule marker'), el('b.mono', {}, source || '8560')),
+          hinges == null ? el('div.material-order-missing', {},
+            icon('alert', { size: 14 }), 'Vent quantity is missing; confirm it before ordering.') : null)))));
+}
+
 function shortageView(rerender, go, orders) {
   if (!hasTasks()) {
     return el('section.panel', {}, el('div.empty', {},
@@ -661,6 +771,8 @@ export function renderMaterials(rerender, go) {
     ? allBackOrders().reduce((sum, group) => sum + group.rows.length, 0)
     : 0;
   const orders = orderRows();
+  const hinges = hasTasks() ? hingeRows() : [];
+  const hingeCount = hinges.reduce((sum, row) => sum + (row.hinges || 0), 0);
   const drafts = orders.filter((row) => row.status === 'DRAFT').length;
   const ready = orders.filter((row) => row.status === 'READY').length;
 
@@ -670,19 +782,24 @@ export function renderMaterials(rerender, go) {
         el('span.centre-rail', { 'aria-hidden': 'true' }),
         el('div', {},
           el('h1.centre-title', {}, 'Materials'),
-          el('div.centre-sub', {}, 'Shortages in, order-ready extrusion requests out'))),
+          el('div.centre-sub', {}, 'Shortages, 8560 hinge needs, and order-ready extrusion requests'))),
       el('span.spacer'),
       el('button.primary.material-new', { onclick: () => materialOrderDialog({}, rerender) },
         icon('plus', { size: 17 }), 'New request'),
       el('div.centre-stats', {},
         el('div.cstat' + (shortages ? '.bad' : ''), {}, el('b', {}, fmtNum(shortages)), el('i', {}, 'shortages')),
+        el('div.cstat' + (hingeCount ? '.warn' : ''), {}, el('b', {}, fmtNum(hingeCount)), el('i', {}, 'hinges')),
         el('div.cstat' + (ready ? '.ok' : ''), {}, el('b', {}, fmtNum(ready)), el('i', {}, 'ready')),
-        el('div.cstat' + (drafts ? '.warn' : ''), {}, el('b', {}, fmtNum(drafts)), el('i', {}, 'drafts')))),
+        drafts ? el('div.cstat.warn', {}, el('b', {}, fmtNum(drafts)), el('i', {}, 'drafts')) : null)),
     el('div.material-tabs', { role: 'tablist', 'aria-label': 'Materials view' },
       el('button', {
         role: 'tab', 'aria-selected': String(mode === 'shortages'),
         onclick: () => { mode = 'shortages'; rerender(); },
       }, icon('alert', { size: 16 }), 'Shortages', shortages ? el('span', {}, shortages) : null),
+      el('button', {
+        role: 'tab', 'aria-selected': String(mode === 'hinges'),
+        onclick: () => { mode = 'hinges'; rerender(); },
+      }, icon('bolt', { size: 16 }), '8560 Hinges', hingeCount ? el('span', {}, hingeCount) : null),
       el('button', {
         role: 'tab', 'aria-selected': String(mode === 'orders'),
         onclick: () => { mode = 'orders'; rerender(); },
@@ -692,5 +809,7 @@ export function renderMaterials(rerender, go) {
     el('div.material-view.material-view-enter', {},
       mode === 'orders'
         ? ordersView(rerender, orders)
-        : shortageView(rerender, go, orders)));
+        : mode === 'hinges'
+          ? hingesView(hinges)
+          : shortageView(rerender, go, orders)));
 }

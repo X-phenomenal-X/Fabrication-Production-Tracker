@@ -6,6 +6,7 @@ import {
 } from '../js/store.js';
 import { shiftWindow, today } from '../js/model.js';
 import { SHIFT_ORDER, breakRanges, shiftAt, shiftStatusAt } from '../js/shifts.js';
+import { HINGES_PER_8560_VENT, hingeRequirement, is8560VentTask } from '../js/material-rules.js';
 
 const localTime = (hour, minute = 0) => new Date(2026, 7, 28, hour, minute, 0, 0);
 
@@ -32,6 +33,21 @@ if (dayBreaks !== '09:15–09:30,12:30–13:00,14:15–14:30'
 }
 if (!shiftStatusAt(localTime(9, 15)).onBreak || shiftStatusAt(localTime(9, 30)).onBreak) {
   throw new Error('a Day break does not start and stop at the stated minute');
+}
+
+// 8560 is a literal schedule signal, not another name for any pin-hole row.
+const hingeTask = { machine: 'fom2', pinHole: '8560 HT', qty: 17 };
+const hinge = hingeRequirement(hingeTask);
+if (HINGES_PER_8560_VENT !== 1 || hinge?.vents !== 17 || hinge?.hinges !== 17) {
+  throw new Error('the one-hinge-per-8560-vent rule is wrong');
+}
+if (is8560VentTask({ machine: 'fom2', pinHole: 'P:Y', qty: 17 })
+    || is8560VentTask({ machine: 'fom2', pinHole: '8550', qty: 17 })
+    || is8560VentTask({ machine: 'fom1', pinHole: '8560', qty: 17 })) {
+  throw new Error('a non-8560 FOM 2 row created a hinge requirement');
+}
+if (hingeRequirement({ machine: 'fom2', pinHole: '8560', qty: '' })?.hinges !== null) {
+  throw new Error('a missing vent count was silently treated as zero hinges');
 }
 
 const [dayFrom, dayTo] = shiftWindow('2026-08-28', 'DAY').map((v) => new Date(v));

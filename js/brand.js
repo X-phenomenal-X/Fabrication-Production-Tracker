@@ -14,29 +14,22 @@
    Both halves are split by the same horizontal gutter, at rows 15-16 of 32,
    which is what makes the left pair read as two squares rather than one.
 
-   If a vector of the logo ever turns up, replacing `MARK` with its contents is
-   the whole job — keep the `viewBox`, drop any `width`/`height`, and use
-   `var(--mark-a|b|c)` for the fills so the dark-ground reversal keeps working. */
+   The shared vector now lives in `brand-mark.js` so screen and print cannot
+   drift apart. If an official vector turns up, replace `BRAND_MARK_SVG` there,
+   keep the `viewBox`, drop fixed dimensions, and retain the three fill tokens. */
 
 import { el } from './ui.js';
+import { BRAND_MARK_SVG } from './brand-mark.js';
 
 /** The mark, on a 32x32 grid taken from the source file's own proportions.
 
     Colours come from CSS custom properties rather than being baked into the
     paths, so correcting a brand value in one stylesheet corrects the mark too,
     and one copy can reverse on a dark ground. */
-const MARK = `
-<svg viewBox="0 0 32 32" role="img" aria-label="BV Glazing Systems" focusable="false">
-  <rect x="0" y="0"  width="18" height="15" fill="var(--mark-a)"/>
-  <rect x="0" y="17" width="18" height="15" fill="var(--mark-b)"/>
-  <path d="M19 0 H31.5 L25.2 15 H19 Z"   fill="var(--mark-c)"/>
-  <path d="M19 17 H24.4 L19 30 Z"        fill="var(--mark-c)"/>
-</svg>`;
-
 /** The mark on its own, at whatever size the surrounding CSS gives it. */
 export function brandMark({ cls = '' } = {}) {
   const node = el('span.brandmark' + (cls ? '.' + cls : ''), { 'aria-hidden': 'true' });
-  node.innerHTML = MARK;
+  node.innerHTML = BRAND_MARK_SVG;
   return node;
 }
 

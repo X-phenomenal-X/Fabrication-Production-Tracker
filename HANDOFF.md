@@ -123,7 +123,10 @@ row number, because they stack.
   are 18:00–18:15, 20:00–20:30 and 23:00–23:15. Midnight is retained only as
   a read-only legacy label for historical saved updates.
 - **Panels belong to another department. Louvres belong to Cutting.**
-- 8560 vents need hinges (rule noted by the user; not currently implemented).
+- 8560 vents need one hinge each. Materials reads only explicit `8560` /
+  `8560 HT` markers from FOM 2, excludes ordinary `P:Y` pin-hole rows, and
+  exposes a separate copy/print requirement list rather than calling hardware
+  an extrusion bar.
 
 ### Current import numbers (sanity check after any importer change)
 
@@ -428,7 +431,7 @@ has been deployed. Listed so you don't rebuild it.
 | **Online-first PWA** | Modular Pages artifact, lazy engineering libraries, service worker, update prompt and `test/offline-check.mjs`. |
 | **Tombstones** | Deletes that don't resurrect. |
 | **Visual QA** | `test/visual-qa.mjs` — 10 screens × 5 widths × 2 themes, measured not eyeballed. |
-| **Materials** | The former Back Orders page is now a shortage-to-request workspace. It expands S/SA assemblies through the engineering listing, keeps pieces and bars separate, saves synced Draft/Ready/Entered rows, blocks duplicate open requests, copies the live workbook's Date→Reason columns and prints an open request list. It does not write the private SharePoint workbook or claim a draft was submitted. |
+| **Materials** | The former Back Orders page is now a shortage-to-request workspace. It expands S/SA assemblies through the engineering listing, keeps pieces and bars separate, saves synced Draft/Ready/Entered rows, blocks duplicate open requests, copies the live workbook's Date→Reason columns and prints an open request list. Its 8560 tab applies one hinge per explicitly marked open vent and keeps that hardware list separate from extrusion bars. It does not write the private SharePoint workbook or claim a draft was submitted. |
 
 ### Open questions worth putting to the user
 
@@ -462,6 +465,9 @@ Plus purpose-built print documents for each machine schedule, Shift Update,
 assembly/component map and extrusion profile record; tabular numerals globally,
 capped annotation bands, translucent sticky headers, and `:active` depress on
 buttons. Print actions use the browser dialog and remain hidden in monitor mode.
+Shift Update also prints a blank Day/Afternoon form for handwriting. The paper
+lockup imports the same exact three-shape SVG as the screen; do not replace it
+with the former clipped-gradient approximation.
 
 Constraints that bound any *further* redesign:
 - **No runtime font requests or external assets.** IBM Plex Sans and Mono are
@@ -491,7 +497,6 @@ way.
 
 ### Smaller known gaps
 
-- The 8560-vents-need-hinges rule was mentioned by the user but never built.
 - The Supabase key rotation and first live schedule import still need an owner
   to confirm them on the production devices (see §6).
 

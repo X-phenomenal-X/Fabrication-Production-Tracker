@@ -1,5 +1,7 @@
 /* Tiny DOM helpers. Everything renders from plain data, no framework. */
 
+import { BRAND_MARK_SVG } from './brand-mark.js';
+
 export function el(tag, props = {}, ...kids) {
   const [name, ...classes] = tag.split('.');
   const node = document.createElement(name || 'div');
@@ -164,12 +166,14 @@ export function printDocument({
     year: 'numeric', month: 'short', day: 'numeric',
     hour: 'numeric', minute: '2-digit',
   });
+  const printMark = el('span.print-brand-mark', { 'aria-hidden': 'true' });
+  printMark.innerHTML = BRAND_MARK_SVG;
   const sheet = el(`section.print-sheet${landscape ? '.landscape' : ''}`, {
     'aria-label': `Print preview — ${title}`,
   },
     el('header.print-sheet-head', {},
       el('div.print-brand', {},
-        el('span.print-brand-mark', { 'aria-hidden': 'true' }),
+        printMark,
         el('span', {}, el('b', {}, 'BV GLAZING'), el('em', {}, 'CUTTING DEPARTMENT'))),
       el('div.print-heading', {},
         el('div.print-eyebrow', {}, 'Production tracker'),

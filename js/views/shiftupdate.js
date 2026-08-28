@@ -433,42 +433,70 @@ function asText(log) {
   return out.join('\n');
 }
 
-function printShiftUpdate(log, { draft: isDraft = false } = {}) {
+function printShiftUpdate(log, { draft: isDraft = false, blank = false } = {}) {
   const blocks = sections().map((section) => {
-    const rows = section.rows.filter((machine) => hasContent(log.rows?.[machine.key]));
+    // The paper form mirrors the department's current sheet: Back Order plus
+    // every visible machine. The two retired standing rows stay available in
+    // the interactive writer, but do not consume handwriting space on paper.
+    const rows = blank
+      ? section.rows.filter((machine) => !machine.secondary)
+      : section.rows.filter((machine) => hasContent(log.rows?.[machine.key]));
     if (!rows.length) return null;
-    return el('section.print-table-group.print-shift-group', {},
-      el('h2', {}, section.label, el('span', {}, `${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}`)),
+    return el('section.print-table-group.print-shift-group' + (blank ? '.print-shift-blank' : ''), {},
+      el('h2', {}, section.label, el('span', {}, blank
+        ? 'Fill by hand'
+        : `${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}`)),
       el('table.print-table.print-shift-table', {},
         el('thead', {}, el('tr', {},
           ...['Machine', '# Ops', 'Work done / in progress', 'Next in schedule', 'Notes']
             .map((label) => el('th', {}, label)))),
         el('tbody', {}, ...rows.map((machine) => {
-          const row = log.rows[machine.key];
+          const row = blank ? {} : log.rows[machine.key];
           return el('tr', {},
             el('td', {}, el('strong', {}, machine.label),
               machine.note ? el('small', {}, machine.note) : null),
-            el('td.mono.num', {}, row.ops || '—'),
-            el('td.preline', {}, row.done || '—'),
-            el('td.preline', {}, row.next || '—'),
-            el('td.preline', {}, row.notes || '—'));
+            el('td.mono.num', {}, blank ? '\u00a0' : row.ops || '—'),
+            el('td.preline', {}, blank ? '\u00a0' : row.done || '—'),
+            el('td.preline', {}, blank ? '\u00a0' : row.next || '—'),
+            el('td.preline', {}, blank ? '\u00a0' : row.notes || '—'));
         }))));
   }).filter(Boolean);
 
   const body = el('div.print-shift-update', {},
     ...blocks,
-    log.notes ? el('section.print-general-notes', {},
-      el('h2', {}, 'General notes'), el('p.preline', {}, log.notes)) : null,
+    blank ? el('section.print-general-notes.print-handwrite-notes', {},
+      el('h2', {}, 'General notes'),
+      el('div.print-handwrite-lines', {}, ...Array.from({ length: 3 }, () => el('span', {}))))
+      : log.notes ? el('section.print-general-notes', {},
+        el('h2', {}, 'General notes'), el('p.preline', {}, log.notes)) : null,
     el('footer.print-signoff', {},
-      isDraft ? `Draft prepared by ${me()}` : `Written by ${log.by || '—'}${log.at ? ` · ${fmtWhen(log.at)}` : ''}`));
+      blank ? 'Completed by: ______________________________    Time: ______________'
+        : isDraft ? `Draft prepared by ${me()}`
+          : `Written by ${log.by || '—'}${log.at ? ` · ${fmtWhen(log.at)}` : ''}`));
+
+  const selected = shiftDef(log.shift);
 
   printDocument({
-    title: `${shiftLabel(log.shift)} shift update`,
-    subtitle: fmtDate(log.date, { withDay: true }),
-    meta: [isDraft ? 'DRAFT — NOT SAVED' : 'Saved shift record'],
+    title: `${shiftLabel(log.shift)} shift update${blank ? ' — blank' : ''}`,
+    subtitle: [
+      fmtDate(log.date, { withDay: true }),
+      blank && selected.range ? selected.range : null,
+      blank && selected.breaks?.length ? `Breaks ${breakRanges(log.shift).join(' · ')}` : null,
+    ].filter(Boolean).join(' · '),
+    meta: [blank ? 'BLANK FORM · FILL BY HAND' : isDraft ? 'DRAFT — NOT SAVED' : 'Saved shift record'],
     body,
     landscape: true,
   });
+}
+
+function printBlankShiftUpdate() {
+  if (!operationalShift()) {
+    toast('Blank forms are available for Day and Afternoon shifts');
+    return;
+  }
+  printShiftUpdate({
+    date: view.date, shift: view.shift, rows: {}, notes: '', by: '', at: null,
+  }, { blank: true });
 }
 
 function printCurrentShiftUpdate() {
@@ -617,6 +645,13 @@ export function renderShiftUpdate(rerender, go) {
           : 'Add or open a shift update before printing',
         onclick: printCurrentShiftUpdate,
       }, icon('print', { size: 16 }), el('span', {}, 'Print update')),
+      el('button.print-action.print-blank-action', {
+        type: 'button', disabled: !operationalShift(),
+        title: operationalShift()
+          ? `Print a blank ${selectedShift.label.toLowerCase()} form to fill by hand`
+          : 'Blank forms are available for Day and Afternoon shifts',
+        onclick: printBlankShiftUpdate,
+      }, icon('note', { size: 16 }), el('span', {}, 'Print blank')),
       el('div.su-when', {},
         el('input.su-date', {
           type: 'date', value: view.date, 'aria-label': 'Shift date',
