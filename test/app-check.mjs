@@ -1097,6 +1097,45 @@ if (overruled.shown !== 'IN_PROGRESS' || overruled.implied) {
   throw new Error('an operator setting a status must beat the inference');
 }
 
+/* The inference has to survive the way people actually work: start a station,
+   then finish it. Both updates land on the same record, so nothing about the
+   shape of state changes on the second one — only the value. A derived cache
+   that watches record counts sees no difference and keeps serving the answer
+   from before the station was finished, which is the one moment the whole
+   feature exists for. Built from two lines added by hand so the case is the
+   same whichever workbook is in play. */
+const restart = await page.evaluate(() => Promise.all([
+  import('/js/model.js'), import('/js/store.js'),
+]).then(([M, S]) => {
+  const wo = 'CACHE-PROBE-1';
+  S.addManualTask({ machine: 'roll-auto', wo, die: 'SA80-104', qty: 10 });
+  S.addManualTask({ machine: 'fom1', wo, die: 'SA80-104', qty: 10 });
+  const rows = M.tasksInScope().filter((t) => t.wo === wo);
+  const up = rows.find((t) => t.machine === 'roll-auto');
+  const down = rows.find((t) => t.machine === 'fom1');
+  const key = M.taskStatusKey(down);
+  const read = () => M.effectiveTaskStatus(up).key;
+
+  const before = read();
+  S.setTaskStatus(key, 'IN_PROGRESS');   // a new record: every count changes
+  const started = read();
+  S.setTaskStatus(key, 'DONE');          // the same record: no count changes
+  const finished = read();
+
+  for (const t of rows) S.deleteManualTask(M.manualIdFor(t));
+  S.setTaskStatus(key, null);
+  return { before, started, finished };
+}));
+step('downstream started then finished: ' + JSON.stringify(restart));
+if (restart.before !== 'NOT_STARTED') throw new Error('the probe job did not start clean');
+if (restart.started !== 'IN_PROGRESS') {
+  throw new Error('a station running downstream should lift the one before it off Not started');
+}
+if (restart.finished !== 'DONE') {
+  throw new Error('finishing the downstream station did not finish the one before it'
+    + ` — upstream stayed ${restart.finished}, so the derived cache went stale`);
+}
+
 /* ---------- the routing panel ---------- */
 
 /* Opened from a line, it has to show the SOP's stations with their paperwork —
@@ -1285,6 +1324,42 @@ const noSuggestForAssigned = await page.evaluate((k) => import('/js/model.js').t
   mo.suggestedMachine(mo.taskByKey(k))), learn.keys[0]);
 if (noSuggestForAssigned) throw new Error('an assigned line should not be re-suggested');
 step('assigned lines are left alone');
+
+/* The same cache trap, on the other derived table. Where a die usually ends up
+   is counted from what people have already done with it, and moving a line
+   that was *already* assigned — FOM 1 to FOM 2, a routine correction — rewrites
+   one existing record without changing how many there are. The habit has
+   changed; a table keyed on record counts has not noticed, and goes on
+   recommending the machine nobody uses for that die any more. */
+const rerouted = await page.evaluate(() => Promise.all([
+  import('/js/model.js'), import('/js/store.js'),
+]).then(([M, S]) => {
+  const die = 'CACHE-DIE-1';
+  const wos = ['RT-1', 'RT-2', 'RT-3'];
+  for (const wo of wos) S.addManualTask({ machine: 'fom1', wo, die, qty: 5 });
+  const rows = M.tasksInScope().filter((t) => t.die === die);
+  const [a, b, c] = rows;
+  const key = (t) => M.taskStatusKey(t);
+
+  // Two sightings on FOM 2 — new records, so any cache invalidates.
+  S.setTaskMachine(key(a), 'fom2', a.machine);
+  S.setTaskMachine(key(b), 'fom2', b.machine);
+  const first = M.suggestedMachine(c, { minSeen: 2 })?.machine || null;
+
+  // Move the same two to FOM 3 — existing records rewritten, counts identical.
+  S.setTaskMachine(key(a), 'fom3', a.machine);
+  S.setTaskMachine(key(b), 'fom3', b.machine);
+  const second = M.suggestedMachine(c, { minSeen: 2 })?.machine || null;
+
+  for (const t of rows) { S.setTaskMachine(key(t), null, t.machine); S.deleteManualTask(M.manualIdFor(t)); }
+  return { first, second };
+}));
+step('where a die usually goes, after a correction: ' + JSON.stringify(rerouted));
+if (rerouted.first !== 'fom2') throw new Error(`two lines on FOM 2 should suggest fom2, got ${rerouted.first}`);
+if (rerouted.second !== 'fom3') {
+  throw new Error('moving both lines to FOM 3 did not change the suggestion'
+    + ` — still ${rerouted.second}, so the route table went stale`);
+}
 
 /* ---------- a job added by hand ---------- */
 

@@ -86,7 +86,22 @@ export function onChange(fn) {
   return () => listeners.delete(fn);
 }
 
+/* Every change to state gets a number.
+
+   Derived views cache expensive work — the per-job stage map in model.js is
+   the costly one — and need to know when that work is stale. Counting records
+   is not enough and was actively wrong: setting a line In progress and then
+   Done rewrites an existing key, so every count stays identical while the
+   answer changes completely. An operator starting a station and then finishing
+   it is the ordinary way to work, and it was the exact case that went stale.
+
+   A counter cannot miss that. Every mutator ends at save() -> emit(), and the
+   bulk paths that replace state outright bump it themselves. */
+let rev = 0;
+export function stateRev() { return rev; }
+
 function emit() {
+  rev++;
   for (const fn of listeners) fn();
 }
 
@@ -629,6 +644,9 @@ function apply(data) {
   }
   state.shiftLogs = onlyShiftLogs(state.shiftLogs);
   observeSnapshot(state);
+  // Replacing state wholesale — a boot, a restored backup, a cloud pull — is
+  // the one path that does not reach emit() on its own.
+  rev++;
 }
 
 /* An earlier version of the app also wrote `shiftLogs`, in a different shape.

@@ -2,7 +2,7 @@
    tasks — one row per (work order, die, machine) from the Rolling and CNC
    workbooks. */
 
-import { state, EDITABLE_FIELDS } from './store.js';
+import { state, EDITABLE_FIELDS, stateRev } from './store.js';
 import { PARSER_VERSION } from './import-machines.js';
 import { MACHINES } from './machines.js';
 import { sopMachine } from './routing.js';
@@ -119,8 +119,11 @@ let stageCache = null;
 let stageCacheAt = null;
 
 function stages() {
-  const stamp = `${state.tasks?.length || 0}:${Object.keys(state.taskStatus || {}).length}`
-    + `:${Object.keys(state.manualTasks || {}).length}`;
+  /* Keyed on the store's change counter, not on record counts. Counting missed
+     the ordinary case: a station set In progress and then Done rewrites one
+     existing key, so every count stayed the same while the answer changed, and
+     the stations upstream kept showing the old one. */
+  const stamp = stateRev();
   if (stageCache && stageCacheAt === stamp) return stageCache;
 
   const map = new Map();
@@ -712,10 +715,15 @@ function routeTable() {
 let routeCache = null;
 let routeCacheAt = null;
 
-/** Invalidated by any change to assignments — cheap enough to rebuild, but a
-    queue of 80 lines would otherwise rebuild it 80 times per render. */
+/** Invalidated by any change to state — cheap enough to rebuild, but a queue
+    of 80 lines would otherwise rebuild it 80 times per render.
+
+    Counting assignments was not "any change": moving an already-assigned line
+    from FOM 1 to FOM 2 rewrites one existing key, so the count held still while
+    the habit this table reads changed, and every other line carrying that die
+    kept being pointed at the old machine. */
 function routes() {
-  const stamp = Object.keys(state.taskAssign || {}).length + ':' + (state.tasks?.length || 0);
+  const stamp = stateRev();
   if (routeCache && routeCacheAt === stamp) return routeCache;
   routeCache = routeTable();
   routeCacheAt = stamp;
