@@ -74,6 +74,10 @@
      failed the suite. So each value below is solved against its own soft fill,
      and clears on white with room to spare as a side effect. */
   --accent: #1c6ba2;              /* brand blue,  x0.95 */
+  /* What stays legible on top of an --accent fill. The brand blue is dark
+     enough for white in light mode and bright enough to need the opposite
+     in dark, so the pairing is a token rather than a hardcoded #fff. */
+  --on-accent: #ffffff;
   --accent-soft: #e4eef5;
   --ok: #48752b;                  /* brand green, x0.64 */
   --ok-soft: #eaf4e2;
@@ -190,6 +194,7 @@
        so the mark's own colours are used exactly as printed. Only the blue
        lifts, because at 3.8:1 it would have been the one failure. */
     --accent: #2ba2f5;              /* brand blue,  x1.44 — 4.81:1 on its fill */
+    --on-accent: #07111d;
     --accent-soft: #12314f;
     --ok: var(--brand-green);       /* unmodified         — 5.65:1 on its fill */
     --ok-soft: #22320f;
@@ -235,6 +240,7 @@
      so the mark's own colours are used exactly as printed. Only the blue
      lifts, because at 3.8:1 it would have been the one failure. */
   --accent: #2ba2f5;              /* brand blue,  x1.44 — 4.81:1 on its fill */
+  --on-accent: #07111d;
   --accent-soft: #12314f;
   --ok: var(--brand-green);       /* unmodified         — 5.65:1 on its fill */
   --ok-soft: #22320f;
@@ -538,7 +544,10 @@ button:disabled {
   border-color: var(--line-soft);
 }
 button.primary {
-  background: var(--accent); border-color: transparent; color: #fff;
+  /* --on-accent, not #fff: the dark palette's brand blue is bright, and white
+     on it measures 2.77:1 — under AA for the one control on most screens that
+     has to be found first. Light mode resolves the token to #fff unchanged. */
+  background: var(--accent); border-color: transparent; color: var(--on-accent);
   box-shadow: var(--shadow-1), 0 1px 3px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 button.primary:hover:not(:disabled) {
@@ -1562,6 +1571,244 @@ main.page-enter { animation: page-enter .18s cubic-bezier(.2,.8,.2,1); }
   .sug { flex-direction: column; gap: 3px; }
   .sug-label { width: auto; padding-top: 0; }
   .su-when { align-items: stretch; }
+}
+
+/* ---------- the shift update on a phone ----------
+
+   Thirteen machines is a page on a monitor and a hunt on a phone, so the phone
+   writes one at a time: a rail that says how far along the update is, one
+   editor, and a dock that saves and moves on. Both writers render; these rules
+   pick the one that fits. The desktop form is not merely hidden — it is the
+   surface print builds from, and the surface a shift started on a phone is
+   finished on when somebody sits down at the desk. */
+
+.su-m { display: none; }
+
+@media (max-width: 720px) {
+  .su-wide { display: none; }
+  .su-m { display: block; }
+  /* The dock is fixed over everything on the page, so the room for it is the
+     page's to give — put it on the writer and the gap opens in the middle,
+     above Recent updates, with the dock still covering the bottom of it. */
+  .centre:has(.su-m-dock) {
+    padding-bottom: calc(var(--ctl-lg) + var(--s5) + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Which day and which shift, on one line. Stacked, they cost a third of the
+     screen before the first box a writer came here to fill in. */
+  .su-head-page:not(.reading) .su-when { flex-direction: row; align-items: center; gap: var(--s2); }
+  /* The shift pills take the width their labels need and the date takes the
+     rest — split evenly, "Afternoon" is the one that gets cut in half. */
+  .su-head-page:not(.reading) .su-when .subtabs { flex: 0 0 auto; margin-top: 0; }
+  .su-head-page:not(.reading) .su-when .subtabs button { padding-inline: var(--s2); }
+  .su-head-page:not(.reading) .su-date { flex: 1 1 auto; min-width: 0; }
+
+  /* The header's monitor furniture — mode switch, both print routes, the
+     breaks band and the bar that says the same thing the rail does — moves
+     into the More menu. Reading keeps all of it: it has the room. */
+  .su-head-page:not(.reading) .print-action,
+  .su-head-page:not(.reading) .centre-filters,
+  .su-head-page:not(.reading) .su-breaks,
+  .su-head-page:not(.reading) > .progress { display: none; }
+
+  .su-m-top {
+    display: flex; align-items: center; gap: var(--s2);
+    min-height: var(--tap); margin-top: var(--s1);
+  }
+  .su-m-count {
+    display: flex; align-items: baseline; gap: 5px; min-width: 0;
+    font-size: var(--t-sm); color: var(--ink-2);
+  }
+  .su-m-count b {
+    font-size: 22px; font-weight: 800; color: var(--ink);
+    letter-spacing: -.03em; font-variant-numeric: tabular-nums;
+  }
+  .su-m-alldone {
+    display: inline-flex; align-items: center; gap: 3px;
+    color: var(--ok); font-weight: 800;
+  }
+  .su-m-alldone svg { flex-shrink: 0; }
+  .su-m-more { min-width: var(--tap); gap: 6px; padding-inline: var(--s3); flex: 0 0 auto; }
+
+  /* Thirteen steps will not fit across a phone and are not meant to: the rail
+     scrolls, and what it is for is saying at a glance how many are left. */
+  .su-m-rail {
+    display: flex; gap: 6px; margin-top: var(--s2); padding-bottom: var(--s2);
+    overflow-x: auto; overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity; scrollbar-width: none;
+  }
+  .su-m-rail::-webkit-scrollbar { display: none; }
+  .su-m-step {
+    flex: 0 0 auto; scroll-snap-align: start;
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: var(--tap); padding: 0 var(--s3) 0 7px;
+    border: 1px solid var(--line); border-radius: var(--r-pill);
+    background: var(--panel); color: var(--ink-2);
+    font-size: var(--t-sm); font-weight: 700; white-space: nowrap;
+  }
+  .su-m-stepmark {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%;
+    background: var(--line-soft); color: var(--ink-2);
+    font-size: var(--t-xs); font-weight: 800; font-variant-numeric: tabular-nums;
+  }
+  .su-m-stepmark svg { display: block; }
+  .su-m-step.done { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); color: var(--ok); }
+  .su-m-step.done .su-m-stepmark { background: var(--ok-soft); color: var(--ok); }
+  /* The two rows reported occasionally rather than every shift sit back a
+     little, so "how much is left" reads off the ten that are always due. */
+  .su-m-step.extra:not(.here):not(.done) { border-style: dashed; color: var(--ink-3); }
+  .su-m-step.here {
+    border-color: transparent; background: var(--accent); color: var(--on-accent);
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 34%, transparent);
+  }
+  /* Scrim of whatever the label is written in, so the number stays readable
+     against the fill in both themes without a second pair of colours. */
+  .su-m-step.here .su-m-stepmark {
+    background: color-mix(in srgb, currentColor 20%, transparent); color: inherit;
+  }
+
+  .su-m-editor {
+    margin-top: var(--s3); padding: var(--s4) var(--s4) var(--s2);
+    border: 1px solid var(--line); border-radius: var(--r-lg);
+    background: var(--panel); box-shadow: var(--shadow-1), var(--sheen);
+  }
+  .su-m-editor.down { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+  .su-m-editor .sucard-down { margin: calc(var(--s4) * -1) calc(var(--s4) * -1) var(--s3); }
+  .su-m-editorhead { display: flex; align-items: flex-start; gap: var(--s3); }
+  .su-m-ident { min-width: 0; flex: 1; }
+  .su-m-section {
+    display: block; font-size: 10.5px; font-weight: 800; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--ink-3);
+  }
+  .su-m-name {
+    margin: 2px 0 0; font-size: 21px; font-weight: 800; letter-spacing: -.025em;
+    line-height: 1.1; color: var(--ink); overflow-wrap: anywhere;
+  }
+  .su-m-note { display: block; margin-top: 2px; font-size: var(--t-sm); color: var(--ink-3); }
+
+  .su-m-ops { flex: 0 0 auto; text-align: right; }
+  .su-m-opslabel {
+    display: block; font-size: 10.5px; font-weight: 800; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--ink-3);
+  }
+  .su-m-opsset {
+    display: flex; align-items: center; gap: 2px; margin-top: 3px;
+    border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--panel-2);
+  }
+  .su-m-opsbtn {
+    width: var(--tap); min-width: var(--tap); padding: 0;
+    border: 0; background: none; color: var(--ink-2); border-radius: var(--r-pill);
+  }
+  .su-m-opsbtn:active { background: var(--line-soft); }
+  .su-m-opsnum {
+    width: 46px; min-width: 0; padding: 0; text-align: center; border: 0; background: none;
+    font-size: var(--t-lg); font-weight: 800; font-variant-numeric: tabular-nums;
+  }
+  .su-m-opsnum::-webkit-outer-spin-button,
+  .su-m-opsnum::-webkit-inner-spin-button { appearance: none; margin: 0; }
+
+  .su-m-pull { width: 100%; margin-top: var(--s3); gap: 6px; }
+  .su-m-boxes { display: grid; gap: var(--s3); margin-top: var(--s3); }
+  .su-m-box textarea { font-size: var(--t-md); line-height: 1.45; }
+
+  /* Folded, because it is the tallest thing on the card and the boxes are
+     what someone opened the screen to type in. The count is the argument for
+     opening it. */
+  .su-m-suggests { margin: var(--s3) calc(var(--s4) * -1) 0; border-top: 1px solid var(--line-soft); }
+  .su-m-suggestbtn {
+    width: 100%; justify-content: flex-start; gap: var(--s2);
+    padding: 0 var(--s4); border: 0; border-radius: 0; background: none;
+    color: var(--accent); font-weight: 700; font-size: var(--t-sm);
+  }
+  .su-m-suggestbtn svg { flex-shrink: 0; }
+  .su-m-suggestcount {
+    min-width: 22px; padding: 1px 6px; border-radius: var(--r-pill);
+    background: var(--accent-soft); color: var(--accent);
+    font-size: var(--t-xs); font-weight: 800; font-variant-numeric: tabular-nums;
+  }
+  .su-m-suggestcaret {
+    margin-left: auto; display: inline-flex; color: var(--ink-3);
+    transition: transform .18s cubic-bezier(.4, 0, .2, 1);
+  }
+  .su-m-suggestbtn.open .su-m-suggestcaret { transform: rotate(90deg); }
+  .su-m-suggests .sugs { padding: 0 var(--s4) var(--s3); animation: su-m-reveal .2s ease both; }
+  /* Reads as the way on rather than as another line to add. */
+  .sug-more { border-style: solid; border-color: var(--accent); color: var(--accent); font-weight: 800; }
+
+  .su-m-move { display: flex; gap: var(--s2); margin-top: var(--s3); }
+  .su-m-prev, .su-m-next { flex: 1; justify-content: center; gap: 6px; }
+  .su-m-prev svg { transform: rotate(180deg); }
+  .su-m-saved {
+    margin: var(--s3) 0 0; text-align: center;
+    font-size: var(--t-sm); color: var(--ink-3);
+  }
+
+  .su-m-dock {
+    position: fixed; z-index: 20; left: var(--s3); right: var(--s3);
+    bottom: calc(var(--s3) + env(safe-area-inset-bottom, 0px));
+    animation: su-m-dock-in .22s cubic-bezier(.2, .8, .2, 1) both;
+  }
+  .su-m-save {
+    width: 100%; min-height: var(--ctl-lg); justify-content: center; gap: var(--s2);
+    border-radius: var(--r-lg); font-size: var(--t-md); font-weight: 800;
+    box-shadow: var(--shadow-2), 0 6px 18px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .su-m-save:active { transform: scale(.99); }
+  /* Every save raises a toast, and the toast's home is the same corner of the
+     screen as the dock — so on this one page it sits above it. Saying "saved"
+     on top of the button that saves is worse than not saying it. */
+  body:has(.su-m-dock) .toast {
+    bottom: calc(var(--ctl-lg) + var(--s4) + var(--s3) + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100vw - var(--s5) * 2);
+  }
+
+  .su-m-top, .su-m-rail, .su-m-editor, .su-m-move {
+    animation: su-m-in .24s cubic-bezier(.2, .8, .2, 1) both;
+  }
+  .su-m-rail { animation-delay: 30ms; }
+  .su-m-editor { animation-delay: 60ms; }
+  .su-m-move { animation-delay: 90ms; }
+
+  /* The More menu. Rows, not a toolbar — each one says what it does. */
+  .su-m-menu { display: grid; gap: var(--s1); }
+  .su-m-menuitem {
+    display: flex; align-items: center; gap: var(--s3); width: 100%;
+    padding: var(--s2) var(--s3); text-align: left;
+    border: 0; background: none; border-radius: var(--r-sm);
+  }
+  .su-m-menuitem:active:not(:disabled) { background: var(--panel-2); }
+  .su-m-menuicon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; flex: 0 0 38px; border-radius: var(--r-sm);
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .su-m-menuitem:disabled .su-m-menuicon { background: var(--line-soft); color: var(--ink-3); }
+  .su-m-menutext { min-width: 0; display: grid; }
+  .su-m-menutext strong { font-size: var(--t-md); font-weight: 700; color: var(--ink); }
+  .su-m-menutext small { font-size: var(--t-sm); color: var(--ink-3); }
+  .su-m-menuitem:disabled .su-m-menutext strong { color: var(--ink-3); }
+  .su-m-menufact { background: var(--panel-2); }
+  .su-m-menufact .su-m-menuicon { background: var(--line-soft); color: var(--ink-2); }
+  .su-m-menufact .su-m-menutext small { font-variant-numeric: tabular-nums; }
+  .su-m-menunotes { margin-top: var(--s2); }
+}
+
+/* Printing builds its own sheet, but a browser asked to print the page itself
+   must not put both writers on the paper. */
+@media print { .su-m { display: none !important; } }
+
+@keyframes su-m-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes su-m-dock-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes su-m-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
 }
 
 /* ---------- rush ---------- */
