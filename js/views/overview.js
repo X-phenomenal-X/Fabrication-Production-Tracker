@@ -12,12 +12,16 @@ import {
   taskStatusKey, tasksInScope, today, todayBoard,
 } from '../model.js';
 import { MACHINES, MACHINE_BY_KEY } from '../machines.js';
-import { SHIFTS, shiftAt } from '../shifts.js';
+import { SHIFTS, shiftContextAt } from '../shifts.js';
 import { focusCentreTask } from './centre.js';
 
 const GROUP_PAGE = { Rolling: 'rolling', FOM: 'fom', CNC: 'cnc', Punch: 'punch' };
+/* Which shift handed over to this one. Nights were retired, so the Day crew's
+   handoff now comes from yesterday's Afternoon — but shift logs written while
+   nights still ran are still on file, so a Midnight log for the same date is
+   read in preference when one exists. */
 const PREVIOUS_SHIFT = {
-  DAY: { key: 'NIGHT', day: -1 },
+  DAY: { key: 'AFT', day: -1, legacy: 'NIGHT' },
   AFT: { key: 'DAY', day: 0 },
   NIGHT: { key: 'AFT', day: 0 },
 };
@@ -29,20 +33,15 @@ function longDate(iso) {
   }).format(date);
 }
 
-function currentShift(now = new Date()) {
-  const key = shiftAt(now);
-  const ref = today();
-  // Between midnight and 07:00 the floor is still working the shift that
-  // started yesterday at 23:00. Naming it with today's date would point at
-  // the wrong saved handoff and the wrong shift-update record.
-  const date = key === 'NIGHT' && now.getHours() < 7 ? addDays(ref, -1) : ref;
-  return { key, date, shift: SHIFTS[key] };
-}
-
 function previousHandoff(date, shiftKey) {
-  const previous = PREVIOUS_SHIFT[shiftKey];
+  /* An unrecognised shift key would take the whole page down with it, and this
+     is the page the app opens on. Falling back to the Day handoff shows
+     something slightly wrong instead of nothing at all. */
+  const previous = PREVIOUS_SHIFT[shiftKey] || PREVIOUS_SHIFT.DAY;
   const previousDate = addDays(date, previous.day);
-  const log = state.shiftLogs?.[`${previousDate}|${previous.key}`] || null;
+  const log = state.shiftLogs?.[`${previousDate}|${previous.key}`]
+    || (previous.legacy ? state.shiftLogs?.[`${previousDate}|${previous.legacy}`] : null)
+    || null;
   const source = log?.rows || {};
   const usefulRow = Object.entries(source).find(([, row]) =>
     String(row?.notes || row?.next || row?.done || '').trim());
@@ -219,7 +218,7 @@ function quickStart(label, detail, iconName, page, go, on) {
 
 export function renderOverview(rerender, go) {
   const ref = today();
-  const shiftContext = currentShift();
+  const shiftContext = shiftContextAt(ref);
   const handoff = previousHandoff(shiftContext.date, shiftContext.key);
   const shift = shiftContext.shift;
   const crew = shift.crew ? `${shift.crew} operators` : 'Full crew';

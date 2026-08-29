@@ -509,28 +509,83 @@ step('materials shortages — owners: ' + owners.join(', ') + ' | ' + boStats.jo
 if (!owners.includes('Abhay')) throw new Error('assignee group missing from Materials page');
 await page.screenshot({ path: path.join(SHOT, 'materials-shortages.png'), fullPage: true });
 
-// FOM 2's explicit 8560 marker creates one hinge for every scheduled vent.
-// Ordinary P:Y pin-hole rows are deliberately excluded from this list.
+/* One hinge per 8560 vent, counted off FOM 2's explicit marker.
+
+   The assertion is on the rule, not on a number: the page has to agree with
+   the model about which rows qualify, and hinges have to equal vents. That
+   holds whether there are twelve such rows or none.
+
+   None is the live case, and worth stating plainly — across 1,271 FOM 2 rows
+   in the current Rolling and CNC workbooks not one carries an 8560 marker in
+   its pin-hole column, only P:Y, P:N and blanks. The generated CI workbook
+   carries a single "8560 HT" row precisely so the arithmetic is still
+   exercised somewhere. Asserting the CI row's numbers against the real books
+   is how this started failing the moment it met them. */
 await page.getByRole('tab', { name: /8560 Hinges/ }).click();
-await page.waitForSelector('.material-hinge-card');
-const hingeCards = await page.locator('.material-hinge-card').count();
-const hingeText = await page.locator('.material-hinge-card').first().textContent();
-step(`8560 hinge requirements: ${hingeCards} row · ${hingeText.replace(/\s+/g, ' ').trim()}`);
-if (hingeCards !== 1 || !/11\s*vents/.test(hingeText) || !/11\s*hinges/.test(hingeText)) {
-  throw new Error('the FOM 2 8560 row did not become a 1:1 hinge requirement');
+await page.waitForTimeout(400);
+
+const hinges = await page.evaluate(async () => {
+  const M = await import('/js/model.js');
+  const R = await import('/js/material-rules.js');
+  const qualifying = M.tasksInScope().map(M.resolveTask)
+    .filter((t) => R.is8560VentTask(t) && !M.isParked(t)
+      && M.effectiveTaskStatus(t).key !== 'DONE')
+    .map(R.hingeRequirement).filter(Boolean);
+  return {
+    expected: qualifying.length,
+    shown: document.querySelectorAll('.material-hinge-card').length,
+    arithmetic: qualifying.map((r) => ({ vents: r.vents, hinges: r.hinges })),
+    fom2Rows: M.tasksInScope().filter((t) => t.machine === 'fom2').length,
+    text: document.querySelector('.material-hinge-card')?.textContent.replace(/\s+/g, ' ').trim() || null,
+  };
+});
+step(`8560 hinges: ${hinges.shown} shown, ${hinges.expected} qualifying`
+  + ` of ${hinges.fom2Rows} FOM 2 rows${hinges.text ? ' · ' + hinges.text : ''}`);
+
+if (hinges.shown !== hinges.expected) {
+  throw new Error(`the hinge list shows ${hinges.shown} rows, the rule finds ${hinges.expected}`);
 }
-await page.getByRole('button', { name: 'Copy list' }).click();
-await page.waitForTimeout(100);
-const copiedHinges = await page.evaluate(() => navigator.clipboard.readText());
-if (!copiedHinges.includes('8560 vents\tHinges required') || !copiedHinges.includes('\t11\t11\t')) {
-  throw new Error('the copied 8560 hinge list is incomplete');
+for (const { vents, hinges: n } of hinges.arithmetic) {
+  if (vents != null && n !== vents) throw new Error(`${vents} vents produced ${n} hinges, not 1:1`);
 }
-const hingePrintCount = await page.evaluate(() => window.__printCaptures.length);
-await page.getByRole('button', { name: 'Print list' }).click();
-await page.waitForFunction((count) => window.__printCaptures.length > count, hingePrintCount);
-const hingePrint = await page.evaluate(() => window.__printCaptures.at(-1));
-if (hingePrint.title !== '8560 Hinge Requirements' || !hingePrint.text.includes('11')) {
-  throw new Error('the printable 8560 hinge list is incomplete');
+if (books.synthetic && hinges.expected !== 1) {
+  throw new Error('the generated workbook should carry exactly one 8560 row to pin the rule');
+}
+if (hinges.expected && !/vents/.test(hinges.text || '')) {
+  throw new Error('a hinge row rendered without saying how many vents it is for');
+}
+
+/* Copying and printing only mean something when there is a row. With none, the
+   right behaviour is a disabled control rather than an empty table on somebody's
+   clipboard or a blank sheet out of the printer — so that is what is asserted
+   against the live books, and the full round trip against the generated one. */
+const hingeCopy = page.getByRole('button', { name: 'Copy list' });
+const hingePrintBtn = page.getByRole('button', { name: 'Print list' });
+
+if (!hinges.expected) {
+  const enabled = await hingeCopy.isEnabled() || await hingePrintBtn.isEnabled();
+  if (enabled) throw new Error('Copy/Print stayed live with no hinge requirements to act on');
+  step('no 8560 rows in these workbooks — copy and print are correctly disabled');
+} else {
+  await hingeCopy.click();
+  await page.waitForTimeout(100);
+  const copiedHinges = await page.evaluate(() => navigator.clipboard.readText());
+  if (!copiedHinges.includes('8560 vents\tHinges required')) {
+    throw new Error('the copied 8560 hinge list has no header row');
+  }
+  const pair = hinges.arithmetic[0];
+  if (pair.vents != null && !copiedHinges.includes(`\t${pair.vents}\t${pair.hinges}\t`)) {
+    throw new Error('the copied list does not carry the vent and hinge counts');
+  }
+  const hingePrintCount = await page.evaluate(() => window.__printCaptures.length);
+  await hingePrintBtn.click();
+  await page.waitForFunction((count) => window.__printCaptures.length > count, hingePrintCount);
+  const hingePrint = await page.evaluate(() => window.__printCaptures.at(-1));
+  if (hingePrint.title !== '8560 Hinge Requirements'
+      || (pair.vents != null && !hingePrint.text.includes(String(pair.vents)))) {
+    throw new Error('the printable 8560 hinge list is incomplete');
+  }
+  step(`8560 list copied and printed: ${hinges.expected} row(s)`);
 }
 await page.getByRole('tab', { name: /Shortages/ }).click();
 await page.waitForSelector('.material-shortage-line');
@@ -809,10 +864,18 @@ await page.click('.centre-head .print-action');
 await page.waitForFunction(() => window.__printCaptures.length > 0);
 const machinePrint = await page.evaluate(() => window.__printCaptures.at(-1));
 step('machine print: ' + JSON.stringify({ ...machinePrint, text: machinePrint.text.slice(0, 90) + '…' }));
-if (machinePrint.title !== 'Multi Punch schedule' || machinePrint.rows !== 52
+/* The row count comes from the model rather than being written down here. The
+   point of the assertion is that printing ignores the collapse and the 25-row
+   cap and puts the whole queue on paper — a fixed number tests the workbook
+   that happened to be loaded when it was written, and fails against any other. */
+const punchOpen = await page.evaluate(() => import('/js/model.js').then((M) =>
+  M.groupedQueue('multipunch').reduce((n, g) => n + g.rows.length, 0)));
+step(`multi punch print: ${machinePrint.rows} rows on paper, ${punchOpen} open in the model`);
+if (machinePrint.title !== 'Multi Punch schedule' || machinePrint.rows !== punchOpen
   || !machinePrint.classes.includes('landscape') || !machinePrint.text.includes('Open lines only')) {
   throw new Error('machine schedule did not produce the complete paper queue');
 }
+if (punchOpen < 10) throw new Error('too few rows on Multi Punch to prove the cap was ignored');
 
 // ---------- stale-import warning ----------
 // Exactly the situation that bit in practice: data already loaded, then a
@@ -1415,6 +1478,55 @@ if (restart.started !== 'IN_PROGRESS') {
 if (restart.finished !== 'DONE') {
   throw new Error('finishing the downstream station did not finish the one before it'
     + ` — upstream stayed ${restart.finished}, so the derived cache went stale`);
+}
+
+/* ---------- the hours when no shift is running ---------- */
+
+/* Production runs 07:00 to midnight in two shifts, so between midnight and
+   07:00 shiftAt() correctly answers "nobody is on the floor". Pages that have
+   to *name* a shift cannot use that answer directly: Overview and Today both
+   indexed the shift table with it, got undefined, and took themselves down —
+   Overview being the page the app opens on, so the whole app showed nothing.
+
+   Those are exactly the hours somebody comes in early, a wall panel sits on
+   overnight, or anyone opens it from a timezone the schedule was not written
+   for. Every page is loaded at 03:00 here, because "does it render at all" is
+   not a property worth assuming. */
+{
+  const ctx = await browser.newContext();
+  const night = await ctx.newPage();
+  const crashes = [];
+  night.on('pageerror', (e) => crashes.push(e.message));
+  // 03:14 local — inside the gap between the Afternoon shift ending and Day
+  // starting, on a date the fixture has data for.
+  await night.clock.install({ time: new Date('2026-08-28T03:14:00') });
+  await night.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, await page.evaluate(() => JSON.parse(localStorage.getItem('bv.cutting.v1'))));
+
+  const rendered = {};
+  for (const tab of ['overview', 'today', 'staging', 'shift', 'jobs', 'rolling', 'setup']) {
+    await night.goto(`${base}/#${tab}`);
+    await night.waitForSelector('header.top', { timeout: 10000 });
+    await night.waitForTimeout(250);
+    rendered[tab] = await night.evaluate(() =>
+      document.getElementById('app')?.textContent.trim().length || 0);
+  }
+  const shiftNamed = await night.evaluate(() => import('/js/shifts.js').then((S) => {
+    const ctxt = S.shiftContextAt('2026-08-28', new Date('2026-08-28T03:14:00'));
+    return { key: ctxt.key, date: ctxt.date, live: ctxt.live, label: ctxt.shift?.label || null };
+  }));
+  await ctx.close();
+
+  step(`at 03:14 the app names ${JSON.stringify(shiftNamed)}`);
+  step('pages rendered overnight: ' + JSON.stringify(rendered));
+  if (crashes.length) throw new Error(`the app threw overnight: ${crashes.join(' | ')}`);
+  const empty = Object.entries(rendered).filter(([, n]) => n < 50).map(([k]) => k);
+  if (empty.length) throw new Error(`rendered nothing at 03:14: ${empty.join(', ')}`);
+  if (shiftNamed.live) throw new Error('03:14 should not be reported as a shift in progress');
+  if (shiftNamed.key !== 'AFT' || shiftNamed.date !== '2026-08-27') {
+    throw new Error('overnight should name the Afternoon shift that just ended, dated yesterday');
+  }
 }
 
 /* ---------- parking a line nobody is going to run ---------- */

@@ -21,7 +21,7 @@ import {
   openTodos, todayBoard, shiftWritten, today, hasTasks, machineConfig,
 } from '../model.js';
 import { MACHINE_BY_KEY } from '../machines.js';
-import { SHIFTS, shiftAt } from '../shifts.js';
+import { shiftContextAt } from '../shifts.js';
 
 function machineLabel(key) {
   const m = MACHINE_BY_KEY[key];
@@ -162,8 +162,10 @@ function pileList(title, rows, tone, cap = 5) {
 
 export function renderToday(rerender, go) {
   const ref = today();
-  const shiftKey = shiftAt();
-  const shift = SHIFTS[shiftKey];
+  /* Never null, even between midnight and 07:00 when no shift is running —
+     this page names a shift in three places and an undefined one took the
+     whole page down. */
+  const { key: shiftKey, shift } = shiftContextAt(ref);
 
   const head = el('div.centre-head', {},
     el('div.row.centre-title-row', {},

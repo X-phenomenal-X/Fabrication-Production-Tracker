@@ -65,6 +65,34 @@ export function shiftAt(date = new Date()) {
   }) || null;
 }
 
+/** Which shift a moment belongs to for the purposes of naming a handoff, a
+    shift update or a briefing — and never null, which is the difference
+    between this and shiftAt().
+
+    Production runs 07:00 to midnight in two shifts. Between midnight and 07:00
+    nobody is on the floor, but the app is still opened then: by whoever comes
+    in early, by a wall panel that never sleeps, and by anyone in a timezone the
+    schedule was not written for. shiftAt() correctly answers "no shift is
+    running"; a page that has to name a shift needs the shift that just ended,
+    which in those hours is yesterday's Afternoon.
+
+    `ref` is the shop date, passed in because the Toronto-date rule lives in
+    model.js and model.js imports this file.
+
+    Returns { key, date, shift, live } — `live` false when the answer is the
+    shift that has ended rather than one in progress, so a page can say so
+    rather than implying a crew is standing there. */
+export function shiftContextAt(ref, now = new Date()) {
+  const key = shiftAt(now);
+  if (key) return { key, date: ref, shift: SHIFTS[key], live: true };
+
+  const previous = new Date(now.getTime());
+  previous.setDate(previous.getDate() - 1);
+  const date = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`
+    + `-${String(previous.getDate()).padStart(2, '0')}`;
+  return { key: 'AFT', date, shift: SHIFTS.AFT, live: false };
+}
+
 /** Header-ready live state, including current/next break detail. */
 export function shiftStatusAt(date = new Date()) {
   const minute = date.getHours() * 60 + date.getMinutes();
