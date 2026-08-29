@@ -358,20 +358,35 @@ function header() {
    centred only when it *changes*. Centring on every render would drag the row
    back under someone's thumb mid-scroll, and renders happen constantly. */
 let navScroll = 0;
+let navScrollY = 0;
 let navCentredOn = null;
 
+/* The nav scrolls on one axis or the other depending on the layout: a
+   horizontal row on a phone, a vertical rail on a desktop. Both hide their
+   scrollbar, so both need the fade — it is the only thing on the page saying
+   there is more nav than you can see.
+
+   The vertical case was missed, and on a 960px-tall screen the rail runs 734px
+   of buttons through a 620px window: Materials, Engineering Lookup and Shift
+   Update sat below the fold with no indication they existed at all. */
 function paintNavEdges(nav) {
-  const room = nav.scrollWidth - nav.clientWidth;
-  // Fades stand in for a scrollbar, which is hidden here: they say there is
-  // more that way, and on which side.
-  nav.classList.toggle('can-l', room > 1 && nav.scrollLeft > 1);
-  nav.classList.toggle('can-r', room > 1 && nav.scrollLeft < room - 1);
+  const roomX = nav.scrollWidth - nav.clientWidth;
+  nav.classList.toggle('can-l', roomX > 1 && nav.scrollLeft > 1);
+  nav.classList.toggle('can-r', roomX > 1 && nav.scrollLeft < roomX - 1);
+
+  const roomY = nav.scrollHeight - nav.clientHeight;
+  nav.classList.toggle('can-u', roomY > 1 && nav.scrollTop > 1);
+  nav.classList.toggle('can-d', roomY > 1 && nav.scrollTop < roomY - 1);
 }
 
 function settleNav() {
   const nav = root.querySelector('nav.tabs');
   if (!nav) return;
   nav.scrollLeft = navScroll;
+  // Carried across rebuilds like the horizontal position, and for the same
+  // reason: the header is rebuilt on every render, and a rail that jumped back
+  // to the top each time would be unusable for the pages at the bottom of it.
+  nav.scrollTop = navScrollY;
 
   if (navCentredOn !== current) {
     const on = nav.querySelector('button[aria-current="true"]');
@@ -381,14 +396,17 @@ function settleNav() {
       const nr = nav.getBoundingClientRect();
       const br = on.getBoundingClientRect();
       nav.scrollLeft += (br.left + br.width / 2) - (nr.left + nr.width / 2);
+      nav.scrollTop += (br.top + br.height / 2) - (nr.top + nr.height / 2);
     }
     navCentredOn = current;
   }
 
   navScroll = nav.scrollLeft;
+  navScrollY = nav.scrollTop;
   paintNavEdges(nav);
   nav.addEventListener('scroll', () => {
     navScroll = nav.scrollLeft;
+    navScrollY = nav.scrollTop;
     paintNavEdges(nav);
   }, { passive: true });
 }

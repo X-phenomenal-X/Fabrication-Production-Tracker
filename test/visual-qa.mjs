@@ -486,6 +486,68 @@ for (const theme of ['light', 'dark']) {
   await ctx.close();
 }
 
+/* ---------- the nav scrolls on whichever axis the layout uses ----------
+
+   A phone scrolls the nav sideways, a desktop scrolls a vertical rail, and both
+   hide the scrollbar — so the fade at the edge is the only thing on the page
+   saying there is more nav than fits. The vertical case had no fade and no
+   scroll memory: on a 960px-tall screen the rail runs 734px of buttons through
+   a 620px window, so three of the twelve pages sat below the fold looking like
+   they did not exist. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 960 } });
+  const page = await ctx.newPage();
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/#overview`);
+  await page.waitForSelector('nav.tabs button');
+
+  const rail = await page.evaluate(() => {
+    const nav = document.querySelector('nav.tabs');
+    return {
+      overflows: nav.scrollHeight - nav.clientHeight > 1,
+      classes: nav.className,
+      tabs: nav.querySelectorAll('button').length,
+    };
+  });
+
+  if (!rail.overflows) {
+    note(`desktop rail: all ${rail.tabs} pages fit without scrolling`);
+  } else if (!/can-d/.test(rail.classes)) {
+    fail('the desktop nav rail scrolls but shows no fade — pages below the fold'
+      + ' are invisible and nothing says the rail moves');
+  } else {
+    note(`desktop rail: ${rail.tabs} pages, scrolls, fade shown`);
+  }
+
+  /* Whichever page you pick has to be visible in the rail once you are on it,
+     including the last one. The header is rebuilt on every render, so this also
+     covers the scroll position surviving that rebuild. */
+  const last = await page.$$eval('nav.tabs button', (ns) => ns.at(-1).getAttribute('aria-label'));
+  await page.click(`nav.tabs button[aria-label="${last}"]`);
+  await page.waitForTimeout(300);
+  const landed = await page.evaluate(() => {
+    const nav = document.querySelector('nav.tabs');
+    const on = nav.querySelector('button[aria-current="true"]');
+    if (!on) return { visible: false, name: null };
+    const nr = nav.getBoundingClientRect();
+    const br = on.getBoundingClientRect();
+    return {
+      visible: br.top >= nr.top - 1 && br.bottom <= nr.bottom + 1,
+      name: on.getAttribute('aria-label'),
+      classes: nav.className,
+    };
+  });
+  if (!landed.visible) {
+    fail(`selecting "${last}" left it out of view in the rail — the active page is unfindable`);
+  } else {
+    note(`rail follows the active page: "${landed.name}" in view`);
+  }
+  await page.screenshot({ path: path.join(SHOT, 'nav-rail.png'), clip: { x: 0, y: 0, width: 260, height: 960 } });
+  await ctx.close();
+}
+
 /* ---------- forced theme ----------
 
    Dark is reachable two ways: the OS asks for it, or the user picks "Always

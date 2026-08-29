@@ -425,6 +425,24 @@ nav.tabs.can-l.can-r {
   mask-image: linear-gradient(to right, transparent, #000 var(--navfade),
     #000 calc(100% - var(--navfade)), transparent);
 }
+/* The same fade, down the rail. Only one axis can overflow in a given layout —
+   a row on a phone, a column on a desktop — so these never combine with the
+   horizontal masks above. */
+nav.tabs.can-u {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--navfade));
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--navfade));
+}
+nav.tabs.can-d {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--navfade)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--navfade)), transparent);
+}
+nav.tabs.can-u.can-d {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--navfade),
+    #000 calc(100% - var(--navfade)), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--navfade),
+    #000 calc(100% - var(--navfade)), transparent);
+}
+
 .tabgroup { flex-shrink: 0; }
 .tabgroup { display: flex; align-items: center; gap: var(--s1); }
 .tabgroup.centres {
@@ -2430,7 +2448,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   header.top { gap: var(--s3); padding-left: var(--s4); padding-right: var(--s4); }
 }
 
-@media (min-width: 721px) and (max-width: 1560px) {
+/* Abbreviations belong to the horizontal scroller, where a phone has to fit
+   four machines and six tools on one line. Above 1101px the nav becomes a
+   216px vertical rail with a line to itself per page, and there "MAT" and
+   "Lookup" are cryptic for no gain — so the short labels stop where the
+   scroller does, not 460px later. */
+@media (min-width: 721px) and (max-width: 1100px) {
   /* Which shift it is also appears on Today and on the Shift Update page.
      Whether your updates are reaching anyone does not, so the sync chip stays
      and this one goes when the row needs the width. */
@@ -3948,6 +3971,10 @@ button.sync-chip:active { transform: translateY(1px); }
   color: var(--ink-3); font-size: var(--t-xs); font-weight: 600;
   letter-spacing: .03em;
 }
+
+/* "ended" beside the shift name. Deliberately quiet: it qualifies the heading
+   rather than competing with it, and it only appears outside working hours. */
+.overview-ended { margin-left: var(--s2); vertical-align: middle; }
 
 /* ---------- jobs ----------
 

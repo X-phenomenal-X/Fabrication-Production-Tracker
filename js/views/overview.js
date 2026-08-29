@@ -221,7 +221,20 @@ export function renderOverview(rerender, go) {
   const shiftContext = shiftContextAt(ref);
   const handoff = previousHandoff(shiftContext.date, shiftContext.key);
   const shift = shiftContext.shift;
-  const crew = shift.crew ? `${shift.crew} operators` : 'Full crew';
+
+  /* The crew line used to read shift.crew, a field the two-shift rewrite
+     removed, so it silently said "Full crew" for everybody forever. The real
+     number is in the machine list: `ops` per machine, from the department's own
+     Shift Assignment sheet and editable in Setup. Machines that are hidden or
+     down are left out, because the point of the line is how many people are
+     actually on the floor. */
+  const staffed = MACHINES
+    .map(machineConfig)
+    .filter((m) => !m.queue && !m.hidden && !m.down);
+  const heads = staffed.reduce((n, m) => n + (Number(m.ops) || 0), 0);
+  const crew = heads
+    ? `${heads} operator${heads === 1 ? '' : 's'} across ${staffed.length} machines`
+    : 'Crew not set';
 
   const all = tasksInScope().map((task) => rowFor(task, ref));
   const open = all.filter((row) => row.status.key !== 'DONE').sort(urgency);
@@ -255,10 +268,21 @@ export function renderOverview(rerender, go) {
   const brief = el('header.overview-brief', {},
     el('div.overview-intro', {},
       el('div.overview-date', {}, longDate(shiftContext.date)),
+      /* `range` is the shift's own printed hours. This read shift.from/shift.to,
+         which the two-shift rewrite removed, so the headline of the page the
+         app opens on said "undefined:00–undefined:00".
+
+         When no shift is running the page still has to name one — it is
+         summarising a shift's work — but it must not imply a crew is standing
+         there while the header chip says Off shift. So it says which shift this
+         was. */
       el('div.overview-shift', {},
         el('strong', {}, `${shift.label} shift`),
-        el('span', {}, `· ${String(shift.from).padStart(2, '0')}:00–${String(shift.to).padStart(2, '0')}:00`)),
-      el('div.overview-crew', {}, icon('dot', { size: 12 }), crew, me() ? ` · ${me()}` : ''),
+        shift.range ? el('span', {}, `· ${shift.range}`) : null,
+        shiftContext.live ? null : el('span.chip.mute.overview-ended', {}, 'ended')),
+      el('div.overview-crew', {}, icon('dot', { size: 12 }),
+        shiftContext.live ? crew : 'Nobody on the floor right now',
+        me() ? ` · ${me()}` : ''),
       el('div.overview-complete', {},
         el('strong', {}, `${donePct}%`),
         el('span', {}, 'schedule complete'),
