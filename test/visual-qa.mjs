@@ -142,7 +142,17 @@ for (const theme of ['light', 'dark']) {
          hundreds of pixels off-screen. Nothing caught it, because nothing
          asked. Setup is the exception — it is the gear, not a nav tab. */
       if (screen.hash !== 'setup') {
-        const nav = await page.evaluate(() => {
+        const nav = await page.evaluate((phone) => {
+          if (phone) {
+            const route = document.querySelector('.mobile-route');
+            const box = route?.getBoundingClientRect();
+            return {
+              label: route?.querySelector('.mobile-route-label')?.textContent?.trim(),
+              missing: !route,
+              shown: !!box && box.width >= 44 && box.height >= 44,
+              off: 0,
+            };
+          }
           const n = document.querySelector('nav.tabs');
           const on = n.querySelector('button[aria-current="true"]');
           if (!on) return { missing: true };
@@ -155,12 +165,11 @@ for (const theme of ['light', 'dark']) {
             shown: br.left >= nr.left - 1 && br.right <= nr.right + 1,
             off: Math.round(Math.max(nr.left - br.left, br.right - nr.right)),
           };
-        });
+        }, vp.name === 'phone');
         if (nav.missing) {
-          fail(`${screen.name} @ ${vp.name}/${theme}: no nav tab is marked current`);
+          fail(`${screen.name} @ ${vp.name}/${theme}: no current-page control is visible`);
         } else if (!nav.shown) {
-          fail(`${screen.name} @ ${vp.name}/${theme}: the "${nav.label}" tab is `
-            + `${nav.off}px outside the nav — you cannot see which page you are on`);
+          fail(`${screen.name} @ ${vp.name}/${theme}: the "${nav.label}" page control is not fully visible`);
         }
       }
 
@@ -237,6 +246,15 @@ for (const theme of ['light', 'dark']) {
          were still bundled. Assert visibility, then follow the exact route an
          operator uses into the full Engineering Lookup section. */
       if (vp.name === 'phone' && screen.hash === 'rolling') {
+        await page.click('.mobile-route');
+        await page.waitForSelector('dialog.mobile-nav-dialog');
+        const destinations = await page.$$eval('.mobile-nav-item', (nodes) =>
+          nodes.map((node) => node.querySelector('.mobile-nav-label')?.textContent?.trim()));
+        if (destinations.length !== 12) {
+          fail(`rolling @ phone/${theme}: page menu exposes ${destinations.length} of 12 destinations`);
+        }
+        await page.click('dialog.mobile-nav-dialog button:has-text("Close")');
+
         const tools = await page.evaluate(() => Object.fromEntries(
           ['.hdr-dies', '.hdr-setup'].map((sel) => {
             const n = document.querySelector(sel);

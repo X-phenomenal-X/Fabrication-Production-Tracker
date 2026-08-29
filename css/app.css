@@ -3940,3 +3940,99 @@ button.sync-chip:active { transform: translateY(1px); }
 /* Rows are read, not scanned with a finger, so the banding that helps a hand
    track across a desk row is noise at this distance. The rail carries state. */
 :root[data-display="monitor"] .line:nth-child(even) { background: transparent; }
+
+/* ---------- compact phone shell ----------
+
+   One current-page control replaces the twelve-button horizontal rail on a
+   phone. The full map opens as a bottom sheet, while identity and the two
+   global tools remain one tap away. This keeps the same 96px shell budget but
+   removes the clipped, half-labelled controls visible in the old header. */
+.mobile-route { display: none; }
+
+.mobile-nav-sheet { display: grid; gap: var(--s5); }
+.mobile-nav-group { display: grid; gap: var(--s2); }
+.mobile-nav-group h3 {
+  margin: 0; color: var(--ink-3); font-size: var(--t-xs); font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.mobile-nav-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
+.mobile-nav-item {
+  --nav-tone: var(--accent);
+  display: flex; align-items: center; gap: var(--s2); min-width: 0;
+  min-height: 54px; padding: var(--s2) var(--s1); text-align: left;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--panel-2); color: var(--ink-2); box-shadow: var(--sheen);
+  font: inherit; font-size: var(--t-sm); font-weight: 650;
+  transition: color .14s, background .14s, border-color .14s, transform .14s;
+}
+.mobile-nav-item .mobile-nav-label {
+  min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-nav-item.on {
+  color: var(--ink); border-color: color-mix(in srgb, var(--nav-tone) 55%, var(--line));
+  background: color-mix(in srgb, var(--nav-tone) 12%, var(--panel-2));
+  box-shadow: inset 3px 0 0 var(--nav-tone), var(--sheen);
+}
+.mobile-nav-item.on > .ui-icon:last-child { color: var(--nav-tone); }
+
+@media (max-width: 720px) {
+  header.top {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center; flex-wrap: nowrap;
+    gap: 4px 6px; padding: 2px var(--s3) 1px;
+  }
+  .hdr-id {
+    grid-column: 1 / -1; width: 100%; min-width: 0; min-height: var(--tap);
+    gap: 6px;
+  }
+  .hdr-id .brandmark { width: 24px; height: 24px; }
+  .hdr-id .brand { flex-shrink: 0; padding-left: var(--s2); margin-left: 0; }
+  .hdr-id .shift-chip { flex-shrink: 0; }
+  button.sync-chip {
+    min-width: 0; max-width: 142px; height: var(--tap); min-height: var(--tap);
+    margin: 0 0 0 auto; padding: 1px var(--s2); overflow: hidden;
+  }
+  button.sync-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  nav.tabs { display: none; }
+  .mobile-route {
+    --nav-tone: var(--accent);
+    grid-column: 1; display: flex; align-items: center; gap: 7px;
+    width: 100%; min-width: 0; height: var(--tap); min-height: var(--tap);
+    padding: 4px var(--s2); border: 1px solid color-mix(in srgb, var(--nav-tone) 38%, var(--line));
+    border-radius: var(--r-sm); background: var(--panel-2); color: var(--ink);
+    box-shadow: inset 3px 0 0 var(--nav-tone), var(--sheen);
+    font: inherit; font-size: var(--t-sm); font-weight: 750; text-align: left;
+    transition: color .14s, background .14s, border-color .14s, transform .12s;
+  }
+  .mobile-route:active { transform: translateY(1px); }
+  .mobile-route .nav-icon {
+    color: var(--on-fill); background: var(--nav-tone); border-color: var(--nav-tone);
+  }
+  .mobile-route-label {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mobile-route-caret { display: inline-flex; flex-shrink: 0; transform: rotate(90deg); color: var(--ink-3); }
+
+  .hdr-right { grid-column: 2; min-width: 0; margin: 0; gap: var(--s1); }
+  .hdr-tools { gap: var(--s1); }
+
+  dialog.mobile-nav-dialog {
+    width: 100%; max-width: none; max-height: calc(100dvh - 56px);
+    margin: auto 0 0; border-width: 1px 0 0; border-radius: var(--r-lg) var(--r-lg) 0 0;
+    animation: mobile-sheet-in .18s cubic-bezier(.2,.8,.2,1);
+  }
+  dialog.mobile-nav-dialog .body {
+    padding: var(--s4) var(--s3) calc(var(--s5) + env(safe-area-inset-bottom, 0px));
+  }
+  @keyframes mobile-sheet-in {
+    from { opacity: .6; transform: translateY(24px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+@media (max-width: 350px) {
+  .hdr-id .brand { display: none; }
+  button.sync-chip { max-width: 126px; }
+  .mobile-nav-grid { grid-template-columns: 1fr; }
+}

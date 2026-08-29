@@ -95,6 +95,13 @@ await page.goto(base + '/index.html');
 await page.waitForSelector('header.top');
 step('app booted');
 
+const overviewShift = await page.textContent('.overview-shift');
+if (/undefined/i.test(overviewShift || '')
+  || !/(07:00–15:30|15:30–00:00)/.test(overviewShift || '')) {
+  throw new Error('overview does not show a valid two-shift range: ' + overviewShift);
+}
+step('overview shift range: ' + overviewShift.trim());
+
 // The nav carries a long and a short label per tool and shows one by width, so
 // read the tab's stated accessible name rather than its concatenated text.
 const tabs = await page.$$eval('nav.tabs button', (ns) =>
@@ -638,7 +645,11 @@ await inspector.getByRole('button', { name: 'Rush', exact: true }).click();
 await page.waitForSelector('dialog .rush-flagrow');
 await page.locator('dialog .rush-flagrow input').check();
 // The needed-by date is the whole point: a shipping gate that beats the sheet.
-const gate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+// Derive "yesterday" in the same local-date model the app uses. UTC slicing
+// returns today's date during the evening in North America and makes this test
+// change meaning depending on the hour it runs.
+const gate = await page.evaluate(() => import('/js/model.js').then(
+  (m) => m.addDays(m.today(), -1)));
 await page.locator('dialog input[type="date"]').fill(gate);
 await page.selectOption('dialog select', 'Abhay');
 await page.locator('dialog textarea').fill('Shipping gate moved up — trailer Friday.');

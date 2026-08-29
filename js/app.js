@@ -183,6 +183,51 @@ function tabButton(t) {
     tabBadge(t));
 }
 
+/* A phone cannot show twelve destinations beside the operator and the two
+   global tools without turning the header into a clipped strip. Keep the
+   current page visible as one stable control and put the complete page map in
+   a labelled sheet. Desktop keeps the persistent sidebar. */
+function openMobileNavigation() {
+  let dlg = null;
+  const item = (tab) => {
+    const on = tab.key === current;
+    return el(`button.mobile-nav-item.tab-${tab.key}${on ? '.on' : ''}`, {
+      type: 'button',
+      'aria-current': on ? 'page' : undefined,
+      onclick: () => {
+        dlg?.close();
+        go(tab.key);
+      },
+    },
+      el('span.nav-icon', { 'aria-hidden': 'true' }, icon(tab.icon, { size: 18 })),
+      el('span.mobile-nav-label', {}, tab.label),
+      tabBadge(tab),
+      on ? icon('check', { size: 17 }) : icon('chevron', { size: 17 }));
+  };
+  const group = (label, tabs) => el('section.mobile-nav-group', {},
+    el('h3', {}, label),
+    el('div.mobile-nav-grid', {}, ...tabs.map(item)));
+
+  dlg = modal('Go to', el('div.mobile-nav-sheet', {},
+    group('Production', TABS.filter((tab) => tab.kind === 'centre')),
+    group('Department tools', TABS.filter((tab) => tab.kind === 'tool' && tab.key !== 'setup'))));
+  dlg.classList.add('mobile-nav-dialog');
+}
+
+function mobileRouteButton() {
+  const tab = TABS.find((entry) => entry.key === current) || TABS[0];
+  return el(`button.mobile-route.tab-${tab.key}`, {
+    type: 'button',
+    'aria-label': `Choose page. Current page: ${tab.label}`,
+    'aria-haspopup': 'dialog',
+    onclick: openMobileNavigation,
+  },
+    el('span.nav-icon', { 'aria-hidden': 'true' }, icon(tab.icon, { size: 18 })),
+    el('span.mobile-route-label', {}, tab.label),
+    tabBadge(tab),
+    el('span.mobile-route-caret', { 'aria-hidden': 'true' }, icon('chevron', { size: 16 })));
+}
+
 function latestSyncAt(...values) {
   return values.filter(Boolean).sort().at(-1) || null;
 }
@@ -322,6 +367,8 @@ function header() {
       el('div.tabgroup.tools', { role: 'group', 'aria-label': 'Department tools' },
         el('span.nav-eyebrow', { 'aria-hidden': 'true' }, 'Department tools'),
         ...TABS.filter((t) => t.kind === 'tool' && t.key !== 'setup').map(tabButton))),
+
+    mobileRouteButton(),
 
     // Setup is configuration, not a page anyone works on, so it sits with the
     // name picker as a gear rather than taking another slot in a nav row that

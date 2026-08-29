@@ -234,7 +234,9 @@ if (!onPhone.note) throw new Error('note did not reach the phone');
 if (onPhone.who !== 'Abhay') throw new Error('the update lost who made it');
 
 // The phone should be able to work without importing anything itself.
-await phone.click('nav.tabs button:has-text("Rush")');
+await phone.click('.mobile-route');
+await phone.waitForSelector('dialog.mobile-nav-dialog');
+await phone.click('.mobile-nav-item:has-text("Rush")');
 await phone.waitForSelector('.rush-line');
 const phoneRush = await phone.$eval('.rush-line .mono.strong', (n) => n.textContent.trim());
 step('phone Rush page shows: ' + phoneRush);

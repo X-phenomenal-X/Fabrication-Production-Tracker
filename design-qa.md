@@ -1,57 +1,53 @@
-# Option 3 Overview visual QA
+# Design QA — mobile application header
 
 ## Comparison target
 
-- Source visual truth: `C:\Users\abhay.badhwar\.codex\generated_images\01a001db-b21a-7120-b6c0-c6cc1bbe39eb\exec-23fa4c39-b928-4878-b998-4898567a1e55.png`
-- Rendered implementation: `test/screens/overview-desktop-qa.png`
-- Full-view comparison evidence: `test/screens/overview-qa-comparison.png`
-- Focused priority-action comparison: `test/screens/overview-qa-focus.png`
-- Responsive evidence: `test/screens/overview-phone-qa.png`
-- Desktop viewport/state: 1488 × 1058 CSS px, device pixel ratio 1, dark scheme, sanitized production fixture, Midnight shift, populated handoff and queues.
-- Pixel normalization: source 1487 × 1058 px; implementation 1488 × 1058 px. Both were displayed at the same scale in the full-view comparison; the one-pixel source-width difference is immaterial.
-- Phone viewport/state: 390 × 844 CSS px, device pixel ratio 1, same fixture and route.
+- Source visual truth: `test/screens/mobile-audit/00-user-reference.jpg`
+- Rendered implementation: `test/screens/mobile-audit/08-header-final.png`
+- Combined comparison input: `test/screens/mobile-audit/09-header-comparison.png`
+- State: Overview, dark shop-floor header, phone portrait. The source contains production data and iOS browser chrome; the implementation uses the sanitized local fixture. The comparison is therefore scoped to the app-owned header and the shift summary immediately below it.
+- Responsive viewport requested: 390 × 844 CSS px at device scale 1. The in-app browser capture raster is 375 × 812 px after its own chrome; the measured app header is 375 × 96 CSS px.
+- Source pixels: 590 × 1280. The attachment has unknown capture density and was scaled to 375 px wide in the combined comparison rather than treated as a 1:1 density reference.
+- Implementation pixels: 375 × 812.
 
-## Fidelity surfaces
-
-- Fonts and typography: the app uses locally bundled IBM Plex Sans and IBM Plex Mono with established weights. Overview-specific W/O, quantity, shift and action typography remains readable on the floor, and the standalone build inlines every font file.
-- Spacing and layout rhythm: the final desktop uses the source's three-column composition: 232px command rail, 922px briefing/action region and 274px quick-start rail. Cards share the existing 8px app radius and restrained border/elevation tokens.
-- Colors and tokens: the source's navy surfaces and blue, violet, amber and red semantic rails map to the existing dark-mode tokens. Light mode continues to derive from the same token system.
-- Image and icon fidelity: the source contains line icons but no photographic or branded image assets. The implementation uses the app's existing vendored Lucide-compatible icon paths so the single-file offline constraint remains intact; no placeholder, emoji or external asset was added.
-- Copy and content: headings and action order match the selected design. Work orders, dates, quantities, shortages, rush flags, machine issues and handoff text are derived from real tracker state rather than copied mock values.
-
-## Findings and comparison history
-
-1. **P1 — phone header expanded to 178px and appeared to squeeze the briefing.**
-   - Evidence: the first phone render showed the Overview tab class inheriting the page-level `.overview` rules.
-   - Fix: renamed the navigation wrapper to `.briefing`, restoring the proven two-row phone shell.
-   - Post-fix evidence: `overview-phone-qa.png` measures a 96px header, 0px document overflow and full-width briefing cards.
-2. **P2 — quick starts began below the briefing instead of forming the source's right-hand command rail.**
-   - Evidence: the first full-view render placed the aside at y=234 while the source begins it beside the date and handoff.
-   - Fix: promoted Overview to a two-column grid, spanning quick starts across both rows; tuned the desktop rail to 274px and its cards to 178px.
-   - Post-fix evidence: the final quick-start rail begins at y=20, x=1194 and spans 798px, aligned with the briefing top.
-3. **P2 — the first-action typography was too small for the source hierarchy and shop-floor glanceability.**
-   - Evidence: the focused comparison showed the W/O, quantity and Open W/O label receding behind badges and secondary copy.
-   - Fix: enlarged the W/O and quantity to 28px, project to the large body token and primary-action type to 17–20px.
-   - Post-fix evidence: the focused comparison preserves the same reading order as the source: urgency, W/O, project/context, quantity, then action.
-4. **P2 — Overview initially sat inside the Production Centres navigation group.**
-   - Evidence: the selected source gives Overview its own navigation heading.
-   - Fix: added a dedicated Overview group while retaining the existing centre and department-tool groups.
-   - Post-fix evidence: desktop and phone captures show Overview as the first, separately labelled entry point.
+## Findings
 
 No actionable P0, P1 or P2 findings remain.
 
-## Interaction and responsive evidence
+- The former horizontal page rail exposed a clipped next tab, squeezed the operator picker, and made the two global tools read as overflow. The implementation replaces it at phone width with one 44 px current-page control and a complete twelve-destination navigation sheet.
+- The visible Overview shift range previously rendered `undefined:00–undefined:00` locally and showed an obsolete 15:00–23:00 range in the production reference. It now reads the shared two-shift definition and renders `15:30–00:00` for Afternoon and `07:00–15:30` for Day.
+- The header remains exactly 96 px tall, has zero document-level horizontal overflow, and every visible button/select measures at least 44 × 44 px.
 
-- Open W/O routed from Overview to `#fom` and opened the correct line inspector.
-- Today quick start routed to `#today`.
-- Phone rendered all three bands and four quick starts with no horizontal page overflow; the smallest main-page control is 44px high.
-- Browser console diagnostics returned no errors.
-- End-to-end app, standalone-file and offline checks pass after adding Overview to their navigation assertions.
+## Required fidelity surfaces
 
-## Intentional differences
+- Fonts and typography: the existing locally packaged IBM Plex hierarchy is preserved. Current page, shift, sync and operator labels retain their prior weights and sizes; the active page label truncates safely only below its available width.
+- Spacing and layout rhythm: the header remains a two-row, 96 px shell. Row one is operational identity and health; row two is page, operator and global tools. The prior half-visible tab is gone and the navigation sheet uses an even two-column grid.
+- Colors and visual tokens: the company navy, semantic page tones, sync state and focus ring all reuse existing tokens. No new palette was introduced.
+- Image quality and asset fidelity: the existing official three-shape BV mark is unchanged. Navigation uses the app's existing packaged icon set; no logo approximation or placeholder asset was added.
+- Copy and content: current-page copy is explicit, all twelve destination names remain available, and the active shift uses the confirmed two-shift schedule.
 
-- The implementation uses live derived tracker values instead of the concept's static sample data.
-- The mock's unconfigured “Contact your lead” card was not shipped as a false action.
-- Existing inline app icons and locally bundled fonts preserve the zero-runtime-dependency, fully offline build.
+## Focused comparison evidence
+
+The combined comparison shows the complete before and after phone screens together. A separate crop was unnecessary because the header labels and edge clipping are legible at the displayed 375 px width. The production data below the header was not evaluated for visual fidelity because it differs from the sanitized fixture by design.
+
+## Interaction and runtime checks
+
+- Opened and closed the phone navigation sheet.
+- Confirmed all twelve destinations render.
+- Navigated from Overview to Rolling through the sheet; the sheet closes and the current-page control updates.
+- Confirmed Engineering Lookup and Setup remain visible 44 px actions.
+- Checked browser console warnings/errors: none.
+- Automated visual QA passed light/dark themes, contrast, 390 px phone layout, reduced motion and monitor mode.
+- End-to-end application check passed after the change.
+
+## Comparison history
+
+1. Initial evidence: the source and local before-capture showed a clipped horizontal page rail, a crowded operator/tool cluster and an invalid Overview shift range.
+2. Fix: replaced the phone-only rail with a current-page trigger and animated bottom navigation sheet; retained desktop navigation; corrected Overview to use `shift.range` and the Day/Afternoon handoff sequence.
+3. Post-fix evidence: `08-header-final.png` and `09-header-comparison.png` show a fully visible, stable two-row header. Rendered measurements and interaction checks passed.
+
+## Follow-up polish
+
+- P3: confirm the 96 px header under the exact production phone's installed-PWA safe-area behavior after deployment. The browser and automated breakpoint checks are already green.
 
 final result: passed
