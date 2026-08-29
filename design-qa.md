@@ -1,53 +1,57 @@
-# Design QA — mobile application header
+# Mobile Overview Design QA
 
 ## Comparison target
 
-- Source visual truth: `test/screens/mobile-audit/00-user-reference.jpg`
-- Rendered implementation: `test/screens/mobile-audit/08-header-final.png`
-- Combined comparison input: `test/screens/mobile-audit/09-header-comparison.png`
-- State: Overview, dark shop-floor header, phone portrait. The source contains production data and iOS browser chrome; the implementation uses the sanitized local fixture. The comparison is therefore scoped to the app-owned header and the shift summary immediately below it.
-- Responsive viewport requested: 390 × 844 CSS px at device scale 1. The in-app browser capture raster is 375 × 812 px after its own chrome; the measured app header is 375 × 96 CSS px.
-- Source pixels: 590 × 1280. The attachment has unknown capture density and was scaled to 375 px wide in the combined comparison rather than treated as a 1:1 density reference.
-- Implementation pixels: 375 × 812.
+- Source visual truth: `C:\Users\abhay.badhwar\.codex\generated_images\01a0409f-1a16-7bb0-ac5e-caa8b26cef14\exec-77d499e7-60c8-4477-b292-3e443680afd1.png`
+- Browser-rendered implementation: `C:\Users\abhay.badhwar\OneDrive - BVGLAZING SYSTEMS\Documents\ChatGPT\Production Tracker Fabrication\test\screens\mobile-next\05-command-rail-mobile-final.png`
+- Route and state: Mobile Overview, dark theme, sanitized schedule data loaded, off-shift state, empty previous-shift handoff, one urgent back-order line.
+- Requested CSS viewport: 390 x 844 at device scale 1.
+- Captured implementation pixels: 375 x 812 at 96 dpi. The in-app browser reserves 15 x 32 pixels from the requested viewport; the app content retains the same 0.462 aspect ratio.
+- Source pixels: 853 x 1844 at 96 dpi. The source was normalized by aspect and scale to the implementation frame (375 x 811) before judging spacing and hierarchy; no findings were filed from the density difference alone.
 
-## Findings
+## Full-view comparison evidence
 
-No actionable P0, P1 or P2 findings remain.
+The source and implementation were opened together at original resolution. The implementation preserves the source's defining structure: compact two-row header, shift summary, green completion rail, compact handoff, cyan numbered command rail, dominant urgent work action, a single coming-next lane, and a red risk lane. It deliberately fits all three priorities in one physical phone viewport because the product requirement is a ten-second overview rather than a poster-scale mock.
 
-- The former horizontal page rail exposed a clipped next tab, squeezed the operator picker, and made the two global tools read as overflow. The implementation replaces it at phone width with one 44 px current-page control and a complete twelve-destination navigation sheet.
-- The visible Overview shift range previously rendered `undefined:00–undefined:00` locally and showed an obsolete 15:00–23:00 range in the production reference. It now reads the shared two-shift definition and renders `15:30–00:00` for Afternoon and `07:00–15:30` for Day.
-- The header remains exactly 96 px tall, has zero document-level horizontal overflow, and every visible button/select measures at least 44 × 44 px.
+## Focused-region comparison evidence
+
+- Header and shift summary: the existing 96 px production header was preserved, with real shift/offline/sync state and the existing BV mark. The selected concept's hierarchy is present without copying its oversized static header.
+- Urgent work region: work order, die, shortage, project, quantity, due date, warning icon and primary action all align to the selected concept. The work-order size was increased after the first comparison.
+- Command rail and supporting lanes: numbered nodes, continuous cyan rail, separators, compact next row and red risk treatment match the concept while using the app's existing icon family and live data.
 
 ## Required fidelity surfaces
 
-- Fonts and typography: the existing locally packaged IBM Plex hierarchy is preserved. Current page, shift, sync and operator labels retain their prior weights and sizes; the active page label truncates safely only below its available width.
-- Spacing and layout rhythm: the header remains a two-row, 96 px shell. Row one is operational identity and health; row two is page, operator and global tools. The prior half-visible tab is gone and the navigation sheet uses an even two-column grid.
-- Colors and visual tokens: the company navy, semantic page tones, sync state and focus ring all reuse existing tokens. No new palette was introduced.
-- Image quality and asset fidelity: the existing official three-shape BV mark is unchanged. Navigation uses the app's existing packaged icon set; no logo approximation or placeholder asset was added.
-- Copy and content: current-page copy is explicit, all twelve destination names remain available, and the active shift uses the confirmed two-shift schedule.
-
-## Focused comparison evidence
-
-The combined comparison shows the complete before and after phone screens together. A separate crop was unnecessary because the header labels and edge clipping are legible at the displayed 375 px width. The production data below the header was not evaluated for visual fidelity because it differs from the sanitized fixture by design.
-
-## Interaction and runtime checks
-
-- Opened and closed the phone navigation sheet.
-- Confirmed all twelve destinations render.
-- Navigated from Overview to Rolling through the sheet; the sheet closes and the current-page control updates.
-- Confirmed Engineering Lookup and Setup remain visible 44 px actions.
-- Checked browser console warnings/errors: none.
-- Automated visual QA passed light/dark themes, contrast, 390 px phone layout, reduced motion and monitor mode.
-- End-to-end application check passed after the change.
+- Fonts and typography: IBM Plex Sans and IBM Plex Mono remain bundled and render offline. The urgent work order now uses a 19–24 px responsive display treatment with tighter tracking; supporting text remains at the established 13.5–15 px scale. No clipping or broken wrapping was observed.
+- Spacing and layout rhythm: card boxes were removed on mobile in favor of the source's continuous rail and separators. The 96 px app header, 48 px minimum touch target and 56 px primary action are preserved. The source's oversized date block was intentionally compacted so all three priorities remain above the fold.
+- Colors and visual tokens: completion uses semantic green, active navigation and the rail use cyan/blue, and shortage/risk use red. All colors come from the existing light/dark token system; no one-off palette was introduced.
+- Image and asset fidelity: the production BV mark is retained. There are no raster illustrations in this screen. Icons use the app's existing vendored, Lucide-compatible offline icon set; no placeholder, emoji, CSS illustration or new hand-built icon was introduced.
+- Copy and content: labels match the selected concept, while dates, shift state, counts, handoff source and work-order details remain live rather than being hard-coded to the mock.
+- Accessibility and motion: controls remain at least 48 px on mobile, semantic buttons and the progressbar label are retained, contrast continues to use the tested theme tokens, and the staggered entrance/pressed transitions collapse under `prefers-reduced-motion`.
 
 ## Comparison history
 
-1. Initial evidence: the source and local before-capture showed a clipped horizontal page rail, a crowded operator/tool cluster and an invalid Overview shift range.
-2. Fix: replaced the phone-only rail with a current-page trigger and animated bottom navigation sheet; retained desktop navigation; corrected Overview to use `shift.range` and the Day/Afternoon handoff sequence.
-3. Post-fix evidence: `08-header-final.png` and `09-header-comparison.png` show a fully visible, stable two-row header. Rendered measurements and interaction checks passed.
+### Pass 1 — blocked
+
+- [P2] Urgent work-order hierarchy was too weak.
+  - Evidence: source used the work order as the dominant line in the urgent region; implementation capture `04-command-rail-mobile-overview-clean.png` rendered it at the ordinary queue size.
+  - Impact: the primary floor action did not scan quickly enough and repeated the typography weakness the redesign was meant to fix.
+  - Fix: added a responsive 19–24 px size, 1.0 line height, tighter tracking and safe wrapping to `.overview-task-id > strong`.
+
+### Pass 2 — passed
+
+- Post-fix evidence: `05-command-rail-mobile-final.png`.
+- The work order is now the dominant item within the urgent region without forcing quantity, badges or the 56 px action out of the viewport.
+- No actionable P0, P1 or P2 differences remain.
+
+## Primary interactions and browser health
+
+- `Open W/O 71024` opened the correct Rolling queue and focused the exact line.
+- The mobile page chooser opened from Rolling and returned to Overview.
+- Browser console errors checked after both interactions: none.
 
 ## Follow-up polish
 
-- P3: confirm the 96 px header under the exact production phone's installed-PWA safe-area behavior after deployment. The browser and automated breakpoint checks are already green.
+- [P3] The source mock uses a bespoke handoff/person symbol; the implementation uses the closest semantic icon already present in the offline app's icon subset.
+- [P3] The source gives the calendar date more vertical space. The implementation intentionally keeps the compact date treatment to preserve the user-requested overview density.
 
 final result: passed

@@ -128,7 +128,8 @@ function primaryWork(row, ref, go) {
 
   const context = taskContext(row);
   return el('div.overview-focus-card', {},
-    el('div.overview-focus-icon', {}, icon(row.rush.on ? 'bolt' : 'alert', { size: 28 })),
+    el('div.overview-focus-icon' + (row.bo.on ? '.bad' : row.rush.on ? '.warn' : ''), {},
+      icon(row.rush.on ? 'bolt' : 'alert', { size: 28 })),
     el('div.overview-focus-copy', {},
       el('div.overview-task-id', {},
         el('strong.mono', {}, row.task.wo),
@@ -257,6 +258,7 @@ export function renderOverview(rerender, go) {
   const rush = board.rushNow.find((row) => taskStatusKey(row.task) !== firstKey) || null;
 
   const handoffCard = el('section.overview-handoff' + (handoff.log ? '' : '.empty'), {},
+    el('span.overview-handoff-icon', {}, icon('clipboard', { size: 21 })),
     el('div.overview-handoff-title', {}, `Handoff from ${handoff.label}`),
     handoff.log ? el('div.overview-handoff-by', {},
       el('strong', {}, handoff.log.by || 'Previous shift'),
@@ -284,10 +286,15 @@ export function renderOverview(rerender, go) {
         shiftContext.live ? crew : 'Nobody on the floor right now',
         me() ? ` · ${me()}` : ''),
       el('div.overview-complete', {},
-        el('strong', {}, `${donePct}%`),
-        el('span', {}, 'schedule complete'),
-        el('i', {}),
-        el('b.mono', {}, `${fmtNum(done)} / ${fmtNum(all.length)} lines done`))),
+        el('div.overview-complete-summary', {},
+          el('strong', {}, `${donePct}%`),
+          el('span', {}, 'schedule complete'),
+          el('i', {}),
+          el('b.mono', {}, `${fmtNum(done)} / ${fmtNum(all.length)} lines done`)),
+        el('progress.overview-meter', {
+          max: '100', value: String(donePct),
+          'aria-label': `${donePct}% of the cutting schedule is complete`,
+        }))),
     handoffCard);
 
   const quick = el('aside.overview-quickstarts', {},
