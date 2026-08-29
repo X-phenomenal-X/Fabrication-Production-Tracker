@@ -766,6 +766,15 @@ if (!fomAfter.assigns.length || !fomAfter.assigns[0].startsWith('fom1|')) {
 // operator can see where the job went.
 await page.click('.subtabs button:has-text("FOM 2")');
 await page.waitForTimeout(250);
+/* Open every date group first. Which band a line falls into depends on how far
+   past its cutting date it is, and the workbooks are fixed while today is not,
+   so a line drifts between bands as the days pass — one of which is folded shut
+   by default. Asserting on a line without expanding is a test that starts
+   failing on a Tuesday for no reason anybody changed. */
+await page.$$eval('.dgroup-toggle[aria-expanded="false"]', (ns) => ns.forEach((n) => n.click()));
+await page.waitForTimeout(200);
+await page.$$eval('.showmore', (ns) => ns.forEach((n) => n.click()));
+await page.waitForTimeout(200);
 const movedBadge = await page.locator('.line').filter({ hasText: fomWo }).first()
   .locator('.badge-moved').first().textContent();
 step('moved badge on FOM 2: ' + movedBadge.trim());
