@@ -1,57 +1,55 @@
-# Mobile Overview Design QA
+# Mobile Production Queue Design QA
 
 ## Comparison target
 
-- Source visual truth: `C:\Users\abhay.badhwar\.codex\generated_images\01a0409f-1a16-7bb0-ac5e-caa8b26cef14\exec-77d499e7-60c8-4477-b292-3e443680afd1.png`
-- Browser-rendered implementation: `C:\Users\abhay.badhwar\OneDrive - BVGLAZING SYSTEMS\Documents\ChatGPT\Production Tracker Fabrication\test\screens\mobile-next\05-command-rail-mobile-final.png`
-- Route and state: Mobile Overview, dark theme, sanitized schedule data loaded, off-shift state, empty previous-shift handoff, one urgent back-order line.
+- Source visual truth: `C:\Users\abhay.badhwar\.codex\generated_images\01a0409f-1a16-7bb0-ac5e-caa8b26cef14\exec-c9ca581b-10bc-4a18-83af-cca7c30e1889.png`
+- Browser-rendered implementation: `C:\Users\abhay.badhwar\OneDrive - BVGLAZING SYSTEMS\Documents\ChatGPT\Production Tracker Fabrication\test\screens\mobile-next\08-queue-first-rolling-settled.png`
+- Same-input comparison: `C:\Users\abhay.badhwar\OneDrive - BVGLAZING SYSTEMS\Documents\ChatGPT\Production Tracker Fabrication\test\screens\mobile-next\09-queue-first-comparison.png`
+- Route and state: Rolling / Auto, dark theme, sanitized schedule data loaded, 18 running, 63 open, one blocked line, live order `MU2026-012` and its real waiting queue.
 - Requested CSS viewport: 390 x 844 at device scale 1.
-- Captured implementation pixels: 375 x 812 at 96 dpi. The in-app browser reserves 15 x 32 pixels from the requested viewport; the app content retains the same 0.462 aspect ratio.
-- Source pixels: 853 x 1844 at 96 dpi. The source was normalized by aspect and scale to the implementation frame (375 x 811) before judging spacing and hierarchy; no findings were filed from the density difference alone.
+- Captured implementation pixels: 375 x 812 at 96 dpi. The in-app browser reserves 15 x 32 pixels from the requested viewport; the content retains the same phone aspect and breakpoint.
+- Source pixels: 853 x 1844 at 96 dpi. It was normalized to the implementation frame before judging structure, scale and spacing.
 
 ## Full-view comparison evidence
 
-The source and implementation were opened together at original resolution. The implementation preserves the source's defining structure: compact two-row header, shift summary, green completion rail, compact handoff, cyan numbered command rail, dominant urgent work action, a single coming-next lane, and a red risk lane. It deliberately fits all three priorities in one physical phone viewport because the product requirement is a ten-second overview rather than a poster-scale mock.
+The source and implementation were placed together in one comparison image at equivalent phone scale. The implementation preserves the selected direction's defining hierarchy: a compact machine switcher, thin live-operation strip, one-line queue summary, ordered next-work list, a single immediate Start action and a persistent green Done dock. The production version keeps the proven 96 px global header and real schedule state instead of duplicating identity or using mock content.
 
 ## Focused-region comparison evidence
 
-- Header and shift summary: the existing 96 px production header was preserved, with real shift/offline/sync state and the existing BV mark. The selected concept's hierarchy is present without copying its oversized static header.
-- Urgent work region: work order, die, shortage, project, quantity, due date, warning icon and primary action all align to the selected concept. The work-order size was increased after the first comparison.
-- Command rail and supporting lanes: numbered nodes, continuous cyan rail, separators, compact next row and red risk treatment match the concept while using the app's existing icon family and live data.
+- Machine and live context: the existing global identity controls remain in the production header; the local switcher carries machine identity and setup/print tools without repeating the operator name. The live strip exposes work order, die, quantity, blocked state and details in one scan line.
+- Queue rows: numbered sequence, work order, die, project, quantity and due state use the selected flat list pattern. The first waiting row alone receives the Start action, preserving a clear next action while later rows open the existing line inspector.
+- Action dock: the green `Mark ... done` control is fixed above the phone safe area, spans the usable width and provides the existing micro-undo feedback after completion.
 
 ## Required fidelity surfaces
 
-- Fonts and typography: IBM Plex Sans and IBM Plex Mono remain bundled and render offline. The urgent work order now uses a 19–24 px responsive display treatment with tighter tracking; supporting text remains at the established 13.5–15 px scale. No clipping or broken wrapping was observed.
-- Spacing and layout rhythm: card boxes were removed on mobile in favor of the source's continuous rail and separators. The 96 px app header, 48 px minimum touch target and 56 px primary action are preserved. The source's oversized date block was intentionally compacted so all three priorities remain above the fold.
-- Colors and visual tokens: completion uses semantic green, active navigation and the rail use cyan/blue, and shortage/risk use red. All colors come from the existing light/dark token system; no one-off palette was introduced.
-- Image and asset fidelity: the production BV mark is retained. There are no raster illustrations in this screen. Icons use the app's existing vendored, Lucide-compatible offline icon set; no placeholder, emoji, CSS illustration or new hand-built icon was introduced.
-- Copy and content: labels match the selected concept, while dates, shift state, counts, handoff source and work-order details remain live rather than being hard-coded to the mock.
-- Accessibility and motion: controls remain at least 48 px on mobile, semantic buttons and the progressbar label are retained, contrast continues to use the tested theme tokens, and the staggered entrance/pressed transitions collapse under `prefers-reduced-motion`.
+- Typography: IBM Plex Sans and IBM Plex Mono remain bundled and offline-safe. Work orders and die numbers use the established high-density weights and sizes; secondary project and timing copy is quieter without dropping below the app's mobile legibility baseline.
+- Spacing and touch: mobile controls retain the app's 48 px minimum target, while the primary dock is 56 px high. Flat separators replace card stacks, and four real waiting lines remain visible in the verified phone frame.
+- Colors: active/live context uses the existing cyan tokens, completion uses semantic green, shortages use red and due-state accents remain distinct. No one-off color system was introduced.
+- Assets: the real BV mark and the existing vendored Lucide-compatible icon family are retained. No placeholder art, emoji, handcrafted SVG or CSS illustration was added.
+- Responsive behavior: only the machine-page center changes at the 720 px mobile breakpoint. Desktop/monitor queues, inspectors, shift update, bulk tools and all print layouts remain available through the same source model.
+- Motion and accessibility: live, summary and row entrance transitions are brief and staggered; pressed controls give immediate feedback; all additions collapse under `prefers-reduced-motion`. Buttons remain semantic and status copy is exposed through the existing live region.
 
 ## Comparison history
 
-### Pass 1 — blocked
+### Pass 1 — passed
 
-- [P2] Urgent work-order hierarchy was too weak.
-  - Evidence: source used the work order as the dominant line in the urgent region; implementation capture `04-command-rail-mobile-overview-clean.png` rendered it at the ordinary queue size.
-  - Impact: the primary floor action did not scan quickly enough and repeated the typography weakness the redesign was meant to fix.
-  - Fix: added a responsive 19–24 px size, 1.0 line height, tighter tracking and safe wrapping to `.overview-task-id > strong`.
-
-### Pass 2 — passed
-
-- Post-fix evidence: `05-command-rail-mobile-final.png`.
-- The work order is now the dominant item within the urgent region without forcing quantity, badges or the 56 px action out of the viewport.
-- No actionable P0, P1 or P2 differences remain.
+- The first settled production capture matched the selected hierarchy and action model with real data.
+- A service-worker reload toast appeared in the initial preview capture; the preview was reloaded and the settled state was captured before comparison. This was a preview lifecycle state, not a layout defect.
+- No actionable P0, P1 or P2 visual differences remain.
 
 ## Primary interactions and browser health
 
-- `Open W/O 71024` opened the correct Rolling queue and focused the exact line.
-- The mobile page chooser opened from Rolling and returned to Overview.
-- Browser console errors checked after both interactions: none.
+- Machine tabs switch Auto/Etas and Manual/Iota without leaving the queue-first layout.
+- Search/filter expands in place and applies the mobile text and status filters.
+- Queue rows open the existing line inspector; its edit, quantity, routing and print capabilities remain intact.
+- `Start` promotes the first waiting line to running and exposes the existing Undo action.
+- The Done dock completes the current running line and exposes the existing Undo action.
+- The visual regression suite verified light/dark phone states, safe-area clearance, queue visibility, edit-dialog access, 200% zoom, reduced motion, monitor mode and contrast. Browser console errors: none.
 
 ## Follow-up polish
 
-- [P3] The source mock uses a bespoke handoff/person symbol; the implementation uses the closest semantic icon already present in the offline app's icon subset.
-- [P3] The source gives the calendar date more vertical space. The implementation intentionally keeps the compact date treatment to preserve the user-requested overview density.
+- [P3] The concept duplicated operator identity in a local row; the implementation keeps identity once in the global header to reduce noise.
+- [P3] The concept used a larger isolated Start block. The implementation uses a 68 x 60 px shop-safe target so more of the real queue remains visible.
+- [P3] The in-app browser capture includes its native scrollbar; this is outside the application surface.
 
 final result: passed

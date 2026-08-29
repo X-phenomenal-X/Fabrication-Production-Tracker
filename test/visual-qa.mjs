@@ -374,35 +374,47 @@ for (const theme of ['light', 'dark']) {
     fail(`keyboard focus is invisible on ${focusRing.tag || 'the first control'} `
       + `(box-shadow "${focusRing.after}", outline "${focusRing.outline}")`);
   }
-  // --- bulk actions clear the browser's safe area ---
+  // --- the phone's persistent Done action clears the browser's safe area ---
+  // The redesigned production flow removes the old checkbox-first phone queue.
+  // Its repeated floor action is now the current job's Done dock, so that is
+  // the persistent control that must never sit under the home indicator.
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${base}/#fom`);
-  await page.waitForSelector('.line');
+  await page.goto(`${base}/#rolling`);
+  await page.waitForSelector('.mobile-queue-row');
+  await page.waitForSelector('.mobile-done-dock');
   // A desktop-selected line becomes a phone drawer when the same tab is
-  // resized in place. Close it before testing the queue underneath.
+  // resized in place. Close it before measuring the production flow beneath.
   const phoneInspectorClose = page.locator('.line-inspector [aria-label="Close line details"]');
   if (await phoneInspectorClose.count()) {
     await phoneInspectorClose.click();
     await page.waitForSelector('.line-inspector', { state: 'detached' });
   }
-  await page.click('.line .line-pick');
-  await page.waitForSelector('.bulkbar');
-  // The bar slides in over 180ms; measured mid-flight it reads 5px low.
+  // The dock and ordered rows enter over 200ms; measure the settled state.
   await page.waitForTimeout(300);
-  await page.screenshot({ path: path.join(SHOT, `bulkbar-phone-${theme}.png`) });
-  const bulk = await page.evaluate(() => {
-    const b = document.querySelector('.bulkbar').getBoundingClientRect();
-    return { bottomGap: Math.round(window.innerHeight - b.bottom), right: Math.round(b.right) };
+  await page.screenshot({ path: path.join(SHOT, `production-flow-phone-${theme}.png`) });
+  const dock = await page.evaluate(() => {
+    const b = document.querySelector('.mobile-done-dock').getBoundingClientRect();
+    const rows = Array.from(document.querySelectorAll('.mobile-queue-row'))
+      .filter((n) => n.getBoundingClientRect().height > 0);
+    return {
+      bottomGap: Math.round(window.innerHeight - b.bottom),
+      right: Math.round(b.right),
+      live: !!document.querySelector('.mobile-live-strip'),
+      visibleRows: rows.filter((n) => n.getBoundingClientRect().top < b.top).length,
+    };
   });
-  if (bulk.bottomGap < 8) fail(`bulk bar sits ${bulk.bottomGap}px off the bottom — too close to the safe area`);
-  if (bulk.right > 390) fail(`bulk bar runs ${bulk.right - 390}px off the right edge`);
-  await page.click('.bulk-x');
+  if (dock.bottomGap < 8) fail(`Done dock sits ${dock.bottomGap}px off the bottom — too close to the safe area`);
+  if (dock.right > 390) fail(`Done dock runs ${dock.right - 390}px off the right edge`);
+  if (!dock.live) fail('phone production flow has no live-job strip');
+  if (dock.visibleRows < 2) fail(`phone production flow shows only ${dock.visibleRows} queue row(s) above Done`);
 
   // --- a dialog on a phone: every action reachable without hidden buttons ---
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${base}/#fom`);
-  await page.waitForSelector('.line');
-  await page.click('.line .line-iconbtn[title*="Edit this line"]');
+  await page.goto(`${base}/#rolling`);
+  await page.waitForSelector('.mobile-queue-row');
+  await page.click('.mobile-queue-row .mobile-queue-open');
+  await page.waitForSelector('.line-inspector');
+  await page.locator('.line-inspector .inspector-action').filter({ hasText: /^Edit$/ }).click();
   await page.waitForSelector('dialog[open]');
   await page.screenshot({ path: path.join(SHOT, `dialog-phone-${theme}.png`) });
   const cut = await page.evaluate(() => {
@@ -420,7 +432,7 @@ for (const theme of ['light', 'dark']) {
   // which reports scroll metrics in unzoomed pixels and always looks broken.
   await page.setViewportSize({ width: 640, height: 512 });
   await page.goto(`${base}/#fom`);
-  await page.waitForSelector('.line');
+  await page.waitForSelector('.mobile-queue-row');
   await page.waitForTimeout(150);
   const zoomOverflow = await page.evaluate(() =>
     document.documentElement.scrollWidth - document.documentElement.clientWidth);

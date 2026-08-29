@@ -47,6 +47,7 @@ function stateFor(group) {
     viewState.set(group, {
       machine: null, q: '', showDone: false, filter: 'ALL',
       open: {}, expanded: {}, selected: new Set(), nowExpanded: {}, active: undefined,
+      mobileFilters: false, mobileQueueExpanded: false,
       motion: null, motionTimer: null,
     });
   }
@@ -799,6 +800,236 @@ function nowRunningPanel(machine, rerender, vs) {
       }, `Show ${hidden} more`) : null));
 }
 
+/* ---------- mobile production flow ----------
+
+   A phone is not a narrow desktop queue. It has one repeated job: finish what
+   is running, see what starts next, then scan the few lines after it. The
+   desktop date groups and bulk controls remain untouched; this compact flow is
+   an additional presentation of the same task records and the same actions. */
+
+const MOBILE_QUEUE_CAP = 8;
+
+function shortMachineLabel(machine, group) {
+  if (group === 'Rolling') return machine.label.replace(/^Rolling\s*\(|\)$/g, '');
+  if (group === 'Punch') return machine.label.replace(/^Multi\s*/i, '');
+  return machine.label;
+}
+
+function setMobileStatus(row, status, rerender, target) {
+  const key = taskStatusKey(row.task);
+  const before = [{ key, prev: state.taskStatus[key]?.status ?? null }];
+  setTaskStatus(key, status);
+  const surface = target?.closest?.('.mobile-live-strip, .mobile-queue-row, .mobile-done-dock');
+  if (surface) flash(surface);
+  toastAction(`${row.task.wo} → ${TRACK_STATUS[status].label}`, 'Undo', () => {
+    restoreTaskStatus(before);
+    rerender();
+  });
+  rerender();
+}
+
+function mobileMachineMenu(machine, groups, sum, vs, rerender) {
+  const close = (e) => e.currentTarget.closest('dialog')?.close();
+  const action = (label, iconName, onclick) => el('button.mobile-machine-action', {
+    onclick: (e) => { close(e); onclick(); },
+  }, icon(iconName, { size: 18 }), el('span', {}, label), icon('chevron', { size: 15 }));
+
+  modal(`${machine.label} actions`, el('div.mobile-machine-actions', {},
+    action('Machine setup', 'gear', () => machineSettings(machine, rerender)),
+    action(`Add a job to ${machine.label}`, 'plus', () => manualJobDialog({
+      machine: machine.key, rerender,
+    })),
+    action('Print schedule', 'print', () => printMachineSchedule(machine, groups, sum, vs))), {});
+}
+
+function mobileMachineBar(machines, machine, groups, sum, vs, rerender, group) {
+  const tabs = machines.length > 1
+    ? el('div.mobile-machine-tabs', { 'aria-label': `${group} machines` },
+        ...machines.map((m) => el('button', {
+          'aria-current': String(m.key === vs.machine),
+          onclick: () => {
+            vs.machine = m.key;
+            vs.selected.clear();
+            vs.active = undefined;
+            vs.mobileQueueExpanded = false;
+            vs.mobileFilters = false;
+            markMotion(vs, { type: 'machine', key: m.key });
+            rerender();
+          },
+        }, shortMachineLabel(m, group))))
+    : el('div.mobile-machine-single', {}, shortMachineLabel(machine, group));
+
+  return el('section.mobile-machinebar', { 'aria-label': `Machine: ${machine.label}` },
+    tabs,
+    el('div.mobile-machine-meta', {},
+      machine.note ? el('strong', {}, machine.note) : null,
+      machine.ops != null ? el('span', {},
+        `${machine.ops} operator${machine.ops === 1 ? '' : 's'}`) : null),
+    el('button.mobile-machine-more', {
+      'aria-label': `${machine.label} actions`,
+      title: `${machine.label} actions`,
+      onclick: () => mobileMachineMenu(machine, groups, sum, vs, rerender),
+    }, icon('gear', { size: 18 })));
+}
+
+function mobileLiveStrip(machine, runningRows) {
+  if (!runningRows.length) {
+    return el('section.mobile-live-strip.idle', {},
+      el('div.mobile-live-kicker', {}, icon('dot', { size: 15 }), 'Live now'),
+      el('strong', {}, `Nothing running on ${machine.label}`),
+      el('span', {}, 'Start the first ready line below.'));
+  }
+
+  const row = runningRows[0];
+  const t = row.task;
+  const since = row.status.at ? fmtWhen(row.status.at) : null;
+  return el('section.mobile-live-strip', { 'aria-label': `Live now: ${t.wo}` },
+    el('div.mobile-live-kicker', {},
+      icon('play', { size: 13 }),
+      el('span', {}, 'Live now'),
+      since ? el('span.mobile-live-time', {}, `Started ${since}`) : null),
+    el('div.mobile-live-main', {},
+      el('div', {},
+        el('div.mobile-live-id', {},
+          el('strong.mono', {}, t.wo),
+          t.die ? el('span.die', {}, t.die) : null),
+        el('div.mobile-live-project', {},
+          el('strong', {}, t.project || '—'),
+          t.floor ? el('span', {}, ` · ${t.floor}`) : null)),
+      el('div.mobile-live-meta', {},
+        el('span', {}, el('strong.mono', {}, fmtNum(t.qty)), ' pcs'),
+        el('span', {}, row.status.by || 'Unassigned'))));
+}
+
+function mobileQueueTone(row) {
+  const bo = resolveBackOrder(row.task);
+  const rush = row.rush || resolveRush(row.task);
+  const late = daysLate(row.task);
+  if (bo.on) return { cls: 'bad', icon: 'alert', label: 'Back order' };
+  if (rush.on) return { cls: 'warn', icon: 'bolt', label: 'Rush' };
+  if (late > 0) return { cls: 'bad', icon: 'alert', label: 'Overdue' };
+  if (isStaged(row.task)) return { cls: 'ok', icon: 'check', label: 'Staged' };
+  return { cls: 'work', icon: 'calendar', label: 'Planned' };
+}
+
+function mobileQueueRow(row, index, vs, rerender, isNext) {
+  const t = row.task;
+  const key = taskStatusKey(t);
+  const tone = mobileQueueTone(row);
+  const open = () => {
+    vs.active = key;
+    markMotion(vs, { type: 'select', key });
+    rerender();
+  };
+
+  return el('li.mobile-queue-row.' + tone.cls + (isNext ? '.next' : ''), {
+    style: { '--queue-delay': `${Math.min(index, 6) * 32}ms` },
+    onclick: (e) => {
+      if (e.target.closest('button, input, label, select, textarea, a')) return;
+      open();
+    },
+  },
+    el('span.mobile-queue-order', { 'aria-hidden': 'true' }, String(index + 1)),
+    el('div.mobile-queue-copy', {},
+      el('div.mobile-queue-id', {},
+        el('strong.mono', {}, t.wo),
+        t.die ? el('span.die', {}, t.die) : null),
+      el('div.mobile-queue-project', {},
+        el('strong', {}, t.project || '—'),
+        t.floor ? el('span', {}, ` · ${t.floor}`) : null),
+      el('div.mobile-queue-qty', {},
+        el('strong.mono', {}, fmtNum(t.qty)), ' pcs',
+        t.cuttingDate ? el('span', {}, ` · ${fmtDate(t.cuttingDate)}`) : null)),
+    el('div.mobile-queue-state.' + tone.cls, {},
+      icon(tone.icon, { size: 15 }),
+      el('span', {}, tone.label)),
+    isNext ? el('button.mobile-queue-start', {
+      'aria-label': `Start work order ${t.wo}`,
+      onclick: (e) => setMobileStatus(row, 'IN_PROGRESS', rerender, e.currentTarget),
+    }, icon('play', { size: 16 }), el('span', {}, 'Start'))
+      : el('button.mobile-queue-open', {
+        'aria-label': `Open details for ${t.wo}`,
+        onclick: open,
+      }, icon('chevron', { size: 17 })));
+}
+
+function mobileFilters(vs, sum, rerender) {
+  const panel = el('div.mobile-filter-panel', {},
+    el('div.searchwrap', {},
+      icon('search', { size: 15, cls: 'searchicon' }),
+      el('input', {
+        type: 'search', placeholder: 'Search W/O, project, die, note…', value: vs.q,
+        oninput: (e) => {
+          vs.q = e.target.value;
+          vs.mobileQueueExpanded = false;
+          clearTimeout(panel._t);
+          panel._t = setTimeout(rerender, 150);
+        },
+      })),
+    el('div.filterpills', {}, ...FILTERS.map((f) => el('button.pill', {
+      'aria-current': String(vs.filter === f.key),
+      onclick: () => { vs.filter = f.key; vs.mobileQueueExpanded = false; rerender(); },
+    }, f.label))),
+    el('label.row.small.donetoggle', {},
+      el('input', {
+        type: 'checkbox', checked: vs.showDone,
+        onchange: (e) => { vs.showDone = e.target.checked; rerender(); },
+      }),
+      `Show done${sum.done ? ` (${fmtNum(sum.done)})` : ''}`));
+  return panel;
+}
+
+function mobileCentreFlow({ machines, machine, groups, sum, vs, rerender, group }) {
+  const runningRows = runningNow(machine.key);
+  const liveKey = runningRows[0] ? taskStatusKey(runningRows[0].task) : null;
+  const allRows = groups.flatMap((g) => g.rows).filter((row) => taskStatusKey(row.task) !== liveKey);
+  /* In the normal view, lines already running belong to the live count rather
+     than pretending to be next. A search or the Running filter still exposes
+     every one of them when an operator needs a specific active line. */
+  const queueRows = (!vs.q && vs.filter === 'ALL')
+    ? allRows.filter((row) => row.status.key !== 'IN_PROGRESS')
+    : allRows;
+  const shown = vs.mobileQueueExpanded ? queueRows : queueRows.slice(0, MOBILE_QUEUE_CAP);
+  const hidden = queueRows.length - shown.length;
+
+  return el('div.mobile-centre-flow' + (vs.motion?.type === 'machine' ? '.machine-switch' : ''), {},
+    mobileMachineBar(machines, machine, groups, sum, vs, rerender, group),
+    mobileLiveStrip(machine, runningRows),
+    el('div.mobile-queue-toolbar', {},
+      el('div.mobile-queue-summary', {},
+        icon('list', { size: 17 }),
+        el('span', {}, el('strong.work', {}, fmtNum(sum.inProgress)), ' running'),
+        el('span', {}, el('strong', {}, fmtNum(sum.open)), ' open'),
+        el('span', {}, el('strong.bad', {}, fmtNum(sum.rush + sum.backOrder)), ' blocked')),
+      el('button.mobile-filter-toggle', {
+        'aria-expanded': String(vs.mobileFilters),
+        onclick: () => { vs.mobileFilters = !vs.mobileFilters; rerender(); },
+      }, icon('search', { size: 16 }), el('span', {}, vs.mobileFilters ? 'Close' : 'Search / filter'))),
+    vs.mobileFilters ? mobileFilters(vs, sum, rerender) : null,
+    el('section.mobile-queue-section', {},
+      el('div.mobile-queue-heading', {},
+        el('h2', {}, vs.filter === 'ALL' && !vs.q ? 'Next in line' : 'Matching lines'),
+        el('span', {}, `${fmtNum(queueRows.length)} line${queueRows.length === 1 ? '' : 's'}`)),
+      shown.length
+        ? el('ol.mobile-queue-list', {},
+            ...shown.map((row, index) => mobileQueueRow(row, index, vs, rerender, index === 0)))
+        : el('div.mobile-queue-empty', {},
+            icon('check', { size: 20 }),
+            el('strong', {}, vs.q || vs.filter !== 'ALL' ? 'Nothing matches' : 'Queue is clear'),
+            el('span', {}, vs.q || vs.filter !== 'ALL'
+              ? 'Try another search or filter.'
+              : 'There is no waiting work on this machine.')),
+      hidden > 0 ? el('button.mobile-queue-more', {
+        onclick: () => { vs.mobileQueueExpanded = true; rerender(); },
+      }, `Show ${fmtNum(hidden)} more`) : null),
+    runningRows.length ? el('div.mobile-done-dock', { role: 'region', 'aria-label': 'Current job action' },
+      el('button', {
+        'aria-label': `Mark work order ${runningRows[0].task.wo} done`,
+        onclick: (e) => setMobileStatus(runningRows[0], 'DONE', rerender, e.currentTarget),
+      }, icon('check', { size: 20 }),
+        el('span', {}, el('strong.mono', {}, runningRows[0].task.wo), ' · Mark done'))) : null);
+}
+
 /* ---------- shift update ---------- */
 
 function shiftUpdatePanel(machineKey) {
@@ -1175,11 +1406,12 @@ export function makeCentreView(group) {
     return el('div.centre', {},
       el('div.centre-workspace' + (activeRow ? '.with-inspector' : ''), {},
         el('div.centre-primary' + (vs.motion?.type === 'machine' ? '.machine-switch' : ''), {},
+          mobileCentreFlow({ machines, machine, groups, sum, vs, rerender, group }),
           head,
           routeBanner,
           nowRunningPanel(machine, rerender, vs),
           filters,
-          body,
+          el('div.desktop-centre-body', {}, body),
           shiftUpdatePanel(machine.key),
           bulkBar(vs, rerender, group)),
         lineInspector(activeRow, vs, rerender, group)));
