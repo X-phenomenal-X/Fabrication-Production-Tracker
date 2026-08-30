@@ -312,7 +312,7 @@ function componentGroup(title, components, chooseProfile, tone = '') {
     el('div.dieparts', {}, ...components.map((component) => componentRow(component, chooseProfile))));
 }
 
-function assemblyDetail(assembly, chooseAssembly, chooseProfile, rerender) {
+function assemblyDetail(assembly, chooseAssembly, chooseProfile, rerender, mobile = {}) {
   const verified = componentsOf(assembly).map((component) => ({
     ...component, source: 'listing', sourceSa: assembly.sa, verified: true,
   }));
@@ -328,6 +328,10 @@ function assemblyDetail(assembly, chooseAssembly, chooseProfile, rerender) {
     lowerTB: 'Lower T-break', interior: 'Interior',
   };
   const missing = coverage.missingRoles.map((part) => roleLabel[part]);
+  const forms = dieForms(assembly.sa);
+  const related = lookupDie(forms.part).usedIn.filter((row) => row.sa !== assembly.sa);
+  const componentCount = verified.length + recovered.length + references.length;
+  const openProfile = (record) => chooseProfile(record, assembly);
 
   const drawingPane = dwg ? el('button.diedrawing', {
     type: 'button',
@@ -361,7 +365,8 @@ function assemblyDetail(assembly, chooseAssembly, chooseProfile, rerender) {
             ? `${reference.die} remains linked from the source listing.`
             : 'The component map can still be used.'));
 
-  return el(`article.diecard.lookup-detail-enter${reference ? '.reference-only' : ''}`, {},
+  return el(`article.diecard.lookup-detail-enter${reference ? '.reference-only' : ''}`
+    + (mobile.enabled ? `.mobile-lookup-record.mobile-tab-${mobile.tab}` : ''), {},
     el('div.diecard-head', {},
       el('div', {},
         el('div.lookup-kind', {}, icon(reference ? 'extrusion' : 'rollers', { size: 14 }),
@@ -369,6 +374,11 @@ function assemblyDetail(assembly, chooseAssembly, chooseProfile, rerender) {
         el('span.mono.diecard-sa', {}, assembly.sa),
         assembly.desc ? el('div.diecard-desc', {}, assembly.desc) : null),
       el('span.spacer'),
+      mobile.enabled ? el('div.mobile-record-status', {},
+        chip(reference
+          ? 'Profile reference'
+          : coverage.complete ? 'Verified complete' : 'Needs review',
+        reference || coverage.complete ? 'ok' : 'warn')) : null,
       el('button.print-action.record-print', {
         type: 'button', disabled: !!referenceRecord && !imageMap,
         title: referenceRecord && !imageMap
@@ -380,6 +390,18 @@ function assemblyDetail(assembly, chooseAssembly, chooseProfile, rerender) {
 
     el('div.die-assembly-grid', {},
       drawingPane,
+
+      mobile.enabled ? el('div.mobile-lookup-detail-tabs', {
+        role: 'tablist', 'aria-label': `${assembly.sa} detail`,
+      },
+      el('button', {
+        type: 'button', role: 'tab', 'aria-selected': String(mobile.tab === 'components'),
+        onclick: () => mobile.setTab('components'),
+      }, icon('list', { size: 17 }), el('span', {}, 'Components'), el('b.mono', {}, String(componentCount))),
+      el('button', {
+        type: 'button', role: 'tab', 'aria-selected': String(mobile.tab === 'usage'),
+        onclick: () => mobile.setTab('usage'),
+      }, icon('job', { size: 17 }), el('span', {}, 'Used in'), el('b.mono', {}, String(related.length)))) : null,
 
       el('div.die-component-map', {},
         el(`div.component-coverage${reference ? '.reference-only' : ''}`, {},
@@ -401,10 +423,10 @@ function assemblyDetail(assembly, chooseAssembly, chooseProfile, rerender) {
                   ? `Still unverified: ${missing.join(', ')}.`
                   : 'Listing references are shown without assigning an uncertain role.'))),
         assembly.note ? el('div.banner.warn.lookup-note', {}, el('div', {}, assembly.note)) : null,
-        componentGroup('Verified components', verified, chooseProfile),
-        componentGroup('Recovered from matching variant', recovered, chooseProfile, 'recovered'),
+        componentGroup('Verified components', verified, openProfile),
+        componentGroup('Recovered from matching variant', recovered, openProfile, 'recovered'),
         componentGroup(reference ? 'Profile named in source listing' : 'Referenced in listing text',
-          references, chooseProfile, 'reference'),
+          references, openProfile, 'reference'),
         !verified.length && !recovered.length && !references.length
           ? el('div.empty.die-components-empty', {},
               el('h3', {}, 'No verified extrusion numbers'),
@@ -416,24 +438,31 @@ function assemblyDetail(assembly, chooseAssembly, chooseProfile, rerender) {
             ? 'No exterior, interior or additional thermal-break roles were supplied or inferred for this catalogue row.'
             : 'Recovered values are cross-referenced from a matching standard, HT or HTX variant; thermal-break values are never inferred.'))),
 
-    (() => {
-      const forms = dieForms(assembly.sa);
-      const related = lookupDie(forms.part).usedIn.filter((row) => row.sa !== assembly.sa);
-      return related.length ? el('section.lookup-where-used', {},
+    related.length ? el('section.lookup-where-used', {},
         el('div.die-component-head', {}, el('h3', {}, `Assemblies using ${forms.part}`),
           el('span', {}, `${related.length} found`)),
         el('div.lookup-related-list', {}, ...related.slice(0, 12).map((row) => el('button', {
           type: 'button', onclick: () => chooseAssembly(row),
-        }, el('b.mono', {}, row.sa), el('span', {}, row.desc || ''), icon('chevron', { size: 13 }))))) : null;
-    })());
+        }, el('b.mono', {}, row.sa), el('span', {}, row.desc || ''), icon('chevron', { size: 13 }))))) : null,
+
+    mobile.enabled ? el('div.mobile-lookup-dock', {
+      role: 'region', 'aria-label': `${assembly.sa} actions`,
+    },
+    el('button.mobile-lookup-secondary', { type: 'button', onclick: mobile.showResults },
+      icon('chevron', { size: 17, cls: 'mobile-lookup-back-icon' }),
+      el('span', {}, 'Back to results')),
+    el('button.mobile-lookup-primary', {
+      type: 'button', disabled: !!referenceRecord && !imageMap,
+      onclick: () => printAssembly(assembly),
+    }, icon('print', { size: 19 }), el('span', {}, 'Print sheet'))) : null);
 }
 
-function profileDetail(record, rerender, chooseAssembly) {
+function profileDetail(record, rerender, chooseAssembly, mobile = {}) {
   const body = imageMap?.[record.key];
   if (!imageMap) ensureExtrusionImages(rerender);
   const usages = componentUsageOf(record.id);
 
-  return el('article.extrusion-card.lookup-detail-enter', {},
+  return el(`article.extrusion-card.lookup-detail-enter${mobile.enabled ? '.mobile-lookup-record' : ''}`, {},
     el('div.extrusion-card-head', {},
       el('div', {},
         el('div.lookup-kind', {}, icon('extrusion', { size: 14 }), 'Individual extrusion'),
@@ -477,7 +506,17 @@ function profileDetail(record, rerender, chooseAssembly) {
       el('span', {}, usage.assembly.desc || ''),
       el('em', {}, usageSourceLabel(usage)),
       icon('chevron', { size: 13 }))))
-        : el('p.small.muted', {}, 'The profile has a reviewed master drawing but is not referenced by a parsed sub-assembly row.')));
+        : el('p.small.muted', {}, 'The profile has a reviewed master drawing but is not referenced by a parsed sub-assembly row.')),
+    mobile.enabled ? el('div.mobile-lookup-dock', {
+      role: 'region', 'aria-label': `${record.id} actions`,
+    },
+    el('button.mobile-lookup-secondary', {
+      type: 'button', onclick: mobile.backToParent || mobile.showResults,
+    }, icon('chevron', { size: 17, cls: 'mobile-lookup-back-icon' }),
+    el('span', {}, mobile.parentAssembly ? `Back to ${mobile.parentAssembly.sa}` : 'Back to results')),
+    el('button.mobile-lookup-primary', {
+      type: 'button', disabled: !imageMap, onclick: () => printProfile(record),
+    }, icon('print', { size: 19 }), el('span', {}, 'Print profile'))) : null);
 }
 
 function browseLibrary(showQuery) {
@@ -513,6 +552,9 @@ function browseLibrary(showQuery) {
 function lookupWorkspace({ initial = '', onQuery = () => {}, persist = false } = {}) {
   let filter = persist ? sectionFilter : 'all';
   let selected = persist ? selectedToken : '';
+  let mobileResultsOpen = !initial.trim();
+  let mobileDetailTab = 'components';
+  let mobileParentAssembly = null;
   const wrap = el('div.engineering-lookup.dielookup', {});
   const input = el('input', {
     type: 'search',
@@ -523,36 +565,78 @@ function lookupWorkspace({ initial = '', onQuery = () => {}, persist = false } =
   });
   const filterBar = el('div.lookup-filters', { 'aria-label': 'Engineering result type' });
   const output = el('div.lookup-output', { 'aria-live': 'polite' });
+  const mobileBack = el('button.mobile-lookup-back', {
+    type: 'button', hidden: true,
+    onclick: () => { mobileResultsOpen = true; render(); },
+  }, icon('chevron', { size: 16, cls: 'mobile-lookup-back-icon' }), el('span', {}, 'Results'));
 
   const remember = () => {
     onQuery(input.value);
     if (persist) { sectionFilter = filter; selectedToken = selected; }
   };
+  const revealMobileDetail = () => {
+    if (!persist) return;
+    requestAnimationFrame(() => {
+      if (window.matchMedia('(max-width: 720px)').matches) {
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      } else {
+        wrap.scrollIntoView({ block: 'start' });
+      }
+    });
+  };
 
   const choose = (item) => {
     selected = tokenFor(item);
+    mobileResultsOpen = false;
+    mobileDetailTab = 'components';
+    mobileParentAssembly = null;
     remember();
     render();
+    revealMobileDetail();
   };
   const chooseAssembly = (assembly) => {
     input.value = assembly.sa;
     selected = `assembly:${assembly.sa}`;
     filter = 'all';
+    mobileResultsOpen = false;
+    mobileDetailTab = 'components';
+    mobileParentAssembly = null;
     remember();
     render();
+    revealMobileDetail();
   };
-  const chooseProfile = (record) => {
+  const chooseProfile = (record, parentAssembly = null) => {
     input.value = record.id;
     selected = `profile:${record.key}`;
     filter = 'all';
+    mobileResultsOpen = false;
+    mobileParentAssembly = parentAssembly;
     remember();
     render();
+    revealMobileDetail();
   };
   const showQuery = (query) => {
     input.value = query;
     selected = '';
+    mobileResultsOpen = false;
+    mobileParentAssembly = null;
     remember();
     render();
+  };
+  const showResults = () => {
+    mobileResultsOpen = true;
+    render();
+    requestAnimationFrame(() => output.scrollIntoView({ block: 'start' }));
+  };
+  const setMobileTab = (tab) => {
+    mobileDetailTab = tab;
+    render();
+  };
+  const backToParent = () => {
+    if (!mobileParentAssembly) return showResults();
+    const parent = mobileParentAssembly;
+    mobileParentAssembly = null;
+    chooseAssembly(parent);
   };
 
   function renderFilters(counts = null) {
@@ -564,7 +648,10 @@ function lookupWorkspace({ initial = '', onQuery = () => {}, persist = false } =
     filterBar.replaceChildren(...choices.map(([key, label, count]) => el('button', {
       type: 'button',
       'aria-pressed': String(filter === key),
-      onclick: () => { filter = key; selected = ''; remember(); render(); },
+      onclick: () => {
+        filter = key; selected = ''; mobileResultsOpen = true; mobileParentAssembly = null;
+        remember(); render();
+      },
     }, el('span', {}, label), Number.isFinite(count) ? el('b.mono', {}, String(count)) : null)));
   }
 
@@ -572,6 +659,10 @@ function lookupWorkspace({ initial = '', onQuery = () => {}, persist = false } =
     output.replaceChildren();
     const query = input.value.trim();
     remember();
+    wrap.classList.toggle('mobile-results-open', !!query && mobileResultsOpen);
+    wrap.classList.toggle('mobile-detail-open', !!query && !mobileResultsOpen);
+    wrap.classList.toggle('mobile-browse-open', !query);
+    mobileBack.hidden = !persist || !query || mobileResultsOpen;
 
     if (!query) {
       renderFilters();
@@ -602,18 +693,25 @@ function lookupWorkspace({ initial = '', onQuery = () => {}, persist = false } =
           el('span', {}, 'Section-book rows and profiles')),
         el('div.lookup-result-list', {}, ...matches.items.map((item) => resultRow(item, selected, choose)))),
       el('div.lookup-detail', {}, active.type === 'assembly'
-        ? assemblyDetail(active.assembly, chooseAssembly, chooseProfile, render)
-        : profileDetail(active.record, render, chooseAssembly))));
+        ? assemblyDetail(active.assembly, chooseAssembly, chooseProfile, render, {
+            enabled: persist, tab: mobileDetailTab, setTab: setMobileTab, showResults,
+          })
+        : profileDetail(active.record, render, chooseAssembly, {
+            enabled: persist, showResults, parentAssembly: mobileParentAssembly, backToParent,
+          }))));
   }
 
   let timer = null;
   input.addEventListener('input', () => {
     clearTimeout(timer);
+    mobileResultsOpen = true;
+    mobileParentAssembly = null;
     timer = setTimeout(() => { selected = ''; render(); }, 90);
   });
 
   wrap.append(
     el('div.lookup-search-line', {},
+      persist ? mobileBack : null,
       el('div.searchwrap.lookup-search.diesearch', { role: 'search' },
         icon('search', { size: 17, cls: 'searchicon' }), input),
       filterBar),

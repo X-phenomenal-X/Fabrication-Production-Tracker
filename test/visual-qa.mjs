@@ -439,6 +439,98 @@ for (const theme of ['light', 'dark']) {
   await page.locator('dialog[open] button').filter({ hasText: 'Close' }).click();
   await page.screenshot({ path: path.join(SHOT, `shift-update-focused-phone-${theme}.png`) });
 
+  // --- mobile Engineering Lookup is a focused drawing workflow ---
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${base}/#dies`);
+  await page.waitForSelector('.lookup-search input');
+  await page.locator('.lookup-search input').fill('S80.106');
+  await page.waitForSelector('.mobile-results-open .lookup-result');
+  const lookupSearchState = await page.evaluate(() => ({
+    results: getComputedStyle(document.querySelector('.lookup-match-panel')).display !== 'none',
+    detail: getComputedStyle(document.querySelector('.lookup-detail')).display !== 'none',
+  }));
+  if (!lookupSearchState.results || lookupSearchState.detail) {
+    fail(`lookup @ phone/${theme}: typing does not open the focused results list`);
+  }
+  await page.locator('.lookup-result').filter({ hasText: 'SA80-106' }).first().click();
+  await page.waitForSelector('.mobile-lookup-record');
+  await page.waitForSelector('.mobile-lookup-dock');
+  await page.waitForTimeout(180);
+  const assemblyLookup = await page.evaluate((activeTheme) => {
+    const record = document.querySelector('.mobile-lookup-record');
+    const drawing = record?.querySelector('.diedrawing img');
+    const primary = record?.querySelector('.mobile-lookup-primary');
+    const tabs = Array.from(record?.querySelectorAll('.mobile-lookup-detail-tabs [role="tab"]') || []);
+    const style = drawing ? getComputedStyle(drawing) : null;
+    const primaryBox = primary?.getBoundingClientRect();
+    return {
+      activeTheme,
+      records: document.querySelectorAll('.mobile-lookup-record').length,
+      components: record?.querySelectorAll('.diepart').length || 0,
+      tabs: tabs.map((tab) => tab.textContent.trim()),
+      drawingLoaded: !!drawing?.naturalWidth,
+      drawingBlend: style?.mixBlendMode,
+      drawingFilter: style?.filter,
+      buttonGap: primaryBox ? Math.round(innerHeight - primaryBox.bottom) : -1,
+      resultsHidden: getComputedStyle(document.querySelector('.lookup-match-panel')).display === 'none',
+    };
+  }, theme);
+  if (assemblyLookup.records !== 1 || assemblyLookup.components < 3 || !assemblyLookup.resultsHidden) {
+    fail(`lookup @ phone/${theme}: assembly is not one focused record with its components`);
+  }
+  if (assemblyLookup.tabs.length !== 2) {
+    fail(`lookup @ phone/${theme}: expected Components and Used in tabs`);
+  }
+  if (!assemblyLookup.drawingLoaded) fail(`lookup @ phone/${theme}: assembly drawing did not load`);
+  if (assemblyLookup.buttonGap < 8) {
+    fail(`lookup @ phone/${theme}: Print sheet sits ${assemblyLookup.buttonGap}px off the safe area`);
+  }
+  if (theme === 'dark'
+      && (assemblyLookup.drawingBlend !== 'lighten' || !assemblyLookup.drawingFilter.includes('invert'))) {
+    fail(`lookup @ phone/dark: engineering drawing is not blended into the app surface`);
+  }
+  if (theme === 'light' && assemblyLookup.drawingFilter !== 'none') {
+    fail(`lookup @ phone/light: original white engineering sheet is filtered`);
+  }
+
+  await page.getByRole('tab', { name: /Used in/ }).click();
+  const usedInVisible = await page.evaluate(() => ({
+    usage: getComputedStyle(document.querySelector('.mobile-lookup-record > .lookup-where-used')).display !== 'none',
+    components: getComputedStyle(document.querySelector('.mobile-lookup-record .die-component-map')).display !== 'none',
+  }));
+  if (!usedInVisible.usage || usedInVisible.components) {
+    fail(`lookup @ phone/${theme}: Used in does not replace the component list in place`);
+  }
+  await page.getByRole('tab', { name: /Components/ }).click();
+  await page.locator('.mobile-lookup-record .diepart').first().click();
+  await page.waitForSelector('.mobile-lookup-record .extrusion-drawing img');
+  await page.waitForTimeout(220);
+  const profileLookup = await page.evaluate(() => {
+    const card = document.querySelector('.mobile-lookup-record');
+    const id = card?.querySelector('.extrusion-id');
+    const image = card?.querySelector('.extrusion-drawing img');
+    return {
+      id: id?.textContent.trim(),
+      idTop: Math.round(id?.getBoundingClientRect().top || -1),
+      back: card?.querySelector('.mobile-lookup-secondary')?.textContent.trim(),
+      loaded: !!image?.naturalWidth,
+      blend: image ? getComputedStyle(image).mixBlendMode : '',
+    };
+  });
+  if (profileLookup.id !== '80-113' || !profileLookup.loaded) {
+    fail(`lookup @ phone/${theme}: component did not open extrusion 80-113 with its drawing`);
+  }
+  if (profileLookup.idTop < 96 || profileLookup.idTop > 360) {
+    fail(`lookup @ phone/${theme}: extrusion identity is lost at ${profileLookup.idTop}px after drill-in`);
+  }
+  if (!profileLookup.back.includes('SA80-106')) {
+    fail(`lookup @ phone/${theme}: extrusion has no return path to SA80-106`);
+  }
+  if (theme === 'dark' && profileLookup.blend !== 'lighten') {
+    fail(`lookup @ phone/dark: extrusion profile is not blended into the app surface`);
+  }
+  await page.screenshot({ path: path.join(SHOT, `engineering-lookup-focused-phone-${theme}.png`) });
+
   // --- the phone's persistent Done action clears the browser's safe area ---
   // The redesigned production flow removes the old checkbox-first phone queue.
   // Its repeated floor action is now the current job's Done dock, so that is

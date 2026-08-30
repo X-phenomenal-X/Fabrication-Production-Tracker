@@ -128,3 +128,49 @@ A separate crop was not necessary because the normalized 1100 x 900 comparison r
 - [P3] The source's active FOM row is numbered 5 of 13; production is 7 of 13 because the real handoff includes Back Order, Service Orders and K1285 Pulls before machine rows.
 
 final result: passed
+
+---
+
+# Focused Mobile Engineering Lookup Design QA
+
+## Comparison target
+
+- Source visual truth: `C:\Users\abhay.badhwar\.codex\generated_images\01a0409f-1a16-7bb0-ac5e-caa8b26cef14\exec-f55e1928-5362-4330-9778-e428c54f6e0f.png`
+- Final assembly implementation: `C:\Users\abhay.badhwar\OneDrive - BVGLAZING SYSTEMS\Documents\ChatGPT\Production Tracker Fabrication\test\screens\mobile-lookup-audit-2026-08-30\12-final-assembly.png`
+- Final profile implementation: `C:\Users\abhay.badhwar\OneDrive - BVGLAZING SYSTEMS\Documents\ChatGPT\Production Tracker Fabrication\test\screens\mobile-lookup-audit-2026-08-30\13-final-profile.png`
+- Same-input comparison: `C:\Users\abhay.badhwar\OneDrive - BVGLAZING SYSTEMS\Documents\ChatGPT\Production Tracker Fabrication\test\screens\mobile-lookup-audit-2026-08-30\14-source-vs-final.png`
+- Route and state: Engineering Lookup, dark theme, `S80.106` assembly, Components tab, real SA80-106 section drawing, three verified components, fixed print dock.
+- Requested CSS viewport: 390 x 844. The connected browser reserved its own chrome and captured 375 x 812 while retaining the intended phone breakpoint and aspect.
+
+## Full-view comparison evidence
+
+The selected Drawing Spotlight concept and final production capture were rendered side by side at equal visual scale. The implementation follows its search-first hierarchy, single-record focus, strong assembly identity, drawing-led center, Components / Used in tabs and persistent print action. It retains the app's proven 96 px global header, real engineering data and existing touch-safe controls.
+
+The intentional difference is the drawing treatment requested after the concept was selected: on a dark phone, the real black-on-white engineering image is inverted and blended into the slate drawing surface. This removes the bright paper rectangle without redrawing or approximating the engineering source. Light theme, enlarged view and print keep the unmodified white sheet.
+
+## Comparison history
+
+### Pass 1 — findings
+
+- [P2] The white paper rectangle around assembly and extrusion drawings looked disconnected from the dark shop-floor surface.
+- [P2] Drilling from an assembly component into its extrusion profile could leave the sticky search row over the profile identity after the page retained its previous scroll position.
+
+### Fixes applied
+
+- Added a dark-phone-only `invert` plus `lighten` blend treatment to the real drawing images and matched their container to the existing slate panel token.
+- Scoped the blend to focused mobile records. The light theme, enlarged drawing dialog and every print path remain untouched.
+- Reset mobile detail handoff to the top of the page when changing records, keeping `Individual extrusion`, profile number and description fully visible below the sticky global header.
+- Added automated assertions for dark/light image treatment, focused results, Components / Used in tabs, component drill-in, parent return, safe-area print actions and the profile identity position.
+
+### Pass 2 — passed
+
+- The assembly drawing now reads as linework on the same slate surface as its record while retaining all dimensions and profile labels.
+- The `80-113` profile opens with its identity fully visible and the same integrated linework treatment.
+- The automated visual suite passes light and dark phone states, all 27 measured WCAG AA contrast pairs, reduced motion, 200% zoom, desktop rails and non-interactive monitor mode. Browser console errors: none.
+- No actionable P0, P1 or P2 mismatch remains.
+
+## Follow-up polish
+
+- [P3] The existing global mobile page selector truncates `Engineering Lookup` at narrow browser widths. Its icon and selected-state styling still make the destination clear, and changing the shared header is outside this focused drawing pass.
+
+final result: passed
