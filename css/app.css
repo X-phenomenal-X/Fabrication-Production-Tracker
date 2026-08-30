@@ -1798,6 +1798,162 @@ main.page-enter { animation: page-enter .18s cubic-bezier(.2,.8,.2,1); }
    must not put both writers on the paper. */
 @media print { .su-m { display: none !important; } }
 
+/* ---------- staging on a phone ----------
+
+   The desk queue is a table you scan across; the phone queue is a list you
+   work down. Same rows, same actions — but bucketed by how late the line is,
+   capped so the page is not eighteen thousand pixels tall, and with the height
+   spent on the work order rather than on two full-width controls per row. */
+
+.stage-m { display: none; }
+
+@media (max-width: 720px) {
+  .stage-wide { display: none; }
+  .stage-m { display: block; }
+
+  .stage-m-group { margin-top: var(--s4); }
+  .stage-m-grouphead {
+    position: sticky; top: var(--hdr-h); z-index: 8;
+    display: flex; align-items: center; gap: var(--s2);
+    padding: var(--s2) 0; margin-bottom: var(--s1);
+    background: var(--bg);
+  }
+  .stage-m-groupdot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--ink-3); }
+  .stage-m-groupdot.bad { background: var(--bad); }
+  .stage-m-groupdot.warn { background: var(--warn); }
+  .stage-m-groupdot.ok { background: var(--ok); }
+  .stage-m-grouplabel {
+    font-size: var(--t-xs); font-weight: 800; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--ink-2);
+  }
+  .stage-m-groupcount {
+    padding: 1px 8px; border-radius: var(--r-pill);
+    background: var(--line-soft); color: var(--ink-2);
+    font-size: var(--t-xs); font-weight: 800; font-variant-numeric: tabular-nums;
+  }
+  .stage-m-groupcount.bad { background: var(--bad-soft); color: var(--bad); }
+  .stage-m-groupcount.warn { background: var(--warn-soft); color: var(--warn); }
+  .stage-m-groupcount.ok { background: var(--ok-soft); color: var(--ok); }
+
+  .stage-m-row {
+    padding: var(--s3) 0; border-bottom: 1px solid var(--line-soft);
+  }
+  /* A rush line keeps its spine here too, so it still reads as jumping the
+     queue when the badge has scrolled past. */
+  .stage-m-row.rush { box-shadow: inset 3px 0 0 var(--warn); padding-left: var(--s3); }
+  .stage-m-row.is-staged { opacity: .78; }
+
+  .stage-m-id { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+  .stage-m-id .mono.strong { font-size: var(--t-lg); font-weight: 800; letter-spacing: -.02em; }
+  .stage-m-where {
+    margin-top: 2px; font-size: var(--t-sm); color: var(--ink-2);
+    overflow-wrap: anywhere;
+  }
+  .stage-m-facts {
+    display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap;
+    margin-top: 5px; font-size: var(--t-sm);
+  }
+  .stage-m-qty { font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .stage-m-qty small { font-weight: 600; color: var(--ink-3); }
+  .stage-m-due { font-weight: 700; }
+  .stage-m-due.bad { color: var(--bad); }
+  .stage-m-due.warn { color: var(--warn); }
+  .stage-m-due.mute { color: var(--ink-3); font-weight: 600; }
+  .stage-m-machine { margin-left: auto; color: var(--ink-3); }
+
+  .stage-m-act { display: flex; gap: var(--s2); margin-top: var(--s3); }
+  .stage-m-stage { flex: 1; justify-content: center; gap: 6px; white-space: nowrap; }
+  .stage-m-other { width: var(--tap); min-width: var(--tap); flex: 0 0 var(--tap); padding: 0; }
+
+  .stage-m-done { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s3); }
+  .stage-m-doneband {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: var(--s2) var(--s3); border-radius: var(--r-sm);
+    background: var(--ok-soft); color: var(--ok);
+    font-size: var(--t-sm); font-weight: 700;
+  }
+  .stage-m-doneband svg { flex-shrink: 0; }
+  .stage-m-doneband small { font-weight: 600; opacity: .85; }
+  .stage-m-undo { width: var(--tap); min-width: var(--tap); flex: 0 0 var(--tap); padding: 0; }
+
+  .stage-m-more { width: 100%; margin-top: var(--s3); justify-content: center; font-weight: 700; }
+
+  /* The other-shift picker, built when it is asked for rather than once per
+     row. Full-width targets, because it is used in gloves. */
+  .stage-m-pick { display: grid; gap: var(--s2); }
+  .stage-m-pickbtn { width: 100%; justify-content: flex-start; gap: var(--s3); min-height: var(--ctl-lg); }
+}
+
+@media print { .stage-m { display: none !important; } }
+
+/* ---------- back orders on a phone ----------
+
+   Seven chase lists, seventy-eight lines. Same treatment as staging: the list
+   that matters first, each one bounded, and the row carrying the date the list
+   is sorted by. The row is a real button here — on the desk page it is a div
+   with an onclick, which no keyboard reaches and no tap-target check sees. */
+
+.bo-m { display: none; }
+
+@media (max-width: 720px) {
+  .bo-wide { display: none; }
+  .bo-m { display: block; }
+
+  .bo-m-group { margin-top: var(--s4); }
+  .bo-m-grouphead {
+    position: sticky; top: var(--hdr-h); z-index: 8;
+    display: flex; align-items: center; gap: var(--s2);
+    min-height: 40px; padding: var(--s2) 0; margin-bottom: var(--s1);
+    background: var(--bg);
+  }
+  .bo-m-who {
+    font-size: var(--t-md); font-weight: 800; letter-spacing: -.01em; color: var(--ink);
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .bo-m-grouphead.none .bo-m-who { color: var(--warn); }
+  .bo-m-count {
+    padding: 1px 8px; border-radius: var(--r-pill);
+    background: var(--line-soft); color: var(--ink-2);
+    font-size: var(--t-xs); font-weight: 800; font-variant-numeric: tabular-nums;
+  }
+  .bo-m-grouphead.none .bo-m-count { background: var(--warn-soft); color: var(--warn); }
+  .bo-m-shortsum { font-size: var(--t-sm); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+  .bo-m-row {
+    display: flex; align-items: center; gap: var(--s2); width: 100%;
+    padding: var(--s3) 0; text-align: left;
+    border: 0; border-bottom: 1px solid var(--line-soft); border-radius: 0;
+    background: none; box-shadow: inset 3px 0 0 var(--bad);
+    padding-left: var(--s3);
+  }
+  .bo-m-row:active { background: var(--panel-2); }
+  .bo-m-main { flex: 1; min-width: 0; display: block; }
+  .bo-m-id { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+  .bo-m-id .mono.strong { font-size: var(--t-lg); font-weight: 800; letter-spacing: -.02em; }
+  .bo-m-where {
+    display: block; margin-top: 2px; font-size: var(--t-sm); color: var(--ink-2);
+    font-weight: 500; overflow-wrap: anywhere;
+  }
+  .bo-m-facts {
+    display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; margin-top: 4px;
+    font-size: var(--t-sm);
+  }
+  .bo-m-short { font-weight: 800; color: var(--bad); font-variant-numeric: tabular-nums; }
+  .bo-m-short.none { font-weight: 600; color: var(--ink-3); }
+  .bo-m-when { margin-left: auto; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .bo-m-note {
+    display: flex; align-items: flex-start; gap: 5px; margin-top: 4px;
+    font-size: var(--t-sm); font-weight: 500; color: var(--ink-2);
+  }
+  .bo-m-note svg { flex-shrink: 0; margin-top: 2px; }
+  .bo-m-note.from-sheet { color: var(--warn); }
+  .bo-m-go { flex-shrink: 0; color: var(--ink-3); }
+
+  .stage-m-more, .bo-m-more { width: 100%; margin-top: var(--s3); justify-content: center; font-weight: 700; }
+}
+
+@media print { .bo-m { display: none !important; } }
+
 @keyframes su-m-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }

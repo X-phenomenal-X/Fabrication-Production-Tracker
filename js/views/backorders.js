@@ -141,6 +141,91 @@ export function backOrderDialog(task, rerender) {
 
 let mineOnly = false;
 
+/* ---------- back orders on a phone ----------
+
+   Seventy-eight lines across seven chase lists, twelve screens deep, and two
+   things wrong with reading it on a phone rather than at a desk.
+
+   The list nobody owns sorts last. On a monitor that reads as the odd one out
+   put at the end; on a phone it puts the fifty-five lines this page calls the
+   urgent ones eight screens below the fold. Here it leads.
+
+   And every row was a div with an onclick — no keyboard, no accessible name,
+   invisible to the tap-target check because it is not a control. On the phone
+   a row that opens a dialog is a button that says what it opens.
+
+   The desk page is untouched: both render and CSS shows one. */
+
+const bm = { open: {} };
+
+const BO_PAGE = 8;
+
+function mobileBoRow(row, rerender) {
+  const { task, bo, machine } = row;
+  const short = bo.qty != null ? `${fmtNum(bo.qty)} pcs short` : 'not counted';
+
+  return el('button.bo-m-row', {
+    type: 'button',
+    // The row opens the shortage dialog, so it says so rather than leaving a
+    // screen reader to infer it from four stacked spans.
+    'aria-label': `${task.wo}, ${task.project || 'no project'}, ${short} — edit this back order`,
+    onclick: () => backOrderDialog(task, rerender),
+  },
+    el('span.bo-m-main', {},
+      el('span.bo-m-id', {},
+        el('span.mono.strong', {}, task.wo),
+        task.die ? el('span.die', {}, task.die) : null,
+        chip(machineLabel(machine), 'mute')),
+      el('span.bo-m-where', {},
+        el('span', {}, task.project || '—'),
+        task.floor ? el('span.muted', {}, ' · ' + task.floor) : null),
+      el('span.bo-m-facts', {},
+        el('span.bo-m-short' + (bo.qty != null ? '' : '.none'), {}, short),
+        // `.line-date` is hidden below the small breakpoint, so on a phone the
+        // date this list is sorted by was the one thing it never showed.
+        el('span.bo-m-when', {}, fmtDate(task.cuttingDate))),
+      bo.note ? el('span.bo-m-note', {},
+        icon('note', { size: 13 }), el('span', {}, bo.note)) : null,
+      bo.sheetShort ? el('span.bo-m-note.from-sheet', {},
+        icon('alert', { size: 13 }),
+        el('span', {}, el('span.muted', {}, 'workbook: '), bo.sheetShort)) : null),
+    icon('chevron', { size: 16, cls: 'bo-m-go' }));
+}
+
+function mobileBoGroup(group, rerender) {
+  const id = group.assignee || '__none__';
+  const shown = bm.open[id] || BO_PAGE;
+  const left = group.rows.length - shown;
+  const short = group.rows.reduce((a, r) => a + (r.bo.qty || 0), 0);
+
+  return el('section.bo-m-group', {},
+    el('div.bo-m-grouphead' + (group.assignee ? '' : '.none'), {},
+      el('span.bo-avatar', { 'aria-hidden': 'true' },
+        group.assignee ? group.assignee.slice(0, 1).toUpperCase() : '?'),
+      el('span.bo-m-who', {}, group.assignee || 'Nobody is chasing these'),
+      el('span.bo-m-count', {}, String(group.rows.length)),
+      el('span.spacer'),
+      short ? el('span.bo-m-shortsum', {}, `${fmtNum(short)} pcs`) : null),
+
+    ...group.rows.slice(0, shown).map((r) => mobileBoRow(r, rerender)),
+
+    left > 0 ? el('button.bo-m-more', {
+      type: 'button',
+      onclick: () => { bm.open[id] = shown + BO_PAGE; rerender(); },
+    }, `Show ${Math.min(left, BO_PAGE)} more of ${group.rows.length}`) : null);
+}
+
+/** The phone page: the unowned list first, then each person's, each bounded. */
+function mobileBackOrders(groups, rerender) {
+  const ordered = [
+    ...groups.filter((g) => !g.assignee),
+    ...groups.filter((g) => g.assignee),
+  ];
+  return el('div.bo-m', {}, ...ordered.map((g) => mobileBoGroup(g, rerender)));
+}
+
+
+
 export function renderBackOrders(rerender, go) {
   if (!hasTasks()) {
     return el('div.panel', {},
@@ -229,5 +314,7 @@ export function renderBackOrders(rerender, go) {
         el('div.line-date.hide-sm', {}, fmtDate(task.cuttingDate))))));
   });
 
-  return el('div.centre', {}, head, ...sections);
+  return el('div.centre', {}, head,
+    mobileBackOrders(groups, rerender),
+    el('div.bo-wide', {}, ...sections));
 }

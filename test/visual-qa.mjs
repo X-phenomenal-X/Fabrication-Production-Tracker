@@ -841,6 +841,162 @@ for (const theme of ['light', 'dark']) {
   await ctx.close();
 }
 
+/* ---------- the staging queue on a phone ----------
+
+   Ninety-seven lines in one flat list was eighteen thousand pixels of
+   identical-looking work, with the field that says how late each one is hidden
+   below the small breakpoint and a native select on every row. What is
+   asserted is that the phone gets the queue bucketed by lateness, bounded, and
+   carrying the date — and that staging still takes one tap. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  const broke = [];
+  page.on('pageerror', (e) => broke.push(String(e.message)));
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/#staging`);
+  await page.waitForSelector('.stage-m-row');
+  await page.waitForTimeout(150);
+
+  const q = await page.evaluate(() => {
+    const shown = (n) => !!n && getComputedStyle(n).display !== 'none';
+    return {
+      phone: shown(document.querySelector('.stage-m')),
+      desk: shown(document.querySelector('.stage-wide')),
+      rows: document.querySelectorAll('.stage-m-row').length,
+      screens: +(document.documentElement.scrollHeight / innerHeight).toFixed(1),
+      selects: document.querySelectorAll('.stage-m select').length,
+      dated: document.querySelectorAll('.stage-m-due').length,
+      groups: [...document.querySelectorAll('.stage-m-group')].map((g) => ({
+        label: g.querySelector('.stage-m-grouplabel')?.textContent.trim(),
+        count: Number(g.querySelector('.stage-m-groupcount')?.textContent || 0),
+        shown: g.querySelectorAll('.stage-m-row').length,
+      })),
+    };
+  });
+  if (!q.phone) fail('staging @ phone: the phone queue is not on screen');
+  if (q.desk) fail('staging @ phone: both queues are on screen at once');
+  /* The point of the rewrite. A queue this long is not made workable by a
+     shorter row — it is made workable by not rendering all of it. */
+  if (q.screens > 8) fail(`staging @ phone: the queue is ${q.screens} screens tall`);
+  if (q.selects) fail(`staging @ phone: ${q.selects} native selects, one per row again`);
+  if (q.dated !== q.rows) {
+    fail(`staging @ phone: ${q.rows - q.dated} row(s) do not say when the line was due`);
+  }
+  const over = q.groups.find((g) => g.label === 'Overdue');
+  if (!over || !over.count) fail('staging @ phone: the overdue lines are not bucketed');
+  else if (over.shown >= over.count) {
+    fail(`staging @ phone: all ${over.count} overdue rows render at once`);
+  }
+  note(`staging @ phone: ${q.screens} screens, ${q.groups.map((g) => `${g.label} ${g.shown}/${g.count}`).join(', ')}`);
+
+  // Show more reaches the rest of the bucket rather than stranding it.
+  const before = q.groups[0].shown;
+  await page.click('.stage-m-more');
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() =>
+    document.querySelector('.stage-m-group').querySelectorAll('.stage-m-row').length);
+  if (after <= before) fail(`staging @ phone: "Show more" did not extend the bucket (${before} -> ${after})`);
+
+  /* Staging for the next crew is one tap; staging for any other shift is the
+     picker that replaced ninety-seven selects. */
+  const wo = await page.$eval('.stage-m-row .mono.strong', (n) => n.textContent.trim());
+  await page.click('.stage-m-row .stage-m-stage');
+  await page.waitForTimeout(350);
+  const stored = await page.evaluate(() =>
+    Object.keys(JSON.parse(localStorage.getItem('bv.cutting.v1') || '{}').staging || {}).length);
+  if (!stored) fail(`staging @ phone: staging ${wo} in one tap did not persist`);
+
+  await page.click('.stage-m-row .stage-m-other');
+  await page.waitForSelector('dialog .stage-m-pick');
+  const picks = await page.$$eval('.stage-m-pickbtn', (n) => n.length);
+  if (picks < 2) fail(`staging @ phone: the other-shift picker offers ${picks} shifts`);
+  await page.click('dialog.stage-m-pick, dialog button:has-text("Close")');
+  await page.waitForTimeout(200);
+
+  if (broke.length) fail(`staging @ phone: page error — ${broke[0]}`);
+  await page.screenshot({ path: path.join(SHOT, 'staging-phone-queue.png'), fullPage: true });
+  await ctx.close();
+}
+
+/* ---------- back orders on a phone ----------
+
+   The list nobody owns is the one this page calls urgent, and it sorted last —
+   fifty-five lines, eight screens down. And every row was a div with an
+   onclick, which no keyboard reaches and the tap-target pass above cannot even
+   see, because it only counts real controls. Both are asserted here. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  const broke = [];
+  page.on('pageerror', (e) => broke.push(String(e.message)));
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/#backorders`);
+  await page.waitForSelector('.bo-m-row');
+  await page.waitForTimeout(150);
+
+  const bo = await page.evaluate(() => {
+    const shown = (n) => !!n && getComputedStyle(n).display !== 'none';
+    const groups = [...document.querySelectorAll('.bo-m-group')].map((g) => ({
+      who: g.querySelector('.bo-m-who')?.textContent.trim(),
+      unowned: !!g.querySelector('.bo-m-grouphead.none'),
+      count: Number(g.querySelector('.bo-m-count')?.textContent || 0),
+      shown: g.querySelectorAll('.bo-m-row').length,
+    }));
+    const rows = [...document.querySelectorAll('.bo-m-row')];
+    return {
+      phone: shown(document.querySelector('.bo-m')),
+      desk: shown(document.querySelector('.bo-wide')),
+      screens: +(document.documentElement.scrollHeight / innerHeight).toFixed(1),
+      groups,
+      buttons: rows.filter((n) => n.tagName === 'BUTTON').length,
+      named: rows.filter((n) => (n.getAttribute('aria-label') || '').length > 10).length,
+      dated: document.querySelectorAll('.bo-m-when').length,
+      total: rows.length,
+    };
+  });
+  if (!bo.phone) fail('backorders @ phone: the phone list is not on screen');
+  if (bo.desk) fail('backorders @ phone: both lists are on screen at once');
+  if (bo.screens > 8) fail(`backorders @ phone: the page is ${bo.screens} screens tall`);
+  if (bo.buttons !== bo.total) {
+    fail(`backorders @ phone: ${bo.total - bo.buttons} row(s) open a dialog without being a control`);
+  }
+  if (bo.named !== bo.total) {
+    fail(`backorders @ phone: ${bo.total - bo.named} row(s) have no accessible name`);
+  }
+  if (bo.dated !== bo.total) {
+    fail(`backorders @ phone: ${bo.total - bo.dated} row(s) do not show the date they sort by`);
+  }
+  // The unowned list is the urgent one, so it leads rather than trailing.
+  if (bo.groups.length && !bo.groups[0].unowned) {
+    fail(`backorders @ phone: "${bo.groups[0].who}" leads instead of the unowned list`);
+  }
+  const big = bo.groups.find((g) => g.count > 8);
+  if (big && big.shown >= big.count) {
+    fail(`backorders @ phone: all ${big.count} of ${big.who}'s rows render at once`);
+  }
+  note(`backorders @ phone: ${bo.screens} screens, ${bo.groups.length} lists, "${bo.groups[0]?.who}" first`);
+
+  const before = bo.groups[0].shown;
+  await page.click('.bo-m-more');
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() =>
+    document.querySelector('.bo-m-group').querySelectorAll('.bo-m-row').length);
+  if (after <= before) fail(`backorders @ phone: "Show more" did not extend the list (${before} -> ${after})`);
+
+  // The row still opens the shortage dialog it is named for.
+  await page.click('.bo-m-row');
+  await page.waitForTimeout(300);
+  if (!(await page.$('dialog'))) fail('backorders @ phone: tapping a row did not open the back-order dialog');
+
+  if (broke.length) fail(`backorders @ phone: page error — ${broke[0]}`);
+  await ctx.close();
+}
+
 /* ---------- reduced motion ---------- */
 
 {
