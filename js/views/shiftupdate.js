@@ -14,7 +14,7 @@
    update is mostly assembled from what the app already saw happen. */
 
 import {
-  el, chip, icon, fmtDate, fmtWhen, toast, confirmDialog, printDocument,
+  el, chip, icon, fmtDate, fmtWhen, toast, confirmDialog, printDocument, modal,
 } from '../ui.js';
 import { state, saveShiftLog, deleteShiftLog, me } from '../store.js';
 import {
@@ -41,7 +41,12 @@ const FIELDS = [
   ['notes', 'Notes'],
 ];
 
-const view = { date: today(), shift: shiftAt() || 'DAY', mode: 'write', onlyIncomplete: false };
+const view = {
+  date: today(), shift: shiftAt() || 'DAY', mode: 'write', onlyIncomplete: false,
+  // Where the phone's stepper is, and which machine has its suggestions
+  // open. Null means "wherever the work is" — see activeMobileIndex.
+  mobileIndex: null, mobileSugsFor: null, mobileSugsAll: null,
+};
 
 function shiftDef(value = view.shift) {
   return SHIFTS[normalizeShift(value)] || {
@@ -86,6 +91,11 @@ function loadDraft() {
 function dropDraft() {
   draft = null;
   draftKey = null;
+  view.mobileIndex = null;
+  view.mobileSugsFor = null;
+  view.mobileSugsAll = null;
+  railScroll = 0;
+  railCentredOn = null;
 }
 
 function rowFor(key) {
@@ -133,7 +143,7 @@ function sections() {
 
 /** One-click inserts: what this shift actually moved in the tracker, and what
     the imported workbook already says about this machine. */
-function suggestions(row, entry, rerender) {
+function suggestions(row, entry, rerender, { limit = 0, onShowAll = null } = {}) {
   const add = (field, text) => {
     const cur = row[field] || '';
     if (cur.split('\n').some((l) => l.trim() === text.trim())) return false;
@@ -144,20 +154,30 @@ function suggestions(row, entry, rerender) {
   const has = (field, text) => (row[field] || '')
     .split('\n').some((l) => l.trim() === text.trim());
 
-  const group = (label, field, items, cls = '') => (items.length
-    ? el('div.sug' + cls, {},
-        el('span.sug-label', {}, label),
-        el('div.sug-items', {}, ...items.map((text) => {
-          // Suggestions already written into the box stay visible but read as
-          // spent, so it is obvious what is left to pick up.
-          const used = has(field, text);
-          return el('button.sug-chip' + (used ? '.used' : ''), {
-            type: 'button',
-            title: used ? 'Already in the update' : 'Add to ' + FIELDS.find(([f]) => f === field)[1],
-            onclick: () => { if (add(field, text)) rerender(); },
-          }, icon('check', { size: 10 }), text);
-        })))
-    : null);
+  /* `limit` is for the phone. A busy machine offers eighty-odd lines, and on
+     a desk monitor that is a column beside the boxes; on a phone it is the
+     boxes pushed off the bottom of the screen by a list nobody scrolls to the
+     end of. The rest stay one tap away rather than gone. */
+  const group = (label, field, items, cls = '') => {
+    if (!items.length) return null;
+    const shown = limit ? items.slice(0, limit) : items;
+    const hidden = items.length - shown.length;
+    return el('div.sug' + cls, {},
+      el('span.sug-label', {}, label),
+      el('div.sug-items', {}, ...shown.map((text) => {
+        // Suggestions already written into the box stay visible but read as
+        // spent, so it is obvious what is left to pick up.
+        const used = has(field, text);
+        return el('button.sug-chip' + (used ? '.used' : ''), {
+          type: 'button',
+          title: used ? 'Already in the update' : 'Add to ' + FIELDS.find(([f]) => f === field)[1],
+          onclick: () => { if (add(field, text)) rerender(); },
+        }, icon('check', { size: 10 }), text);
+      }),
+        hidden && onShowAll ? el('button.sug-chip.sug-more', {
+          type: 'button', title: `Show the other ${hidden}`, onclick: onShowAll,
+        }, `+${hidden} more`) : null));
+  };
 
   const tracked = entry.tracked || [];
   const running = entry.running || [];
@@ -343,7 +363,7 @@ function writeView(rerender) {
     card.querySelector('textarea')?.focus();
   };
 
-  return el('div', {},
+  return el('div.su-wide', {},
     el('div.su-progress' + (outstanding.length ? '' : '.complete'), {},
       el('div.su-progress-count', {},
         el('b', {}, `${done}`), el('span', {}, ` of ${total} written`)),
@@ -404,6 +424,354 @@ function writeView(rerender) {
           rerender();
         },
       }, icon('check', { size: 14 }), 'Save shift update')));
+}
+
+/* ---------- writing on a phone ----------
+
+   The same update, but one machine at a time.
+
+   The form above is thirteen cards stacked in a column. On a desk monitor that
+   is a page you scan; on a phone held in a doorway at 23:20 it is nine thousand
+   pixels of scrolling to find the two boxes nobody filled in, and the thing
+   most often typed into it — one machine's three lines — costs a hunt every
+   time. So the phone gets a stepper instead: a rail that says how far along the
+   update is and lets any machine be jumped to, one editor open at a time, and a
+   dock that saves what is written so far and moves to the next machine nobody
+   has done.
+
+   Both surfaces are built on every render and CSS shows exactly one, so this is
+   a second presentation of the same draft rather than a second writer. Nothing
+   here holds state the desktop form cannot see: they share `draft`, so a shift
+   started on a phone finishes on a monitor. */
+
+/** Every reportable row in one flat, ordered list — the order the stepper
+    walks. The page above folds the two retired standing rows behind a link;
+    the rail has room for all thirteen and marking them done is the whole
+    point of it, so nothing is folded here. */
+function reportRows() {
+  return sections().flatMap((s) => s.rows.map((m) => ({ ...m, section: s.label })));
+}
+
+/** The row the phone is editing. Resolved rather than trusted: the index is
+    kept across re-renders in `view`, and a stale one from a longer list would
+    otherwise point past the end. With nothing chosen it opens on the first row
+    nobody has written, so picking the page up mid-shift lands on the work. */
+function activeMobileIndex(rows, d) {
+  if (view.mobileIndex != null) {
+    return Math.min(Math.max(view.mobileIndex, 0), Math.max(rows.length - 1, 0));
+  }
+  const next = rows.findIndex((m) => !m.secondary && !hasContent(d.rows[m.key]));
+  return next < 0 ? 0 : next;
+}
+
+/** The next row still to write, wrapping once past the end so finishing in the
+    middle of the rail carries on from the top rather than stopping. The two
+    retired standing rows are skipped — they are reported occasionally, not
+    every shift, so landing on them would make the update feel unfinished. */
+function nextIncomplete(rows, from, d) {
+  const open = (m) => !m.secondary && !hasContent(d.rows[m.key]);
+  for (let i = from + 1; i < rows.length; i += 1) if (open(rows[i])) return i;
+  for (let i = 0; i <= from && i < rows.length; i += 1) if (open(rows[i])) return i;
+  return -1;
+}
+
+/** How much the app can offer this machine, for the disclosure button. Kept as
+    a count so the suggestions themselves — three blocks and up to a dozen
+    chips — stay folded until somebody asks for them. */
+function mobileSuggestionCount({ tracked, running, sheet }) {
+  return tracked.length + running.length + (sheet
+    ? (sheet.done || []).length + (sheet.next || []).length + (sheet.notes || []).length
+    : 0);
+}
+
+/** Everything the header carries on a monitor that will not fit beside a title
+    on a phone: the mode switch, both print routes, and the general notes box.
+    None of it is dropped — a shift lead prints the update from the floor — it
+    just stops competing with the machine being written up. */
+function mobileShiftActions(rerender) {
+  const d = loadDraft();
+  const saved = currentLog();
+  const selected = shiftDef();
+
+  const item = (ic, label, hint, onclick, { disabled = false } = {}) =>
+    el('button.su-m-menuitem', {
+      type: 'button', disabled,
+      onclick: (e) => { e.currentTarget.closest('dialog')?.close(); onclick(); },
+    },
+      el('span.su-m-menuicon', {}, icon(ic, { size: 17 })),
+      el('span.su-m-menutext', {},
+        el('strong', {}, label),
+        el('small', {}, hint)));
+
+  // The breaks are here to be read, not pressed. A disabled button says the
+  // opposite — that this is something that could be done, just not now.
+  const fact = (ic, label, hint) => el('div.su-m-menuitem.su-m-menufact', {},
+    el('span.su-m-menuicon', {}, icon(ic, { size: 17 })),
+    el('span.su-m-menutext', {},
+      el('strong', {}, label),
+      el('small', {}, hint)));
+
+  const notes = el('textarea', {
+    value: d.notes,
+    rows: 5,
+    placeholder: 'Anything not tied to one machine — people, material, safety, visitors.',
+    oninput: (e) => { d.notes = e.target.value; },
+  });
+
+  const body = el('div.su-m-menu', {},
+    item('note', 'Read this update', saved
+      ? `Saved by ${saved.by} · ${fmtWhen(saved.at)}`
+      : 'Nothing saved for this shift yet',
+    () => { view.mode = 'read'; rerender(); }),
+
+    fact('clock', `${selected.label} breaks`, breakRanges(view.shift).join(' · ') || '—'),
+
+    item('print', 'Print update', 'The written entries, as a sheet',
+      printCurrentShiftUpdate),
+
+    item('clipboard', 'Print blank form', operationalShift()
+      ? 'An empty sheet to fill in by hand'
+      : 'Day and Afternoon only',
+    printBlankShiftUpdate, { disabled: !operationalShift() }),
+
+    el('label.field.su-m-menunotes', {},
+      el('span', {}, 'General notes'),
+      notes));
+
+  modal('Shift update', body, {
+    actions: [{
+      label: 'Done', class: 'primary', onClick: (dlg) => { dlg.close(); rerender(); },
+    }],
+  });
+}
+
+/* The rail is rebuilt on every render, so left alone it comes back at zero —
+   the same fault that once hid the current page from the nav. Carry the
+   position across rebuilds, and centre the active step whenever it changes, so
+   step 9 of 13 is visible rather than three screens to the right. */
+let railScroll = 0;
+let railCentredOn = null;
+
+function settleRail(rail, key) {
+  requestAnimationFrame(() => {
+    // Built on every render but only laid out on a phone; on a monitor it is
+    // display:none, every box is zero, and centring would be meaningless.
+    if (!rail.isConnected || !rail.clientWidth) return;
+    rail.scrollLeft = railScroll;
+    if (railCentredOn !== key) {
+      const on = rail.querySelector('.su-m-step.here');
+      if (on) {
+        const rr = rail.getBoundingClientRect();
+        const br = on.getBoundingClientRect();
+        // Centred, so the steps either side stay half-visible — the only hint
+        // on the screen that the row moves at all.
+        rail.scrollLeft += (br.left + br.width / 2) - (rr.left + rr.width / 2);
+      }
+      railCentredOn = key;
+    }
+    railScroll = rail.scrollLeft;
+    rail.addEventListener('scroll', () => { railScroll = rail.scrollLeft; }, { passive: true });
+  });
+}
+
+/** The one machine being written up. Three boxes, the operator count, and —
+    only if asked for — everything the app already knows about this machine. */
+function mobileEditor(machine, rerender) {
+  const row = rowFor(machine.key);
+  const sheet = machine.standing ? null : shiftUpdateFor(machine.key);
+  const tracked = machine.standing ? [] : trackedLines(machine.key);
+  const running = machine.standing ? [] : inProgressLines(machine.key);
+  const entry = { tracked, running, sheet };
+  const offered = mobileSuggestionCount(entry);
+  const open = view.mobileSugsFor === machine.key;
+  const showAll = view.mobileSugsAll === machine.key;
+
+  const box = (field, label, placeholder, lines) => el('label.field.su-m-box', {},
+    el('span', {}, label),
+    el('textarea', {
+      value: row[field] || '',
+      placeholder,
+      rows: lines,
+      oninput: (e) => { row[field] = e.target.value; },
+    }));
+
+  /* A number pad for one digit is the wrong keyboard to open on a phone, and
+     crewing moves by one. The field stays typeable for the rare four. */
+  const bump = (by) => {
+    const now = Number(row.ops === '' || row.ops == null ? (machine.ops ?? 0) : row.ops);
+    row.ops = String(Math.max(0, (Number.isFinite(now) ? now : 0) + by));
+    rerender();
+  };
+
+  const pullAll = sheet && (sheet.done.length || sheet.next.length)
+    ? el('button.su-m-pull', {
+        type: 'button',
+        onclick: () => {
+          for (const field of ['done', 'next', 'notes']) {
+            const items = sheet[field] || [];
+            if (!items.length) continue;
+            const have = new Set((row[field] || '').split('\n').map((l) => l.trim()));
+            const add = items.filter((t) => !have.has(t.trim()));
+            if (!add.length) continue;
+            row[field] = row[field] ? `${row[field]}\n${add.join('\n')}` : add.join('\n');
+          }
+          rerender();
+        },
+      }, icon('undo', { size: 14 }), 'Pull last update')
+    : null;
+
+  return el('section.su-m-editor' + (sheet?.down ? '.down' : ''), { id: 'su-m-' + machine.key },
+    sheet?.down ? el('div.sucard-down', {},
+      icon('alert', { size: 15 }),
+      el('strong', {}, machine.label + ' is down'),
+      el('span', {}, 'Say what happened and what is needed in Notes')) : null,
+
+    el('div.su-m-editorhead', {},
+      el('div.su-m-ident', {},
+        el('span.su-m-section', {}, machine.section),
+        el('h2.su-m-name', {}, machine.label),
+        machine.note ? el('span.su-m-note', {}, machine.note) : null),
+      machine.standing ? null : el('div.su-m-ops', {},
+        el('span.su-m-opslabel', {}, '# Ops'),
+        el('div.su-m-opsset', {},
+          el('button.su-m-opsbtn', {
+            type: 'button', 'aria-label': `One fewer operator on ${machine.label}`,
+            onclick: () => bump(-1),
+          }, icon('minus', { size: 14 })),
+          el('input.su-m-opsnum', {
+            type: 'number', min: '0', inputmode: 'numeric',
+            'aria-label': `Operators on ${machine.label}`,
+            value: row.ops ?? '',
+            placeholder: machine.ops == null ? '—' : String(machine.ops),
+            oninput: (e) => { row.ops = e.target.value; },
+          }),
+          el('button.su-m-opsbtn', {
+            type: 'button', 'aria-label': `One more operator on ${machine.label}`,
+            onclick: () => bump(1),
+          }, icon('plus', { size: 14 }))))),
+
+    pullAll,
+
+    el('div.su-m-boxes', {},
+      box('done', 'Work done / in progress', '1-\n2-\n3-', 4),
+      box('next', 'Next in schedule', '1-\n2-\n3-', 3),
+      box('notes', 'Notes', 'Breakdowns, material, anything the next shift needs', 2)),
+
+    /* Folded by default. The suggestion blocks are the most useful thing on
+       the card and the tallest — left open they push the boxes somebody came
+       here to type in off the bottom of the screen. */
+    offered ? el('div.su-m-suggests', {},
+      el('button.su-m-suggestbtn' + (open ? '.open' : ''), {
+        type: 'button', 'aria-expanded': String(open),
+        onclick: () => { view.mobileSugsFor = open ? null : machine.key; rerender(); },
+      },
+        icon('bolt', { size: 15 }),
+        el('span', {}, open ? 'Hide suggestions' : 'Suggested lines'),
+        el('span.su-m-suggestcount', {}, String(offered)),
+        el('span.su-m-suggestcaret', {}, icon('chevron', { size: 14 }))),
+      open ? suggestions(row, entry, rerender, showAll ? {} : {
+        limit: 5,
+        onShowAll: () => { view.mobileSugsAll = machine.key; rerender(); },
+      }) : null) : null);
+}
+
+/** The phone writer: how far along, which machine, and the way on. */
+function mobileWriteView(rerender) {
+  const d = loadDraft();
+  const rows = reportRows();
+  const index = activeMobileIndex(rows, d);
+  const machine = rows[index];
+  const saved = currentLog();
+  const counted = rows.filter((m) => !m.secondary);
+  const written = counted.filter((m) => hasContent(d.rows[m.key])).length;
+  const left = counted.length - written;
+
+  const goTo = (i) => {
+    view.mobileIndex = Math.min(Math.max(i, 0), rows.length - 1);
+    view.mobileSugsFor = null;
+    view.mobileSugsAll = null;
+    rerender();
+  };
+
+  /* Save what is written and move on. Partial by design: an update is written
+     across a shift, not in one sitting, and a writer who has done four
+     machines at 19:00 should be able to put the phone down without either
+     losing them or being told the form is incomplete. */
+  const saveAndNext = () => {
+    const write = Object.fromEntries(
+      Object.entries(d.rows).filter(([, r]) => hasContent(r)));
+    if (!Object.keys(write).length && !d.notes.trim()) {
+      toast('Write something on a machine first');
+      return;
+    }
+    saveShiftLog(view.date, view.shift, { rows: write, notes: d.notes.trim() });
+    const target = nextIncomplete(rows, index, d);
+    dropDraft();
+    if (target < 0) {
+      view.mobileIndex = index;
+      toast('Saved — every machine is written up');
+    } else {
+      view.mobileIndex = target;
+      view.mobileSugsFor = null;
+      view.mobileSugsAll = null;
+      toast(`Saved — ${rows[target].label} next`);
+    }
+    rerender();
+    document.querySelector('.su-m-editor')?.scrollIntoView({ block: 'start' });
+  };
+
+  const rail = el('div.su-m-rail', { role: 'tablist', 'aria-label': 'Machines to write up' },
+    ...rows.map((m, i) => {
+      const filled = hasContent(d.rows[m.key]);
+      const here = i === index;
+      return el('button.su-m-step'
+        + (filled ? '.done' : '') + (here ? '.here' : '') + (m.secondary ? '.extra' : ''), {
+        type: 'button', role: 'tab', 'aria-selected': String(here),
+        title: `${m.section} · ${m.label}${filled ? ' · written' : ''}`,
+        onclick: () => goTo(i),
+      },
+        el('span.su-m-stepmark', {}, filled ? icon('check', { size: 12 }) : String(i + 1)),
+        el('span.su-m-steplabel', {}, m.short || m.label));
+    }));
+  settleRail(rail, `${view.date}|${view.shift}|${machine ? machine.key : ''}`);
+
+  return el('div.su-m', {},
+    el('div.su-m-top', {},
+      el('div.su-m-count', {},
+        el('b', {}, String(written)),
+        el('span', {}, ` of ${counted.length} written`),
+        left ? null : el('span.su-m-alldone', {}, icon('check', { size: 13 }), 'complete')),
+      el('span.spacer'),
+      el('button.su-m-more', {
+        type: 'button', 'aria-label': 'Shift update actions',
+        onclick: () => mobileShiftActions(rerender),
+      }, icon('list', { size: 17 }), el('span', {}, 'More'))),
+
+    rail,
+
+    mobileEditor(machine, rerender),
+
+    el('div.su-m-move', {},
+      el('button.su-m-prev', {
+        type: 'button', disabled: index <= 0,
+        onclick: () => goTo(index - 1),
+      }, icon('chevron', { size: 15 }), el('span', {}, 'Previous')),
+      el('button.su-m-next', {
+        type: 'button', disabled: index >= rows.length - 1,
+        onclick: () => goTo(index + 1),
+      }, el('span', {}, 'Next'), icon('chevron', { size: 15 }))),
+
+    el('p.su-m-saved', {}, saved
+      ? `Last saved by ${saved.by} · ${fmtWhen(saved.at)}`
+      : 'Nothing saved for this shift yet'),
+
+    /* Above the home indicator, and always there: the one thing this screen is
+       for should never need scrolling to. */
+    el('div.su-m-dock', {},
+      el('button.primary.su-m-save', {
+        type: 'button', onclick: saveAndNext,
+      }, icon('check', { size: 16 }),
+        el('span', {}, left > 1 ? 'Save & next' : 'Save update'))));
 }
 
 /* ---------- reading ---------- */
@@ -724,6 +1092,10 @@ export function renderShiftUpdate(rerender, go) {
 
   return el('div.centre', {},
     head,
-    view.mode === 'write' ? writeView(rerender) : readView(rerender),
+    // Both writers are built, and CSS shows the one that fits the screen.
+    // Reading is one column either way, so it needs no phone variant.
+    view.mode === 'write'
+      ? el('div.su-writers', {}, mobileWriteView(rerender), writeView(rerender))
+      : readView(rerender),
     recent);
 }

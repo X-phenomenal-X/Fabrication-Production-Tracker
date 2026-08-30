@@ -462,7 +462,10 @@ const CONTRAST = `(() => {
   const seen = new Set();
   for (const sel of ['.badge-rush', '.badge-bo', '.badge-moved', '.badge-edited', '.die',
                      '.cstat b', '.cstat i', '.dgroup-label', '.line-where', '.muted',
-                     '.chip', '.seg-btn.on', '.nowrun-head', '.line-id .mono']) {
+                     '.chip', '.seg-btn.on', '.nowrun-head', '.line-id .mono',
+                     '.su-m-step.here', '.su-m-step.done', '.su-m-count b',
+                     '.su-m-suggestcount', '.su-m-menutext small',
+                     'button.primary', '.su-m-save']) {
     for (const n of Array.from(document.querySelectorAll(sel)).slice(0, 3)) {
       const st = getComputedStyle(n);
       const pair = st.color + '|' + bgOf(n);
@@ -674,6 +677,323 @@ for (const theme of ['light', 'dark']) {
       fail(`theme picker: choice lost on reload — data-theme "${kept.attr}", body ${kept.bg}`);
     } else note('theme picker: choice survives a reload');
   }
+  await ctx.close();
+}
+
+/* ---------- the shift update on a phone ----------
+
+   Thirteen machines is a page on a monitor and a stepper on a phone, and both
+   write the same draft. What has to hold is that exactly one of them is on
+   screen, that the stepper reaches all thirteen, that saving keeps what was
+   written and moves to the next machine nobody has done, and that nothing an
+   operator needs ends up under the dock or behind the breakpoint. Its own
+   context per theme, because unlike every other check here this one writes. */
+for (const theme of ['light', 'dark']) {
+  const ctx = await browser.newContext({
+    colorScheme: theme, viewport: { width: 390, height: 844 },
+  });
+  const page = await ctx.newPage();
+  const broke = [];
+  page.on('pageerror', (e) => broke.push(String(e.message)));
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/#shift`);
+  await page.waitForSelector('.su-m-editor');
+  await page.waitForTimeout(150);
+
+  const shape = await page.evaluate(() => {
+    const shown = (n) => !!n && getComputedStyle(n).display !== 'none';
+    return {
+      steps: document.querySelectorAll('.su-m-step').length,
+      editors: document.querySelectorAll('.su-m-editor').length,
+      phone: shown(document.querySelector('.su-m')),
+      desk: shown(document.querySelector('.su-wide')),
+      open: document.querySelectorAll('.su-m-suggests .sugs').length,
+      active: document.querySelector('.su-m-name')?.textContent.trim(),
+    };
+  });
+  if (shape.steps !== 13) fail(`shift @ phone/${theme}: the rail walks ${shape.steps} rows, not 13`);
+  if (shape.editors !== 1) fail(`shift @ phone/${theme}: ${shape.editors} editors open at once, not 1`);
+  if (!shape.phone) fail(`shift @ phone/${theme}: the phone writer is not on screen`);
+  if (shape.desk) fail(`shift @ phone/${theme}: both writers are on screen at once`);
+  if (shape.open) fail(`shift @ phone/${theme}: suggestions are open before anyone asked`);
+  note(`shift @ phone/${theme}: 13 steps, one editor, opens on ${shape.active}`);
+
+  /* The rail is rebuilt on every render. Left alone it comes back at zero, and
+     step nine — which is where the work is on a half-written update — is three
+     screens off to the right with nothing saying so. */
+  await page.click('.su-m-step:nth-child(9)');
+  await page.waitForTimeout(200);
+  const centred = await page.evaluate(() => {
+    const rail = document.querySelector('.su-m-rail');
+    const on = rail.querySelector('.su-m-step.here');
+    if (!on) return { missing: true };
+    const rr = rail.getBoundingClientRect();
+    const br = on.getBoundingClientRect();
+    return { label: on.textContent.trim(), shown: br.left >= rr.left - 1 && br.right <= rr.right + 1 };
+  });
+  if (centred.missing || !centred.shown) {
+    fail(`shift @ phone/${theme}: step 9 is selected but not brought into the rail`);
+  }
+
+  /* A busy machine offers eighty-odd lines. Folded they cost nothing; opened
+     they must not bury the boxes somebody came to type in, so each block shows
+     a handful and holds the rest behind one more tap. */
+  await page.click('.su-m-step:nth-child(4)');
+  await page.waitForTimeout(180);
+  if (await page.$('.su-m-suggestbtn')) {
+    await page.click('.su-m-suggestbtn');
+    await page.waitForTimeout(220);
+    const sug = await page.evaluate(() => ({
+      chips: document.querySelectorAll('.su-m-suggests .sug-chip:not(.sug-more)').length,
+      more: document.querySelectorAll('.su-m-suggests .sug-more').length,
+      offered: Number(document.querySelector('.su-m-suggestcount')?.textContent || 0),
+    }));
+    if (sug.offered > 20 && sug.chips > 20) {
+      fail(`shift @ phone/${theme}: opening suggestions drops ${sug.chips} chips on the screen`);
+    }
+    if (sug.offered > 20 && !sug.more) {
+      fail(`shift @ phone/${theme}: ${sug.offered} suggestions offered with no way to the rest`);
+    }
+    await page.click('.su-m-suggestbtn');
+    await page.waitForTimeout(150);
+  }
+
+  /* Save what is written, keep it, and move to the next machine nobody has
+     done. Partial by design: an update is written across a shift. */
+  await page.click('.su-m-step:nth-child(1)');
+  await page.waitForTimeout(180);
+  await page.fill('.su-m-boxes textarea >> nth=0', 'Cleared two back orders for Maple Ridge');
+  await page.click('.su-m-save');
+  await page.waitForTimeout(400);
+  const saved = await page.evaluate(() => ({
+    active: document.querySelector('.su-m-name')?.textContent.trim(),
+    done: document.querySelectorAll('.su-m-step.done').length,
+    count: document.querySelector('.su-m-count b')?.textContent.trim(),
+    stored: JSON.parse(localStorage.getItem('bv.cutting.v1') || '{}'),
+  }));
+  const logs = Object.values(saved.stored.shiftLogs || {});
+  const kept = logs.some((l) => (l.rows?.backorder?.done || '').includes('Maple Ridge'));
+  if (!kept) fail(`shift @ phone/${theme}: Save & next did not persist what was written`);
+  if (saved.done !== 1) fail(`shift @ phone/${theme}: ${saved.done} steps marked written after one save`);
+  if (saved.active === 'Back Order') {
+    fail(`shift @ phone/${theme}: Save & next stayed on Back Order instead of advancing`);
+  }
+  note(`shift @ phone/${theme}: saved and advanced to ${saved.active}, ${saved.count} written`);
+
+  /* The dock is fixed over the page, so the page has to leave room for it —
+     above the phone's home indicator, and clear of the last thing on screen.
+     The toast lands in the same corner, and must not cover the button. */
+  await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
+  await page.waitForTimeout(250);
+  const dock = await page.evaluate(() => {
+    const d = document.querySelector('.su-m-dock').getBoundingClientRect();
+    const last = [...document.querySelectorAll('.centre > *')].pop().getBoundingClientRect();
+    const t = document.querySelector('.toast')?.getBoundingClientRect();
+    const save = document.querySelector('.su-m-save').getBoundingClientRect();
+    return {
+      covers: Math.round(last.bottom - d.top),
+      belowFold: Math.round(d.bottom - innerHeight),
+      tap: Math.round(Math.min(save.width, save.height)),
+      toastClear: !t || t.bottom <= d.top + 1,
+    };
+  });
+  if (dock.covers > 0) fail(`shift @ phone/${theme}: the dock covers the last ${dock.covers}px of the page`);
+  if (dock.belowFold > 0) fail(`shift @ phone/${theme}: the dock hangs ${dock.belowFold}px off the bottom`);
+  if (dock.tap < 44) fail(`shift @ phone/${theme}: Save & next is ${dock.tap}px, under the 44px floor`);
+  if (!dock.toastClear) fail(`shift @ phone/${theme}: the toast covers the Save & next dock`);
+  await page.evaluate(() => scrollTo(0, 0));
+
+  /* Nothing the header carried on a monitor may be lost to the breakpoint. The
+     blank form is the one that matters most: it is what gets printed when the
+     network is down, which is exactly when somebody reaches for a phone. */
+  await page.evaluate(() => {
+    window.__printed = [];
+    window.print = () => window.__printed.push(document.querySelector('.print-sheet h1')?.textContent);
+  });
+  await page.click('.su-m-more');
+  await page.waitForSelector('dialog .su-m-menu');
+  const menu = await page.$$eval('.su-m-menu strong', (n) => n.map((x) => x.textContent.trim()));
+  for (const want of ['Read this update', 'Print update', 'Print blank form']) {
+    if (!menu.includes(want)) fail(`shift @ phone/${theme}: "${want}" is not in the actions menu`);
+  }
+  if (!(await page.$('.su-m-menunotes textarea'))) {
+    fail(`shift @ phone/${theme}: general shift notes are not reachable on a phone`);
+  }
+  await page.click('.su-m-menuitem:has-text("Print blank form")');
+  await page.waitForTimeout(300);
+  const printed = await page.evaluate(() => window.__printed || []);
+  if (!printed.some((t) => /blank/i.test(t || ''))) {
+    fail(`shift @ phone/${theme}: the blank form did not print from the phone menu`);
+  }
+
+  // The new surfaces are read under shop lighting like everything else.
+  const pairs = await page.evaluate(CONTRAST);
+  for (const p of pairs.filter((x) => x.r < x.need)) {
+    fail(`shift @ phone/${theme}: ${p.sel} contrast ${p.r}:1, needs ${p.need}:1 — in "${p.where}"`);
+  }
+  note(`shift @ phone/${theme}: ${pairs.length} measured text pairs pass WCAG AA`);
+
+  if (broke.length) fail(`shift @ phone/${theme}: page error — ${broke[0]}`);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: path.join(SHOT, `shift-stepper-${theme}.png`), fullPage: true });
+  await ctx.close();
+}
+
+/* ---------- the staging queue on a phone ----------
+
+   Ninety-seven lines in one flat list was eighteen thousand pixels of
+   identical-looking work, with the field that says how late each one is hidden
+   below the small breakpoint and a native select on every row. What is
+   asserted is that the phone gets the queue bucketed by lateness, bounded, and
+   carrying the date — and that staging still takes one tap. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  const broke = [];
+  page.on('pageerror', (e) => broke.push(String(e.message)));
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/#staging`);
+  await page.waitForSelector('.stage-m-row');
+  await page.waitForTimeout(150);
+
+  const q = await page.evaluate(() => {
+    const shown = (n) => !!n && getComputedStyle(n).display !== 'none';
+    return {
+      phone: shown(document.querySelector('.stage-m')),
+      desk: shown(document.querySelector('.stage-wide')),
+      rows: document.querySelectorAll('.stage-m-row').length,
+      screens: +(document.documentElement.scrollHeight / innerHeight).toFixed(1),
+      selects: document.querySelectorAll('.stage-m select').length,
+      dated: document.querySelectorAll('.stage-m-due').length,
+      groups: [...document.querySelectorAll('.stage-m-group')].map((g) => ({
+        label: g.querySelector('.stage-m-grouplabel')?.textContent.trim(),
+        count: Number(g.querySelector('.stage-m-groupcount')?.textContent || 0),
+        shown: g.querySelectorAll('.stage-m-row').length,
+      })),
+    };
+  });
+  if (!q.phone) fail('staging @ phone: the phone queue is not on screen');
+  if (q.desk) fail('staging @ phone: both queues are on screen at once');
+  /* The point of the rewrite. A queue this long is not made workable by a
+     shorter row — it is made workable by not rendering all of it. */
+  if (q.screens > 8) fail(`staging @ phone: the queue is ${q.screens} screens tall`);
+  if (q.selects) fail(`staging @ phone: ${q.selects} native selects, one per row again`);
+  if (q.dated !== q.rows) {
+    fail(`staging @ phone: ${q.rows - q.dated} row(s) do not say when the line was due`);
+  }
+  const over = q.groups.find((g) => g.label === 'Overdue');
+  if (!over || !over.count) fail('staging @ phone: the overdue lines are not bucketed');
+  else if (over.shown >= over.count) {
+    fail(`staging @ phone: all ${over.count} overdue rows render at once`);
+  }
+  note(`staging @ phone: ${q.screens} screens, ${q.groups.map((g) => `${g.label} ${g.shown}/${g.count}`).join(', ')}`);
+
+  // Show more reaches the rest of the bucket rather than stranding it.
+  const before = q.groups[0].shown;
+  await page.click('.stage-m-more');
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() =>
+    document.querySelector('.stage-m-group').querySelectorAll('.stage-m-row').length);
+  if (after <= before) fail(`staging @ phone: "Show more" did not extend the bucket (${before} -> ${after})`);
+
+  /* Staging for the next crew is one tap; staging for any other shift is the
+     picker that replaced ninety-seven selects. */
+  const wo = await page.$eval('.stage-m-row .mono.strong', (n) => n.textContent.trim());
+  await page.click('.stage-m-row .stage-m-stage');
+  await page.waitForTimeout(350);
+  const stored = await page.evaluate(() =>
+    Object.keys(JSON.parse(localStorage.getItem('bv.cutting.v1') || '{}').staging || {}).length);
+  if (!stored) fail(`staging @ phone: staging ${wo} in one tap did not persist`);
+
+  await page.click('.stage-m-row .stage-m-other');
+  await page.waitForSelector('dialog .stage-m-pick');
+  const picks = await page.$$eval('.stage-m-pickbtn', (n) => n.length);
+  if (picks < 2) fail(`staging @ phone: the other-shift picker offers ${picks} shifts`);
+  await page.click('dialog.stage-m-pick, dialog button:has-text("Close")');
+  await page.waitForTimeout(200);
+
+  if (broke.length) fail(`staging @ phone: page error — ${broke[0]}`);
+  await page.screenshot({ path: path.join(SHOT, 'staging-phone-queue.png'), fullPage: true });
+  await ctx.close();
+}
+
+/* ---------- back orders on a phone ----------
+
+   The list nobody owns is the one this page calls urgent, and it sorted last —
+   fifty-five lines, eight screens down. And every row was a div with an
+   onclick, which no keyboard reaches and the tap-target pass above cannot even
+   see, because it only counts real controls. Both are asserted here. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  const broke = [];
+  page.on('pageerror', (e) => broke.push(String(e.message)));
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/#backorders`);
+  await page.waitForSelector('.bo-m-row');
+  await page.waitForTimeout(150);
+
+  const bo = await page.evaluate(() => {
+    const shown = (n) => !!n && getComputedStyle(n).display !== 'none';
+    const groups = [...document.querySelectorAll('.bo-m-group')].map((g) => ({
+      who: g.querySelector('.bo-m-who')?.textContent.trim(),
+      unowned: !!g.querySelector('.bo-m-grouphead.none'),
+      count: Number(g.querySelector('.bo-m-count')?.textContent || 0),
+      shown: g.querySelectorAll('.bo-m-row').length,
+    }));
+    const rows = [...document.querySelectorAll('.bo-m-row')];
+    return {
+      phone: shown(document.querySelector('.bo-m')),
+      desk: shown(document.querySelector('.bo-wide')),
+      screens: +(document.documentElement.scrollHeight / innerHeight).toFixed(1),
+      groups,
+      buttons: rows.filter((n) => n.tagName === 'BUTTON').length,
+      named: rows.filter((n) => (n.getAttribute('aria-label') || '').length > 10).length,
+      dated: document.querySelectorAll('.bo-m-when').length,
+      total: rows.length,
+    };
+  });
+  if (!bo.phone) fail('backorders @ phone: the phone list is not on screen');
+  if (bo.desk) fail('backorders @ phone: both lists are on screen at once');
+  if (bo.screens > 8) fail(`backorders @ phone: the page is ${bo.screens} screens tall`);
+  if (bo.buttons !== bo.total) {
+    fail(`backorders @ phone: ${bo.total - bo.buttons} row(s) open a dialog without being a control`);
+  }
+  if (bo.named !== bo.total) {
+    fail(`backorders @ phone: ${bo.total - bo.named} row(s) have no accessible name`);
+  }
+  if (bo.dated !== bo.total) {
+    fail(`backorders @ phone: ${bo.total - bo.dated} row(s) do not show the date they sort by`);
+  }
+  // The unowned list is the urgent one, so it leads rather than trailing.
+  if (bo.groups.length && !bo.groups[0].unowned) {
+    fail(`backorders @ phone: "${bo.groups[0].who}" leads instead of the unowned list`);
+  }
+  const big = bo.groups.find((g) => g.count > 8);
+  if (big && big.shown >= big.count) {
+    fail(`backorders @ phone: all ${big.count} of ${big.who}'s rows render at once`);
+  }
+  note(`backorders @ phone: ${bo.screens} screens, ${bo.groups.length} lists, "${bo.groups[0]?.who}" first`);
+
+  const before = bo.groups[0].shown;
+  await page.click('.bo-m-more');
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() =>
+    document.querySelector('.bo-m-group').querySelectorAll('.bo-m-row').length);
+  if (after <= before) fail(`backorders @ phone: "Show more" did not extend the list (${before} -> ${after})`);
+
+  // The row still opens the shortage dialog it is named for.
+  await page.click('.bo-m-row');
+  await page.waitForTimeout(300);
+  if (!(await page.$('dialog'))) fail('backorders @ phone: tapping a row did not open the back-order dialog');
+
+  if (broke.length) fail(`backorders @ phone: page error — ${broke[0]}`);
   await ctx.close();
 }
 

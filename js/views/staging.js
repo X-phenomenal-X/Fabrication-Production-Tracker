@@ -10,7 +10,7 @@
    work order, the same status, the same notes and shortages. */
 
 import {
-  el, chip, icon, fmtDate, fmtNum, fmtWhen, toast,
+  el, chip, icon, fmtDate, fmtNum, fmtWhen, toast, modal,
 } from '../ui.js';
 import { setStaging, clearStaging, me } from '../store.js';
 import {
@@ -115,6 +115,154 @@ function stageRow(row, rerender) {
               ...upcomingShifts().slice(1).map((s) => el('option', { value: s.value }, s.label))))));
 }
 
+/* ---------- staging on a phone ----------
+
+   Ninety-seven lines, eighty-four of them overdue, in one flat list of
+   184-pixel rows: eighteen thousand pixels of identical-looking work with
+   nothing saying which end to start at. The counts were already in the header
+   and the queue was already sorted rush-first then by date — the page simply
+   never showed either.
+
+   So the phone buckets by how late the line is, caps what is on screen, and
+   spends the row's height on the line rather than on its buttons. Nothing is
+   removed: every bucket opens in full, and staging for a shift other than the
+   next one moves from a select on all ninety-seven rows to one picker built
+   when somebody asks for it. */
+
+const sm = { open: {} };
+
+const BUCKETS = [
+  ['overdue', 'Overdue', 'bad'],
+  ['today', 'Due today', 'warn'],
+  ['later', 'Still to come', 'mute'],
+];
+
+/* How many rows of a bucket are on screen before the page asks. Twelve is
+   about three phone screens — enough to work through without the list ending
+   in a way that suggests there is nothing else. */
+const PAGE = 12;
+
+function bucketOf(row, ref) {
+  const d = row.task.cuttingDate;
+  if (!d) return 'later';
+  if (d < ref) return 'overdue';
+  if (d === ref) return 'today';
+  return 'later';
+}
+
+/** The cutting date said the way it matters. `.line-date` is hidden below the
+    small breakpoint, so on a phone the one field that says how late a line is
+    was invisible while the header counted eighty-four of them. */
+function dueLabel(date, ref) {
+  if (!date) return { text: 'no date', tone: 'mute' };
+  if (date === ref) return { text: 'due today', tone: 'warn' };
+  if (date > ref) return { text: fmtDate(date), tone: 'mute' };
+  const days = Math.round(
+    (Date.parse(ref + 'T00:00:00Z') - Date.parse(date + 'T00:00:00Z')) / 86400000);
+  return { text: days === 1 ? '1 day late' : `${days} days late`, tone: 'bad' };
+}
+
+/** Staging for a shift other than the very next one. One picker, built when
+    it is asked for, instead of a select on every row in the queue. */
+function pickShift(row, rerender) {
+  const { task, key } = row;
+  const body = el('div.stage-m-pick', {},
+    ...upcomingShifts().map((s) => el('button.stage-m-pickbtn', {
+      type: 'button',
+      onclick: (e) => {
+        e.currentTarget.closest('dialog')?.close();
+        setStaging(key, { staged: true, stageFor: s.value });
+        toast(`${task.wo} staged for ${stageForLabel(s.value)}`);
+        rerender();
+      },
+    }, icon('check', { size: 15 }), el('span', {}, s.label))));
+  modal(`Stage ${task.wo} for`, body);
+}
+
+function mobileRow(row, rerender) {
+  const { task, key, staging, machine, rush } = row;
+  const staged = !!staging?.staged;
+  const [nextShift] = upcomingShifts(1);
+  const due = dueLabel(task.cuttingDate, today());
+
+  return el('div.stage-m-row' + (staged ? '.is-staged' : '') + (rush.on ? '.rush' : ''), {},
+    el('div.stage-m-id', {},
+      el('span.mono.strong', {}, task.wo),
+      task.die ? el('button.die.dielink', {
+        title: `What is ${task.die} made of?`,
+        onclick: () => dieDialog(task.die),
+      }, task.die) : null,
+      rush.on ? el('span.badge-rush' + (rush.late || rush.soon ? '.hot' : ''), {},
+        icon('bolt', { size: 11 }), 'RUSH') : null),
+
+    el('div.stage-m-where', {},
+      el('span', {}, task.project || '—'),
+      task.floor ? el('span.muted', {}, ' · ' + task.floor) : null),
+
+    el('div.stage-m-facts', {},
+      el('span.stage-m-qty', {}, fmtNum(task.qty), el('small', {}, ' pcs')),
+      el('span.stage-m-due.' + due.tone, {}, due.text),
+      el('span.stage-m-machine', {}, machineLabel(machine))),
+
+    staged
+      ? el('div.stage-m-done', {},
+          el('span.stage-m-doneband', {},
+            icon('check', { size: 14 }),
+            el('span', {}, staging.stageFor
+              ? `For ${stageForLabel(staging.stageFor)}`
+              : 'Staged'),
+            el('small', {}, `${staging.by}, ${fmtWhen(staging.at)}`)),
+          el('button.stage-m-undo', {
+            type: 'button', title: 'Put it back on the list',
+            onclick: () => { clearStaging(key); toast('Back on the staging list'); rerender(); },
+          }, icon('undo', { size: 15 })))
+      : el('div.stage-m-act', {},
+          el('button.primary.stage-m-stage', {
+            type: 'button',
+            onclick: () => {
+              setStaging(key, { staged: true, stageFor: nextShift.value });
+              toast(`${task.wo} staged for ${stageForLabel(nextShift.value)}`);
+              rerender();
+            },
+          }, icon('check', { size: 15 }),
+            el('span', {}, `Stage · ${SHIFTS[nextShift.value.split('|')[1]].label}`)),
+          el('button.stage-m-other', {
+            type: 'button', 'aria-label': `Stage ${task.wo} for another shift`,
+            title: 'Stage for another shift',
+            onclick: () => pickShift(row, rerender),
+          }, icon('list', { size: 16 }))));
+}
+
+function mobileSection(id, label, tone, rows, rerender) {
+  if (!rows.length) return null;
+  const shown = sm.open[id] || PAGE;
+  const left = rows.length - shown;
+
+  return el('section.stage-m-group', {},
+    el('div.stage-m-grouphead', {},
+      el('span.stage-m-groupdot.' + tone, { 'aria-hidden': 'true' }),
+      el('span.stage-m-grouplabel', {}, label),
+      el('span.stage-m-groupcount.' + tone, {}, String(rows.length))),
+    ...rows.slice(0, shown).map((r) => mobileRow(r, rerender)),
+    left > 0 ? el('button.stage-m-more', {
+      type: 'button',
+      onclick: () => { sm.open[id] = shown + PAGE; rerender(); },
+    }, `Show ${Math.min(left, PAGE)} more of ${rows.length}`) : null);
+}
+
+/** The phone queue: what is late, what is next, and one tap to stage it. */
+function mobileStaging(todo, staged, rerender) {
+  const ref = today();
+  const by = { overdue: [], today: [], later: [] };
+  for (const r of todo) by[bucketOf(r, ref)].push(r);
+
+  return el('div.stage-m', {},
+    ...BUCKETS.map(([id, label, tone]) => mobileSection(id, label, tone, by[id], rerender)),
+    vs.showStaged
+      ? mobileSection('staged', 'Staged and ready', 'ok', staged, rerender)
+      : null);
+}
+
 export function renderStaging(rerender, go) {
   if (!hasTasks()) {
     return el('div.panel', {},
@@ -178,9 +326,13 @@ export function renderStaging(rerender, go) {
     : null);
 
   const body = todo.length || (vs.showStaged && staged.length)
+    // Both queues are built and CSS shows the one that fits the screen, the
+    // same way the shift update carries a phone writer beside its desk form.
     ? el('div', {},
-        section('Needs staging', todo, 'warn'),
-        vs.showStaged ? section('Staged and ready', staged, 'mute') : null)
+        mobileStaging(todo, staged, rerender),
+        el('div.stage-wide', {},
+          section('Needs staging', todo, 'warn'),
+          vs.showStaged ? section('Staged and ready', staged, 'mute') : null))
     : el('div.panel', {}, el('div.empty', {},
         el('div.empty-icon', {}, icon('check', { size: 28 })),
         el('h3', {}, vs.q ? 'Nothing matches' : 'Nothing waiting to be staged'),
