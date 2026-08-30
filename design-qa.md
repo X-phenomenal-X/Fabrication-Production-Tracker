@@ -173,4 +173,71 @@ The intentional difference is the drawing treatment requested after the concept 
 
 - [P3] The existing global mobile page selector truncates `Engineering Lookup` at narrow browser widths. Its icon and selected-state styling still make the destination clear, and changing the shared header is outside this focused drawing pass.
 
+---
+
+# Mobile Staging and Back Orders Design QA
+
+Same treatment as the Shift Update stepper, applied to the two deepest
+remaining phone screens. Both build a phone surface beside the desk one and
+let CSS show exactly one; neither desk page changed.
+
+## Depth at 390 x 844, before and after
+
+| Route | Before | After |
+| --- | --- | --- |
+| Staging | 21.3 screens (17,955 px) | 5.6 screens (4,700 px) |
+| Back Orders | 12.1 screens (10,199 px) | 4.9 screens (4,132 px) |
+| Shift Update | ~10.6 screens | 1.4 screens |
+
+## Staging
+
+Ninety-seven lines in one flat `Needs staging` group, 184 px per row, with a
+native `select` on every one of them. The header already counted 84 overdue
+and the queue was already sorted rush-first then by date; the page showed
+neither.
+
+- Bucketed into Overdue / Due today / Still to come, each capped at 12 rows
+  with the rest one tap away. 84 overdue now reads as 84 overdue.
+- `.line-date` is hidden below the small breakpoint, so on a phone the field
+  saying how late a line was had never been visible. Rows now carry
+  `18 days late` / `due today` / the date, toned accordingly.
+- The 97 per-row selects became one picker, built when asked for. Staging for
+  the next crew stays a single tap.
+- Row height 184 px to 159 px; the height now goes to the work order rather
+  than to two full-width controls.
+
+## Back Orders
+
+Seventy-eight lines across seven chase lists.
+
+- [P1] Every row was a `div` with an `onclick` — no keyboard access, no
+  accessible name, and invisible to the tap-target pass, which only counts
+  real controls. The phone rows are `button`s carrying an `aria-label` that
+  says which work order they open.
+- [P2] `allBackOrders()` sorts the unowned group **last** (`if (!a.assignee)
+  return 1`), while the page's own comment calls an unowned list "the urgent
+  one". On a monitor that reads as the odd one out at the end; on a phone it
+  put 55 urgent lines eight screens below the fold. The phone list leads with
+  it. **The desk ordering was left alone** — flipping it is a product call,
+  not a layout one, and is flagged rather than changed silently.
+- Each list capped at 8 rows with a `Show N more of M`.
+- The cutting date the lists are sorted by is now shown on the row.
+
+## Verification
+
+`npm run test:all` green: rules, machines, app, cloud, routing, visual, build,
+site build, size, offline and standalone all `ERRORS: none`.
+
+New regressions in `test/visual-qa.mjs` assert, for both pages: exactly one
+surface on screen, the page under 8 screens, buckets present and bounded,
+`Show more` reaching the rest, and the date on every row. Staging additionally
+asserts zero per-row selects, one-tap staging persisting, and the other-shift
+picker; Back Orders additionally asserts every row is a named control, that the
+unowned list leads, and that a row still opens the shortage dialog.
+
+## Not done
+
+The reference-mock fidelity pass, for the same reason as the section above:
+the mocks are not reachable from this environment.
+
 final result: passed
