@@ -374,6 +374,71 @@ for (const theme of ['light', 'dark']) {
     fail(`keyboard focus is invisible on ${focusRing.tag || 'the first control'} `
       + `(box-shadow "${focusRing.after}", outline "${focusRing.outline}")`);
   }
+
+  // --- mobile Shift Update is one focused handoff, not thirteen stacked forms ---
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${base}/#shift`);
+  await page.waitForSelector('.mobile-su-editor');
+  await page.waitForSelector('.mobile-su-save-dock');
+  const shiftStart = await page.evaluate(() => ({
+    active: document.querySelector('.mobile-su-editor')?.getAttribute('aria-label'),
+    complete: Number(document.querySelector('.mobile-su-progress-track')?.getAttribute('aria-valuenow')),
+    editors: Array.from(document.querySelectorAll('.mobile-su-editor'))
+      .filter((node) => node.getBoundingClientRect().height > 0).length,
+    desktopVisible: getComputedStyle(document.querySelector('.su-desktop-write')).display !== 'none',
+    steps: document.querySelectorAll('.mobile-su-step').length,
+  }));
+  if (shiftStart.editors !== 1) fail(`shift @ phone/${theme}: ${shiftStart.editors} active editors are visible`);
+  if (shiftStart.desktopVisible) fail(`shift @ phone/${theme}: desktop comparison sheet is still visible`);
+  if (shiftStart.steps !== 13) fail(`shift @ phone/${theme}: progress rail has ${shiftStart.steps} of 13 steps`);
+
+  // A busy machine can offer dozens of lines. Opening the disclosure must
+  // preserve the focused form instead of expanding every suggestion at once.
+  await page.locator('.mobile-su-step').nth(6).click();
+  await page.waitForTimeout(100);
+  const suggestionToggle = page.locator('.mobile-su-suggestion-toggle');
+  if (await suggestionToggle.count()) {
+    const offered = Number(await suggestionToggle.locator('b').textContent() || 0);
+    await suggestionToggle.click();
+    await page.waitForTimeout(100);
+    const shown = await page.locator('.mobile-su-suggestions .sug-chip:not(.sug-more)').count();
+    const more = await page.locator('.mobile-su-suggestions .sug-more').count();
+    if (offered > 20 && shown > 20) {
+      fail(`shift @ phone/${theme}: opening ${offered} suggestions renders ${shown} chips at once`);
+    }
+    if (offered > 20 && !more) {
+      fail(`shift @ phone/${theme}: ${offered} suggestions have no Show more action`);
+    }
+    await suggestionToggle.click();
+    await page.waitForTimeout(100);
+  }
+  await page.locator('.mobile-su-step').first().click();
+  await page.waitForTimeout(100);
+
+  await page.locator('.mobile-su-editor textarea').first().fill('Visual QA handoff complete.');
+  await page.click('.mobile-su-save-dock button');
+  await page.waitForTimeout(100);
+  const shiftAfter = await page.evaluate(() => ({
+    active: document.querySelector('.mobile-su-editor')?.getAttribute('aria-label'),
+    complete: Number(document.querySelector('.mobile-su-progress-track')?.getAttribute('aria-valuenow')),
+    dockGap: Math.round(innerHeight
+      - document.querySelector('.mobile-su-save-dock').getBoundingClientRect().bottom),
+  }));
+  if (shiftAfter.complete !== shiftStart.complete + 1) {
+    fail(`shift @ phone/${theme}: Save & next moved progress from ${shiftStart.complete} to ${shiftAfter.complete}`);
+  }
+  if (shiftAfter.active === shiftStart.active) fail(`shift @ phone/${theme}: Save & next did not advance`);
+  if (shiftAfter.dockGap < 8) {
+    fail(`shift @ phone/${theme}: Save & next dock sits ${shiftAfter.dockGap}px off the safe area`);
+  }
+
+  await page.click('.su-mobile-action-menu');
+  await page.waitForSelector('dialog[open]');
+  const blankPrint = await page.locator('dialog[open] button').filter({ hasText: 'Print blank form' }).count();
+  if (!blankPrint) fail(`shift @ phone/${theme}: blank print action is missing from the compact menu`);
+  await page.locator('dialog[open] button').filter({ hasText: 'Close' }).click();
+  await page.screenshot({ path: path.join(SHOT, `shift-update-focused-phone-${theme}.png`) });
+
   // --- the phone's persistent Done action clears the browser's safe area ---
   // The redesigned production flow removes the old checkbox-first phone queue.
   // Its repeated floor action is now the current job's Done dock, so that is

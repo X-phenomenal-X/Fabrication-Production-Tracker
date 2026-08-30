@@ -14,7 +14,7 @@
    update is mostly assembled from what the app already saw happen. */
 
 import {
-  el, chip, icon, fmtDate, fmtWhen, toast, confirmDialog, printDocument,
+  el, chip, icon, fmtDate, fmtWhen, toast, confirmDialog, printDocument, modal,
 } from '../ui.js';
 import { state, saveShiftLog, deleteShiftLog, me } from '../store.js';
 import {
@@ -41,7 +41,10 @@ const FIELDS = [
   ['notes', 'Notes'],
 ];
 
-const view = { date: today(), shift: shiftAt() || 'DAY', mode: 'write', onlyIncomplete: false };
+const view = {
+  date: today(), shift: shiftAt() || 'DAY', mode: 'write', onlyIncomplete: false,
+  mobileKey: null, mobileSuggestions: false, mobileSuggestionAll: false,
+};
 
 function shiftDef(value = view.shift) {
   return SHIFTS[normalizeShift(value)] || {
@@ -133,7 +136,7 @@ function sections() {
 
 /** One-click inserts: what this shift actually moved in the tracker, and what
     the imported workbook already says about this machine. */
-function suggestions(row, entry, rerender) {
+function suggestions(row, entry, rerender, { limit = 0, onShowAll = null } = {}) {
   const add = (field, text) => {
     const cur = row[field] || '';
     if (cur.split('\n').some((l) => l.trim() === text.trim())) return false;
@@ -144,10 +147,13 @@ function suggestions(row, entry, rerender) {
   const has = (field, text) => (row[field] || '')
     .split('\n').some((l) => l.trim() === text.trim());
 
-  const group = (label, field, items, cls = '') => (items.length
-    ? el('div.sug' + cls, {},
+  const group = (label, field, items, cls = '') => {
+    if (!items.length) return null;
+    const shown = limit ? items.slice(0, limit) : items;
+    const hidden = items.length - shown.length;
+    return el('div.sug' + cls, {},
         el('span.sug-label', {}, label),
-        el('div.sug-items', {}, ...items.map((text) => {
+        el('div.sug-items', {}, ...shown.map((text) => {
           // Suggestions already written into the box stay visible but read as
           // spent, so it is obvious what is left to pick up.
           const used = has(field, text);
@@ -156,8 +162,11 @@ function suggestions(row, entry, rerender) {
             title: used ? 'Already in the update' : 'Add to ' + FIELDS.find(([f]) => f === field)[1],
             onclick: () => { if (add(field, text)) rerender(); },
           }, icon('check', { size: 10 }), text);
-        })))
-    : null);
+        }),
+        hidden && onShowAll ? el('button.sug-chip.sug-more', {
+          type: 'button', title: `Show the other ${hidden}`, onclick: onShowAll,
+        }, `+${hidden} more`) : null));
+  };
 
   const tracked = entry.tracked || [];
   const running = entry.running || [];
@@ -292,6 +301,237 @@ function card(machine, rerender) {
       box('notes', 'Notes', 'Breakdowns, material, anything the next shift needs', 2)),
 
     suggestions(row, { tracked, running, sheet }, rerender));
+}
+
+/* ---------- focused mobile writer ----------
+
+   The desktop sheet is intentionally broad: supervisors can compare several
+   machines at once. A phone needs the opposite presentation. It keeps the
+   same draft object and save record, but exposes one row at a time with a
+   clear sequence, a short progress rail and one repeated Save & next action. */
+
+function reportRows() {
+  return sections().flatMap((section) => section.rows);
+}
+
+function activeMobileIndex(rows, d) {
+  const remembered = rows.findIndex((machine) => machine.key === view.mobileKey);
+  if (remembered >= 0) return remembered;
+  const firstOpen = rows.findIndex((machine) => !hasContent(d.rows[machine.key]));
+  const index = firstOpen >= 0 ? firstOpen : 0;
+  view.mobileKey = rows[index]?.key || null;
+  return index;
+}
+
+function mobileShiftActions(rerender) {
+  const d = loadDraft();
+  const closeThen = (event, action) => {
+    event.currentTarget.closest('dialog')?.close();
+    setTimeout(action, 0);
+  };
+  modal('Shift update actions', el('div.mobile-su-menu', {},
+    el('button', {
+      onclick: (event) => closeThen(event, () => {
+        view.mode = view.mode === 'write' ? 'read' : 'write';
+        rerender();
+      }),
+    }, icon(view.mode === 'write' ? 'note' : 'pencil', { size: 18 }),
+    view.mode === 'write' ? 'Read saved update' : 'Return to writing', icon('chevron', { size: 15 })),
+    el('button', {
+      disabled: view.mode === 'read' && !currentLog(),
+      onclick: (event) => closeThen(event, printCurrentShiftUpdate),
+    }, icon('print', { size: 18 }), 'Print update', icon('chevron', { size: 15 })),
+    el('button', {
+      disabled: !operationalShift(),
+      onclick: (event) => closeThen(event, printBlankShiftUpdate),
+    }, icon('note', { size: 18 }), 'Print blank form', icon('chevron', { size: 15 })),
+    view.mode === 'write' ? el('label.mobile-su-general-field', {},
+      el('span', {}, 'General shift notes'),
+      el('textarea', {
+        rows: 4,
+        value: d.notes,
+        placeholder: 'People, material, safety, visitors or anything not tied to one machine.',
+        oninput: (event) => { d.notes = event.target.value; },
+      })) : null));
+}
+
+function mobileSuggestionCount(machine) {
+  if (machine.standing) return 0;
+  const sheet = shiftUpdateFor(machine.key);
+  return trackedLines(machine.key).length
+    + inProgressLines(machine.key).length
+    + (sheet?.done || []).length
+    + (sheet?.next || []).length
+    + (sheet?.notes || []).length;
+}
+
+function mobileEditor(machine, index, total, rerender) {
+  const row = rowFor(machine.key);
+  const sheet = machine.standing ? null : shiftUpdateFor(machine.key);
+  const tracked = machine.standing ? [] : trackedLines(machine.key);
+  const running = machine.standing ? [] : inProgressLines(machine.key);
+  const available = mobileSuggestionCount(machine);
+
+  const field = (key, label, prompt, lines) => el('label.mobile-su-field', {},
+    el('span', {}, label),
+    el('textarea', {
+      rows: lines,
+      value: row[key] || '',
+      placeholder: prompt,
+      oninput: (event) => { row[key] = event.target.value; },
+    }));
+
+  const changeOps = (delta) => {
+    const fallback = Number(machine.ops) || 0;
+    const current = row.ops === '' || row.ops == null ? fallback : Number(row.ops) || 0;
+    row.ops = String(Math.max(0, current + delta));
+    rerender();
+  };
+
+  return el('section.mobile-su-editor' + (sheet?.down ? '.down' : ''), {
+    'aria-label': `Machine ${index + 1} of ${total}: ${machine.label}`,
+  },
+    sheet?.down ? el('div.mobile-su-down', {},
+      icon('alert', { size: 16 }),
+      el('strong', {}, `${machine.label} is down`),
+      el('span', {}, 'Record what happened and what the next shift needs.')) : null,
+    el('header.mobile-su-editor-head', {},
+      el('div', {},
+        el('h2', {}, machine.label, machine.note ? el('span', {}, ` · ${machine.note}`) : null),
+        el('span', {}, machine.standing ? 'Department handoff' : `Machine ${index + 1} of ${total}`)),
+      hasContent(row) ? chip('written', 'ok') : chip('needs update', 'warn')),
+    machine.standing ? null : el('div.mobile-su-ops', {},
+      el('div', {},
+        el('strong', {}, 'Operators working'),
+        el('span', {}, 'How many operators are on this machine?')),
+      el('div.mobile-su-stepper', { role: 'group', 'aria-label': 'Operators working' },
+        el('button', {
+          type: 'button', 'aria-label': 'Decrease operator count', title: 'Fewer operators',
+          onclick: () => changeOps(-1),
+        }, icon('minus', { size: 18 })),
+        el('input', {
+          type: 'number', min: '0', inputmode: 'numeric', 'aria-label': 'Operator count',
+          value: row.ops ?? '', placeholder: machine.ops == null ? '0' : String(machine.ops),
+          oninput: (event) => { row.ops = event.target.value; },
+        }),
+        el('button', {
+          type: 'button', 'aria-label': 'Increase operator count', title: 'More operators',
+          onclick: () => changeOps(1),
+        }, icon('plus', { size: 18 })))),
+    el('div.mobile-su-fields', {},
+      field('done', 'Work done / in progress', 'What ran, what finished, or what is still active?', 3),
+      field('next', 'Next in schedule', 'What should this machine run next?', 2),
+      field('notes', 'Notes', 'Material, tooling, breakdowns or anything the next shift needs.', 2)),
+    available ? el('button.mobile-su-suggestion-toggle', {
+      type: 'button', 'aria-expanded': String(view.mobileSuggestions),
+      onclick: () => {
+        view.mobileSuggestions = !view.mobileSuggestions;
+        if (!view.mobileSuggestions) view.mobileSuggestionAll = false;
+        rerender();
+      },
+    },
+    icon('play', { size: 16 }),
+    el('span', {}, view.mobileSuggestions ? 'Hide suggested work' : 'Add work the tracker already knows'),
+    el('b.mono', {}, String(available)),
+    icon('chevron', { size: 15 })) : null,
+    view.mobileSuggestions
+      ? el('div.mobile-su-suggestions', {}, suggestions(
+          row, { tracked, running, sheet }, rerender,
+          view.mobileSuggestionAll ? {} : {
+            limit: 5,
+            onShowAll: () => { view.mobileSuggestionAll = true; rerender(); },
+          }))
+      : null);
+}
+
+function mobileWriteView(rerender) {
+  const d = loadDraft();
+  const rows = reportRows();
+  const total = rows.length;
+  const index = activeMobileIndex(rows, d);
+  const machine = rows[index];
+  const done = rows.filter((item) => hasContent(d.rows[item.key])).length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+
+  const goTo = (nextIndex) => {
+    if (nextIndex < 0 || nextIndex >= total) return;
+    view.mobileKey = rows[nextIndex].key;
+    view.mobileSuggestions = false;
+    view.mobileSuggestionAll = false;
+    rerender();
+    requestAnimationFrame(() => {
+      document.querySelector('.mobile-su-progress')?.scrollIntoView({ block: 'start' });
+      document.querySelector('.mobile-su-step[aria-current="step"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    });
+  };
+
+  const saveAndNext = () => {
+    const row = d.rows[machine.key];
+    if (!hasContent(row)) {
+      toast(`Add an update for ${machine.label} before continuing`);
+      document.querySelector('.mobile-su-editor textarea')?.focus();
+      return;
+    }
+    const savedRows = Object.fromEntries(
+      Object.entries(d.rows).filter(([, value]) => hasContent(value)));
+    saveShiftLog(view.date, view.shift, { rows: savedRows, notes: d.notes.trim() });
+
+    const after = rows.findIndex((item, itemIndex) => itemIndex > index && !hasContent(d.rows[item.key]));
+    const anywhere = rows.findIndex((item) => !hasContent(d.rows[item.key]));
+    const nextIndex = after >= 0 ? after : anywhere;
+    if (nextIndex >= 0) {
+      view.mobileKey = rows[nextIndex].key;
+      view.mobileSuggestions = false;
+      view.mobileSuggestionAll = false;
+      toast(`${machine.label} saved · Next: ${rows[nextIndex].label}`);
+    } else {
+      toast('Shift update complete and saved');
+    }
+    rerender();
+    requestAnimationFrame(() => {
+      document.querySelector('.mobile-su-progress')?.scrollIntoView({ block: 'start' });
+      document.querySelector('.mobile-su-step[aria-current="step"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    });
+  };
+
+  return el('div.mobile-su-write', {},
+    el('section.mobile-su-progress' + (done === total ? '.complete' : ''), {},
+      el('div.mobile-su-progress-copy', {},
+        el('div', {}, el('b.mono', {}, String(done)), el('span', {}, ` of ${total} complete`)),
+        el('span', {}, done === total ? 'Every update is written' : `${total - done} still need an update`)),
+      el('div.mobile-su-progress-track', {
+        role: 'progressbar', 'aria-label': 'Shift update completion',
+        'aria-valuemin': '0', 'aria-valuemax': String(total), 'aria-valuenow': String(done),
+      }, el('i', { style: { width: `${pct}%` } })),
+      el('div.mobile-su-steps', { 'aria-label': 'Shift update machines' },
+        ...rows.map((item, itemIndex) => el('button.mobile-su-step'
+          + (itemIndex === index ? '.on' : '')
+          + (hasContent(d.rows[item.key]) ? '.done' : ''), {
+          type: 'button',
+          'aria-current': itemIndex === index ? 'step' : undefined,
+          title: item.label,
+          onclick: () => goTo(itemIndex),
+        },
+        el('span', {}, hasContent(d.rows[item.key]) ? icon('check', { size: 12 }) : String(itemIndex + 1)),
+        el('small', {}, item.short || item.label))))),
+    mobileEditor(machine, index, total, rerender),
+    el('nav.mobile-su-nav', { 'aria-label': 'Shift update step controls' },
+      el('button', {
+        type: 'button', disabled: index === 0, onclick: () => goTo(index - 1),
+      }, icon('chevron', { size: 16, cls: 'mobile-su-arrow-back' }),
+      el('span', {}, el('strong', {}, 'Previous'), index > 0 ? rows[index - 1].label : 'Start of update')),
+      el('span.mobile-su-nav-count', {}, `${index + 1} / ${total}`),
+      el('button', {
+        type: 'button', disabled: index === total - 1, onclick: () => goTo(index + 1),
+      }, el('span', {}, el('strong', {}, 'Next'), index + 1 < total ? rows[index + 1].label : 'Last update'),
+      icon('chevron', { size: 16 }))),
+    el('div.mobile-su-save-dock', { role: 'region', 'aria-label': 'Save current machine update' },
+      el('button', { type: 'button', onclick: saveAndNext },
+        icon('check', { size: 20 }),
+        el('span', {}, el('strong', {}, done === total ? 'Save update' : 'Save & next'),
+          el('small', {}, done === total ? 'Keep this shift record current' : `Save ${machine.label} and continue`)))));
 }
 
 function writeView(rerender) {
@@ -638,6 +878,12 @@ export function renderShiftUpdate(rerender, go) {
             el('span.dot-sep', {}, '·'),
             view.mode === 'read' ? 'Reading' : `Writing as ${me()}`))),
       el('span.spacer'),
+      el('button.su-mobile-action-menu', {
+        type: 'button',
+        'aria-label': 'Shift update actions',
+        title: 'Shift update actions',
+        onclick: () => mobileShiftActions(rerender),
+      }, icon('gear', { size: 18 })),
       el('button.print-action', {
         type: 'button', disabled: !canPrint,
         title: canPrint
@@ -657,6 +903,8 @@ export function renderShiftUpdate(rerender, go) {
           type: 'date', value: view.date, 'aria-label': 'Shift date',
           onchange: (e) => {
             view.date = e.target.value || today();
+            view.mobileKey = null;
+            view.mobileSuggestions = false;
             dropDraft();
             rerender();
           },
@@ -664,7 +912,13 @@ export function renderShiftUpdate(rerender, go) {
         el('div.subtabs', {}, ...SHIFT_ORDER.map((k) => el('button', {
           'aria-current': String(view.shift === k),
           title: `${SHIFTS[k].label} · ${SHIFTS[k].range} · Breaks: ${breakRanges(k).join(', ')}`,
-          onclick: () => { view.shift = k; dropDraft(); rerender(); },
+          onclick: () => {
+            view.shift = k;
+            view.mobileKey = null;
+            view.mobileSuggestions = false;
+            dropDraft();
+            rerender();
+          },
         }, SHIFTS[k].label))))),
 
     // Writing and reading are different jobs on the same data, so the switch
@@ -724,6 +978,10 @@ export function renderShiftUpdate(rerender, go) {
 
   return el('div.centre', {},
     head,
-    view.mode === 'write' ? writeView(rerender) : readView(rerender),
+    view.mode === 'write'
+      ? el('div.su-write-surfaces', {},
+          el('div.su-desktop-write', {}, writeView(rerender)),
+          mobileWriteView(rerender))
+      : readView(rerender),
     recent);
 }
