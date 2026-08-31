@@ -1076,6 +1076,63 @@ for (const theme of ['light', 'dark']) {
   await ctx.close();
 }
 
+/* The monitor's overview is a separate department broadcast surface. It must
+   fit one 16:9 frame, carry four production groups, and keep the same zero-
+   interaction contract as the older per-machine monitor bookmarks. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 810 } });
+  const page = await ctx.newPage();
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/?monitor#overview`);
+  await page.waitForSelector('.monitor-shell');
+  await page.waitForTimeout(200);
+
+  const dashboard = await page.evaluate(() => {
+    const pressable = [...document.querySelectorAll('button, input, select, textarea, a[href]')]
+      .filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && getComputedStyle(node).pointerEvents !== 'none';
+      });
+    const shell = document.querySelector('.monitor-shell').getBoundingClientRect();
+    const wo = document.querySelector('.monitor-wo');
+    return {
+      cards: document.querySelectorAll('.monitor-now-card').length,
+      next: document.querySelectorAll('.monitor-next-item').length,
+      attention: document.querySelectorAll('.monitor-alert').length,
+      controls: pressable.length,
+      width: Math.round(shell.width),
+      height: Math.round(shell.height),
+      overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      overflowY: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+      workOrderSize: wo ? Math.round(parseFloat(getComputedStyle(wo).fontSize)) : 0,
+      cycle: document.querySelector('.monitor-cycle')?.textContent.trim(),
+    };
+  });
+
+  note(`monitor overview: ${dashboard.cards} now, ${dashboard.next} next, `
+    + `${dashboard.attention} alerts, ${dashboard.controls} controls`);
+  if (dashboard.cards !== 4) fail(`monitor overview shows ${dashboard.cards} of 4 production groups`);
+  if (dashboard.next !== 3) fail(`monitor overview shows ${dashboard.next} of 3 next handoffs`);
+  if (dashboard.attention > 3) fail(`monitor overview shows ${dashboard.attention} alerts — the cap is 3`);
+  if (dashboard.controls) fail(`monitor overview leaves ${dashboard.controls} control(s) operable`);
+  if (dashboard.width !== 1440 || dashboard.height !== 810) {
+    fail(`monitor overview is ${dashboard.width}x${dashboard.height}, expected one 1440x810 frame`);
+  }
+  if (dashboard.overflowX || dashboard.overflowY) {
+    fail(`monitor overview overflows by ${dashboard.overflowX}px x / ${dashboard.overflowY}px y`);
+  }
+  if (dashboard.workOrderSize < 34) {
+    fail(`monitor overview work order is ${dashboard.workOrderSize}px — too small across an aisle`);
+  }
+  if (!/^1\s+of\s+3$/i.test(dashboard.cycle || '')) {
+    fail(`monitor overview does not expose its automatic cycle state: "${dashboard.cycle || ''}"`);
+  }
+  await page.screenshot({ path: path.join(SHOT, 'monitor-overview.png') });
+  await ctx.close();
+}
+
 await browser.close();
 server.close();
 

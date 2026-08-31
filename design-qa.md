@@ -131,6 +131,74 @@ final result: passed
 
 ---
 
+# Shop Monitor Department Dashboard Design QA
+
+## Comparison target
+
+- Source visual truth: `C:\Users\abhay.badhwar\.codex\generated_images\01a0409f-1a16-7bb0-ac5e-caa8b26cef14\exec-572dd9ca-6a2f-4be8-a923-b42918e82496.png`
+- Browser-rendered implementation: `C:\Users\abhay.badhwar\OneDrive - BVGLAZING SYSTEMS\Documents\ChatGPT\Production Tracker Fabrication\test\screens\monitor-dashboard-2026-08-30\11-monitor-broadcast-final-1440x810.png`
+- Same-input comparison: `C:\Users\abhay.badhwar\OneDrive - BVGLAZING SYSTEMS\Documents\ChatGPT\Production Tracker Fabrication\test\screens\monitor-dashboard-2026-08-30\12-option3-vs-implementation.png`
+- Route and state: `?monitor#overview`, dark monitor-local palette, sanitized production-volume fixture, Afternoon shift, device-only storage, active work across all four production groups, machine-down / rush / SOP exceptions visible.
+- CSS viewport and capture: 1440 x 810 at device scale 1.
+- Source pixels: 1440 x 810. Implementation pixels: 1440 x 810. No density or crop normalization was required; the two frames are stacked at native size in the comparison image.
+
+## Findings
+
+No actionable P0, P1 or P2 mismatch remains.
+
+The implementation reproduces the selected broadcast hierarchy: one compact identity/clock/health header, four department pulse numbers, a dominant 2 x 2 NOW field, a three-row NEEDS ATTENTION lane, and a three-handoff NEXT band. It intentionally uses the app's live derived records instead of the concept's sample work orders and counts.
+
+## Full-view comparison evidence
+
+The selected design and implementation were placed together at the same 1440 x 810 size. Major-region proportions, scan order, flat-panel treatment, slate/cyan palette, vertical NOW/NEXT rails, attention color hierarchy and across-aisle type scale align. The implementation stays within one viewport with zero horizontal or vertical overflow and no clipped persistent region.
+
+The production version preserves the existing authentic BV mark and bundled IBM Plex Sans / IBM Plex Mono fonts. It shows real machine names, actual status authors, current shift hours, live storage/sync state and the current date. It does not invent partial-piece completion: because the data model records line state and total quantity but not pieces-complete, each NOW rail is explicitly labelled as machine schedule completion.
+
+## Focused-region comparison evidence
+
+The native-size combined comparison keeps the header, work-order typography, attention symbols, progress rails and next-work details legible, so a separate crop was not required.
+
+- Fonts and typography: IBM Plex remains consistent with the product and closely matches the source's industrial grotesk. Work orders are 46 px at the verified viewport; the clock is 79 px; section labels and KPI values preserve the source hierarchy. Secondary operator and progress captions remain subordinate without replacing the primary work order or blocker.
+- Spacing and layout rhythm: the 16:9 frame is filled without scroll, nested-card clutter or unused zones. Four equal NOW areas and three equal exception bands align to shared rails; NEXT remains a single bottom scan line.
+- Colors and tokens: dark slate, electric cyan, emerald, amber, crimson and SOP magenta map to the existing semantic meanings. The monitor-local palette is stable even if a shared wall device has the normal app set to light mode.
+- Image and icon quality: the authentic reusable BV vector mark is retained. Attention symbols use the product's existing icon system rather than placeholder art, emoji, CSS drawings or newly approximated brand assets.
+- Copy and content: the screen answers only what is running, what is next and what needs intervention. Machine-down, rush and SOP deviation copy comes from live model state; no purchasing surface or unrelated operator tool appears.
+
+## Comparison history
+
+### Pass 1 — blocked
+
+- [P2] The first implementation left the NEEDS ATTENTION lane text-only, losing the selected design's strongest rapid-recognition cues.
+- [P2] Device-only mode repeated `this device only` and omitted the date from the compact health block.
+- [P2] The first captured frame included a transient service-worker reload notice, which was preview chrome rather than dashboard content.
+
+### Fixes applied
+
+- Added large existing-system symbols for machine down, rush and SOP routing deviation, with the same semantic crimson / amber / magenta mapping as the source.
+- Rewrote the health detail as `Local storage active · <date>` while keeping the accurate DEVICE ONLY status.
+- Settled the service-worker update state and recaptured the same viewport with zero visible controls.
+
+### Pass 2 — passed
+
+- The native-size comparison shows all earlier findings resolved.
+- No P0, P1 or P2 mismatch remains. The remaining differences are live-data substitutions and the deliberate schedule-completion label described above.
+
+## Behavior, accessibility and browser health
+
+- Automatic rotation advanced from `2 of 3` to `3 of 3` after 20 seconds and changed the displayed Rolling work order from `32820` to `31782`.
+- The monitor overview exposes zero buttons, links, inputs, selects or text areas. Existing machine-specific monitor bookmarks remain non-interactive and unchanged.
+- The new visual regression gate asserts four NOW groups, three NEXT handoffs, at most three attention items, a 34 px minimum work-order size, exact 1440 x 810 fit, zero overflow and zero operable controls.
+- Main app suite: passed. Visual suite: passed in light/dark themes, reduced motion and both monitor modes.
+- Browser console warnings/errors: 0.
+
+## Follow-up polish
+
+- [P3] A future partial-production field could replace schedule completion with `pieces complete / total` without changing the selected layout.
+
+final result: passed
+
+---
+
 # Focused Mobile Engineering Lookup Design QA
 
 ## Comparison target

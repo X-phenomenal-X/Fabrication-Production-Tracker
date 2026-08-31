@@ -18,6 +18,9 @@ import { renderOverview } from './views/overview.js';
 import { renderShiftUpdate } from './views/shiftupdate.js';
 import { renderRush } from './views/rush.js';
 import { renderData, initSharedFile } from './views/data.js';
+import {
+  armMonitorRotation, refreshMonitorClock, renderMonitorDashboard,
+} from './views/monitor.js';
 import { shiftStatusAt } from './shifts.js';
 import { registerServiceWorker, watchConnection, isOnline } from './offline.js';
 
@@ -480,6 +483,14 @@ let hdrObserver = null;
 function render() {
   const tab = TABS.find((t) => t.key === current) || TABS[0];
   const storage = storageStatus();
+  /* Overview becomes a department broadcast board in monitor mode. Machine
+     hashes keep the existing queue display, so old bay bookmarks remain
+     valid while ?monitor#overview gains the across-department dashboard. */
+  if (document.documentElement.dataset.display === 'monitor' && current === 'overview') {
+    root.replaceChildren(renderMonitorDashboard(syncViewState()));
+    pageMotion = false;
+    return;
+  }
   // Views are handed scheduleRender, never render, so a redraw requested from
   // inside a click or change handler lands after the browser has finished
   // moving focus — tearing the DOM down mid-event throws.
@@ -508,6 +519,7 @@ function scheduleRender() {
    whole page every minute would replace a textarea while somebody is writing
    the shift handoff. */
 function refreshShiftChip() {
+  refreshMonitorClock();
   const node = root.querySelector('.shift-chip');
   if (!node) return;
   const shift = shiftStatusAt();
@@ -560,6 +572,7 @@ applyTheme();
 onChange(() => { applyTheme(); scheduleRender(); });
 render();
 armShiftClock();
+if (document.documentElement.dataset.display === 'monitor') armMonitorRotation(scheduleRender);
 registerServiceWorker();
 watchConnection(scheduleRender);
 initSharedFile(render);
