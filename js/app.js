@@ -23,7 +23,7 @@ import {
 } from './views/monitor.js';
 import { shiftStatusAt } from './shifts.js';
 import { registerServiceWorker, watchConnection, isOnline } from './offline.js';
-import { pulseSyncMerge, reducedMotion, transitionView } from './motion.js';
+import { pulseSyncMerge, reducedMotion } from './motion.js';
 
 /* The engineering libraries contain thousands of records and drawings. They
    are useful, but they are not part of running a machine queue. Loading those
@@ -98,28 +98,18 @@ if (!TABS.some((t) => t.key === current)) current = 'overview';
 const root = document.getElementById('app');
 let scheduled = false;
 let pageMotion = true;
-let navigationRevision = 0;
 
 function go(key) {
-  const revision = ++navigationRevision;
   const changing = key !== current;
-  const sharedTransition = changing && !reducedMotion()
-    && typeof document.startViewTransition === 'function';
-  if (changing) pageMotion = !sharedTransition;
-  const update = () => {
-    // Chromium may invoke an older view-transition callback after a newer tab
-    // tap has already committed. Only the latest navigation may change the
-    // page; transition decoration is never allowed to send an operator back.
-    if (revision !== navigationRevision) return;
-    current = key;
-    location.hash = key;
-    // startViewTransition invokes this after the original click has finished,
-    // so the DOM can be swapped synchronously for an accurate new snapshot.
-    // The fallback keeps the original scheduled-render safety inside events.
-    if (sharedTransition) render(); else scheduleRender();
-    window.scrollTo({ top: 0 });
-  };
-  transitionView(update);
+  /* Native view transitions place a document-wide snapshot above the app.
+     On a busy device that layer can outlive a fast second tap and swallow the
+     operator's newer destination. The page-enter CSS motion is non-blocking,
+     runs for the same short interval and still honours reduced motion. */
+  pageMotion = changing && !reducedMotion();
+  current = key;
+  location.hash = key;
+  scheduleRender();
+  window.scrollTo({ top: 0 });
 }
 
 function whoAmI() {
@@ -569,9 +559,6 @@ window.addEventListener('resize', () => {
 window.addEventListener('hashchange', () => {
   const k = location.hash.slice(1);
   if (TABS.some((t) => t.key === k) && k !== current) {
-    // A direct hash change (bookmark, back/forward or external link) also wins
-    // over any view-transition callback that has not run yet.
-    navigationRevision += 1;
     current = k;
     pageMotion = true;
     scheduleRender();
