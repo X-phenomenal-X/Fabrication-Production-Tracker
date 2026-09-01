@@ -3,7 +3,7 @@
 
 import { el, chip, icon, fmtNum, fmtWhen, toast, modal, download, confirmDialog } from '../ui.js';
 import {
-  state, setMachineImport, save, exportJson, importJson, resetAll,
+  state, setMachineImport, setDailyImport, save, exportJson, importJson, resetAll,
   connectSharedFile, reconnectSharedFile, grantSharedFile, pullSharedFile,
   supportsSharedFile, sharedFileName, disconnectSharedFile, me,
   connectCloud, disconnectCloud, cloudStatus, cloudConfig, retrySync,
@@ -86,6 +86,33 @@ async function handleMachineFile(file, kind, rerender) {
       el('p.small.muted', {}, 'Nothing already loaded has been changed.')));
   } finally {
     document.querySelectorAll('.toast').forEach((t) => t.remove());
+  }
+}
+
+async function handleDailyFile(file, rerender) {
+  toast(`Reading ${file.name}…`, 60000);
+  try {
+    const { importDailySchedule } = await import('../import-daily.js');
+    const result = await importDailySchedule(await file.arrayBuffer(), { fileName: file.name });
+    setDailyImport(result);
+    const report = result.report;
+    modal(`Imported ${file.name}`, el('div', {},
+      el('div.stats.import-stats', {},
+        el('div.stat', {}, el('div.n', {}, fmtNum(report.count)), el('div.k', {}, 'Orders')),
+        el('div.stat', {}, el('div.n', {}, fmtNum(report.projects)), el('div.k', {}, 'Projects')),
+        el('div.stat', {}, el('div.n', {}, fmtNum(report.colors)), el('div.k', {}, 'Colours'))),
+      el('p.small.muted', {}, `Read the ${report.sheet} sheet. ${fmtNum(report.skipped)} sparse or non-order rows were ignored.`),
+      !report.colorColumnFound ? el('div.banner.warn', {},
+        el('div', {}, el('strong', {}, 'No colour column was found. '),
+          'Project names and job codes are loaded; the Projects page will mark colour as not listed.')) : null));
+    toast(`Loaded ${result.rows.length} Daily Schedule orders`);
+    rerender();
+  } catch (error) {
+    modal('Import failed', el('div', {},
+      el('p', {}, error.message),
+      el('p.small.muted', {}, 'Nothing already loaded has been changed.')));
+  } finally {
+    document.querySelectorAll('.toast').forEach((item) => item.remove());
   }
 }
 
@@ -325,6 +352,7 @@ function firstRun(rerender) {
 
 export function renderData(rerender) {
   const mm = state.machineMeta || {};
+  const scheduleMeta = { ...mm, daily: state.dailyMeta };
   const sharing = cloudStatus().on || !!sharedFileName();
   const sharingProblem = cloudStatus().error || sharedFileStatus().error;
   const storage = storageStatus();
@@ -332,8 +360,8 @@ export function renderData(rerender) {
     el('div.row', { style: { marginBottom: '6px' } },
       el('strong.small', {}, label),
       el('span.spacer'),
-      mm[key]?.fileName
-        ? el('span.small.muted', {}, `${mm[key].fileName} · ${fmtNum(mm[key].count)} lines · ${fmtWhen(mm[key].importedAt)}`)
+      scheduleMeta[key]?.fileName
+        ? el('span.small.muted', {}, `${scheduleMeta[key].fileName} · ${fmtNum(scheduleMeta[key].count)} lines · ${fmtWhen(scheduleMeta[key].importedAt)}`)
         : chip('not loaded', 'warn')),
     node);
 
@@ -354,8 +382,8 @@ export function renderData(rerender) {
           + 'set — statuses, notes, rush, back orders — is kept; only what the '
           + 'workbook itself says is re-read.')) : null,
       el('p.small.muted', { style: { marginTop: 0 } },
-        'These two workbooks are the whole source of truth. Re-import either one ' +
-        'whenever a new revision comes out — statuses you have set are kept.'),
+        'Machine queues come from the Rolling and CNC workbooks. Daily Schedule is a separate third file ' +
+        'for the department schedule and project directory. Re-import any revision when it changes.'),
       el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '14px' } },
         slot('Rolling schedule', 'rolling', dropZone({
           title: 'Rolling workbook',
@@ -366,6 +394,11 @@ export function renderData(rerender) {
           title: 'CNC workbook',
           hint: 'FOM 1-3, MultiPunch & SAW, CNC & FMC',
           onFile: (f) => handleMachineFile(f, 'cnc', rerender),
+        })),
+        slot('Daily schedule', 'daily', dropZone({
+          title: 'Daily Schedule workbook',
+          hint: 'Daily Sched sheet · projects, job codes, colours and dates',
+          onFile: (f) => handleDailyFile(f, rerender),
         })))));
 
   /* shared file */

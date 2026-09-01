@@ -122,6 +122,33 @@ function shiftUpdateRows({ archived = false } = {}) {
   ];
 }
 
+function dailyScheduleRows(count = 72) {
+  const projects = ['Harbour Point', 'Elm Court', 'Station Square', 'Maple Ridge', 'Riverbend', 'Northgate'];
+  const colors = ['Charcoal Grey', 'Clear Anodized', 'Black', 'Architectural Bronze'];
+  const series = ['8000', '8500', '8900'];
+  const rows = [
+    {
+      1: 'W/O#', 2: 'JOB CODE', 3: 'PROJECT', 4: 'FLOOR', 5: 'QTY', 6: 'NOTES',
+      12: 'SERIES', 13: 'SHIP DATE', 15: 'GLAZING DATE', 16: 'CUTTING DATE',
+      27: 'CUT STATUS', 41: 'MTL STATUS', 42: 'COLOUR / FINISH',
+    },
+    { 1: 'Separate Daily Schedule fixture' },
+  ];
+  const statuses = ['IP', 'READY', 'DONE', 'OK', 'B/O'];
+  for (let i = 0; i < count; i++) {
+    const date = `2026-08-${String(12 + (i % 6)).padStart(2, '0')}`;
+    rows.push({
+      1: String(81000 + i), 2: `J-${100 + (i % 18)}`, 3: projects[i % projects.length],
+      4: `L${1 + (i % 20)}`, 5: 8 + (i % 48), 6: i % 9 === 0 ? 'Check latest elevation.' : null,
+      12: series[i % series.length], 13: dateCell(`2026-08-${String(18 + (i % 6)).padStart(2, '0')}`),
+      15: dateCell(`2026-08-${String(16 + (i % 6)).padStart(2, '0')}`), 16: dateCell(date),
+      27: statuses[i % statuses.length], 41: i % 11 === 0 ? 'NOT RECEIVED' : 'READY',
+      42: colors[i % colors.length],
+    });
+  }
+  return rows;
+}
+
 function storedZip(files) {
   const locals = [];
   const centrals = [];
@@ -194,6 +221,7 @@ export function ensureWorkbookFixtures() {
   fs.mkdirSync(dir, { recursive: true });
   const rolling = path.join(dir, 'Rolling_Schedule_SANITIZED.xlsx');
   const cnc = path.join(dir, 'CNC_Schedule_SANITIZED.xlsx');
+  const daily = path.join(dir, 'Daily_Schedule_SANITIZED.xlsx');
 
   fs.writeFileSync(rolling, workbook({
     Auto: taskRows('auto', 64),
@@ -211,5 +239,6 @@ export function ensureWorkbookFixtures() {
     'Shift Update (3)': shiftUpdateRows({ archived: true }),
     'Shift Update Old': shiftUpdateRows({ archived: true }),
   }));
-  return { rolling, cnc, synthetic: true };
+  fs.writeFileSync(daily, workbook({ 'Daily Sched': dailyScheduleRows() }));
+  return { rolling, cnc, daily, synthetic: true };
 }

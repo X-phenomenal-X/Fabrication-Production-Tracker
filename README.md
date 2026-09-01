@@ -1,14 +1,15 @@
 # Cutting Tracker — Rolling, FOM, CNC & FMC, Multi Punch
 
-A page per work centre, driven entirely by the department's own Rolling and CNC
-schedule workbooks. Each page shows that machine's open lines grouped by
-cutting date, with a single click to move a line through Not started →
-In Progress → Done.
+A page per work centre, driven by the department's own Rolling and CNC schedule
+workbooks. Each page shows that machine's open lines grouped by cutting date,
+with a single click to move a line through Not started → In Progress → Done.
+The separate Daily Schedule workbook supplies a read-only daily/project view;
+it never drives machine routing or machine status.
 
-The scope stays operational rather than becoming a general ERP: no Daily
-Schedule and no inventory ledger. It does include the actions the cutting
-floor needs around the queues — staging, rush work, back-order chasing,
-engineering lookup and shift handoff.
+The scope stays operational rather than becoming a general ERP: no purchasing
+workflow or inventory ledger. It includes the actions the cutting floor needs
+around the queues — daily/project reference, staging, rush work, back-order
+chasing, engineering lookup, forms, employee selection and shift handoff.
 
 ## Running it
 
@@ -45,14 +46,16 @@ re-read.
 
 ## First run
 
-1. **Setup** → import the Rolling workbook, then the CNC workbook.
+1. **Setup** → import the Rolling workbook, the CNC workbook, and the separate
+   Daily Schedule workbook.
 2. Pick your centre from the nav: **Rolling · FOM · CNC & FMC · Multi Punch**.
 3. Pick your machine from the sub-tabs, and work the queue.
 4. At the end of the shift, **Shift Update** → Write.
 
 The nav reads **Overview · Rolling · FOM · CNC & FMC · Multi Punch · Jobs ·
-Today · Staging · Rush · Back Orders · Engineering Lookup · Shift Update**.
-Setup is the gear in the header.
+Today · Daily Schedule · Projects · Staging · Rush · Back Orders · Forms ·
+Employees · Engineering Lookup · Shift Update**. Setup is the gear in the
+header.
 
 To use it on a phone, set up **Sync across devices** in Setup once — see below.
 
@@ -64,6 +67,10 @@ To use it on a phone, set up **Sync across devices** in Setup once — see below
 | FOM | FOM 1, FOM 2, FOM 3 | CNC workbook: `FOM1`, `FOM2`, `FOM3` |
 | CNC & FMC | Unassigned queue, CNC 1, FMC 1, FMC 2 | CNC workbook: `CNC & FMC` |
 | Multi Punch | Multi Punch | CNC workbook: `MultiPunch & SAW` |
+| Daily Schedule | Cutting-department day view grouped by project | Separate Daily Schedule workbook: exact `Daily Sched` sheet |
+| Projects | Project name, job code, colour/finish and series directory | Separate Daily Schedule workbook: exact `Daily Sched` sheet |
+| Forms | Downloadable blank production, incident and orientation PDFs | Versioned templates in `assets/forms/` |
+| Employees | Searchable device/user selector and locally managed employee list | Saved `people` records; no real roster is committed |
 
 Machines with no lines scheduled still appear — a machine that is idle should
 look different from one that does not exist.
@@ -83,6 +90,8 @@ screen chrome to the printer:
 - **Blank shift update:** choose the date and Day or Afternoon, then use
   **Print blank**. It prints Back Order and every active machine with the shift
   hours, break times, handwriting space, general-note lines and signoff.
+- **Daily schedule:** open **Daily Schedule**, choose the date, then use
+  **Print day**. It prints the complete filtered day grouped by project.
 - **Assembly or extrusion:** search in **Engineering Lookup**, open a record,
   then choose **Print**. Assembly sheets include the drawing, component map,
   missing-role state and recovery provenance. Extrusion sheets include the
@@ -850,21 +859,24 @@ department finds out the app is behind the floor again. `CNC-3` is recognised
 and maps to the `cnc1` work centre; whether the visible label should say
 “CNC 1” or “CNC-3” remains a floor-naming decision and can be changed in Setup.
 
-## What was removed
+## Scope boundary
 
-Everything driven by the Daily Schedule: order-level tracking, profile types
-and per-profile material, purchasing workflows, process guide, verification
-screen, and the old dashboard. Manual jobs, history and shift-update posting
-were later rebuilt against the machine-schedule model and are current features.
-The 8560 rule is derived directly from FOM 2 and shown on the affected
-production line; it is not a purchase request.
+The old ERP-style Daily Schedule implementation — purchasing, inventory,
+per-profile material ordering, process-guide and verification workflows —
+remains removed. The separate workbook has been reintroduced only as a narrow
+read-only source for the **Daily Schedule** and **Projects** pages. Its rows are
+stored in `dailyOrders` with `dailyMeta`; they do not create machine tasks,
+change routing, or submit anything to purchasing. Manual jobs, history and
+shift-update posting remain based on the machine-schedule model. The 8560 rule
+is derived directly from FOM 2 and shown on the affected production line; it is
+not a purchase request.
 
 The stored data went with it. On first load the app rewrites its saved payload
 without the retired fields, so an existing install — and the shared JSON on the
 network drive — sheds them rather than carrying them indefinitely. State now
 holds `tasks`, `machineMeta`, the keyed overlay maps, `taskHistory`,
 `shiftUpdate`, `shiftLogs`, `manualTasks`, `todos`, `staging`, `deletions`,
-`people` and local `settings`.
+`people`, `dailyOrders`, `dailyMeta` and local `settings`.
 
 (Shift-update posting has since come back, rebuilt around the machine layout —
 see above. An old install's `shiftLogs` were written in a different shape and

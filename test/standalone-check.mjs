@@ -11,6 +11,7 @@ const FILE = path.join(ROOT, 'Cutting-Tracker.html');
 const books = workbookPaths();
 const ROLLING = books.rolling;
 const CNC = books.cnc;
+const DAILY = books.daily;
 
 if (!fs.existsSync(FILE)) throw new Error('Run `node build.mjs` first.');
 
@@ -53,14 +54,16 @@ step('File System Access available: ' + await page.evaluate(() => 'showOpenFileP
 const tabs = await page.$$eval('nav.tabs button', (ns) =>
   ns.map((n) => (n.getAttribute('aria-label') || n.textContent).trim()));
 step('tabs: ' + tabs.join(', '));
-if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Staging,Rush,Back Orders,Engineering Lookup,Shift Update') {
+if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Daily Schedule,Projects,Staging,Rush,Back Orders,Forms,Employees,Engineering Lookup,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
-// import Rolling + CNC through the real UI
+// Import all three source workbooks through the real UI.
 await page.click('.hdr-setup');
 await page.waitForSelector('.drop');
-for (const [label, file] of [['Rolling workbook', ROLLING], ['CNC workbook', CNC]]) {
+for (const [label, file] of [
+  ['Rolling workbook', ROLLING], ['CNC workbook', CNC], ['Daily Schedule workbook', DAILY],
+]) {
   const ch = page.waitForEvent('filechooser');
   await page.click(`.drop:has-text("${label}") button`);
   await (await ch).setFiles(file);

@@ -83,8 +83,23 @@ export function makeFixture({ today = '2026-08-14', volume = 'heavy' } = {}) {
   const rush = {};
   const taskAssign = {};
   const taskHistory = [];
+  const dailyOrders = [];
 
   const key = (t) => `${t.machine}|${t.wo}|${t.die || ''}`;
+
+  for (let i = 0; i < 96; i++) {
+    dailyOrders.push({
+      id: `daily-${i}`, row: i + 3, wo: String(61000 + i),
+      jobCode: `J-${120 + (i % 24)}`, project: PROJECTS[i % PROJECTS.length], floor: FLOORS[i % FLOORS.length],
+      qty: 8 + (i % 90), notes: i % 11 === 0 ? 'Check latest elevation.' : null,
+      series: ['8000', '8500', '8900'][i % 3], shipDate: day(5 + (i % 4)),
+      glazingDate: day(3 + (i % 4)), cuttingDate: day((i % 7) - 3),
+      cutStatus: ['IP', 'READY', 'DONE', 'OK', 'B/O'][i % 5],
+      materialStatus: i % 13 === 0 ? 'NOT RECEIVED' : 'READY',
+      color: ['Charcoal Grey', 'Clear Anodized', 'Black', 'Architectural Bronze'][i % 4],
+      section: i % 5 ? 'IN CUTTING' : 'WINDOW WALL',
+    });
+  }
 
   let wo = 31500;
   for (const machine of MACHINES) {
@@ -343,6 +358,12 @@ export function makeFixture({ today = '2026-08-14', volume = 'heavy' } = {}) {
         fileName: 'CNC_Schedule_Rev_E.xlsx', importedAt: iso(base - 3 * 3600000),
         count: tasks.filter((t) => !t.machine.startsWith('roll')).length, parser: 4,
       },
+    },
+    dailyOrders,
+    dailyMeta: {
+      fileName: 'Daily_Schedule_SANITIZED.xlsx', importedAt: iso(base - 3 * 3600000),
+      count: dailyOrders.length, projects: PROJECTS.length, colors: 4, parser: 1,
+      colorColumnFound: true,
     },
     taskStatus,
     shiftUpdate: {

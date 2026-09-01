@@ -61,6 +61,10 @@ const VIEWPORTS = [
 const SCREENS = [
   { hash: 'overview', name: 'overview' },
   { hash: 'today', name: 'today' },
+  { hash: 'schedule', name: 'schedule' },
+  { hash: 'projects', name: 'projects' },
+  { hash: 'resources', name: 'resources' },
+  { hash: 'employees', name: 'employees' },
   { hash: 'staging', name: 'staging' },
   { hash: 'rolling', name: 'rolling' },
   { hash: 'fom', name: 'fom' },
@@ -250,8 +254,8 @@ for (const theme of ['light', 'dark']) {
         await page.waitForSelector('dialog.mobile-nav-dialog');
         const destinations = await page.$$eval('.mobile-nav-item', (nodes) =>
           nodes.map((node) => node.querySelector('.mobile-nav-label')?.textContent?.trim()));
-        if (destinations.length !== 12) {
-          fail(`rolling @ phone/${theme}: page menu exposes ${destinations.length} of 12 destinations`);
+        if (destinations.length !== 16) {
+          fail(`rolling @ phone/${theme}: page menu exposes ${destinations.length} of 16 destinations`);
         }
         await page.click('dialog.mobile-nav-dialog button:has-text("Close")');
 

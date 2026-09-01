@@ -259,6 +259,10 @@ const ICON_PATHS = {
   print: 'M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6zM18 12h.01',
   camera: 'M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v10H2V9a2 2 0 0 1 2-2zM12 10a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
   sparkles: 'M12 3l1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2zM19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7zM5 14l.8 2.2L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-.8z',
+  file: 'M6 2h8l4 4v16H6zM14 2v5h5M9 12h6M9 16h6',
+  download: 'M12 3v12M7 10l5 5 5-5M5 21h14',
+  users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+  'chevron-left': 'M15 18l-6-6 6-6',
 };
 
 export function icon(name, { size = 16, cls = '' } = {}) {

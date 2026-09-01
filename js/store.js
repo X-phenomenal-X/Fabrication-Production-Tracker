@@ -33,6 +33,8 @@ const RETIRED_KEYS = [
 export const state = {
   tasks: [],        // machine-schedule rows: the base for scheduling
   machineMeta: {},  // kind -> { fileName, importedAt, count }
+  dailyOrders: [],  // separate Daily Sched workbook, read-only order rows
+  dailyMeta: null,  // { fileName, importedAt, count, projects, colors }
   taskStatus: {},   // `${machine}|${wo}|${die}` -> { status, at, by }
   shiftUpdate: null, // latest Shift Update sheet: { date, shift, machines }
   taskNote: {},     // `${machine}|${wo}|${die}` -> { text, at, by }
@@ -670,6 +672,23 @@ export function setMachineImport({ tasks, shiftUpdate, report }) {
   queueCloudPush({ base: true, change: false });
 }
 
+/** Replace the separate Daily Schedule revision. It is read-only source data;
+    importing it does not touch machine queues or any operator status overlay. */
+export function setDailyImport({ rows, report }) {
+  state.dailyOrders = rows;
+  state.dailyMeta = changed({
+    fileName: report.fileName,
+    importedAt: report.importedAt,
+    count: rows.length,
+    projects: report.projects || 0,
+    colors: report.colors || 0,
+    parser: report.parser || 1,
+    colorColumnFound: !!report.colorColumnFound,
+  });
+  save();
+  queueCloudPush({ base: true, change: false });
+}
+
 /* ---------- local persistence ---------- */
 
 function snapshot() {
@@ -677,6 +696,8 @@ function snapshot() {
     v: 2,
     tasks: state.tasks,
     machineMeta: state.machineMeta,
+    dailyOrders: state.dailyOrders,
+    dailyMeta: state.dailyMeta,
     taskStatus: state.taskStatus,
     shiftUpdate: state.shiftUpdate,
     taskNote: state.taskNote,
@@ -894,6 +915,7 @@ function observeSnapshot(snap) {
     for (const rec of Object.values(snap?.[map] || {})) observeRevision(rec?.rev);
   }
   for (const rec of Object.values(snap?.machineMeta || {})) observeRevision(rec?.rev);
+  observeRevision(snap?.dailyMeta?.rev);
   persistDeviceClock();
 }
 
@@ -945,6 +967,10 @@ function mergeSnapshot(remote) {
       // The shift update rides along with the CNC workbook.
       if (kind === 'cnc' && remote.shiftUpdate) state.shiftUpdate = remote.shiftUpdate;
     }
+  }
+  if (recordWins(remote.dailyMeta, state.dailyMeta) && Array.isArray(remote.dailyOrders)) {
+    state.dailyOrders = remote.dailyOrders;
+    state.dailyMeta = remote.dailyMeta;
   }
 }
 
@@ -1070,7 +1096,7 @@ async function flushSharedFile() {
    megabyte, changing only on re-import. `work` is what people actually do —
    a few kilobytes, changing constantly. Pushing them together would mean a
    phone uploading the workbooks every time somebody taps Done. */
-const CLOUD_BASE_KEYS = ['tasks', 'machineMeta', 'shiftUpdate'];
+const CLOUD_BASE_KEYS = ['tasks', 'machineMeta', 'shiftUpdate', 'dailyOrders', 'dailyMeta'];
 
 function cloudDoc(part) {
   const snap = snapshot();

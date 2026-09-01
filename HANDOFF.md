@@ -10,7 +10,7 @@ the real workbooks, not assumed.
 **Live:** https://x-phenomenal-x.github.io/Fabrication-Production-Tracker/
 **Deploy:** every push to the default branch builds and publishes to Pages
 automatically. There is no separate deploy step.
-**Reviewed:** 28 Aug 2026. This file is versioned with the code; use
+**Reviewed:** 1 Sep 2026. This file is versioned with the code; use
 `git log -1 --oneline` for the exact revision rather than trusting a copied SHA.
 
 ---
@@ -18,8 +18,9 @@ automatically. There is no separate deploy step.
 ## 1. What this is
 
 A production tracker for the **Cutting department at BV Glazing Systems**
-(window/door/curtainwall fabrication). It replaces editing Status cells in two
-Excel workbooks by hand.
+(window/door/curtainwall fabrication). It replaces editing Status cells in the
+two machine-schedule Excel workbooks by hand, while using a third Daily
+Schedule workbook for a separate read-only daily/project reference.
 
 It is a **zero-dependency vanilla-JS app**. No framework, no runtime packages.
 The hosted app is the normal production path; a self-contained file remains
@@ -44,15 +45,18 @@ do not download the entire standalone artifact on every launch (see §6).
 This is the part that took real investigation. Getting it wrong produces an app
 that looks fine and is quietly wrong.
 
-### The two workbooks are the only source of truth
+### Three workbooks, with deliberately separate ownership
 
 | Workbook | Sheets read | Feeds |
 |---|---|---|
 | `Rolling_Schedule_2026.xlsx` | `Auto`, `Manual`, `Complete` | Rolling (Auto/Etas), Rolling (Manual/Iota) |
 | `CNC_Schedule_Rev_E.xlsx` | `FOM1`, `FOM2`, `FOM3`, `MultiPunch & SAW`, `CNC & FMC`, `Shift Update` | FOM 1–3, Multi Punch, the CNC/FMC queue, and the shift update |
+| Daily Schedule workbook | exact `Daily Sched` | Daily Schedule and Projects only: order/date/project/job code/colour/series reference |
 
-The Daily Schedule workbook was **deliberately dropped** — an earlier version
-tracked it and the scope was reset. Don't reintroduce it.
+The Daily Schedule workbook is intentionally isolated in `dailyOrders` and
+`dailyMeta`. It does **not** feed machine queues, routing, completion status,
+purchasing or inventory. Do not broaden that boundary without an explicit
+product decision.
 
 ### Machines: CNC 2 and CNC 3 are gone, FMC 1 and FMC 2 replaced them
 
@@ -283,6 +287,11 @@ js/views/staging.js  (190)  Staging — an overlay on the rolling lines
 js/views/rush.js     (250)  rush dialog + Rush page
 js/views/backorders.js      shared back-order dialog + operational chase list
 js/views/shiftupdate.js(548) Shift Update write/read page
+js/import-daily.js          narrow parser for the separate `Daily Sched` sheet
+js/views/schedule.js        date-filtered Daily Schedule grouped by project
+js/views/projects.js        project/job-code/colour/series directory
+js/views/resources.js       downloadable internal form library
+js/views/employees.js       local employee list and current-device selector
 js/views/dies.js            unified assembly/profile Engineering Lookup
 js/views/die-launcher.js    lightweight lazy entry from production rows
 js/views/routing.js  (156)  per-line routing + paperwork, and the rules
@@ -297,9 +306,10 @@ tools/extract-listing-thumbs.py Listing thumbnails → thumbs.json (gap filler)
 `js/views/centre.js` is parameterised by centre — `makeCentreView('FOM')`.
 All four centre pages are that one file with different data.
 
-**Twelve nav pages:** Overview · Rolling · FOM · CNC & FMC · Multi Punch · Jobs
-· Today · Staging · Rush · Back Orders · Engineering Lookup · Shift Update.
-Setup is the header gear rather than another operational page.
+**Sixteen nav pages:** Overview · Rolling · FOM · CNC & FMC · Multi Punch ·
+Jobs · Today · Daily Schedule · Projects · Staging · Rush · Back Orders · Forms
+· Employees · Engineering Lookup · Shift Update. Setup is the header gear
+rather than another operational page.
 
 `Cutting-Tracker.html` is deliberately large because it contains the full
 24 MB extrusion image library as well as every module and font. It remains the
@@ -316,7 +326,7 @@ npm run build                # regenerate Cutting-Tracker.html
 npm run build:site           # assemble the modular hosted artifact in _site
 npm test                     # the complete release gate below
 
-node test/machines-check.mjs   # parses both workbooks, prints what came out
+node test/machines-check.mjs   # parses the machine workbooks, prints what came out
 node test/app-check.mjs        # full E2E walk of every page  (~2 min)
 node test/cloud-check.mjs      # two devices vs a mock cloud — do they converge?
 node test/routing-check.mjs    # every leaf of the routing SOP, then real data
@@ -328,8 +338,10 @@ node build.mjs && node test/standalone-check.mjs   # same over file://
 `npm test` runs every check before Pages can publish. Tests find Playwright's
 installed Chromium automatically, or use `PLAYWRIGHT_CHROMIUM_PATH`. Public CI
 generates sanitized XLSX schedules with every required sheet and edge case;
-to run the private real-count assertions, set `BV_ROLLING_WORKBOOK` and
-`BV_CNC_WORKBOOK` to the two real files. No customer data is committed.
+to run the private real-count assertions, set `BV_ROLLING_WORKBOOK`,
+`BV_CNC_WORKBOOK`, and optionally `BV_DAILY_WORKBOOK` to the real files. When
+the third variable is absent, tests generate a sanitized Daily Schedule
+workbook. No customer data is committed.
 
 `test/visual-qa.mjs` is the one to run after any CSS change. It does not compare
 screenshots — it **measures the rendered page**: real contrast ratios on actual
@@ -364,8 +376,9 @@ with separate localStorage as two people and asserts they converge.
   fixture is sanitized for exactly this reason; sample workbooks stay outside
   the repo.
 - **Whether the schedules have been imported into the live app is unconfirmed.**
-  Dragging both workbooks into Setup on any one synced device pushes `base` to
-  the cloud and every other device picks it up.
+  Importing all three workbooks in Setup on any one synced device pushes the
+  machine `base` plus the separate Daily Schedule state to the cloud and every
+  other device picks it up.
 - **Works offline as a PWA.** `sw.js` is network-first with an offline
   fallback; its cache name is stamped with the deploying commit, so a deploy
   retires the previous cache. An open tab gets an update *toast with a button* —

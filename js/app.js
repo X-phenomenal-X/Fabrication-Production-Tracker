@@ -58,6 +58,10 @@ function lazyView(load, exportName, label) {
 }
 
 const renderDies = lazyView(() => import('./views/dies.js'), 'renderDies', 'engineering lookup');
+const renderSchedule = lazyView(() => import('./views/schedule.js'), 'renderSchedule', 'Daily Schedule');
+const renderProjects = lazyView(() => import('./views/projects.js'), 'renderProjects', 'project directory');
+const renderResources = lazyView(() => import('./views/resources.js'), 'renderResources', 'department forms');
+const renderEmployees = lazyView(() => import('./views/employees.js'), 'renderEmployees', 'employee list');
 
 // One page per work centre, so an operator opens their own machine's queue
 // instead of scrolling past everyone else's.
@@ -78,9 +82,13 @@ const TABS = [
      time — 201 of the 272 live work orders touch more than one centre. */
   { key: 'jobs', label: 'Jobs', kind: 'tool', icon: 'job', render: renderJobs },
   { key: 'today', label: 'Today', kind: 'tool', icon: 'calendar', render: renderToday },
+  { key: 'schedule', label: 'Daily Schedule', short: 'Schedule', kind: 'tool', icon: 'calendar', render: renderSchedule },
+  { key: 'projects', label: 'Projects', kind: 'tool', icon: 'job', render: renderProjects },
   { key: 'staging', label: 'Staging', short: 'Stage', kind: 'tool', icon: 'staging', render: renderStaging },
   { key: 'rush', label: 'Rush', kind: 'tool', icon: 'bolt', render: renderRush },
   { key: 'backorders', label: 'Back Orders', short: 'B/O', kind: 'tool', icon: 'alert', render: renderBackOrders },
+  { key: 'resources', label: 'Forms', kind: 'tool', icon: 'file', render: renderResources },
+  { key: 'employees', label: 'Employees', kind: 'tool', icon: 'users', render: renderEmployees },
   { key: 'dies', label: 'Engineering Lookup', short: 'Lookup', kind: 'tool', icon: 'search', render: renderDies },
   { key: 'shift', label: 'Shift Update', short: 'Shift', kind: 'tool', icon: 'clipboard', render: renderShiftUpdate },
   { key: 'setup', label: 'Setup', kind: 'tool', icon: 'gear', render: renderData },

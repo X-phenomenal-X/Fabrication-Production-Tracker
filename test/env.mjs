@@ -13,10 +13,16 @@ export function workbookPaths() {
   const explicit = {
     rolling: process.env.BV_ROLLING_WORKBOOK,
     cnc: process.env.BV_CNC_WORKBOOK,
+    daily: process.env.BV_DAILY_WORKBOOK,
   };
   if (explicit.rolling && explicit.cnc
       && fs.existsSync(explicit.rolling) && fs.existsSync(explicit.cnc)) {
-    return { ...explicit, synthetic: false };
+    const fixture = ensureWorkbookFixtures();
+    return {
+      ...explicit,
+      daily: explicit.daily && fs.existsSync(explicit.daily) ? explicit.daily : fixture.daily,
+      synthetic: false,
+    };
   }
 
   const old = '/root/.claude/uploads/042835a0-704b-5601-bc20-4ed82d27578f';
@@ -25,7 +31,7 @@ export function workbookPaths() {
     cnc: `${old}/bae855fd-CNC_Schedule_Rev_E.xlsx`,
   };
   if (fs.existsSync(legacy.rolling) && fs.existsSync(legacy.cnc)) {
-    return { ...legacy, synthetic: false };
+    return { ...legacy, daily: ensureWorkbookFixtures().daily, synthetic: false };
   }
   return ensureWorkbookFixtures();
 }

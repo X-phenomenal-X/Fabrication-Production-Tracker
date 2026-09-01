@@ -86,6 +86,10 @@ if (!marked) {
         + ' — every first visit would download it in the background');
     }
   }
+  const pdfs = precache.filter((rel) => rel.endsWith('.pdf'));
+  if (pdfs.length) {
+    fail(`blank PDFs are in the offline shell (${pdfs.join(', ')}) — forms should cache only after first use`);
+  }
 
   const shell = precache.reduce((n, rel) => n + (sizeOf[rel] || 0), 0);
   note(`offline shell: ${precache.length} assets`);

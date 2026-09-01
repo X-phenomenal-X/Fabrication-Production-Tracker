@@ -12,6 +12,7 @@ import { ROOT, workbookPaths, chromiumOptions } from './env.mjs';
 const books = workbookPaths();
 const ROLLING = books.rolling;
 const CNC = books.cnc;
+const DAILY = books.daily;
 const SHOT = path.join(ROOT, 'test', 'screens');
 
 const RETIRED = ['orders', 'wip', 'prep', 'screens', 'progress', 'material', 'history',
@@ -112,7 +113,7 @@ step('tabs: ' + tabs.join(', '));
 const setupGear = await page.$$eval('.hdr-setup', (ns) => ns.map((n) => n.getAttribute('aria-label')));
 step('setup control: ' + JSON.stringify(setupGear));
 if (setupGear.length !== 1) throw new Error('Setup is not reachable from the header');
-if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Staging,Rush,Back Orders,Engineering Lookup,Shift Update') {
+if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Daily Schedule,Projects,Staging,Rush,Back Orders,Forms,Employees,Engineering Lookup,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -164,10 +165,12 @@ const retiredPurchasing = await page.evaluate(() => import('/js/store.js').then(
 step('retired purchasing cleanup: ' + JSON.stringify(retiredPurchasing));
 if (Object.values(retiredPurchasing).some(Boolean)) throw new Error('retired purchasing data survived upgrade');
 
-// import both workbooks
+// Import the two machine workbooks and the separate Daily Schedule workbook.
 await page.click('.hdr-setup');
 await page.waitForSelector('.drop');
-for (const [label, file] of [['Rolling workbook', ROLLING], ['CNC workbook', CNC]]) {
+for (const [label, file] of [
+  ['Rolling workbook', ROLLING], ['CNC workbook', CNC], ['Daily Schedule workbook', DAILY],
+]) {
   const ch = page.waitForEvent('filechooser');
   await page.click(`.drop:has-text("${label}") button`);
   await (await ch).setFiles(file);
@@ -178,6 +181,51 @@ for (const [label, file] of [['Rolling workbook', ROLLING], ['CNC workbook', CNC
   await page.waitForSelector('dialog', { state: 'detached' });
 }
 await page.screenshot({ path: path.join(SHOT, 'setup.png'), fullPage: true });
+
+await gotoTab('Daily Schedule');
+await page.waitForSelector('.schedule-machine');
+const daily = await page.evaluate(() => ({
+  projects: document.querySelectorAll('.schedule-machine').length,
+  rows: document.querySelectorAll('.schedule-row').length,
+  source: document.querySelector('.centre-sub')?.textContent || '',
+}));
+step('daily schedule: ' + JSON.stringify(daily));
+if (!daily.projects || !daily.rows || !/Daily_Schedule_SANITIZED/.test(daily.source)) {
+  throw new Error('separate Daily Schedule did not render: ' + JSON.stringify(daily));
+}
+await page.click('.daily-schedule .print-action');
+await page.waitForTimeout(20);
+const dailyPrint = await page.evaluate(() => window.__printCaptures.at(-1));
+if (!dailyPrint?.title.startsWith('Daily Schedule —') || !dailyPrint.rows) {
+  throw new Error('Daily Schedule print sheet is incomplete: ' + JSON.stringify(dailyPrint));
+}
+
+await gotoTab('Projects');
+await page.waitForSelector('.project-card');
+const projectDirectory = await page.evaluate(() => ({
+  cards: document.querySelectorAll('.project-card').length,
+  jobs: document.querySelectorAll('.project-facts .chip.work').length,
+  colors: document.querySelectorAll('.project-color').length,
+}));
+step('projects: ' + JSON.stringify(projectDirectory));
+if (!projectDirectory.cards || !projectDirectory.jobs || !projectDirectory.colors) {
+  throw new Error('project directory is incomplete: ' + JSON.stringify(projectDirectory));
+}
+
+await gotoTab('Forms');
+await page.waitForSelector('.resource-card');
+const forms = await page.$$eval('.resource-card a.resource-download', (links) =>
+  links.map((link) => link.getAttribute('href')));
+step('forms: ' + forms.join(', '));
+if (forms.length !== 3 || forms.some((href) => !href?.endsWith('.pdf'))) {
+  throw new Error('forms hub does not expose three PDFs');
+}
+
+await gotoTab('Employees');
+await page.waitForSelector('.employee-card');
+if (!await page.locator('.employee-card').filter({ hasText: 'Abhay' }).count()) {
+  throw new Error('employee directory does not use the shared people list');
+}
 
 // The cover is an operational briefing, not a decorative landing page: it
 // must expose real work and every shortcut must remain a full-size control.
