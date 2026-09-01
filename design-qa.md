@@ -145,4 +145,71 @@ completion/Undo, rapid navigation, swipe-to-Done, and drawing zoom.
 - [x] Console errors checked: none.
 - [x] Visual automation: passed.
 
+## 1 Sep 2026 — mobile Done-action contrast regression
+
+### Comparison target and normalization
+
+- Source visual truth: `C:\Users\abhay.badhwar\.codex\codex-remote-attachments\01a0409f-1a16-7bb0-ac5e-caa8b26cef14\5399620B-1095-4CC3-B852-A942FF30AB4D\1-Photo-1.jpg`.
+- The source was not copied into the public repository because its work order
+  and project are production-identifying data.
+- Browser-rendered implementation: `qa/done-action-mobile-light.png`.
+- Privacy-safe focused comparison: `qa/done-action-focus-comparison.png`.
+- A combined full-view comparison was opened and inspected in the browser but
+  was not retained because it reproduces the production-identifying source.
+- Source pixels: 590×1280; supplied iPhone screenshot, approximately 390×844
+  CSS px at 1.51× density, including 82 source pixels of device chrome.
+- Implementation pixels: 375×812 from an Edge content viewport under a
+  temporary 390×844 browser override.
+- Normalization: both app surfaces were displayed at 375 px wide; the source's
+  device-chrome region was cropped before the full-view comparison. The
+  focused action crops were aligned independently to avoid content and density
+  differences elsewhere on the dashboard.
+- State: light theme, Overview, Running Now line in progress. Production and
+  sanitized work-order values differ intentionally; the component state,
+  breakpoint, hierarchy and action copy are the comparison targets.
+
+### Findings and comparison history
+
+#### Pass 1 — blocked
+
+- P1 — The `DONE` label used green ink over a green gradient. The pale left
+  stop reduced foreground/background separation until the label visually
+  merged into the button. `Mark complete` used a different dark ink, so the
+  action also lacked one coherent filled-control treatment.
+- Fix — `.overview-done` now uses the semantic `--ok` fill with `--on-fill`
+  ink. The check medallion reverses those same tokens. Both label lines inherit
+  the high-contrast foreground, and the decorative wash uses only
+  `--on-fill-soft` behind a raised content layer.
+
+#### Pass 2 — passed
+
+- The combined comparison shows the corrected action as one solid completion
+  control with a clearly legible `DONE`, secondary label and check medallion.
+- Measured light-theme label and medallion contrast: 5.45:1.
+- Measured dark-theme label and medallion contrast: 9.87:1.
+- Done committed, exposed the Undo action, and restored the running line.
+- Browser console errors/warnings: none.
+
+### Required fidelity surfaces
+
+- Fonts and typography: bundled IBM Plex weights, casing, sizes and label
+  hierarchy are unchanged; the fix changes only semantic foreground tokens.
+- Spacing and layout rhythm: the reported width, height, medallion alignment,
+  section rail and surrounding card spacing are unchanged.
+- Colors and visual tokens: the mixed green gradient was replaced by the
+  existing semantic filled-surface pairing, preserving completion green while
+  clearing WCAG AA in both themes.
+- Image quality and assets: no image or icon asset changed; the existing check
+  icon remains crisp and now sits on an inverse token fill.
+- Copy and content: `DONE` and `Mark complete` are unchanged.
+
+### Implementation checklist
+
+- [x] Reported phone screenshot opened and inspected.
+- [x] Corrected phone implementation captured in light and dark themes.
+- [x] Full view and focused action compared in one combined visual.
+- [x] Label and medallion contrast measured in both themes.
+- [x] Done and micro-Undo interaction verified.
+- [x] Console checked: no errors or warnings.
+
 final result: passed

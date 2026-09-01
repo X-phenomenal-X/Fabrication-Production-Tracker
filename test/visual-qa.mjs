@@ -633,7 +633,8 @@ const CONTRAST = `(() => {
   };
   const out = [];
   const seen = new Set();
-  for (const sel of ['button.primary', '.badge-rush', '.badge-bo', '.badge-moved', '.badge-edited', '.die',
+  for (const sel of ['button.primary', '.overview-done strong', '.overview-done small', '.overview-done-mark',
+                     '.badge-rush', '.badge-bo', '.badge-moved', '.badge-edited', '.die',
                      '.cstat b', '.cstat i', '.dgroup-label', '.line-where', '.muted',
                      '.chip', '.seg-btn.on', '.nowrun-head', '.line-id .mono']) {
     for (const n of Array.from(document.querySelectorAll(sel)).slice(0, 3)) {
@@ -665,6 +666,9 @@ for (const theme of ['light', 'dark']) {
   await page.goto(`${base}/#fom`);
   await page.waitForSelector('.line');
   const pairs = await page.evaluate(CONTRAST);
+  await page.goto(`${base}/#overview`);
+  await page.waitForSelector('.overview-done');
+  pairs.push(...(await page.evaluate(CONTRAST)).filter((pair) => pair.sel.startsWith('.overview-done')));
   const bad = pairs.filter((p) => p.r < p.need);
   if (bad.length) {
     for (const b of bad) {
