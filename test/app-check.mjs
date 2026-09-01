@@ -1805,10 +1805,19 @@ const stillListed = await page.evaluate((k) => import('/js/model.js').then((m) =
   || m.stagingQueue().staged.some((r) => r.key === k)), startedKey);
 if (stillListed) throw new Error('a started line is still on the staging page');
 
-// It shows on the rolling queue, so the roller knows before starting.
+// It shows on that line's rolling queue, so the roller knows before starting.
+// Staging covers both rolling machines; checking whichever sub-tab happened to
+// be open made this assertion depend on unrelated navigation earlier in the
+// suite. Focus the exact stable record that was staged.
+const stagedTab = await page.evaluate(async (key) => {
+  const M = await import('/js/model.js');
+  const C = await import('/js/views/centre.js');
+  const task = M.taskByKey(key);
+  return task ? C.focusCentreTask(task) : null;
+}, stagedRec.key);
+if (stagedTab !== 'rolling') throw new Error(`staged record routed to ${stagedTab || 'nothing'}, not Rolling`);
 await gotoTab('Rolling');
-await page.fill('.centre-filters input[type="search"]', stageWo);
-await page.waitForTimeout(300);
+await page.waitForSelector('.line.active .badge-staged');
 const rollerSees = await page.$$eval('.line', (ns) => ns.map((n) => !!n.querySelector('.badge-staged')));
 step('staged badge on the rolling queue: ' + JSON.stringify(rollerSees));
 if (!rollerSees.some(Boolean)) throw new Error('a staged line does not show as staged to the roller');
