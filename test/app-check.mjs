@@ -1663,7 +1663,7 @@ if (new Set(opened.headings).size !== opened.headings.length) {
    that has not finished it — and that page has to actually show the line. A
    finished line is hidden by default on a centre page, so following a link to
    one used to land on an empty queue with a search term in the box. */
-const jumped = await page.evaluate(async () => {
+const jumpTarget = await page.evaluate(async () => {
   const M = await import('/js/model.js');
   const open = document.querySelector('.jcard.open');
   const wo = open.querySelector('.mono.strong').textContent.replace(/^W\/O\s*/, '').trim();
@@ -1671,15 +1671,22 @@ const jumped = await page.evaluate(async () => {
   const die = dieRow.querySelector('.mono.strong').textContent.trim();
   const lines = M.jobFor(wo).dies.find((d) => d.die === die).lines;
   const want = lines.find((l) => l.status.key !== 'DONE') || lines[lines.length - 1];
-  dieRow.click();
-  await new Promise((r) => setTimeout(r, 400));
-  return {
-    wo, die, wantMachine: want.machine, wantStatus: want.status.key,
+  return { wo, die, wantMachine: want.machine, wantStatus: want.status.key };
+});
+await page.locator('.jcard.open .jdie:not(.head)').first().click();
+/* View-transition setup is asynchronous and can take longer on a shared CI
+   runner than on a developer machine. Wait for the promised destination,
+   rather than treating a fixed animation delay as evidence of navigation. */
+await page.waitForFunction((wo) =>
+  location.hash !== '#jobs'
+    && document.querySelector('.line.active .line-id .mono')?.textContent.trim() === wo,
+  jumpTarget.wo);
+const jumped = await page.evaluate((target) => ({
+    ...target,
     hash: location.hash.slice(1),
     lines: document.querySelectorAll('.line').length,
     focused: document.querySelector('.line.active .line-id .mono')?.textContent.trim() || null,
-  };
-});
+  }), jumpTarget);
 step(`clicking die ${jumped.die} of ${jumped.wo} → #${jumped.hash}, `
   + `${jumped.lines} lines, focused ${jumped.focused} (wanted ${jumped.wantMachine}/${jumped.wantStatus})`);
 if (!jumped.lines) throw new Error('following a die from the jobs page landed on an empty queue');
