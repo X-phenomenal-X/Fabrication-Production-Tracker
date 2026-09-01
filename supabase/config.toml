@@ -1,0 +1,4 @@
+[functions.photo-to-todos]
+# The tracker does not currently use Supabase Auth. This function performs its
+# own department access-key check before it spends any OpenAI allowance.
+verify_jwt = false

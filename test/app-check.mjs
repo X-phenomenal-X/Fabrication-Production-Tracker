@@ -680,7 +680,9 @@ step('rush history entries: ' + rushHist);
 if (!rushHist) throw new Error('rush changes were not recorded in history');
 
 await gotoTab('Rush');
-await page.waitForSelector('.rush-line');
+// Both phone and desk rows exist by design; wait on the surface visible at
+// this test's 1440px viewport rather than the first hidden mobile row.
+await page.waitForSelector('.rush-wide .rush-line');
 const rushBuckets = await page.$$eval('.dgroup-label', (ns) => ns.map((n) => n.textContent.trim()));
 const rushCount = await page.$$eval('.rush-line', (ns) => ns.length);
 step(`rush page — buckets [${rushBuckets.join(' | ')}] · ${rushCount} lines`);
@@ -2019,6 +2021,84 @@ const board = await page.$$eval('.att', (ns) => ns.map((n) =>
   n.querySelector('.att-k').textContent + '=' + n.querySelector('.att-n').textContent));
 step('today board: ' + board.join(' '));
 if (board.length !== 5) throw new Error('the today board lost a card');
+
+// Photo analysis is a lazy, reviewed path into the same list — never a second
+// store and never a place where the image itself can survive. The network is
+// mocked; production credentials and real photos do not belong in this suite.
+const photoModuleBefore = served.includes('/js/photo-todos.js');
+if (photoModuleBefore) throw new Error('Photo to To-Do loaded before its button was used');
+await page.evaluate(() => {
+  localStorage.setItem('bv.cutting.cloud', JSON.stringify({
+    url: 'https://photo-test.supabase.co', key: 'sb_publishable_test', site: 'cutting',
+  }));
+  localStorage.setItem('bv.cutting.photo-todo.access.v1', 'department-test-code');
+});
+let photoRequest = null;
+await page.route('https://photo-test.supabase.co/functions/v1/photo-to-todos', async (route) => {
+  const request = route.request();
+  photoRequest = {
+    key: request.headers()['x-photo-todo-key'],
+    apikey: request.headers().apikey,
+    body: request.postDataJSON(),
+  };
+  await route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({
+      summary: 'I found three possible actions. One name needs checking.',
+      tasks: [
+        { text: 'Call site about W/O 29604', assignee: 'Abhay', confidence: .98,
+          evidence: 'Call site — 29604', needsReview: false },
+        { text: 'Move the S80.106 cart', assignee: null, confidence: .91,
+          evidence: 'move S80.106 cart', needsReview: false },
+        { text: 'Check die SA80-235 at FOM 2', assignee: 'Name not on crew', confidence: .62,
+          evidence: 'check SA80-235 — FOM2', needsReview: true },
+      ],
+    }),
+  });
+});
+await page.click('.photo-todo-launch');
+await page.waitForSelector('dialog.photo-todo-dialog[open] .photo-todo-pick');
+if (!served.includes('/js/photo-todos.js')) throw new Error('Photo to To-Do did not load on demand');
+const onePixelPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X7ywAAAAAElFTkSuQmCC',
+  'base64');
+await page.locator('dialog.photo-todo-dialog .photo-todo-file').nth(1).setInputFiles({
+  name: 'floor-note.png', mimeType: 'image/png', buffer: onePixelPng,
+});
+await page.waitForSelector('dialog.photo-todo-dialog .photo-todo-preview');
+await page.fill('dialog.photo-todo-dialog textarea[aria-label="Optional guidance for the photo"]',
+  'Only actions for afternoon shift');
+await page.click('dialog.photo-todo-dialog footer button.primary');
+await page.waitForSelector('dialog.photo-todo-dialog .photo-todo-candidate');
+const candidates = await page.locator('dialog.photo-todo-dialog .photo-todo-candidate').count();
+if (candidates !== 3) throw new Error(`Photo review returned ${candidates} candidates instead of 3`);
+await page.locator('dialog.photo-todo-dialog textarea[aria-label="To-Do 1 text"]')
+  .fill('Call site about W/O 29604 before 15:00');
+await page.locator('dialog.photo-todo-dialog input[aria-label="Include To-Do 2"]').uncheck();
+const addPhotoLabel = await page.textContent('dialog.photo-todo-dialog footer button.primary');
+if (!/\(2\)/.test(addPhotoLabel || '')) throw new Error('Photo review selection count did not update');
+await page.click('dialog.photo-todo-dialog footer button.primary');
+await page.waitForSelector('dialog.photo-todo-dialog', { state: 'detached' });
+const photoTodos = await page.evaluate(() => import('/js/store.js').then((m) => ({
+  rows: Object.values(m.state.todos)
+    .filter((todo) => /29604|SA80-235/.test(todo.text))
+    .map((todo) => ({ text: todo.text, assignee: todo.assignee })),
+  rawHasImage: (localStorage.getItem('bv.cutting.v1') || '').includes('data:image'),
+})));
+step('photo to To-Do: ' + JSON.stringify(photoTodos.rows));
+if (photoTodos.rows.length !== 2
+  || !photoTodos.rows.some((todo) => todo.text === 'Call site about W/O 29604 before 15:00' && todo.assignee === 'Abhay')
+  || !photoTodos.rows.some((todo) => /SA80-235/.test(todo.text) && todo.assignee == null)) {
+  throw new Error('Photo review did not save exactly the approved, edited To-Dos');
+}
+if (photoTodos.rawHasImage) throw new Error('Photo data leaked into the synced tracker state');
+if (photoRequest?.key !== 'department-test-code' || photoRequest?.apikey !== 'sb_publishable_test') {
+  throw new Error('Photo request lost its device access or Supabase gateway key');
+}
+if (!/^data:image\/jpeg;base64,/.test(photoRequest?.body?.image || '')
+  || photoRequest?.body?.guidance !== 'Only actions for afternoon shift') {
+  throw new Error('Photo request did not send the prepared image and operator guidance');
+}
 await page.screenshot({ path: path.join(SHOT, 'today.png'), fullPage: true });
 
 // Browser storage failures must be impossible to miss. A console warning is

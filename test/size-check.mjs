@@ -79,7 +79,7 @@ if (!marked) {
   const missing = precache.filter((rel) => !(rel in sizeOf));
   if (missing.length) fail(`precache lists files the build did not produce: ${missing.join(', ')}`);
 
-  const NEVER_PRECACHE = ['js/extrusion-images.js'];
+  const NEVER_PRECACHE = ['js/extrusion-images.js', 'js/photo-todos.js'];
   for (const rel of NEVER_PRECACHE) {
     if (precache.includes(rel)) {
       fail(`${rel} (${(sizeOf[rel] / MB).toFixed(1)} MB) is in the offline shell`
@@ -169,6 +169,11 @@ for (const heavy of ['js/extrusion-images.js', 'js/drawings.js', 'js/die-drawing
   }
 }
 note('heavy modules stayed behind their lazy boundaries on first load');
+if (got.has('/js/photo-todos.js')) {
+  fail('js/photo-todos.js is fetched on first load — an online-only feature lost its lazy boundary');
+} else {
+  note('Photo to To-Do stayed behind its on-demand boundary');
+}
 
 console.log(errors.length ? '\nERRORS:\n  ' + errors.join('\n  ') : '\nERRORS: none');
 process.exit(errors.length ? 1 : 0);

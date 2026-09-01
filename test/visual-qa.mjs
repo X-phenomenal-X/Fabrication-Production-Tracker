@@ -1427,6 +1427,79 @@ for (const theme of ['light', 'dark']) {
   await ctx.close();
 }
 
+/* Photo review is a bottom sheet on a phone. The image can be tall and the
+   candidate list can grow, so the body — not the final approval action — is
+   what scrolls. Every editable/selection control keeps the 44px floor. */
+{
+  const ctx = await browser.newContext({ colorScheme: 'dark', viewport: { width: 390, height: 844 }, hasTouch: true });
+  const page = await ctx.newPage();
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+    localStorage.setItem('bv.cutting.cloud', JSON.stringify({
+      url: 'https://photo-visual.supabase.co', key: 'sb_publishable_visual', site: 'cutting',
+    }));
+    localStorage.setItem('bv.cutting.photo-todo.access.v1', 'visual-code');
+  }, fixture);
+  await page.route('https://photo-visual.supabase.co/functions/v1/photo-to-todos', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({
+      summary: 'I found three actions. The last line is faint, so check its wording.',
+      tasks: [
+        { text: 'Stage W/O 29604 at Rolling Auto', assignee: 'Abhay', confidence: .98,
+          evidence: 'stage 29604 — auto', needsReview: false },
+        { text: 'Bring drawing S80.106 to FOM 2', assignee: null, confidence: .91,
+          evidence: 'drawing S80.106 FOM2', needsReview: false },
+        { text: 'Check cart beside Multi Punch', assignee: null, confidence: .61,
+          evidence: 'check cart — punch', needsReview: true },
+      ],
+    }),
+  }));
+  await page.goto(`${base}/#today`);
+  await page.click('.photo-todo-launch');
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X7ywAAAAAElFTkSuQmCC',
+    'base64');
+  await page.locator('.photo-todo-file').nth(1).setInputFiles({
+    name: 'shift-whiteboard.png', mimeType: 'image/png', buffer: png,
+  });
+  await page.waitForSelector('.photo-todo-preview');
+  await page.click('dialog.photo-todo-dialog footer button.primary');
+  await page.waitForSelector('.photo-todo-candidate');
+  await page.waitForTimeout(120);
+  const photo = await page.evaluate(() => {
+    const dlg = document.querySelector('dialog.photo-todo-dialog');
+    const box = dlg?.getBoundingClientRect();
+    const controls = [...dlg.querySelectorAll('button, input:not([type="hidden"]), select, textarea')]
+      .filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.width && rect.height && getComputedStyle(node).display !== 'none';
+      })
+      .map((node) => {
+        let rect = node.getBoundingClientRect();
+        if (node.type === 'checkbox') rect = node.closest('label').getBoundingClientRect();
+        return { w: Math.round(rect.width), h: Math.round(rect.height), name: node.getAttribute('aria-label') || node.textContent.trim() };
+      });
+    const footer = dlg.querySelector('footer')?.getBoundingClientRect();
+    return {
+      x: Math.round(box?.x || 0), right: Math.round(box?.right || 0), top: Math.round(box?.top || 0), bottom: Math.round(box?.bottom || 0),
+      candidates: dlg.querySelectorAll('.photo-todo-candidate').length,
+      footerVisible: !!footer && footer.top >= box.top && footer.bottom <= box.bottom + 1,
+      minControl: Math.min(...controls.map((control) => Math.min(control.w, control.h))),
+      overflow: dlg.scrollWidth - dlg.clientWidth,
+    };
+  });
+  if (photo.candidates !== 3) fail(`photo review: ${photo.candidates} candidates, expected 3`);
+  if (photo.x < -1 || photo.right > 391 || photo.top < -1 || photo.bottom > 845) {
+    fail(`photo review: dialog escapes phone viewport ${JSON.stringify(photo)}`);
+  }
+  if (!photo.footerVisible) fail('photo review: approval footer is not pinned inside the dialog');
+  if (photo.minControl < 44) fail(`photo review: smallest control is ${photo.minControl}px`);
+  if (photo.overflow > 1) fail(`photo review: dialog scrolls sideways by ${photo.overflow}px`);
+  await page.screenshot({ path: path.join(SHOT, 'photo-todo-phone-dark.png') });
+  note(`photo review: ${photo.candidates} editable candidates, ${photo.minControl}px control floor, pinned approval`);
+  await ctx.close();
+}
+
 await browser.close();
 server.close();
 

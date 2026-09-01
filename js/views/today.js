@@ -69,7 +69,7 @@ function todoRow(item, ref, rerender) {
     }, icon('x', { size: 15 })));
 }
 
-function listPanel(ref, rerender) {
+function listPanel(ref, rerender, go) {
   const { open, done, carried } = openTodos(ref);
 
   const input = el('input', {
@@ -91,6 +91,27 @@ function listPanel(ref, rerender) {
     rerender();
   }
 
+  async function photoToTodo(origin) {
+    const button = origin?.currentTarget;
+    if (button) button.disabled = true;
+    try {
+      const { openPhotoTodoDialog } = await import('../photo-todos.js');
+      openPhotoTodoDialog({
+        ref,
+        people,
+        defaultAssignee: who.value || null,
+        rerender,
+        go,
+        origin: button,
+      });
+    } catch (error) {
+      toast('Photo to To-Do could not open. Connect once and try again.');
+      console.error('Photo to To-Do failed to load', error);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
   return el('div.panel', {},
     el('header', {},
       icon('list', { size: 14 }),
@@ -104,7 +125,11 @@ function listPanel(ref, rerender) {
       el('div.todo-add', {},
         input,
         who,
-        el('button.primary', { onclick: add }, icon('plus', { size: 15 }), 'Add')),
+        el('button.primary', { onclick: add }, icon('plus', { size: 15 }), 'Add'),
+        el('button.photo-todo-launch', {
+          onclick: photoToTodo,
+          title: 'Turn a photo of notes or a whiteboard into reviewed To-Dos',
+        }, icon('camera', { size: 16 }), 'Photo to To-Do')),
 
       open.length || done.length
         ? el('ul.list.todo-list', {},
@@ -184,7 +209,7 @@ export function renderToday(rerender, go) {
   // The list works with no schedule loaded — chasing material does not depend
   // on a workbook — so only the derived half waits on an import.
   if (!hasTasks()) {
-    return el('div.centre', {}, head, listPanel(ref, rerender),
+    return el('div.centre', {}, head, listPanel(ref, rerender, go),
       el('div.panel', { style: { marginTop: '16px' } }, el('div.empty', {},
         el('div.empty-icon', {}, icon('upload', { size: 28 })),
         el('h3', {}, 'No schedule loaded yet'),
@@ -199,7 +224,7 @@ export function renderToday(rerender, go) {
   return el('div.centre', {},
     head,
 
-    listPanel(ref, rerender),
+    listPanel(ref, rerender, go),
 
     el('div.panel', { style: { marginTop: '16px' } },
       el('header', {},

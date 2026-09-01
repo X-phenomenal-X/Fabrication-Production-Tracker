@@ -257,6 +257,8 @@ const ICON_PATHS = {
   extrusion: 'M4 4h16v5h-5v6h5v5H4v-5h5V9H4zM9 9h6v6H9z',
   clipboard: 'M9 5h6M9 3h6a2 2 0 0 1 2 2v1h2a2 2 0 0 1 2 2v13H3V8a2 2 0 0 1 2-2h2V5a2 2 0 0 1 2-2zM8 12h8M8 16h8',
   print: 'M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6zM18 12h.01',
+  camera: 'M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v10H2V9a2 2 0 0 1 2-2zM12 10a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+  sparkles: 'M12 3l1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2zM19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7zM5 14l.8 2.2L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-.8z',
 };
 
 export function icon(name, { size = 16, cls = '' } = {}) {

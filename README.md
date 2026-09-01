@@ -614,6 +614,35 @@ attached to the shift rather than to a job.
 The list works with no schedule loaded; only the derived half waits on an
 import.
 
+### Photo to To-Do
+
+The Today list can turn a **camera photo or an existing image** of a handwritten
+list, whiteboard or printed floor note into proposed To-Dos. It is a review
+workflow, not an automatic import:
+
+1. Take or choose a JPEG, PNG or WebP image.
+2. Optionally tell the assistant what part of the note matters.
+3. Review the short conversation summary and edit, assign, include or exclude
+   every proposed item.
+4. **Add selected** writes only those approved strings through the existing
+   `addTodo()` path.
+
+The browser scales the photo to at most 1600 px before upload. The image exists
+only in the open dialog and one Edge Function request; it is never placed in
+`state`, localStorage, the shared JSON file, Supabase tables or a printout. The
+OpenAI request sets `store: false`. Closing the dialog drops the preview and
+result. The feature is online-only, while typed To-Dos remain fully offline.
+
+Model output is constrained to twelve concise actions. Unknown names stay
+unassigned, uncertain text is marked **Check wording**, and the prompt forbids
+invented quantities, dates, routes and completion. It also explicitly excludes
+purchasing and material-order creation. Nothing reaches the shared list until
+an operator approves it.
+
+The client module is dynamically imported on the first press and excluded from
+the PWA precache. Devices that never use photo analysis do not pay for it on
+first load.
+
 ## Rush
 
 Nothing in either workbook says "this one first" — a rush is always somebody
@@ -931,6 +960,33 @@ same board is open on a phone on the floor and a PC in the office at once.
    A legacy anon key also works. Never paste a secret or `service_role` key
    into the browser app.
 4. Do the same on every phone and PC, with the same **site name**.
+
+### Enabling Photo to To-Do
+
+Photo analysis uses the same Supabase project, but OpenAI credentials stay in a
+server-side Edge Function — never paste an OpenAI API key into the browser app.
+The source is in `supabase/functions/photo-to-todos/index.ts`.
+
+Create a long department access code and set the three required secrets:
+
+```powershell
+supabase secrets set OPENAI_API_KEY="..." `
+  PHOTO_TODO_ACCESS_KEY="a-long-random-department-code" `
+  PHOTO_TODO_ALLOWED_ORIGINS="https://x-phenomenal-x.github.io"
+supabase functions deploy photo-to-todos --no-verify-jwt
+```
+
+For a custom Pages domain, use its exact origin (scheme plus host). Multiple
+origins are comma-separated. `OPENAI_VISION_MODEL` is optional and defaults to
+`gpt-5.6-luna`. The function rejects other browser origins, requires the
+department access code before spending model allowance, caps image/request
+size, returns `Cache-Control: no-store`, and never writes to the tracker table.
+
+On first use each device asks for the department access code. That code is kept
+in a separate device-only localStorage entry, `bv.cutting.photo-todo.access.v1`;
+it is not part of either synced cloud document. The public Supabase publishable
+key is still sent as the gateway `apikey`; secret and `service_role` keys never
+belong in the PWA.
 
 The snapshot is pushed as **two documents, not one**:
 
