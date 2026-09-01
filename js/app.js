@@ -98,13 +98,19 @@ if (!TABS.some((t) => t.key === current)) current = 'overview';
 const root = document.getElementById('app');
 let scheduled = false;
 let pageMotion = true;
+let navigationRevision = 0;
 
 function go(key) {
+  const revision = ++navigationRevision;
   const changing = key !== current;
   const sharedTransition = changing && !reducedMotion()
     && typeof document.startViewTransition === 'function';
   if (changing) pageMotion = !sharedTransition;
   const update = () => {
+    // Chromium may invoke an older view-transition callback after a newer tab
+    // tap has already committed. Only the latest navigation may change the
+    // page; transition decoration is never allowed to send an operator back.
+    if (revision !== navigationRevision) return;
     current = key;
     location.hash = key;
     // startViewTransition invokes this after the original click has finished,
@@ -563,6 +569,9 @@ window.addEventListener('resize', () => {
 window.addEventListener('hashchange', () => {
   const k = location.hash.slice(1);
   if (TABS.some((t) => t.key === k) && k !== current) {
+    // A direct hash change (bookmark, back/forward or external link) also wins
+    // over any view-transition callback that has not run yet.
+    navigationRevision += 1;
     current = k;
     pageMotion = true;
     scheduleRender();

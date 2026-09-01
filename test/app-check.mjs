@@ -1613,13 +1613,16 @@ if (!jobList.spanning) throw new Error('no job spans more than one centre — th
 /* Expanding one has to agree with the model, station by station. The rail is
    the whole point: a station is a count, not a status word, because a station
    with nine of twelve dies cut is neither started nor finished. */
-const opened = await page.evaluate(async () => {
-  const M = await import('/js/model.js');
+const openedWo = await page.evaluate(() => {
   const cards = [...document.querySelectorAll('.jcard')];
   const card = cards.find((n) => /stations/.test(n.textContent));
   const wo = card.querySelector('.mono.strong').textContent.replace(/^W\/O\s*/, '').trim();
   card.querySelector('.jhead').click();
-  await new Promise((r) => setTimeout(r, 250));
+  return wo;
+});
+await page.waitForSelector('.jcard.open');
+const opened = await page.evaluate(async (wo) => {
+  const M = await import('/js/model.js');
   const open = document.querySelector('.jcard.open');
   const job = M.jobFor(wo);
   return {
@@ -1636,7 +1639,7 @@ const opened = await page.evaluate(async () => {
     // same answer, and both are read off this grid.
     absent: open.querySelectorAll('.jcell.none').length,
   };
-});
+}, openedWo);
 step(`job ${opened.wo}: rail ${opened.railShown.join(' → ')}, `
   + `${opened.diesShown} dies, columns ${opened.headings.join('/')}`);
 if (opened.railShown.join('|') !== opened.railModel.join('|')) {
