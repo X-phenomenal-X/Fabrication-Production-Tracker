@@ -1,6 +1,7 @@
 /* Tiny DOM helpers. Everything renders from plain data, no framework. */
 
 import { BRAND_MARK_SVG } from './brand-mark.js';
+import { MOTION, reducedMotion } from './motion.js';
 
 export function el(tag, props = {}, ...kids) {
   const [name, ...classes] = tag.split('.');
@@ -95,7 +96,7 @@ export function confirmDialog(title, message, { confirmLabel = 'Confirm', danger
   });
 }
 
-export function modal(title, bodyNode, { actions = [], wide = false } = {}) {
+export function modal(title, bodyNode, { actions = [], wide = false, origin = null } = {}) {
   const dlg = el('dialog', wide ? { style: { maxWidth: '900px' } } : {},
     el('header', {}, title,
       el('span.spacer'),
@@ -104,9 +105,24 @@ export function modal(title, bodyNode, { actions = [], wide = false } = {}) {
     actions.length ? el('footer', {}, ...actions.map((a) =>
       el('button', { class: a.class || '', onclick: () => a.onClick(dlg) }, a.label))) : null
   );
+  const source = typeof Element !== 'undefined' && origin instanceof Element ? origin : null;
+  if (source) dlg.classList.add('dialog-origin');
   dlg.addEventListener('close', () => dlg.remove(), { once: true });
   document.body.append(dlg);
   dlg.showModal();
+  if (source && !reducedMotion() && typeof dlg.animate === 'function') {
+    requestAnimationFrame(() => {
+      const from = source.getBoundingClientRect();
+      const to = dlg.getBoundingClientRect();
+      const x = from.left + from.width / 2 - to.left;
+      const y = from.top + from.height / 2 - to.top;
+      dlg.style.transformOrigin = `${x}px ${y}px`;
+      dlg.animate([
+        { opacity: .22, transform: 'scale(.56) translateY(8px)' },
+        { opacity: 1, transform: 'none' },
+      ], { duration: MOTION.durations.dialog, easing: MOTION.spring, fill: 'both' });
+    });
+  }
   return dlg;
 }
 
@@ -260,6 +276,90 @@ export function icon(name, { size = 16, cls = '' } = {}) {
   if (name === 'play') { p.setAttribute('fill', 'currentColor'); p.setAttribute('stroke', 'none'); }
   svg.append(p);
   return svg;
+}
+
+/** Interactive engineering drawing surface. Pointer events support one-finger
+    pan and two-finger pinch; wheel and the visible controls cover desk use.
+    The source image itself is never altered, which keeps dimensions and print
+    records authoritative. */
+export function panZoomImage({ src, alt }) {
+  const img = el('img', { src, alt, draggable: false });
+  const viewport = el('div.panzoom-viewport', {
+    role: 'group',
+    'aria-label': `${alt}. Pinch or use the zoom controls to inspect the drawing.`,
+  }, img);
+  const points = new Map();
+  const state = { scale: 1, x: 0, y: 0 };
+  let gesture = null;
+
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const paint = (animate = false) => {
+    img.style.transition = animate ? `transform ${MOTION.durations.confirm}ms ${MOTION.spring}` : 'none';
+    img.style.transform = `translate3d(${state.x}px, ${state.y}px, 0) scale(${state.scale})`;
+  };
+  const reset = () => {
+    state.scale = 1; state.x = 0; state.y = 0; paint(true);
+  };
+  const zoom = (amount) => {
+    state.scale = clamp(state.scale + amount, 1, 5);
+    if (state.scale === 1) { state.x = 0; state.y = 0; }
+    paint(true);
+  };
+  const metrics = () => {
+    const all = [...points.values()];
+    if (all.length < 2) return null;
+    const [a, b] = all;
+    return {
+      distance: Math.hypot(b.x - a.x, b.y - a.y),
+      cx: (a.x + b.x) / 2,
+      cy: (a.y + b.y) / 2,
+    };
+  };
+
+  viewport.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('button')) return;
+    points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    viewport.setPointerCapture?.(event.pointerId);
+    const pinch = metrics();
+    gesture = pinch
+      ? { ...pinch, scale: state.scale, x: state.x, y: state.y }
+      : { px: event.clientX, py: event.clientY, x: state.x, y: state.y };
+  });
+  viewport.addEventListener('pointermove', (event) => {
+    if (!points.has(event.pointerId)) return;
+    points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const pinch = metrics();
+    if (pinch && gesture?.distance) {
+      state.scale = clamp(gesture.scale * (pinch.distance / Math.max(1, gesture.distance)), 1, 5);
+      state.x = gesture.x + pinch.cx - gesture.cx;
+      state.y = gesture.y + pinch.cy - gesture.cy;
+    } else if (points.size === 1 && gesture?.px != null && state.scale > 1) {
+      state.x = gesture.x + event.clientX - gesture.px;
+      state.y = gesture.y + event.clientY - gesture.py;
+    }
+    paint();
+  });
+  const end = (event) => {
+    points.delete(event.pointerId);
+    if (!points.size) gesture = null;
+    else {
+      const point = [...points.values()][0];
+      gesture = { px: point.x, py: point.y, x: state.x, y: state.y };
+    }
+  };
+  viewport.addEventListener('pointerup', end);
+  viewport.addEventListener('pointercancel', end);
+  viewport.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    zoom(event.deltaY < 0 ? .32 : -.32);
+  }, { passive: false });
+  viewport.addEventListener('dblclick', () => state.scale > 1 ? reset() : zoom(1));
+
+  viewport.append(el('div.panzoom-tools', { 'aria-label': 'Drawing zoom controls' },
+    el('button', { type: 'button', 'aria-label': 'Zoom out', onclick: () => zoom(-.5) }, icon('minus', { size: 18 })),
+    el('button', { type: 'button', 'aria-label': 'Reset drawing', onclick: reset }, icon('undo', { size: 17 })),
+    el('button', { type: 'button', 'aria-label': 'Zoom in', onclick: () => zoom(.5) }, icon('plus', { size: 18 }))));
+  return viewport;
 }
 
 /** Toast with an action, e.g. Undo. Returns the node so it can be dismissed. */

@@ -6,14 +6,14 @@ import { toast } from '../ui.js';
 
 let feature = null;
 
-export async function dieDialog(initial = '') {
+export async function dieDialog(initial = '', origin = null) {
   try {
     if (!feature) {
       toast('Loading engineering lookup…');
       feature = import('./dies.js');
     }
     const module = await feature;
-    return module.dieDialog(initial);
+    return module.dieDialog(initial, origin);
   } catch {
     feature = null;
     toast('Engineering lookup needs a connection the first time');

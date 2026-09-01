@@ -17,6 +17,7 @@ import {
   machineConfig,
 } from '../model.js';
 import { MACHINE_BY_KEY } from '../machines.js';
+import { haptic } from '../motion.js';
 
 /** A machine's name as the department has it — a renamed machine must not go
     back to its built-in label just because this page is not the centre page. */
@@ -120,6 +121,7 @@ export function rushDialog(task, rerender) {
             assignee,
             reason: reason.value,
           });
+          if (flag.checked && !resolved.on) haptic('rush');
           dlg.close();
           toast(flag.checked ? 'Marked as rush' : 'Rush cleared');
           rerender();
@@ -149,6 +151,98 @@ function bucketOf(rush, ref) {
 }
 
 let mineOnly = false;
+
+/* The desk page stays a complete schedule for scanning and print. On a phone,
+   urgency is the navigation: each date bucket starts bounded, then expands in
+   small batches when the operator asks. */
+const rushMobileState = { open: {} };
+const RUSH_PAGE = 4;
+
+function rushRowName({ task, rush, machine }) {
+  const need = rush.needBy ? `needed by ${fmtDate(rush.needBy)}` : 'no need-by date';
+  const owner = rush.assignee ? `assigned to ${rush.assignee}` : 'nobody has been told';
+  return `Work order ${task.wo}, ${task.project || 'no project'}, ${need}, ${fmtNum(task.qty)} pieces, ${machineLabel(machine)}, ${owner} — edit rush details`;
+}
+
+function desktopRushRow(row, ref, rerender) {
+  const { task, rush, machine } = row;
+  const late = rush.late || rush.needBy === ref;
+  return el('button.line.rush-line' + (late ? '.is-late' : '.rush'), {
+    type: 'button',
+    'aria-label': rushRowName(row),
+    onclick: () => rushDialog(task, rerender),
+  },
+    // Need-by leads the row here, not the work order: on this page the
+    // question is what runs first, and the date is the answer.
+    el('span.rush-when' + (late ? '.late' : ''), {},
+      el('span.rush-need', {}, rush.needBy ? fmtDate(rush.needBy) : 'No date'),
+      el('span.rush-needcap', {}, rush.needBy ? 'needed by' : 'not set')),
+
+    el('span.line-main', {},
+      el('span.line-id', {},
+        el('span.mono.strong', {}, task.wo),
+        task.die ? el('span.die', {}, task.die) : null,
+        chip(machineLabel(machine), 'mute')),
+      el('span.line-where', {},
+        el('span', {}, task.project || '—'),
+        task.floor ? el('span.muted', {}, ' · ' + task.floor) : null),
+      // Who was told is half of what a rush *is*. A rush nobody owns is the
+      // one most likely to be missed, so it says so outright.
+      el('span.line-rushband' + (rush.assignee ? '' : '.nobody'), {},
+        icon(rush.assignee ? 'bolt' : 'alert', { size: 13 }),
+        el('span', {},
+          el('strong', {}, rush.assignee || 'Nobody told'),
+          rush.reason ? el('span', {}, ' — ' + rush.reason) : null))),
+
+    el('span.line-qty', {},
+      el('span.mono', {}, fmtNum(task.qty)),
+      el('span.small.muted', {}, 'pcs')));
+}
+
+function mobileRushRow(row, ref, rerender) {
+  const { task, rush, machine } = row;
+  const late = rush.late || rush.needBy === ref;
+  return el('button.rush-m-row.rush-line' + (late ? '.is-late' : '.rush'), {
+    type: 'button',
+    'aria-label': rushRowName(row),
+    onclick: () => rushDialog(task, rerender),
+  },
+    el('span.rush-m-main', {},
+      el('span.rush-m-id', {},
+        el('span.mono.strong', {}, task.wo),
+        task.die ? el('span.die', {}, task.die) : null,
+        chip(machineLabel(machine), 'mute')),
+      el('span.rush-m-where', {},
+        el('span', {}, task.project || '—'),
+        task.floor ? el('span.muted', {}, ' · ' + task.floor) : null),
+      el('span.rush-m-facts', {},
+        el('span.rush-m-when' + (late ? '.bad' : ''), {},
+          rush.needBy ? `${fmtDate(rush.needBy)} needed by` : 'No need-by date'),
+        el('span.rush-m-qty', {}, `${fmtNum(task.qty)} pcs`)),
+      el('span.rush-m-owner' + (rush.assignee ? '' : '.nobody'), {},
+        icon(rush.assignee ? 'bolt' : 'alert', { size: 13 }),
+        el('strong', {}, rush.assignee || 'Nobody told'),
+        rush.reason ? el('span.rush-m-reason', {}, ' — ' + rush.reason) : null)),
+    icon('chevron', { size: 16, cls: 'rush-m-go' }));
+}
+
+function mobileRushGroup(bucket, rows, ref, rerender) {
+  const shown = rushMobileState.open[bucket.key] || RUSH_PAGE;
+  const left = Math.max(0, rows.length - shown);
+  return el('section.rush-m-group', { 'data-bucket': bucket.key },
+    el('div.rush-m-grouphead', {},
+      el('span.rush-m-groupdot.' + bucket.tone, { 'aria-hidden': 'true' }),
+      el('span.rush-m-grouplabel', {}, bucket.label),
+      el('span.rush-m-groupcount.' + bucket.tone, {}, String(rows.length))),
+    ...rows.slice(0, shown).map((row) => mobileRushRow(row, ref, rerender)),
+    left > 0 ? el('button.rush-m-more', {
+      type: 'button',
+      onclick: () => {
+        rushMobileState.open[bucket.key] = shown + RUSH_PAGE;
+        rerender();
+      },
+    }, `Show ${Math.min(left, RUSH_PAGE)} more of ${rows.length}`) : null);
+}
 
 export function renderRush(rerender, go) {
   if (!hasTasks()) {
@@ -205,46 +299,16 @@ export function renderRush(rerender, go) {
   const byBucket = new Map(BUCKETS.map((b) => [b.key, []]));
   for (const r of rows) byBucket.get(bucketOf(r.rush, ref)).push(r);
 
-  const sections = BUCKETS
-    .filter((b) => byBucket.get(b.key).length)
-    .map((b) => el('section.dgroup', {},
+  const activeBuckets = BUCKETS.filter((b) => byBucket.get(b.key).length);
+  const sections = activeBuckets.map((b) => el('section.dgroup', {},
       el('div.dgroup-head', {},
         el('span.dgroup-label.' + b.tone, {}, b.label),
         el('span.dgroup-count', {}, String(byBucket.get(b.key).length))),
+      el('div.dgroup-body', {},
+        ...byBucket.get(b.key).map((row) => desktopRushRow(row, ref, rerender)))));
 
-      el('div.dgroup-body', {}, ...byBucket.get(b.key).map(({ task, rush, machine }) => {
-        const late = rush.late || rush.needBy === ref;
-        return el('div.line.rush-line' + (late ? '.is-late' : '.rush'), {
-          style: { cursor: 'pointer' },
-          onclick: () => rushDialog(task, rerender),
-        },
-          // Need-by leads the row here, not the work order: on this page the
-          // question is what runs first, and the date is the answer.
-          el('div.rush-when' + (late ? '.late' : ''), {},
-            el('div.rush-need', {}, rush.needBy ? fmtDate(rush.needBy) : 'No date'),
-            el('div.rush-needcap', {}, rush.needBy ? 'needed by' : 'not set')),
-
-          el('div.line-main', {},
-            el('div.line-id', {},
-              el('span.mono.strong', {}, task.wo),
-              task.die ? el('span.die', {}, task.die) : null,
-              chip(machineLabel(machine), 'mute')),
-            el('div.line-where', {},
-              el('span', {}, task.project || '—'),
-              task.floor ? el('span.muted', {}, ' · ' + task.floor) : null),
-            // Who was told is half of what a rush *is*. A rush nobody owns is
-            // the one most likely to be missed, so it says so outright rather
-            // than showing nothing.
-            el('div.line-rushband' + (rush.assignee ? '' : '.nobody'), {},
-              icon(rush.assignee ? 'bolt' : 'alert', { size: 13 }),
-              el('span', {},
-                el('strong', {}, rush.assignee || 'Nobody told'),
-                rush.reason ? el('span', {}, ' — ' + rush.reason) : null))),
-
-          el('div.line-qty', {},
-            el('span.mono', {}, fmtNum(task.qty)),
-            el('span.small.muted', {}, 'pcs')));
-      }))));
-
-  return el('div.centre', {}, head, ...sections);
+  return el('div.centre', {}, head,
+    el('div.rush-m', {},
+      ...activeBuckets.map((b) => mobileRushGroup(b, byBucket.get(b.key), ref, rerender))),
+    el('div.rush-wide', {}, ...sections));
 }

@@ -13,7 +13,7 @@ import {
 } from '../model.js';
 import { MACHINES, MACHINE_BY_KEY } from '../machines.js';
 import { SHIFTS, shiftContextAt } from '../shifts.js';
-import { focusCentreTask } from './centre.js';
+import { focusCentreTask, setAnimatedStatus } from './centre.js';
 
 const GROUP_PAGE = { Rolling: 'rolling', FOM: 'fom', CNC: 'cnc', Punch: 'punch' };
 /* Which shift handed over to this one. Nights were retired, so the Day crew's
@@ -29,7 +29,7 @@ const PREVIOUS_SHIFT = {
 function longDate(iso) {
   const date = new Date(iso + 'T00:00:00');
   return new Intl.DateTimeFormat(undefined, {
-    weekday: 'long', month: 'long', day: 'numeric',
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   }).format(date);
 }
 
@@ -120,14 +120,14 @@ function dueText(task, ref) {
   return `${prefix} ${fmtDate(task.cuttingDate)}`;
 }
 
-function primaryWork(row, ref, go) {
+function primaryWork(row, ref, go, rerender) {
   if (!row) return el('div.overview-empty', {},
     icon('check', { size: 24 }),
     el('div', {}, el('strong', {}, 'Nothing overdue'),
       el('div.small.muted', {}, 'The next scheduled lines are shown below.')));
 
   const context = taskContext(row);
-  return el('div.overview-focus-card', {},
+  return el('div.overview-focus-card', { 'data-motion-key': taskStatusKey(row.task) },
     el('div.overview-focus-icon' + (row.bo.on ? '.bad' : row.rush.on ? '.warn' : ''), {},
       icon(row.rush.on ? 'bolt' : 'alert', { size: 28 })),
     el('div.overview-focus-copy', {},
@@ -142,10 +142,19 @@ function primaryWork(row, ref, go) {
       el('strong.mono', {}, fmtNum(row.task.qty)),
       el('span', {}, 'pcs'),
       el('small', {}, dueText(row.task, ref))),
-    el('button.primary.overview-open', {
-      onclick: () => openTask(row, go),
-      'aria-label': `Open work order ${row.task.wo}`,
-    }, icon('arrow', { size: 18 }), el('span', {}, 'Open W/O', el('b.mono', {}, row.task.wo))));
+    row.status.key === 'IN_PROGRESS'
+      ? el('button.overview-done', {
+          title: `Mark work order ${row.task.wo} done`,
+          'aria-label': `Mark work order ${row.task.wo} done`,
+          onclick: (event) => setAnimatedStatus(row, 'DONE', rerender,
+            event.currentTarget, event.currentTarget.closest('.overview-focus-card')),
+        },
+          el('span.overview-done-mark', {}, icon('check', { size: 32 })),
+          el('span', {}, el('strong', {}, 'Done'), el('small', {}, 'Mark complete')))
+      : el('button.primary.overview-open', {
+          onclick: () => openTask(row, go),
+          'aria-label': `Open work order ${row.task.wo}`,
+        }, icon('arrow', { size: 18 }), el('span', {}, 'Open W/O', el('b.mono', {}, row.task.wo))));
 }
 
 function upcomingRow(row, ref, go) {
@@ -208,6 +217,15 @@ function band(step, title, hint, tone, body) {
     body);
 }
 
+function healthStat(iconName, value, label, tone = 'work', detail = '') {
+  return el(`div.overview-health-stat.${tone}`, {},
+    el('span.overview-health-icon', { 'aria-hidden': 'true' }, icon(iconName, { size: 22 })),
+    el('div', {},
+      el('strong.mono', {}, value),
+      el('span', {}, label),
+      detail ? el('small', {}, detail) : null));
+}
+
 function quickStart(label, detail, iconName, page, go, on) {
   return el('button.overview-quick' + (on ? '.on' : ''), {
     onclick: () => go(page),
@@ -217,7 +235,7 @@ function quickStart(label, detail, iconName, page, go, on) {
     icon('chevron', { size: 18 }));
 }
 
-export function renderOverview(rerender, go) {
+export function renderOverview(rerender, go, sync = null) {
   const ref = today();
   const shiftContext = shiftContextAt(ref);
   const handoff = previousHandoff(shiftContext.date, shiftContext.key);
@@ -248,7 +266,10 @@ export function renderOverview(rerender, go) {
   const urgent = uniqueRows([
     ...board.overdue, ...board.rushNow, ...board.dueToday, ...board.running,
   ]).sort(urgency);
-  const first = urgent[0] || open[0] || null;
+  // Running work is the hero of a live command surface. An overdue or rush
+  // line still appears in Needs attention, but it does not replace the line
+  // the operator is physically cutting right now.
+  const first = board.running[0] || urgent[0] || open[0] || null;
   const firstKey = first ? taskStatusKey(first.task) : null;
   const coming = open
     .filter((row) => taskStatusKey(row.task) !== firstKey)
@@ -256,6 +277,27 @@ export function renderOverview(rerender, go) {
     .slice(0, 2);
   const backOrder = board.backOrders.find((row) => taskStatusKey(row.task) !== firstKey) || null;
   const rush = board.rushNow.find((row) => taskStatusKey(row.task) !== firstKey) || null;
+  const runningMachines = new Set(board.running
+    .map((row) => assignedMachine(row.task))
+    .filter(Boolean)).size;
+  const syncState = sync || {
+    label: 'this device only', tone: 'mute', icon: 'cloud', detail: 'Local copy',
+    configured: false, pending: 0, active: false, at: null,
+  };
+  const syncValue = syncState.active ? 'SYNCING'
+    : syncState.tone === 'ok' ? 'LIVE'
+      : syncState.tone === 'bad' ? 'ERROR'
+        : syncState.tone === 'warn' ? 'OFFLINE'
+          : syncState.pending ? `${syncState.pending} PENDING` : 'LOCAL';
+  const healthStrip = el('section.overview-health-strip', {
+    'aria-label': 'Current shift health',
+  },
+    healthStat('check', `${donePct}%`, 'Schedule complete', 'ok', `${fmtNum(done)} / ${fmtNum(all.length)} lines`),
+    healthStat('factory', String(runningMachines), 'Machines running', 'work', `${fmtNum(board.running.length)} active lines`),
+    healthStat('calendar', String(board.dueToday.length), 'Due today', 'warn'),
+    healthStat('alert', String(board.backOrders.length), 'Blocked', 'bad'),
+    healthStat(syncState.icon || 'cloud', syncValue, 'Sync', syncState.tone || 'mute',
+      syncState.at ? fmtWhen(syncState.at) : syncState.label));
 
   const handoffCard = el('section.overview-handoff' + (handoff.log ? '' : '.empty'), {},
     el('span.overview-handoff-icon', {}, icon('clipboard', { size: 21 })),
@@ -269,6 +311,7 @@ export function renderOverview(rerender, go) {
 
   const brief = el('header.overview-brief', {},
     el('div.overview-intro', {},
+      el('div.overview-kicker', {}, 'Kinetic command stack'),
       el('div.overview-date', {}, longDate(shiftContext.date)),
       /* `range` is the shift's own printed hours. This read shift.from/shift.to,
          which the two-shift rewrite removed, so the headline of the page the
@@ -284,18 +327,24 @@ export function renderOverview(rerender, go) {
         shiftContext.live ? null : el('span.chip.mute.overview-ended', {}, 'ended')),
       el('div.overview-crew', {}, icon('dot', { size: 12 }),
         shiftContext.live ? crew : 'Nobody on the floor right now',
-        me() ? ` · ${me()}` : ''),
-      el('div.overview-complete', {},
-        el('div.overview-complete-summary', {},
-          el('strong', {}, `${donePct}%`),
-          el('span', {}, 'schedule complete'),
-          el('i', {}),
-          el('b.mono', {}, `${fmtNum(done)} / ${fmtNum(all.length)} lines done`)),
-        el('progress.overview-meter', {
-          max: '100', value: String(donePct),
-          'aria-label': `${donePct}% of the cutting schedule is complete`,
-        }))),
-    handoffCard);
+        me() ? ` · ${me()}` : '')),
+    handoffCard,
+    healthStrip);
+
+  const currentLog = state.shiftLogs?.[`${shiftContext.date}|${shiftContext.key}`] || null;
+  const loggedMachines = currentLog ? Object.keys(currentLog.rows || {}).length : 0;
+  const shiftRail = el('section.overview-shift-rail', {
+    'aria-label': 'Current shift update',
+  },
+    el('span.overview-shift-rail-icon', {}, icon('pencil', { size: 18 })),
+    el('strong', {}, 'Shift update'),
+    el('span.overview-shift-rail-state.' + (currentLog ? 'ok' : 'warn'), {},
+      currentLog ? 'Written here' : 'Not written yet'),
+    currentLog ? el('span.overview-shift-rail-detail', {},
+      `${currentLog.by || 'Previous operator'} · ${loggedMachines} machine${loggedMachines === 1 ? '' : 's'}`)
+      : el('span.overview-shift-rail-detail', {}, 'Leave the next crew one clear handoff.'),
+    el('button.ghost', { onclick: () => go('shift') },
+      currentLog ? 'View all' : 'Write now', icon('chevron', { size: 16 })));
 
   const quick = el('aside.overview-quickstarts', {},
     el('h2', {}, 'Quick starts'),
@@ -330,7 +379,11 @@ export function renderOverview(rerender, go) {
     brief,
     el('div.overview-layout', {},
       el('div.overview-main', {},
-        band(1, 'Do now', 'One thing to focus on first.', 'work', primaryWork(first, ref, go)),
+        band(1, first?.status?.key === 'IN_PROGRESS' ? 'Running now' : 'Do now',
+          first?.status?.key === 'IN_PROGRESS'
+            ? `On ${machineLabel(first.machine)} · the line moving on the floor.`
+            : 'One thing to focus on first.',
+          'work', primaryWork(first, ref, go, rerender)),
         band(2, 'Coming next', 'Scheduled handoffs to keep the floor moving.', 'accent',
           coming.length
             ? el('div.overview-upcoming', {}, ...coming.map((row) => upcomingRow(row, ref, go)))
@@ -339,5 +392,6 @@ export function renderOverview(rerender, go) {
           keepWatch.length
             ? el('div.overview-watch', {}, ...keepWatch)
             : el('div.overview-empty', {}, icon('check', { size: 22 }), 'No active rush, shortage or machine issue.'))),
-      quick));
+      quick),
+    shiftRail);
 }

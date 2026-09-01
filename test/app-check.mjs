@@ -186,7 +186,7 @@ await page.waitForSelector('.overview');
 const overview = await page.evaluate(() => ({
   bands: document.querySelectorAll('.overview-band').length,
   quickStarts: document.querySelectorAll('.overview-quick').length,
-  hasPriority: !!document.querySelector('.overview-open'),
+  hasPriority: !!document.querySelector('.overview-open, .overview-done'),
 }));
 step('overview: ' + JSON.stringify(overview));
 if (overview.bands !== 3 || overview.quickStarts !== 4 || !overview.hasPriority) {

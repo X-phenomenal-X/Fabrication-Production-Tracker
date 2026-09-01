@@ -15,7 +15,7 @@ import {
   setTaskStatus, setTaskStatusMany, restoreTaskStatus, setTaskNote,
   setMachineConfig, resetMachineConfig, setTaskFields, clearTaskEdits, historyFor,
   setTaskMachineMany, setTaskMachine,
-  EDITABLE_FIELDS, state,
+  EDITABLE_FIELDS, state, storageStatus,
 } from '../store.js';
 import {
   groupedQueue, machineSummary, openCountFor, runningNow, taskStatusKey, hasTasks,
@@ -35,6 +35,9 @@ import { routeDialog } from './routing.js';
 import { haveDrawings, loadDrawings, thumbFor } from './die-thumb.js';
 import { shiftLabel } from '../shifts.js';
 import { hingeRequirement } from '../material-rules.js';
+import {
+  bindSwipeActions, completeWithMotion, haptic, rejectWithMotion,
+} from '../motion.js';
 import {
   machinesByGroup, assignableIn, hasQueue, canMoveIn, MACHINE_BY_KEY,
 } from '../machines.js';
@@ -86,6 +89,41 @@ export function focusCentreTask(task) {
 
 const STATUS_ICON = { NOT_STARTED: 'dot', IN_PROGRESS: 'play', DONE: 'check' };
 
+export function setAnimatedStatus(row, status, rerender, trigger, surface = null) {
+  const key = taskStatusKey(row.task);
+  const before = [{ key, prev: state.taskStatus[key]?.status ?? null }];
+  const target = surface || trigger?.closest?.(
+    '.nowrun-line, .line, .mobile-live-strip, .mobile-queue-row, .mobile-done-dock');
+  const commit = () => {
+    setTaskStatus(key, status);
+    if (!storageStatus().ok) {
+      // A local write failure is a rejected mutation, not an offline queue.
+      // Put the record back immediately; a normal network outage remains
+      // safely queued and never throws away an operator's completed work.
+      restoreTaskStatus(before);
+      toast('Could not save this change — the line was put back');
+      rerender();
+      return false;
+    }
+    toastAction(`${row.task.wo} → ${TRACK_STATUS[status].label}`, 'Undo', () => {
+      restoreTaskStatus(before);
+      rerender();
+    });
+    rerender();
+    return true;
+  };
+
+  if (status === 'DONE') {
+    completeWithMotion({ surface: target, trigger, commit });
+  } else {
+    haptic('tap');
+    const ok = commit();
+    if (ok) flash(target);
+    else requestAnimationFrame(() => rejectWithMotion(document.querySelector(
+      `[data-motion-key="${CSS.escape(key)}"]`)));
+  }
+}
+
 /* ---------- one line ---------- */
 
 /* An explicit three-way control rather than a click-to-cycle chip. Cycling
@@ -114,15 +152,8 @@ function statusControl(row, vs, rerender) {
         'aria-pressed': String(k === cur),
         onclick: (e) => {
           if (k === cur) return;
-          const before = [{ key, prev: state.taskStatus[key]?.status ?? null }];
           markMotion(vs, { type: 'status', key, status: k });
-          setTaskStatus(key, k);
-          flash(e.target.closest('.line'));
-          toastAction(`${row.task.wo} → ${s.label}`, 'Undo', () => {
-            restoreTaskStatus(before);
-            rerender();
-          });
-          rerender();
+          setAnimatedStatus(row, k, rerender, e.currentTarget, e.currentTarget.closest('.line'));
         },
       }, icon(STATUS_ICON[k], { size: 14 }), el('span.seg-label', {}, s.label));
     }));
@@ -188,6 +219,7 @@ function taskLine(row, vs, rerender, group) {
     + (rush.on ? '.rush' : '')
     + (bo.on ? '.is-bo' : '')
     + (t.editedAt ? '.is-edited' : ''), {
+      'data-motion-key': key,
       onclick: (e) => {
         if (e.target.closest('button, input, label, select, textarea, a')) return;
         vs.active = key;
@@ -211,7 +243,7 @@ function taskLine(row, vs, rerender, group) {
         // what it is made of — which is what staging has to pull.
         t.die ? el('button.die.dielink' + (t.edited?.die ? '.edited' : ''), {
           title: `What is ${t.die} made of?`,
-          onclick: (e) => { e.stopPropagation(); dieDialog(t.die); },
+          onclick: (e) => { e.stopPropagation(); dieDialog(t.die, e.currentTarget); },
         }, t.die) : null,
         rush.on ? el('span.badge-rush' + (rush.late || rush.soon ? '.hot' : ''), {
           title: rush.needBy
@@ -558,7 +590,9 @@ function lineInspector(row, vs, rerender, group) {
       detail('Project', t.project || '—'),
       detail('Floor / area', t.floor || '—'),
       detail('Die', t.die
-        ? el('button.die.dielink', { onclick: () => dieDialog(t.die) }, t.die)
+        ? el('button.die.dielink', {
+            onclick: (event) => dieDialog(t.die, event.currentTarget),
+          }, t.die)
         : '—'),
       detail('Quantity', `${fmtNum(t.qty)} pcs`),
       detail('Needed', fmtDate(t.cuttingDate), t.cuttingDate && t.cuttingDate < new Date().toISOString().slice(0, 10) ? 'bad' : ''),
@@ -728,7 +762,7 @@ function nowRunningLine(row, rerender) {
         onclick: () => loadDrawings(rerender),
       }, icon('search', { size: 12 }), 'Profile');
 
-  return el('div.nowrun-line', {},
+  return el('div.nowrun-line', { 'data-motion-key': key },
     profile,
     el('div.nowrun-main', {},
       el('div.line-id', {},
@@ -753,14 +787,8 @@ function nowRunningLine(row, rerender) {
     el('button.nowrun-done', {
       title: 'Mark this line done',
       onclick: (e) => {
-        const before = [{ key, prev: state.taskStatus[key]?.status ?? null }];
-        setTaskStatus(key, 'DONE');
-        flash(e.target.closest('.nowrun-line'));
-        toastAction(`${t.wo} → Done`, 'Undo', () => {
-          restoreTaskStatus(before);
-          rerender();
-        });
-        rerender();
+        setAnimatedStatus(row, 'DONE', rerender, e.currentTarget,
+          e.currentTarget.closest('.nowrun-line'));
       },
     }, icon('check', { size: 13 }), 'Done'));
 }
@@ -815,17 +843,8 @@ function shortMachineLabel(machine, group) {
   return machine.label;
 }
 
-function setMobileStatus(row, status, rerender, target) {
-  const key = taskStatusKey(row.task);
-  const before = [{ key, prev: state.taskStatus[key]?.status ?? null }];
-  setTaskStatus(key, status);
-  const surface = target?.closest?.('.mobile-live-strip, .mobile-queue-row, .mobile-done-dock');
-  if (surface) flash(surface);
-  toastAction(`${row.task.wo} → ${TRACK_STATUS[status].label}`, 'Undo', () => {
-    restoreTaskStatus(before);
-    rerender();
-  });
-  rerender();
+function setMobileStatus(row, status, rerender, target, surface = null) {
+  setAnimatedStatus(row, status, rerender, target, surface);
 }
 
 function mobileMachineMenu(machine, groups, sum, vs, rerender) {
@@ -883,7 +902,10 @@ function mobileLiveStrip(machine, runningRows) {
   const row = runningRows[0];
   const t = row.task;
   const since = row.status.at ? fmtWhen(row.status.at) : null;
-  return el('section.mobile-live-strip', { 'aria-label': `Live now: ${t.wo}` },
+  return el('section.mobile-live-strip', {
+    'aria-label': `Live now: ${t.wo}`,
+    'data-motion-key': taskStatusKey(t),
+  },
     el('div.mobile-live-kicker', {},
       icon('play', { size: 13 }),
       el('span', {}, 'Live now'),
@@ -922,35 +944,51 @@ function mobileQueueRow(row, index, vs, rerender, isNext) {
     rerender();
   };
 
-  return el('li.mobile-queue-row.' + tone.cls + (isNext ? '.next' : ''), {
+  const node = el('li.mobile-queue-row.' + tone.cls + (isNext ? '.next' : ''), {
     style: { '--queue-delay': `${Math.min(index, 6) * 32}ms` },
     onclick: (e) => {
       if (e.target.closest('button, input, label, select, textarea, a')) return;
       open();
     },
   },
-    el('span.mobile-queue-order', { 'aria-hidden': 'true' }, String(index + 1)),
-    el('div.mobile-queue-copy', {},
-      el('div.mobile-queue-id', {},
-        el('strong.mono', {}, t.wo),
-        t.die ? el('span.die', {}, t.die) : null),
-      el('div.mobile-queue-project', {},
-        el('strong', {}, t.project || '—'),
-        t.floor ? el('span', {}, ` · ${t.floor}`) : null),
-      el('div.mobile-queue-qty', {},
-        el('strong.mono', {}, fmtNum(t.qty)), ' pcs',
-        t.cuttingDate ? el('span', {}, ` · ${fmtDate(t.cuttingDate)}`) : null)),
-    el('div.mobile-queue-state.' + tone.cls, {},
-      icon(tone.icon, { size: 15 }),
-      el('span', {}, tone.label)),
-    isNext ? el('button.mobile-queue-start', {
-      'aria-label': `Start work order ${t.wo}`,
-      onclick: (e) => setMobileStatus(row, 'IN_PROGRESS', rerender, e.currentTarget),
-    }, icon('play', { size: 16 }), el('span', {}, 'Start'))
-      : el('button.mobile-queue-open', {
-        'aria-label': `Open details for ${t.wo}`,
-        onclick: open,
-      }, icon('chevron', { size: 17 })));
+    el('button.mobile-swipe-action.done', {
+      type: 'button', tabindex: '-1', 'aria-label': `Mark work order ${t.wo} done`,
+      onclick: (event) => setMobileStatus(row, 'DONE', rerender, event.currentTarget,
+        event.currentTarget.parentElement.querySelector('.mobile-queue-surface')),
+    }, icon('check', { size: 18 }), el('span', {}, 'Done')),
+    el('button.mobile-swipe-action.note', {
+      type: 'button', tabindex: '-1', 'aria-label': `Add note to work order ${t.wo}`,
+      onclick: () => noteEditor(row, rerender),
+    }, icon('note', { size: 18 }), el('span', {}, 'Note')),
+    el('div.mobile-queue-surface', { 'data-motion-key': key },
+      el('span.mobile-queue-order', { 'aria-hidden': 'true' }, String(index + 1)),
+      el('div.mobile-queue-copy', {},
+        el('div.mobile-queue-id', {},
+          el('strong.mono', {}, t.wo),
+          t.die ? el('span.die', {}, t.die) : null),
+        el('div.mobile-queue-project', {},
+          el('strong', {}, t.project || '—'),
+          t.floor ? el('span', {}, ` · ${t.floor}`) : null),
+        el('div.mobile-queue-qty', {},
+          el('strong.mono', {}, fmtNum(t.qty)), ' pcs',
+          t.cuttingDate ? el('span', {}, ` · ${fmtDate(t.cuttingDate)}`) : null)),
+      el('div.mobile-queue-state.' + tone.cls, {},
+        icon(tone.icon, { size: 15 }),
+        el('span', {}, tone.label)),
+      isNext ? el('button.mobile-queue-start', {
+        'aria-label': `Start work order ${t.wo}`,
+        onclick: (e) => setMobileStatus(row, 'IN_PROGRESS', rerender, e.currentTarget),
+      }, icon('play', { size: 16 }), el('span', {}, 'Start'))
+        : el('button.mobile-queue-open', {
+          'aria-label': `Open details for ${t.wo}`,
+          onclick: open,
+        }, icon('chevron', { size: 17 }))));
+
+  return bindSwipeActions(node, {
+    onRight: () => setMobileStatus(row, 'DONE', rerender,
+      node.querySelector('.mobile-swipe-action.done'), node.querySelector('.mobile-queue-surface')),
+    onLeft: () => noteEditor(row, rerender),
+  });
 }
 
 function mobileFilters(vs, sum, rerender) {
@@ -1025,7 +1063,8 @@ function mobileCentreFlow({ machines, machine, groups, sum, vs, rerender, group 
     runningRows.length ? el('div.mobile-done-dock', { role: 'region', 'aria-label': 'Current job action' },
       el('button', {
         'aria-label': `Mark work order ${runningRows[0].task.wo} done`,
-        onclick: (e) => setMobileStatus(runningRows[0], 'DONE', rerender, e.currentTarget),
+        onclick: (e) => setMobileStatus(runningRows[0], 'DONE', rerender, e.currentTarget,
+          e.currentTarget.closest('.mobile-centre-flow')?.querySelector('.mobile-live-strip')),
       }, icon('check', { size: 20 }),
         el('span', {}, el('strong.mono', {}, runningRows[0].task.wo), ' · Mark done'))) : null);
 }

@@ -13,6 +13,7 @@ import { el, chip, icon, modal } from '../ui.js';
 import { routeFor, needsFmc, SOP, SAW_WIDTH_DIES, isHighThermal } from '../routing.js';
 import { MACHINE_BY_KEY } from '../machines.js';
 import { machineConfig, jobStations } from '../model.js';
+import { haptic } from '../motion.js';
 
 const TRACK = {
   vents: { label: 'Vents', tone: 'work', note: 'a separate entity from window wall' },
@@ -63,6 +64,7 @@ function stepRow(step, i, at, stations) {
 /** The routing for one line, as a dialog. */
 export function routeDialog(task) {
   const r = routeFor(task);
+  if (r && r.at < 0 && r.steps.some((step) => step.machine)) haptic('sop');
 
   const body = el('div.routedlg', {},
     el('div.route-head', {},

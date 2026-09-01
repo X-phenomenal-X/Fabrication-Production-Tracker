@@ -6,7 +6,7 @@
    where a component is used. This workspace searches both libraries and keeps
    the distinction visible in the result type and engineering provenance. */
 
-import { el, chip, icon, modal, printDocument } from '../ui.js';
+import { el, chip, icon, modal, panZoomImage, printDocument } from '../ui.js';
 import {
   lookupDie, searchDies, componentsOf, recoveredComponentsOf,
   listingReferencesOf, componentCoverage, componentAudit, componentUsageOf, dieForms,
@@ -151,14 +151,14 @@ function resultRow(item, selected, choose) {
     icon('chevron', { size: 13 }));
 }
 
-function openExtrusionDrawing(record) {
+function openExtrusionDrawing(record, origin = null) {
   const body = imageMap?.[record.key];
   if (!body) return;
   modal(`${record.id} · ${record.series} Series`, el('div.extrusion-zoom', {},
-    el('img', {
+    panZoomImage({
       src: imagePrefix + body,
       alt: `Engineering profile card for ${record.id}`,
-    })), { wide: true });
+    })), { wide: true, origin });
 }
 
 function profileField(label, value) {
@@ -336,8 +336,10 @@ function assemblyDetail(assembly, chooseAssembly, chooseProfile, rerender, mobil
   const drawingPane = dwg ? el('button.diedrawing', {
     type: 'button',
     title: 'Open the assembly drawing',
-    onclick: () => modal(`${assembly.sa} assembly drawing`, el('div.extrusion-zoom', {},
-      el('img', { src: dwg.src, alt: `Section through ${assembly.sa}` })), { wide: true }),
+    onclick: (event) => modal(`${assembly.sa} assembly drawing`, el('div.extrusion-zoom', {},
+      panZoomImage({ src: dwg.src, alt: `Section through ${assembly.sa}` })), {
+        wide: true, origin: event.currentTarget,
+      }),
   },
   el('img', { src: dwg.src, alt: `Section through ${assembly.sa}`, loading: 'lazy' }),
   el('span.drawing-source', {},
@@ -346,7 +348,7 @@ function assemblyDetail(assembly, chooseAssembly, chooseProfile, rerender, mobil
     : referenceImage ? el('button.diedrawing.reference-profile', {
       type: 'button',
       title: `Open ${referenceRecord.id} profile drawing`,
-      onclick: () => openExtrusionDrawing(referenceRecord),
+      onclick: (event) => openExtrusionDrawing(referenceRecord, event.currentTarget),
     },
     el('img', {
       src: imagePrefix + referenceImage,
@@ -477,7 +479,8 @@ function profileDetail(record, rerender, chooseAssembly, mobile = {}) {
       statusChip(record.status), chip(`${record.series} series`, 'mute')),
     body
       ? el('button.extrusion-drawing', {
-          type: 'button', title: 'Open larger drawing', onclick: () => openExtrusionDrawing(record),
+          type: 'button', title: 'Open larger drawing',
+          onclick: (event) => openExtrusionDrawing(record, event.currentTarget),
         },
           el('img', {
             src: imagePrefix + body,
@@ -763,9 +766,9 @@ export function openEngineeringSection(id, go, type = 'auto') {
 }
 
 /** Quick lookup from a production line or the global header. */
-export function dieDialog(initial = '') {
+export function dieDialog(initial = '', origin = null) {
   const { body, input } = lookupWorkspace({ initial });
-  const dlg = modal('Engineering lookup', body, { wide: true });
+  const dlg = modal('Engineering lookup', body, { wide: true, origin });
   setTimeout(() => input.focus(), 30);
   return dlg;
 }

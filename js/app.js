@@ -23,6 +23,7 @@ import {
 } from './views/monitor.js';
 import { shiftStatusAt } from './shifts.js';
 import { registerServiceWorker, watchConnection, isOnline } from './offline.js';
+import { pulseSyncMerge, reducedMotion, transitionView } from './motion.js';
 
 /* The engineering libraries contain thousands of records and drawings. They
    are useful, but they are not part of running a machine queue. Loading those
@@ -99,11 +100,20 @@ let scheduled = false;
 let pageMotion = true;
 
 function go(key) {
-  if (key !== current) pageMotion = true;
-  current = key;
-  location.hash = key;
-  scheduleRender();
-  window.scrollTo({ top: 0 });
+  const changing = key !== current;
+  const sharedTransition = changing && !reducedMotion()
+    && typeof document.startViewTransition === 'function';
+  if (changing) pageMotion = !sharedTransition;
+  const update = () => {
+    current = key;
+    location.hash = key;
+    // startViewTransition invokes this after the original click has finished,
+    // so the DOM can be swapped synchronously for an accurate new snapshot.
+    // The fallback keeps the original scheduled-render safety inside events.
+    if (sharedTransition) render(); else scheduleRender();
+    window.scrollTo({ top: 0 });
+  };
+  transitionView(update);
 }
 
 function whoAmI() {
@@ -329,8 +339,16 @@ function openSyncDetails() {
   modal('Sync status', body, { actions });
 }
 
+let lastSyncPulseAt = null;
+
 function syncIndicator() {
   const view = syncViewState();
+  if (view.at) {
+    if (lastSyncPulseAt && view.at !== lastSyncPulseAt && !view.active) {
+      queueMicrotask(pulseSyncMerge);
+    }
+    lastSyncPulseAt = view.at;
+  }
   return el(`button.chip.sync-chip.${view.tone}${view.active ? '.is-active' : ''}`, {
     type: 'button',
     title: `${view.detail} Open sync details.`,
@@ -501,7 +519,7 @@ function render() {
         'Do not close this page until the problem is fixed or you have exported a backup.',
         el('div.small', { style: { marginTop: '4px' } },
           `${storage.detail} Open Setup → Backup, transfer and reset to export the current copy.`))) : null,
-    tab.render(scheduleRender, go));
+    tab.render(scheduleRender, go, syncViewState()));
   root.replaceChildren(header(), next);
   pageMotion = false;
   measureHeader();

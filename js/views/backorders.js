@@ -154,7 +154,8 @@ let mineOnly = false;
    invisible to the tap-target check because it is not a control. On the phone
    a row that opens a dialog is a button that says what it opens.
 
-   The desk page is untouched: both render and CSS shows one. */
+   The desk page stays a complete scan-and-print list. Both surfaces use real,
+   named controls and CSS shows exactly one. */
 
 const bm = { open: {} };
 
@@ -287,31 +288,35 @@ export function renderBackOrders(rerender, go) {
         el('span.spacer'),
         short ? el('span.small.muted', {}, `${fmtNum(short)} pcs short`) : null),
 
-      el('div.dgroup-body', {}, ...g.rows.map(({ task, bo, machine }) => el('div.line.bo-line.is-bo', {
-        style: { cursor: 'pointer' },
-        onclick: () => backOrderDialog(task, rerender),
-      },
-        el('div.line-main', {},
-          el('div.line-id', {},
-            el('span.mono.strong', {}, task.wo),
-            task.die ? el('span.die', {}, task.die) : null,
-            chip(machineLabel(machine), 'mute')),
-          el('div.line-where', {},
-            el('span', {}, task.project || '—'),
-            task.floor ? el('span.muted', {}, ' · ' + task.floor) : null),
-          bo.note ? el('div.line-bonote', {}, icon('note', { size: 13 }),
-            el('span', {}, bo.note)) : null,
-          // Bars, kept visibly separate from the pieces count beside it.
-          bo.sheetShort ? el('div.line-bonote.from-sheet', {}, icon('alert', { size: 13 }),
-            el('span', {}, el('span.muted', {}, 'workbook: '), bo.sheetShort)) : null),
+      el('div.dgroup-body', {}, ...g.rows.map(({ task, bo, machine }) => {
+        const short = bo.qty != null ? `${fmtNum(bo.qty)} pieces short` : 'short quantity not counted';
+        return el('button.line.bo-line.is-bo', {
+          type: 'button',
+          'aria-label': `Work order ${task.wo}, ${task.project || 'no project'}, ${short} — edit this back order`,
+          onclick: () => backOrderDialog(task, rerender),
+        },
+          el('span.line-main', {},
+            el('span.line-id', {},
+              el('span.mono.strong', {}, task.wo),
+              task.die ? el('span.die', {}, task.die) : null,
+              chip(machineLabel(machine), 'mute')),
+            el('span.line-where', {},
+              el('span', {}, task.project || '—'),
+              task.floor ? el('span.muted', {}, ' · ' + task.floor) : null),
+            bo.note ? el('span.line-bonote', {}, icon('note', { size: 13 }),
+              el('span', {}, bo.note)) : null,
+            // Bars, kept visibly separate from the pieces count beside it.
+            bo.sheetShort ? el('span.line-bonote.from-sheet', {}, icon('alert', { size: 13 }),
+              el('span', {}, el('span.muted', {}, 'workbook: '), bo.sheetShort)) : null),
 
-        el('div.line-qty.bo-qty', {},
-          bo.qty != null
-            ? el('span.mono.bo-short', {}, fmtNum(bo.qty))
-            : el('span.mono.muted', {}, '—'),
-          el('span.small.muted', {}, bo.qty != null ? 'pcs short' : 'not counted')),
+          el('span.line-qty.bo-qty', {},
+            bo.qty != null
+              ? el('span.mono.bo-short', {}, fmtNum(bo.qty))
+              : el('span.mono.muted', {}, '—'),
+            el('span.small.muted', {}, bo.qty != null ? 'pcs short' : 'not counted')),
 
-        el('div.line-date.hide-sm', {}, fmtDate(task.cuttingDate))))));
+          el('span.line-date.hide-sm', {}, fmtDate(task.cuttingDate)));
+      })));
   });
 
   return el('div.centre', {}, head,

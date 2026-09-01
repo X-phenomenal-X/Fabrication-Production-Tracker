@@ -629,7 +629,7 @@ const CONTRAST = `(() => {
   };
   const out = [];
   const seen = new Set();
-  for (const sel of ['.badge-rush', '.badge-bo', '.badge-moved', '.badge-edited', '.die',
+  for (const sel of ['button.primary', '.badge-rush', '.badge-bo', '.badge-moved', '.badge-edited', '.die',
                      '.cstat b', '.cstat i', '.dgroup-label', '.line-where', '.muted',
                      '.chip', '.seg-btn.on', '.nowrun-head', '.line-id .mono']) {
     for (const n of Array.from(document.querySelectorAll(sel)).slice(0, 3)) {
@@ -997,8 +997,152 @@ for (const theme of ['light', 'dark']) {
   await page.click('.bo-m-row');
   await page.waitForTimeout(300);
   if (!(await page.$('dialog'))) fail('backorders @ phone: tapping a row did not open the back-order dialog');
+  await page.evaluate(() => document.querySelector('dialog[open]')?.close());
+
+  // The desktop list used to keep all 78 dialog actions on clickable divs even
+  // after the phone surface was repaired. Its full list remains, but every row
+  // now participates in keyboard, target-size and accessible-name checks.
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.waitForTimeout(150);
+  const boDesk = await page.evaluate(() => {
+    const shown = (node) => !!node && getComputedStyle(node).display !== 'none';
+    const rows = [...document.querySelectorAll('.bo-wide .bo-line')];
+    return {
+      wide: shown(document.querySelector('.bo-wide')),
+      phone: shown(document.querySelector('.bo-m')),
+      total: rows.length,
+      buttons: rows.filter((row) => row.tagName === 'BUTTON').length,
+      named: rows.filter((row) => /work order/i.test(row.getAttribute('aria-label') || '')).length,
+      clickableDivs: [...document.querySelectorAll('.bo-wide div')]
+        .filter((node) => node.style.cursor === 'pointer').length,
+    };
+  });
+  if (!boDesk.wide || boDesk.phone) fail('backorders @ desktop: the wrong queue surface is visible');
+  if (boDesk.buttons !== boDesk.total || boDesk.named !== boDesk.total) {
+    fail(`backorders @ desktop: ${boDesk.buttons}/${boDesk.total} rows are buttons and ${boDesk.named}/${boDesk.total} are named`);
+  }
+  if (boDesk.clickableDivs) fail(`backorders @ desktop: ${boDesk.clickableDivs} clickable div row(s) remain`);
+
+  await page.goto(`${base}/?monitor#backorders`);
+  await page.waitForSelector('.bo-wide .bo-line');
+  const boMonitorControls = await page.evaluate(() =>
+    [...document.querySelectorAll('button, input, select, textarea, a[href]')].filter((node) => {
+      const rect = node.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && getComputedStyle(node).pointerEvents !== 'none';
+    }).length);
+  if (boMonitorControls) fail(`backorders @ monitor: ${boMonitorControls} control(s) remain pressable`);
 
   if (broke.length) fail(`backorders @ phone: page error — ${broke[0]}`);
+  await ctx.close();
+}
+
+/* ---------- Rush on a phone and at a desk ----------
+
+   A rush queue cannot make urgent work safer if its rows are unreachable to a
+   keyboard or if today's work is six screens below the header. The phone gets
+   bounded urgency buckets; both surfaces keep the same labelled dialog action. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  const broke = [];
+  page.on('pageerror', (e) => broke.push(String(e.message)));
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/#rush`);
+  await page.waitForSelector('.rush-m-row');
+  await page.waitForTimeout(150);
+
+  const rush = await page.evaluate(() => {
+    const shown = (node) => !!node && getComputedStyle(node).display !== 'none';
+    const groups = [...document.querySelectorAll('.rush-m-group')].map((group) => ({
+      key: group.dataset.bucket,
+      label: group.querySelector('.rush-m-grouplabel')?.textContent.trim(),
+      count: Number(group.querySelector('.rush-m-groupcount')?.textContent || 0),
+      shown: group.querySelectorAll('.rush-m-row').length,
+      more: !!group.querySelector('.rush-m-more'),
+    }));
+    const rows = [...document.querySelectorAll('.rush-m-row')];
+    return {
+      phone: shown(document.querySelector('.rush-m')),
+      desk: shown(document.querySelector('.rush-wide')),
+      screens: +(document.documentElement.scrollHeight / innerHeight).toFixed(1),
+      groups,
+      total: rows.length,
+      buttons: rows.filter((row) => row.tagName === 'BUTTON').length,
+      named: rows.filter((row) => /work order/i.test(row.getAttribute('aria-label') || '')).length,
+      dated: document.querySelectorAll('.rush-m-when').length,
+      clickableDivs: [...document.querySelectorAll('.rush-m div, .rush-wide div')]
+        .filter((node) => node.style.cursor === 'pointer').length,
+    };
+  });
+  if (!rush.phone) fail('rush @ phone: the bounded queue is not on screen');
+  if (rush.desk) fail('rush @ phone: both queues are on screen at once');
+  if (rush.screens > 4.5) fail(`rush @ phone: the page is ${rush.screens} screens tall`);
+  if (rush.buttons !== rush.total) {
+    fail(`rush @ phone: ${rush.total - rush.buttons} row(s) open a dialog without being a control`);
+  }
+  if (rush.named !== rush.total) {
+    fail(`rush @ phone: ${rush.total - rush.named} row(s) do not name their work order`);
+  }
+  if (rush.dated !== rush.total) {
+    fail(`rush @ phone: ${rush.total - rush.dated} row(s) omit the need-by field they sort by`);
+  }
+  if (rush.clickableDivs) fail(`rush: ${rush.clickableDivs} clickable div row(s) remain`);
+  const bounded = rush.groups.find((group) => group.count > 4);
+  if (!bounded) fail('rush @ phone: fixture has no bucket large enough to prove bounding');
+  else if (bounded.shown >= bounded.count || !bounded.more) {
+    fail(`rush @ phone: ${bounded.label} renders ${bounded.shown}/${bounded.count} without a bounded continuation`);
+  }
+  note(`rush @ phone: ${rush.screens} screens, ${rush.groups.map((g) => `${g.label} ${g.shown}/${g.count}`).join(', ')}`);
+  await page.screenshot({ path: path.join(SHOT, 'rush-phone-queue.png'), fullPage: true });
+
+  const expandable = rush.groups.find((group) => group.more);
+  if (expandable) {
+    await page.click(`.rush-m-group[data-bucket="${expandable.key}"] .rush-m-more`);
+    await page.waitForTimeout(200);
+    const after = await page.$$eval(
+      `.rush-m-group[data-bucket="${expandable.key}"] .rush-m-row`,
+      (rows) => rows.length,
+    );
+    if (after <= expandable.shown) {
+      fail(`rush @ phone: "Show more" did not extend ${expandable.label} (${expandable.shown} -> ${after})`);
+    }
+  }
+
+  await page.click('.rush-m-row');
+  await page.waitForTimeout(200);
+  if (!(await page.$('dialog[open]'))) fail('rush @ phone: tapping a row did not open the Rush dialog');
+  await page.evaluate(() => document.querySelector('dialog[open]')?.close());
+
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.waitForTimeout(150);
+  const desk = await page.evaluate(() => {
+    const shown = (node) => !!node && getComputedStyle(node).display !== 'none';
+    const rows = [...document.querySelectorAll('.rush-wide .rush-line')];
+    return {
+      wide: shown(document.querySelector('.rush-wide')),
+      phone: shown(document.querySelector('.rush-m')),
+      total: rows.length,
+      buttons: rows.filter((row) => row.tagName === 'BUTTON').length,
+      named: rows.filter((row) => /work order/i.test(row.getAttribute('aria-label') || '')).length,
+    };
+  });
+  if (!desk.wide || desk.phone) fail('rush @ desktop: the wrong queue surface is visible');
+  if (desk.buttons !== desk.total || desk.named !== desk.total) {
+    fail(`rush @ desktop: ${desk.buttons}/${desk.total} rows are buttons and ${desk.named}/${desk.total} are named`);
+  }
+
+  await page.goto(`${base}/?monitor#rush`);
+  await page.waitForSelector('.rush-wide .rush-line');
+  const monitorControls = await page.evaluate(() =>
+    [...document.querySelectorAll('button, input, select, textarea, a[href]')].filter((node) => {
+      const rect = node.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && getComputedStyle(node).pointerEvents !== 'none';
+    }).length);
+  if (monitorControls) fail(`rush @ monitor: ${monitorControls} control(s) remain pressable`);
+
+  if (broke.length) fail(`rush: page error — ${broke[0]}`);
   await ctx.close();
 }
 
@@ -1130,6 +1274,156 @@ for (const theme of ['light', 'dark']) {
     fail(`monitor overview does not expose its automatic cycle state: "${dashboard.cycle || ''}"`);
   }
   await page.screenshot({ path: path.join(SHOT, 'monitor-overview.png') });
+  await ctx.close();
+}
+
+/* ---------- kinetic command stack and interaction choreography ----------
+
+   The overview's hierarchy and the motion layer are operational behavior, not
+   decoration: Done must commit immediately, be undoable, and leave the next
+   decision in the same place. Rapid navigation may shorten a transition but
+   must never leave the old page under a new active tab. */
+{
+  const ctx = await browser.newContext({
+    colorScheme: 'dark', viewport: { width: 1440, height: 1024 },
+  });
+  const page = await ctx.newPage();
+  const broke = [];
+  page.on('pageerror', (e) => broke.push(String(e.message)));
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/#overview`);
+  await page.waitForSelector('.overview-focus-card');
+  await page.waitForTimeout(180);
+
+  const command = await page.evaluate(() => {
+    const done = document.querySelector('.overview-done')?.getBoundingClientRect();
+    const handoff = document.querySelector('.overview-handoff')?.getBoundingClientRect();
+    return {
+      health: document.querySelectorAll('.overview-health-stat').length,
+      done: !!done,
+      doneW: Math.round(done?.width || 0),
+      doneH: Math.round(done?.height || 0),
+      handoffH: Math.round(handoff?.height || 0),
+      rail: document.querySelectorAll('.overview-shift-rail').length,
+      keyed: document.querySelectorAll('.overview-focus-card[data-motion-key]').length,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  if (command.health !== 5) fail(`command stack: ${command.health} health signals, expected 5`);
+  if (!command.done || command.doneW < 300 || command.doneH < 88) {
+    fail(`command stack: Done macro is ${command.doneW}x${command.doneH}, expected at least 300x88`);
+  }
+  if (command.handoffH > 110) fail(`command stack: handoff is ${command.handoffH}px tall, still a dashboard card`);
+  if (command.rail !== 1) fail(`command stack: ${command.rail} current-shift rails`);
+  if (command.keyed !== 1) fail('command stack: running work is not keyed for FLIP/rollback motion');
+  if (command.overflow) fail(`command stack: desktop overflows by ${command.overflow}px`);
+
+  const beforeKey = await page.getAttribute('.overview-focus-card', 'data-motion-key');
+  await page.click('.overview-done');
+  await page.waitForTimeout(24);
+  const feedback = await page.evaluate(() => ({
+    ghost: document.querySelectorAll('.motion-completion-ghost').length,
+    ripple: document.querySelectorAll('.motion-done-ripple').length,
+    undo: document.querySelectorAll('.toast-action button').length,
+  }));
+  if (!feedback.ghost || !feedback.ripple) {
+    fail(`command stack: Done feedback ghost ${feedback.ghost}, ripple ${feedback.ripple}`);
+  }
+  if (!feedback.undo) fail('command stack: Done has no micro-undo action');
+  else {
+    await page.click('.toast-action button', { force: true });
+    await page.waitForTimeout(220);
+    const restored = await page.getAttribute('.overview-focus-card', 'data-motion-key');
+    if (restored !== beforeKey) fail(`command stack: Undo restored ${restored}, expected ${beforeKey}`);
+  }
+
+  await page.click('button[aria-label="Rolling"]');
+  await page.click('button[aria-label="Jobs"]');
+  await page.waitForTimeout(180);
+  const rapid = await page.evaluate(() => ({
+    hash: location.hash,
+    title: document.querySelector('main h1')?.textContent?.trim(),
+    current: document.querySelector('header.top [aria-current="true"]')?.getAttribute('aria-label'),
+  }));
+  if (rapid.hash !== '#jobs' || rapid.title !== 'Jobs' || rapid.current !== 'Jobs') {
+    fail(`rapid navigation split state: ${JSON.stringify(rapid)}`);
+  }
+  if (broke.length) fail(`command stack: page error — ${broke[0]}`);
+  note(`command stack: 5 signals, Done ${command.doneW}x${command.doneH}, undo + rapid navigation pass`);
+  await ctx.close();
+}
+
+/* The phone queue exposes real labelled actions behind every row. A deliberate
+   right swipe crosses the shared 88px commit threshold and persists Done. */
+{
+  const ctx = await browser.newContext({
+    colorScheme: 'dark', viewport: { width: 390, height: 844 }, hasTouch: true,
+  });
+  const page = await ctx.newPage();
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/#rolling`);
+  await page.waitForSelector('.mobile-queue-row');
+  const gesture = await page.evaluate(() => {
+    const row = [...document.querySelectorAll('.mobile-queue-row')]
+      .find((node) => node.getBoundingClientRect().height > 0);
+    const surface = row?.querySelector('.mobile-queue-surface');
+    if (!row || !surface) return null;
+    const key = surface.dataset.motionKey;
+    const box = surface.getBoundingClientRect();
+    const fire = (type, x) => row.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, pointerId: 77, pointerType: 'touch', isPrimary: true,
+      clientX: x, clientY: box.top + Math.min(36, box.height / 2), buttons: type === 'pointerup' ? 0 : 1,
+    }));
+    fire('pointerdown', box.left + 24);
+    fire('pointermove', box.left + 128);
+    fire('pointerup', box.left + 128);
+    return { key, done: !!row.querySelector('.mobile-swipe-action.done'), note: !!row.querySelector('.mobile-swipe-action.note') };
+  });
+  if (!gesture?.done || !gesture?.note) fail('mobile swipe: labelled Done/Note actions are missing');
+  await page.waitForTimeout(360);
+  const saved = await page.evaluate((key) => {
+    const snap = JSON.parse(localStorage.getItem('bv.cutting.v1') || '{}');
+    return snap.taskStatus?.[key]?.status || null;
+  }, gesture?.key);
+  if (saved !== 'DONE') fail(`mobile swipe: right swipe stored ${saved || 'nothing'}, expected DONE`);
+  else note('mobile swipe: right gesture crosses 88px and stores Done');
+  await ctx.close();
+}
+
+/* Drawing inspection keeps a real engineering image and adds touch-sized
+   controls around the same pinch/pan transform used by gestures and wheels. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+  const page = await ctx.newPage();
+  await page.addInitScript((snap) => {
+    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+  }, fixture);
+  await page.goto(`${base}/#dies`);
+  await page.fill('.diesearch input', 'S80.106');
+  await page.waitForSelector('.mobile-results-open .lookup-result');
+  await page.locator('.lookup-result').filter({ hasText: 'SA80-106' }).first().click();
+  await page.click('.diedrawing');
+  await page.waitForSelector('dialog[open] .panzoom-viewport');
+  await page.waitForTimeout(320);
+  const zoom = await page.evaluate(() => ({
+    image: !!document.querySelector('dialog[open] .panzoom-viewport img[src]'),
+    controls: [...document.querySelectorAll('dialog[open] .panzoom-tools button')].map((button) => {
+      const box = button.getBoundingClientRect();
+      return { name: button.getAttribute('aria-label'), w: Math.round(box.width), h: Math.round(box.height) };
+    }),
+  }));
+  if (!zoom.image) fail('drawing zoom: engineering image is missing');
+  if (zoom.controls.length !== 3 || zoom.controls.some((control) => !control.name || control.w < 44 || control.h < 44)) {
+    fail(`drawing zoom: invalid controls ${JSON.stringify(zoom.controls)}`);
+  }
+  await page.click('dialog[open] button[aria-label="Zoom in"]');
+  const scaled = await page.getAttribute('dialog[open] .panzoom-viewport img', 'style');
+  if (!/scale\(1\.5\)/.test(scaled || '')) fail(`drawing zoom: Zoom in produced "${scaled || ''}"`);
+  else note('drawing zoom: pan/pinch surface and 44px controls pass');
   await ctx.close();
 }
 
