@@ -47,7 +47,8 @@ re-read.
 ## First run
 
 1. **Setup** → import the Rolling workbook, the CNC workbook, and the separate
-   Daily Schedule workbook.
+   Daily Schedule workbook. Optionally load the populated Material Requests
+   history to fill project colours that are absent from Daily Schedule.
 2. Pick your centre from the nav: **Rolling · FOM · CNC & FMC · Multi Punch**.
 3. Pick your machine from the sub-tabs, and work the queue.
 4. At the end of the shift, **Shift Update** → Write.
@@ -68,7 +69,7 @@ To use it on a phone, set up **Sync across devices** in Setup once — see below
 | CNC & FMC | Unassigned queue, CNC 1, FMC 1, FMC 2 | CNC workbook: `CNC & FMC` |
 | Multi Punch | Multi Punch | CNC workbook: `MultiPunch & SAW` |
 | Daily Schedule | Cutting-department day view grouped by project | Separate Daily Schedule workbook: exact `Daily Sched` sheet |
-| Projects | Project name, job code, colour/finish and series directory | Separate Daily Schedule workbook: exact `Daily Sched` sheet |
+| Projects | Project name, job code, colour/finish and series directory, ranked by scheduled quantity | Daily Schedule plus an optional compact colour reference from `Material Requests` and `Completed Orders` |
 | Forms | Downloadable blank production, incident and orientation PDFs | Versioned templates in `assets/forms/` |
 | Employees | Searchable device/user selector and locally managed employee list | Saved `people` records; no real roster is committed |
 
@@ -869,14 +870,18 @@ stored in `dailyOrders` with `dailyMeta`; they do not create machine tasks,
 change routing, or submit anything to purchasing. Manual jobs, history and
 shift-update posting remain based on the machine-schedule model. The 8560 rule
 is derived directly from FOM 2 and shown on the affected production line; it is
-not a purchase request.
+not a purchase request. The optional Material Requests import is similarly
+narrow: it retains only aggregate project/work-order colour mappings, never
+the source request rows, and adds no ordering workflow. Exact work-order
+matches are used before exact normalized project names.
 
 The stored data went with it. On first load the app rewrites its saved payload
 without the retired fields, so an existing install — and the shared JSON on the
 network drive — sheds them rather than carrying them indefinitely. State now
 holds `tasks`, `machineMeta`, the keyed overlay maps, `taskHistory`,
 `shiftUpdate`, `shiftLogs`, `manualTasks`, `todos`, `staging`, `deletions`,
-`people`, `dailyOrders`, `dailyMeta` and local `settings`.
+`people`, `dailyOrders`, `dailyMeta`, `projectColorReference` and local
+`settings`.
 
 (Shift-update posting has since come back, rebuilt around the machine layout —
 see above. An old install's `shiftLogs` were written in a different shape and

@@ -45,18 +45,24 @@ do not download the entire standalone artifact on every launch (see §6).
 This is the part that took real investigation. Getting it wrong produces an app
 that looks fine and is quietly wrong.
 
-### Three workbooks, with deliberately separate ownership
+### Four workbooks, with deliberately separate ownership
 
 | Workbook | Sheets read | Feeds |
 |---|---|---|
 | `Rolling_Schedule_2026.xlsx` | `Auto`, `Manual`, `Complete` | Rolling (Auto/Etas), Rolling (Manual/Iota) |
 | `CNC_Schedule_Rev_E.xlsx` | `FOM1`, `FOM2`, `FOM3`, `MultiPunch & SAW`, `CNC & FMC`, `Shift Update` | FOM 1–3, Multi Punch, the CNC/FMC queue, and the shift update |
 | Daily Schedule workbook | exact `Daily Sched` | Daily Schedule and Projects only: order/date/project/job code/colour/series reference |
+| Material Requests history (optional) | `Material Requests`, `Completed Orders` | Projects only: compact project/work-order colour mappings; source rows are discarded |
 
 The Daily Schedule workbook is intentionally isolated in `dailyOrders` and
 `dailyMeta`. It does **not** feed machine queues, routing, completion status,
 purchasing or inventory. Do not broaden that boundary without an explicit
 product decision.
+
+The Material Requests importer follows the same scope boundary. It stores and
+syncs only a compact `projectColorReference`, prioritizes exact work-order
+matches, and never saves the workbook's individual request rows. Projects are
+ordered by current Daily Schedule quantity so the busiest work appears first.
 
 ### Machines: CNC 2 and CNC 3 are gone, FMC 1 and FMC 2 replaced them
 
@@ -288,6 +294,8 @@ js/views/rush.js     (250)  rush dialog + Rush page
 js/views/backorders.js      shared back-order dialog + operational chase list
 js/views/shiftupdate.js(548) Shift Update write/read page
 js/import-daily.js          narrow parser for the separate `Daily Sched` sheet
+js/import-material-colors.js aggregate-only Material Requests colour parser
+js/material-colors.js       shared colour-reference picker/import action
 js/views/schedule.js        date-filtered Daily Schedule grouped by project
 js/views/projects.js        project/job-code/colour/series directory
 js/views/resources.js       downloadable internal form library

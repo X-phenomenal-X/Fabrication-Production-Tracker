@@ -328,6 +328,21 @@ for (const theme of ['light', 'dark']) {
     }
   }
 
+  // The real project directory is much larger than the sanitized fixture.
+  // Phones show the busiest six first, then reveal another bounded group.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${base}/#projects`);
+  await page.waitForSelector('.project-card');
+  const boundedProjects = await page.$$eval('.project-card', (cards) => cards.length);
+  if (boundedProjects !== 6 || !await page.$('.project-more')) {
+    fail(`projects/${theme}: phone directory is not bounded at six (${boundedProjects})`);
+  } else {
+    await page.click('.project-more');
+    await page.waitForFunction(() => document.querySelectorAll('.project-card').length > 6);
+    const expandedProjects = await page.$$eval('.project-card', (cards) => cards.length);
+    if (expandedProjects !== 12) fail(`projects/${theme}: Show more exposed ${expandedProjects}, expected 12`);
+  }
+
   // --- a machine page shows the newest shift update, not just the workbook ---
   // The fixture writes an afternoon update for Rolling (Auto) and FOM 1 that is
   // newer than the workbook's own entry; every other machine has only the

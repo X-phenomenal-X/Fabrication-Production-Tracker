@@ -13,6 +13,7 @@ const books = workbookPaths();
 const ROLLING = books.rolling;
 const CNC = books.cnc;
 const DAILY = books.daily;
+const MATERIAL = books.material;
 const SHOT = path.join(ROOT, 'test', 'screens');
 
 const RETIRED = ['orders', 'wip', 'prep', 'screens', 'progress', 'material', 'history',
@@ -170,11 +171,15 @@ await page.click('.hdr-setup');
 await page.waitForSelector('.drop');
 for (const [label, file] of [
   ['Rolling workbook', ROLLING], ['CNC workbook', CNC], ['Daily Schedule workbook', DAILY],
+  ['Material Requests history', MATERIAL],
 ]) {
   const ch = page.waitForEvent('filechooser');
   await page.click(`.drop:has-text("${label}") button`);
   await (await ch).setFiles(file);
-  await page.waitForSelector('dialog .stat', { timeout: 120000 });
+  await page.waitForSelector('dialog', { timeout: 120000 });
+  if (!await page.$('dialog .stat')) {
+    throw new Error(`${label} import failed: ${await page.$eval('dialog', (node) => node.textContent)}`);
+  }
   const n = await page.$eval('dialog .stat .n', (x) => x.textContent);
   step(`${label}: ${n} lines`);
   await page.click('dialog header button');
@@ -202,15 +207,35 @@ if (!dailyPrint?.title.startsWith('Daily Schedule —') || !dailyPrint.rows) {
 
 await gotoTab('Projects');
 await page.waitForSelector('.project-card');
-const projectDirectory = await page.evaluate(() => ({
-  cards: document.querySelectorAll('.project-card').length,
-  jobs: document.querySelectorAll('.project-facts .chip.work').length,
-  colors: document.querySelectorAll('.project-color').length,
-}));
+const projectDirectory = await page.evaluate(async () => {
+  const { state } = await import('/js/store.js');
+  const quantities = new Map();
+  for (const row of state.dailyOrders || []) {
+    const name = String(row.project || '').trim();
+    if (name) quantities.set(name, (quantities.get(name) || 0) + (Number(row.qty) || 0));
+  }
+  const expectedFirst = [...quantities].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+  return {
+    cards: document.querySelectorAll('.project-card').length,
+    jobs: document.querySelectorAll('.project-facts .chip.work').length,
+    colors: document.querySelectorAll('.project-color').length,
+    requestColors: document.querySelectorAll('.project-color.from-reference').length,
+    first: document.querySelector('.project-card h2')?.textContent,
+    expectedFirst,
+    referenceProjects: state.projectColorReference?.projectsCount || 0,
+  };
+});
 step('projects: ' + JSON.stringify(projectDirectory));
-if (!projectDirectory.cards || !projectDirectory.jobs || !projectDirectory.colors) {
+if (!projectDirectory.cards || !projectDirectory.jobs || !projectDirectory.colors
+    || !projectDirectory.requestColors || !projectDirectory.referenceProjects
+    || projectDirectory.first !== projectDirectory.expectedFirst || projectDirectory.cards !== 12) {
   throw new Error('project directory is incomplete: ' + JSON.stringify(projectDirectory));
 }
+await page.click('.project-more');
+await page.waitForFunction(() => document.querySelectorAll('.project-card').length > 12);
+const expandedProjects = await page.$$eval('.project-card', (cards) => cards.length);
+step(`projects expanded: ${projectDirectory.cards} -> ${expandedProjects}`);
+if (expandedProjects !== 18) throw new Error(`project directory did not reveal all projects: ${expandedProjects}`);
 
 await gotoTab('Forms');
 await page.waitForSelector('.resource-card');

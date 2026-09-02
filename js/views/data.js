@@ -12,6 +12,7 @@ import {
 import { importMachineWorkbook } from '../import-machines.js';
 import { staleImports } from '../model.js';
 import { MACHINE_BY_KEY } from '../machines.js';
+import { loadMaterialColorFile } from '../material-colors.js';
 
 let pendingHandle = null;
 
@@ -352,7 +353,7 @@ function firstRun(rerender) {
 
 export function renderData(rerender) {
   const mm = state.machineMeta || {};
-  const scheduleMeta = { ...mm, daily: state.dailyMeta };
+  const scheduleMeta = { ...mm, daily: state.dailyMeta, projectColors: state.projectColorReference };
   const sharing = cloudStatus().on || !!sharedFileName();
   const sharingProblem = cloudStatus().error || sharedFileStatus().error;
   const storage = storageStatus();
@@ -399,6 +400,11 @@ export function renderData(rerender) {
           title: 'Daily Schedule workbook',
           hint: 'Daily Sched sheet · projects, job codes, colours and dates',
           onFile: (f) => handleDailyFile(f, rerender),
+        })),
+        slot('Project colour reference', 'projectColors', dropZone({
+          title: 'Material Requests history',
+          hint: 'Material Requests + Completed Orders · colours only',
+          onFile: (f) => loadMaterialColorFile(f, rerender),
         })))));
 
   /* shared file */

@@ -21,6 +21,7 @@ export function workbookPaths() {
     return {
       ...explicit,
       daily: explicit.daily && fs.existsSync(explicit.daily) ? explicit.daily : fixture.daily,
+      material: fixture.material,
       synthetic: false,
     };
   }
@@ -31,7 +32,8 @@ export function workbookPaths() {
     cnc: `${old}/bae855fd-CNC_Schedule_Rev_E.xlsx`,
   };
   if (fs.existsSync(legacy.rolling) && fs.existsSync(legacy.cnc)) {
-    return { ...legacy, daily: ensureWorkbookFixtures().daily, synthetic: false };
+    const fixture = ensureWorkbookFixtures();
+    return { ...legacy, daily: fixture.daily, material: fixture.material, synthetic: false };
   }
   return ensureWorkbookFixtures();
 }

@@ -25,6 +25,11 @@ function colName(n) {
 }
 
 const dateCell = (iso) => ({ date: iso });
+const FIXTURE_PROJECTS = [
+  'Harbour Point', 'Elm Court', 'Station Square', 'Maple Ridge', 'Riverbend', 'Northgate',
+  'Copperfield', 'Foundry Court', 'Kingsway West', 'Old Mill Crossing', 'Bayfront East', 'Garden District',
+  'Juniper Tower', 'Parkline South', 'Cedar House', 'Market Square', 'West Harbour', 'Union Terrace',
+];
 
 function excelSerial(iso) {
   return Math.round((Date.parse(iso + 'T00:00:00Z') - Date.UTC(1899, 11, 30)) / 86400000);
@@ -123,7 +128,6 @@ function shiftUpdateRows({ archived = false } = {}) {
 }
 
 function dailyScheduleRows(count = 72) {
-  const projects = ['Harbour Point', 'Elm Court', 'Station Square', 'Maple Ridge', 'Riverbend', 'Northgate'];
   const colors = ['Charcoal Grey', 'Clear Anodized', 'Black', 'Architectural Bronze'];
   const series = ['8000', '8500', '8900'];
   const rows = [
@@ -138,7 +142,7 @@ function dailyScheduleRows(count = 72) {
   for (let i = 0; i < count; i++) {
     const date = `2026-08-${String(12 + (i % 6)).padStart(2, '0')}`;
     rows.push({
-      1: String(81000 + i), 2: `J-${100 + (i % 18)}`, 3: projects[i % projects.length],
+      1: String(81000 + i), 2: `J-${100 + (i % 18)}`, 3: FIXTURE_PROJECTS[i % FIXTURE_PROJECTS.length],
       4: `L${1 + (i % 20)}`, 5: 8 + (i % 48), 6: i % 9 === 0 ? 'Check latest elevation.' : null,
       12: series[i % series.length], 13: dateCell(`2026-08-${String(18 + (i % 6)).padStart(2, '0')}`),
       15: dateCell(`2026-08-${String(16 + (i % 6)).padStart(2, '0')}`), 16: dateCell(date),
@@ -146,6 +150,22 @@ function dailyScheduleRows(count = 72) {
       42: colors[i % colors.length],
     });
   }
+  return rows;
+}
+
+function materialRequestRows(completed = false) {
+  const rows = [{
+    1: 'ID', 2: 'Order Date', 3: completed ? 'Order No' : 'Work Order No',
+    4: completed ? 'Project ' : 'job name', 5: 'Floor', 6: 'Die #', 7: 'Size',
+    8: 'Color', 9: 'Quantity', 10: 'Reason',
+  }];
+  const finishes = ['UCFX14001', 'UC150911', 'K1285', 'Architectural Bronze', 'MILL', 'PRETRAIT'];
+  for (let i = 0; i < 54; i++) rows.push({
+    1: i + 1, 3: String(81000 + (i % 72)), 4: FIXTURE_PROJECTS[i % FIXTURE_PROJECTS.length],
+    6: `80.${String(100 + i).padStart(3, '0')}`, 7: 18,
+    8: i === 23 ? 'ANY' : finishes[i % finishes.length], 9: 2 + (i % 8),
+    10: completed ? 'RM - Remake' : 'CU - Cutting Issue',
+  });
   return rows;
 }
 
@@ -222,6 +242,7 @@ export function ensureWorkbookFixtures() {
   const rolling = path.join(dir, 'Rolling_Schedule_SANITIZED.xlsx');
   const cnc = path.join(dir, 'CNC_Schedule_SANITIZED.xlsx');
   const daily = path.join(dir, 'Daily_Schedule_SANITIZED.xlsx');
+  const material = path.join(dir, 'Material_Requests_SANITIZED.xlsx');
 
   fs.writeFileSync(rolling, workbook({
     Auto: taskRows('auto', 64),
@@ -240,5 +261,9 @@ export function ensureWorkbookFixtures() {
     'Shift Update Old': shiftUpdateRows({ archived: true }),
   }));
   fs.writeFileSync(daily, workbook({ 'Daily Sched': dailyScheduleRows() }));
-  return { rolling, cnc, daily, synthetic: true };
+  fs.writeFileSync(material, workbook({
+    'Material Requests': materialRequestRows(),
+    'Completed Orders': materialRequestRows(true),
+  }));
+  return { rolling, cnc, daily, material, synthetic: true };
 }

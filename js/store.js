@@ -35,6 +35,7 @@ export const state = {
   machineMeta: {},  // kind -> { fileName, importedAt, count }
   dailyOrders: [],  // separate Daily Sched workbook, read-only order rows
   dailyMeta: null,  // { fileName, importedAt, count, projects, colors }
+  projectColorReference: null, // aggregated Material Requests colours; source rows are never stored
   taskStatus: {},   // `${machine}|${wo}|${die}` -> { status, at, by }
   shiftUpdate: null, // latest Shift Update sheet: { date, shift, machines }
   taskNote: {},     // `${machine}|${wo}|${die}` -> { text, at, by }
@@ -689,6 +690,24 @@ export function setDailyImport({ rows, report }) {
   queueCloudPush({ base: true, change: false });
 }
 
+/** Replace the compact project-colour reference built from Material Requests.
+    Only aggregate mappings are saved and synced, never the workbook rows. */
+export function setProjectColorReference({ reference, report }) {
+  state.projectColorReference = changed({
+    projects: reference.projects || {},
+    workOrders: reference.workOrders || {},
+    fileName: report.fileName,
+    importedAt: report.importedAt,
+    count: report.count || 0,
+    projectsCount: report.projects || 0,
+    workOrdersCount: report.workOrders || 0,
+    colors: report.colors || 0,
+    parser: report.parser || 1,
+  });
+  save();
+  queueCloudPush({ base: true, change: false });
+}
+
 /* ---------- local persistence ---------- */
 
 function snapshot() {
@@ -698,6 +717,7 @@ function snapshot() {
     machineMeta: state.machineMeta,
     dailyOrders: state.dailyOrders,
     dailyMeta: state.dailyMeta,
+    projectColorReference: state.projectColorReference,
     taskStatus: state.taskStatus,
     shiftUpdate: state.shiftUpdate,
     taskNote: state.taskNote,
@@ -916,6 +936,7 @@ function observeSnapshot(snap) {
   }
   for (const rec of Object.values(snap?.machineMeta || {})) observeRevision(rec?.rev);
   observeRevision(snap?.dailyMeta?.rev);
+  observeRevision(snap?.projectColorReference?.rev);
   persistDeviceClock();
 }
 
@@ -971,6 +992,9 @@ function mergeSnapshot(remote) {
   if (recordWins(remote.dailyMeta, state.dailyMeta) && Array.isArray(remote.dailyOrders)) {
     state.dailyOrders = remote.dailyOrders;
     state.dailyMeta = remote.dailyMeta;
+  }
+  if (recordWins(remote.projectColorReference, state.projectColorReference)) {
+    state.projectColorReference = remote.projectColorReference;
   }
 }
 
@@ -1096,7 +1120,7 @@ async function flushSharedFile() {
    megabyte, changing only on re-import. `work` is what people actually do —
    a few kilobytes, changing constantly. Pushing them together would mean a
    phone uploading the workbooks every time somebody taps Done. */
-const CLOUD_BASE_KEYS = ['tasks', 'machineMeta', 'shiftUpdate', 'dailyOrders', 'dailyMeta'];
+const CLOUD_BASE_KEYS = ['tasks', 'machineMeta', 'shiftUpdate', 'dailyOrders', 'dailyMeta', 'projectColorReference'];
 
 function cloudDoc(part) {
   const snap = snapshot();
