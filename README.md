@@ -71,7 +71,7 @@ To use it on a phone, set up **Sync across devices** in Setup once — see below
 | Daily Schedule | Cutting-department day view grouped by project | Separate Daily Schedule workbook: exact `Daily Sched` sheet |
 | Projects | Project name, job code, colour/finish and series directory, ranked by scheduled quantity | Daily Schedule plus an optional compact colour reference from `Material Requests` and `Completed Orders` |
 | Forms | Downloadable blank production, incident and orientation PDFs | Versioned templates in `assets/forms/` |
-| Employees | Searchable device/user selector and locally managed employee list | Saved `people` records; no real roster is committed |
+| Employees | Searchable device/user selector and locally managed employee list; optional Abhay crew import | Saved `people` names; employee IDs and source rows are discarded and no real roster is committed |
 
 Machines with no lines scheduled still appear — a machine that is idle should
 look different from one that does not exist.

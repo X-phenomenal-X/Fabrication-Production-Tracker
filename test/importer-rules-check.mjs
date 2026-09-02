@@ -4,6 +4,7 @@
 import {
   isWorkOrder, PARSER_VERSION, SHIFT_UPDATE_SHEET,
 } from '../js/import-machines.js';
+import { employeeDisplayName } from '../js/import-employees.js';
 
 const accepted = [
   32127,
@@ -41,6 +42,17 @@ if (SHIFT_UPDATE_SHEET !== 'Shift Update') {
 }
 if (PARSER_VERSION < 5) {
   throw new Error('the importer change will not prompt existing devices to re-import');
+}
+
+for (const [source, expected] of [
+  ['Le, Kim', 'Kim Le'],
+  ['Ngan, Duong Thi Thu', 'Duong Thi Thu Ngan'],
+  ['Mendez Orbelina, Dalila', 'Dalila Mendez Orbelina'],
+  ['Abhay Badhwar', 'Abhay Badhwar'],
+]) {
+  if (employeeDisplayName(source) !== expected) {
+    throw new Error(`employee name ${source} became ${employeeDisplayName(source)}, expected ${expected}`);
+  }
 }
 
 console.log('Importer rules: OK');

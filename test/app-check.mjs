@@ -14,6 +14,7 @@ const ROLLING = books.rolling;
 const CNC = books.cnc;
 const DAILY = books.daily;
 const MATERIAL = books.material;
+const CREW = books.crew;
 const SHOT = path.join(ROOT, 'test', 'screens');
 
 const RETIRED = ['orders', 'wip', 'prep', 'screens', 'progress', 'material', 'history',
@@ -283,6 +284,25 @@ await page.waitForSelector('.employee-card');
 if (!await page.locator('.employee-card').filter({ hasText: 'Abhay' }).count()) {
   throw new Error('employee directory does not use the shared people list');
 }
+const crewChooser = page.waitForEvent('filechooser');
+await page.click('.employee-import');
+await (await crewChooser).setFiles(CREW);
+await page.waitForSelector('dialog .import-stats', { timeout: 120000 });
+const crewImport = await page.evaluate(async () => {
+  const { state } = await import('/js/store.js');
+  return {
+    cards: document.querySelectorAll('.employee-card').length,
+    people: state.people.length,
+    names: state.people.filter((name) => ['Nia Harper', 'Mateo Lopez', 'Isha Singh', 'Devon Chen', 'Amara Okafor'].includes(name)).length,
+    modal: document.querySelector('dialog')?.textContent,
+  };
+});
+step('employee roster: ' + JSON.stringify(crewImport));
+if (crewImport.cards !== 6 || crewImport.people !== 6 || crewImport.names !== 5
+    || !crewImport.modal.includes('5Active crew') || !crewImport.modal.includes('5Names added')) {
+  throw new Error('employee roster import is incomplete: ' + JSON.stringify(crewImport));
+}
+await page.click('dialog header button');
 
 // The cover is an operational briefing, not a decorative landing page: it
 // must expose real work and every shortcut must remain a full-size control.

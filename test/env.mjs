@@ -22,6 +22,7 @@ export function workbookPaths() {
       ...explicit,
       daily: explicit.daily && fs.existsSync(explicit.daily) ? explicit.daily : fixture.daily,
       material: fixture.material,
+      crew: fixture.crew,
       synthetic: false,
     };
   }
@@ -33,7 +34,7 @@ export function workbookPaths() {
   };
   if (fs.existsSync(legacy.rolling) && fs.existsSync(legacy.cnc)) {
     const fixture = ensureWorkbookFixtures();
-    return { ...legacy, daily: fixture.daily, material: fixture.material, synthetic: false };
+    return { ...legacy, daily: fixture.daily, material: fixture.material, crew: fixture.crew, synthetic: false };
   }
   return ensureWorkbookFixtures();
 }

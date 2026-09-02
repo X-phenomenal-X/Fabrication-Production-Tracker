@@ -3,7 +3,7 @@
    list is populated by the department and follows the same sync path as the
    operator picker in the header. */
 
-import { el, icon, toast } from '../ui.js';
+import { el, icon, toast, modal, fmtNum } from '../ui.js';
 import { state, save, me } from '../store.js';
 
 const view = { q: '' };
@@ -17,13 +17,49 @@ function initials(name) {
   return (parts.length > 1 ? parts[0][0] + parts.at(-1)[0] : parts[0]?.slice(0, 2) || '?').toUpperCase();
 }
 
+async function loadCrewFile(file, rerender) {
+  toast(`Reading ${file.name}…`, 60000);
+  try {
+    const { importEmployeeRoster } = await import('../import-employees.js');
+    const result = await importEmployeeRoster(await file.arrayBuffer(), { fileName: file.name });
+    const known = new Set((state.people || []).map((name) => cleanName(name).toLocaleLowerCase()));
+    const added = result.people.filter((name) => !known.has(name.toLocaleLowerCase()));
+    state.people.push(...added);
+    save();
+    modal('Abhay’s crew imported', el('div', {},
+      el('div.stats.import-stats', {},
+        el('div.stat', {}, el('div.n', {}, fmtNum(result.report.count)), el('div.k', {}, 'Active crew')),
+        el('div.stat', {}, el('div.n', {}, fmtNum(added.length)), el('div.k', {}, 'Names added')),
+        el('div.stat', {}, el('div.n', {}, fmtNum(result.report.count - added.length)), el('div.k', {}, 'Already listed'))),
+      el('p.small.muted', {}, 'Only names supervised by Abhay Badhwar were saved. Employee IDs, departments, shirt sizes and source rows were discarded.')));
+    toast(`${fmtNum(added.length)} crew name${added.length === 1 ? '' : 's'} added`);
+    rerender();
+  } catch (error) {
+    modal('Roster import failed', el('div', {},
+      el('p', {}, error.message),
+      el('p.small.muted', {}, 'Nothing already listed has been changed. Choose the UNION employee listing that contains the Abhay sheet.')));
+  } finally {
+    document.querySelectorAll('.toast').forEach((item) => item.remove());
+  }
+}
+
+function chooseCrewFile(rerender) {
+  const input = el('input', { type: 'file', accept: '.xlsx', style: { display: 'none' } });
+  input.addEventListener('change', () => {
+    if (input.files[0]) loadCrewFile(input.files[0], rerender);
+  });
+  document.body.append(input);
+  input.click();
+  input.remove();
+}
+
 function employeeCard(name, rerender) {
   const current = state.settings.me === name;
   return el('article.employee-card' + (current ? '.current' : ''), {},
     el('span.employee-avatar', { 'aria-hidden': 'true' }, initials(name)),
     el('div.employee-name', {},
       el('strong', {}, name),
-      el('span', {}, current ? 'Current device operator' : 'Cutting department')),
+      el('span', {}, current ? 'Current device operator' : 'Department employee')),
     current
       ? el('span.employee-current', {}, icon('check', { size: 15 }), 'This device')
       : el('button.employee-use', {
@@ -90,7 +126,9 @@ export function renderEmployees(rerender) {
           onsubmit: (event) => { event.preventDefault(); add(); },
         },
           el('label', {}, el('span', {}, 'Add to the list'), name),
-          el('button.primary', { type: 'submit' }, icon('plus', { size: 17 }), 'Add employee')))),
+          el('button.primary', { type: 'submit' }, icon('plus', { size: 17 }), 'Add employee')),
+        el('button.employee-import', { type: 'button', onclick: () => chooseCrewFile(rerender) },
+          icon('upload', { size: 17 }), 'Import Abhay’s crew'))),
 
     people.length
       ? el('div.employee-grid', {},
@@ -105,5 +143,5 @@ export function renderEmployees(rerender) {
 
     el('div.employee-privacy', {},
       icon('cloud', { size: 16 }),
-      el('span', {}, 'Names use the tracker’s existing local/shared state. No employee roster is built into the public app files.')));
+      el('span', {}, 'Names use the tracker’s existing local/shared state. Roster imports retain names only; no employee roster is built into the public app files.')));
 }

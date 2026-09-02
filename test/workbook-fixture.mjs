@@ -169,6 +169,23 @@ function materialRequestRows(completed = false) {
   return rows;
 }
 
+function employeeRosterRows() {
+  const rows = [{
+    1: 'Status', 2: 'Co Code', 3: 'Pos ID', 4: 'Name', 5: 'Dept Name',
+    6: 'Dept Code', 7: 'Shift', 8: 'Supervisor Legal Name',
+    9: 'Reports To Legal Name', 10: 'Shirt Size',
+  }];
+  const names = ['Harper, Nia', 'Lopez, Mateo', 'Singh, Isha', 'Chen, Devon', 'Okafor, Amara'];
+  names.forEach((name, index) => rows.push({
+    1: 'Active', 2: index > 2 ? 'ZKA' : null, 3: `TEST${String(index + 1).padStart(5, '0')}`,
+    4: name, 5: index % 2 ? 'CNC' : 'Cutting', 6: index % 2 ? 5227 : 5233,
+    7: 'Afternoon', 8: 'Badhwar, Abhay (TEST005819)', 9: 'Badhwar, Abhay',
+  }));
+  rows.push({ 1: 'Active', 3: 'TEST99998', 4: 'Patel, Zoya', 5: 'Cutting', 7: 'Afternoon', 8: 'Other, Supervisor (TEST000001)' });
+  rows.push({ 1: 'Inactive', 3: 'TEST99999', 4: 'Morgan, Eli', 5: 'Cutting', 7: 'Afternoon', 8: 'Badhwar, Abhay (TEST005819)' });
+  return rows;
+}
+
 function storedZip(files) {
   const locals = [];
   const centrals = [];
@@ -243,6 +260,7 @@ export function ensureWorkbookFixtures() {
   const cnc = path.join(dir, 'CNC_Schedule_SANITIZED.xlsx');
   const daily = path.join(dir, 'Daily_Schedule_SANITIZED.xlsx');
   const material = path.join(dir, 'Material_Requests_SANITIZED.xlsx');
+  const crew = path.join(dir, 'Employee_Roster_SANITIZED.xlsx');
 
   fs.writeFileSync(rolling, workbook({
     Auto: taskRows('auto', 64),
@@ -265,5 +283,6 @@ export function ensureWorkbookFixtures() {
     'Material Requests': materialRequestRows(),
     'Completed Orders': materialRequestRows(true),
   }));
-  return { rolling, cnc, daily, material, synthetic: true };
+  fs.writeFileSync(crew, workbook({ Abhay: employeeRosterRows() }));
+  return { rolling, cnc, daily, material, crew, synthetic: true };
 }
