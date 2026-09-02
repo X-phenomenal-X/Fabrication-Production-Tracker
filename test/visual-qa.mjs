@@ -245,6 +245,28 @@ for (const theme of ['light', 'dark']) {
         fail(`${screen.name} @ ${vp.name}/${theme}: ${unnamed.length} control(s) with no accessible name`
           + ` — e.g. ${unnamed[0]}`);
       }
+
+      // The full controlled library is large, but the phone opens to a five-item
+      // Production overview. Categories and search reveal the rest without
+      // making a supervisor scroll through every HR form and traveler first.
+      if (vp.name === 'phone' && screen.hash === 'resources') {
+        const resources = await page.evaluate(() => ({
+          screens: Math.round((document.documentElement.scrollHeight / innerHeight) * 10) / 10,
+          cards: document.querySelectorAll('.resource-card').length,
+          visible: document.querySelectorAll('.resource-card:not([hidden])').length,
+          categories: document.querySelectorAll('.resource-category').length,
+          commandTop: Math.round(document.querySelector('.resource-command')?.getBoundingClientRect().top || -1),
+        }));
+        if (resources.cards !== 22 || resources.visible !== 5 || resources.categories !== 6) {
+          fail(`resources @ phone/${theme}: library overview is incomplete ${JSON.stringify(resources)}`);
+        }
+        if (resources.screens > 4) {
+          fail(`resources @ phone/${theme}: Production overview is ${resources.screens} screens tall, over 4`);
+        }
+        if (resources.commandTop < 96 || resources.commandTop > 300) {
+          fail(`resources @ phone/${theme}: form finder starts at ${resources.commandTop}px`);
+        }
+      }
       /* The phone header once hid both quick actions to buy nav width. That
          made the section book and Setup unreachable even though both features
          were still bundled. Assert visibility, then follow the exact route an
@@ -633,7 +655,8 @@ const CONTRAST = `(() => {
   };
   const out = [];
   const seen = new Set();
-  for (const sel of ['button.primary', '.overview-done strong', '.overview-done small', '.overview-done-mark',
+  for (const sel of ['button.primary', 'a.resource-download', '.resource-category.on',
+                     '.overview-done strong', '.overview-done small', '.overview-done-mark',
                      '.badge-rush', '.badge-bo', '.badge-moved', '.badge-edited', '.die',
                      '.cstat b', '.cstat i', '.dgroup-label', '.line-where', '.muted',
                      '.chip', '.seg-btn.on', '.nowrun-head', '.line-id .mono']) {
@@ -669,6 +692,10 @@ for (const theme of ['light', 'dark']) {
   await page.goto(`${base}/#overview`);
   await page.waitForSelector('.overview-done');
   pairs.push(...(await page.evaluate(CONTRAST)).filter((pair) => pair.sel.startsWith('.overview-done')));
+  await page.goto(`${base}/#resources`);
+  await page.waitForSelector('.resource-card');
+  pairs.push(...(await page.evaluate(CONTRAST)).filter((pair) =>
+    pair.sel === 'a.resource-download' || pair.sel === '.resource-category.on'));
   const bad = pairs.filter((p) => p.r < p.need);
   if (bad.length) {
     for (const b of bad) {

@@ -86,9 +86,10 @@ if (!marked) {
         + ' — every first visit would download it in the background');
     }
   }
-  const pdfs = precache.filter((rel) => rel.endsWith('.pdf'));
-  if (pdfs.length) {
-    fail(`blank PDFs are in the offline shell (${pdfs.join(', ')}) — forms should cache only after first use`);
+  const documents = precache.filter((rel) => /\.(pdf|docx|xlsx|pptx)$/i.test(rel));
+  if (documents.length) {
+    fail(`department documents are in the offline shell (${documents.join(', ')})`
+      + ' — forms should cache only after first use');
   }
 
   const shell = precache.reduce((n, rel) => n + (sizeOf[rel] || 0), 0);
@@ -107,7 +108,15 @@ if (!marked) {
 
 /* ---------- the whole hosted build ---------- */
 
-budget('hosted build', total, 32 * MB, MB, 'MB');
+/* The controlled forms library is a deliberate download archive, not app
+   startup weight. Keep its own ceiling and retain the original 32 MB budget
+   for everything else so adding documents cannot hide core growth. */
+const formLibrary = files
+  .filter((file) => file.rel.startsWith('assets/forms/'))
+  .reduce((sum, file) => sum + file.size, 0);
+budget('forms library', formLibrary, 13 * MB, MB, 'MB');
+budget('hosted app excluding forms', total - formLibrary, 32 * MB, MB, 'MB');
+budget('hosted build', total, 45 * MB, MB, 'MB');
 budget('initial HTML', sizeOf['index.html'] || 0, 4 * KB);
 
 /* ---------- the standalone rollback ---------- */

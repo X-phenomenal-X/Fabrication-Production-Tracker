@@ -729,7 +729,7 @@ function printShiftUpdate(log, { draft: isDraft = false, blank = false } = {}) {
   });
 }
 
-function printBlankShiftUpdate() {
+export function printBlankShiftUpdate() {
   if (!operationalShift()) {
     toast('Blank forms are available for Day and Afternoon shifts');
     return;

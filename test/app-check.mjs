@@ -214,11 +214,43 @@ if (!projectDirectory.cards || !projectDirectory.jobs || !projectDirectory.color
 
 await gotoTab('Forms');
 await page.waitForSelector('.resource-card');
-const forms = await page.$$eval('.resource-card a.resource-download', (links) =>
-  links.map((link) => link.getAttribute('href')));
-step('forms: ' + forms.join(', '));
-if (forms.length !== 3 || forms.some((href) => !href?.endsWith('.pdf'))) {
-  throw new Error('forms hub does not expose three PDFs');
+const forms = await page.evaluate(() => ({
+  categories: document.querySelectorAll('.resource-category').length,
+  cards: document.querySelectorAll('.resource-card').length,
+  visible: document.querySelectorAll('.resource-card:not([hidden])').length,
+  downloads: [...document.querySelectorAll('.resource-card a.resource-download')]
+    .map((link) => link.getAttribute('href')),
+  printActions: document.querySelectorAll('.resource-card button.resource-download').length,
+}));
+step('forms: ' + JSON.stringify(forms));
+if (forms.categories !== 6 || forms.cards !== 22 || forms.visible !== 5
+    || forms.downloads.length !== 21 || forms.printActions !== 1) {
+  throw new Error('forms hub inventory or initial Production view is incomplete: ' + JSON.stringify(forms));
+}
+if (forms.downloads.some((href) => !/^assets\/forms\/official\/.+\.(pdf|docx|pptx)$/.test(href || ''))) {
+  throw new Error('forms hub includes an unexpected download path: ' + JSON.stringify(forms.downloads));
+}
+for (const href of forms.downloads) {
+  if (!fs.existsSync(path.join(ROOT, href))) throw new Error(`forms hub asset is missing: ${href}`);
+}
+
+await page.click('.resource-category[data-category="travelers"]');
+if (await page.locator('.resource-card:not([hidden])').count() !== 8) {
+  throw new Error('Job Travelers category is not bounded to its eight approved files');
+}
+await page.fill('.resource-search input', 'incident');
+if (await page.locator('.resource-card:not([hidden])').count() !== 1
+    || !await page.locator('.resource-card:not([hidden])').filter({ hasText: 'Incident' }).count()) {
+  throw new Error('forms search did not find the incident report across categories');
+}
+await page.click('.resource-category[data-category="production"]');
+const resourcePrintCount = await page.evaluate(() => window.__printCaptures.length);
+await page.click('.resource-card[data-category="production"] button.resource-download');
+await page.waitForFunction((count) => window.__printCaptures.length > count, resourcePrintCount);
+const resourceShiftPrint = await page.evaluate(() => window.__printCaptures.at(-1));
+if (!resourceShiftPrint?.title?.includes('shift update — blank')
+    || !resourceShiftPrint.text.includes('BLANK FORM · FILL BY HAND')) {
+  throw new Error('Forms does not print the real blank Shift Update sheet');
 }
 
 await gotoTab('Employees');
