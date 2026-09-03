@@ -16,7 +16,7 @@
 import {
   el, chip, icon, fmtDate, fmtNum, fmtWhen, toast, confirmDialog,
 } from '../ui.js';
-import { state, addTodo, setTodo, deleteTodo, me } from '../store.js';
+import { addTodo, setTodo, deleteTodo, me, directoryPeople } from '../store.js';
 import {
   openTodos, todayBoard, shiftWritten, today, hasTasks, machineConfig,
 } from '../model.js';
@@ -78,7 +78,7 @@ function listPanel(ref, rerender, go) {
     onkeydown: (e) => { if (e.key === 'Enter') add(); },
   });
 
-  const people = state.people || [];
+  const people = directoryPeople();
   const who = el('select', { 'aria-label': 'Who it is for', style: { width: 'auto', minWidth: '150px' } },
     el('option', { value: '' }, 'Anyone'),
     ...people.map((p) => el('option', { value: p, selected: p === me() }, p)));

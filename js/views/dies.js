@@ -709,6 +709,10 @@ function lookupWorkspace({ initial = '', onQuery = () => {}, persist = false } =
     clearTimeout(timer);
     mobileResultsOpen = true;
     mobileParentAssembly = null;
+    // Preserve the keystroke immediately. The shell can legitimately rerender
+    // while the 90 ms search debounce is pending (for example when sync comes
+    // online); without this, the replacement view reopened with an empty box.
+    remember();
     timer = setTimeout(() => { selected = ''; render(); }, 90);
   });
 

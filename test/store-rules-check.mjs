@@ -1,7 +1,10 @@
 /* Sync rules that do not need a browser or the real schedules.
    Run: node test/store-rules-check.mjs */
 
-import { mergeRecords } from '../js/store.js';
+import {
+  mergeRecords, state, employeeDirectory, appPeople,
+} from '../js/store.js';
+import { importEmployees, upsertEmployee, archiveEmployee } from '../js/employees.js';
 import { shiftWindow, today } from '../js/model.js';
 import { SHIFT_ORDER, breakRanges, shiftAt, shiftStatusAt } from '../js/shifts.js';
 import { HINGES_PER_8560_VENT, hingeRequirement, is8560VentTask } from '../js/material-rules.js';
@@ -80,5 +83,40 @@ const migrated = mergeRecords(
   { line: { status: 'STALE', at: '2099-01-01T00:00:00.000Z' } },
 );
 if (migrated.line.status !== 'CURRENT') throw new Error('a legacy record beat a revisioned record');
+
+// Employee names and tracker identities are different lists. A roster import
+// must not turn every operator into an app user, and even a manual Employee
+// record cannot bypass the management-role guard.
+state.people = ['Legacy Supervisor', 'Floor Employee'];
+state.employees = {};
+state.settings.me = 'Legacy Supervisor';
+importEmployees([{
+  name: 'Floor Employee', department: 'Cutting', shift: 'AFTERNOON',
+  role: 'EMPLOYEE', active: true, appAccess: true,
+}]);
+if (appPeople().join(',') !== 'Legacy Supervisor') {
+  throw new Error('a roster employee appeared in the tracker identity picker');
+}
+const floor = employeeDirectory().find((record) => record.name === 'Floor Employee');
+if (!floor || floor.department !== 'Cutting' || floor.shift !== 'AFTERNOON' || floor.appAccess) {
+  throw new Error('the roster did not create a directory-only employee');
+}
+upsertEmployee({ ...floor, role: 'EMPLOYEE', appAccess: true });
+if (appPeople().includes('Floor Employee')) throw new Error('an Employee role was granted tracker access');
+const lead = upsertEmployee({
+  name: 'Jordan Lead', department: 'Cutting', shift: 'DAY',
+  role: 'LEAD_HAND', active: true, appAccess: true,
+});
+if (!appPeople().includes('Jordan Lead')) throw new Error('an enabled lead hand is missing from app users');
+const renamed = upsertEmployee({ ...lead, originalName: lead.name, name: 'Jordan Lead Hand' });
+if (employeeDirectory().some((record) => record.name === 'Jordan Lead')
+    || !appPeople().includes('Jordan Lead Hand')) {
+  throw new Error('renaming an app user left the old directory identity behind');
+}
+archiveEmployee(renamed);
+if (employeeDirectory().some((record) => record.name === 'Jordan Lead Hand')
+    || appPeople().includes('Jordan Lead Hand')) {
+  throw new Error('an archived employee remained active in the directory');
+}
 
 console.log('Store rules: OK');

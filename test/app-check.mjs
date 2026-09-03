@@ -290,17 +290,83 @@ await (await crewChooser).setFiles(CREW);
 await page.waitForSelector('dialog .import-stats', { timeout: 120000 });
 const crewImport = await page.evaluate(async () => {
   const { state } = await import('/js/store.js');
+  const store = await import('/js/store.js');
   return {
     cards: document.querySelectorAll('.employee-card').length,
     people: state.people.length,
+    employees: Object.keys(state.employees || {}).length,
+    appUsers: store.appPeople(),
     names: state.people.filter((name) => ['Nia Harper', 'Mateo Lopez', 'Isha Singh', 'Devon Chen', 'Amara Okafor'].includes(name)).length,
+    niaCard: [...document.querySelectorAll('.employee-card')]
+      .find((card) => card.textContent.includes('Nia Harper'))?.textContent,
     modal: document.querySelector('dialog')?.textContent,
   };
 });
 step('employee roster: ' + JSON.stringify(crewImport));
-if (crewImport.cards !== 6 || crewImport.people !== 6 || crewImport.names !== 5
-    || !crewImport.modal.includes('5Active crew') || !crewImport.modal.includes('5Names added')) {
+if (crewImport.cards !== 6 || crewImport.people !== 6 || crewImport.employees !== 5
+    || crewImport.names !== 5 || crewImport.appUsers.join(',') !== 'Abhay'
+    || !crewImport.niaCard.includes('Cutting · Afternoon shift')
+    || !crewImport.niaCard.includes('Directory only')
+    || !crewImport.modal.includes('5Active crew') || !crewImport.modal.includes('5New records')) {
   throw new Error('employee roster import is incomplete: ' + JSON.stringify(crewImport));
+}
+await page.click('dialog header button');
+
+// A roster import creates employees, not tracker users. Access is an explicit
+// management decision and can only be enabled for a lead hand, supervisor or
+// manager from the employee editor.
+const nia = page.locator('.employee-card').filter({ hasText: 'Nia Harper' });
+await nia.locator('.employee-edit').click();
+await page.waitForSelector('dialog .employee-editor');
+await page.fill('dialog .employee-department-input', 'FOM');
+await page.selectOption('dialog .employee-role-input', 'LEAD_HAND');
+await page.check('dialog .employee-access-input');
+step('employee editor fields: ' + JSON.stringify(await page.evaluate(() => ({
+  name: document.querySelector('dialog .employee-name-input')?.value,
+  department: document.querySelector('dialog .employee-department-input')?.value,
+  shift: document.querySelector('dialog .employee-shift-input')?.value,
+  role: document.querySelector('dialog .employee-role-input')?.value,
+  access: document.querySelector('dialog .employee-access-input')?.checked,
+}))));
+await page.click('dialog footer button.primary');
+await page.waitForSelector('dialog', { state: 'detached' });
+const employeeEdit = await page.evaluate(async () => {
+  const store = await import('/js/store.js');
+  const niaRecord = Object.values(store.state.employees).find((record) => record.name === 'Nia Harper');
+  return {
+    role: niaRecord?.role,
+    department: niaRecord?.department,
+    access: niaRecord?.appAccess,
+    appUsers: store.appPeople(),
+    picker: [...document.querySelectorAll('.whopick option')].map((option) => option.textContent),
+  };
+});
+step('employee edit and access: ' + JSON.stringify(employeeEdit));
+if (employeeEdit.role !== 'LEAD_HAND' || employeeEdit.department !== 'FOM' || !employeeEdit.access
+    || employeeEdit.appUsers.join(',') !== 'Abhay,Nia Harper'
+    || employeeEdit.picker.join(',') !== 'Select app user,Abhay,Nia Harper') {
+  throw new Error('employee editing or tracker access is wrong: ' + JSON.stringify(employeeEdit));
+}
+
+const crewRefreshChooser = page.waitForEvent('filechooser');
+await page.click('.employee-import');
+await (await crewRefreshChooser).setFiles(CREW);
+await page.waitForSelector('dialog .import-stats', { timeout: 120000 });
+const crewRefresh = await page.evaluate(async () => {
+  const store = await import('/js/store.js');
+  const niaRecord = Object.values(store.state.employees).find((record) => record.name === 'Nia Harper');
+  return {
+    department: niaRecord?.department,
+    role: niaRecord?.role,
+    access: niaRecord?.appAccess,
+    records: Object.keys(store.state.employees || {}).length,
+    modal: document.querySelector('dialog')?.textContent,
+  };
+});
+step('employee roster refresh: ' + JSON.stringify(crewRefresh));
+if (crewRefresh.department !== 'FOM' || crewRefresh.role !== 'LEAD_HAND' || !crewRefresh.access
+    || crewRefresh.records !== 5 || !crewRefresh.modal.includes('0Records updated')) {
+  throw new Error('roster refresh overwrote a manual employee edit: ' + JSON.stringify(crewRefresh));
 }
 await page.click('dialog header button');
 

@@ -6,7 +6,7 @@
    by the centre view, so there is exactly one place a shortage is recorded. */
 
 import { el, chip, icon, fmtDate, fmtNum, fmtWhen, toast, modal } from '../ui.js';
-import { state, setBackOrder, clearBackOrder, me } from '../store.js';
+import { setBackOrder, clearBackOrder, me, directoryPeople } from '../store.js';
 import {
   allBackOrders, resolveBackOrder, backOrderFor, taskStatusKey, hasTasks,
   machineConfig,
@@ -39,7 +39,7 @@ export function backOrderDialog(task, rerender) {
 
   // Names already in the app, plus an escape hatch for a buyer or supplier
   // contact who is not a tracker user.
-  const people = state.people || [];
+  const people = directoryPeople();
   const known = cur.assignee && !people.includes(cur.assignee) ? [cur.assignee] : [];
   const nameInput = el('input', {
     value: cur.assignee || '', placeholder: 'Name',

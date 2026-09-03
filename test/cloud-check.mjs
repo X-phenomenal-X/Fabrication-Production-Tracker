@@ -161,6 +161,11 @@ step('PC connected to: ' + await connect(pc));
 // A status, a rush and a note — one of each kind of overlay.
 const pcWork = await pc.evaluate(() => import('/js/model.js').then(async (m) => {
   const s = await import('/js/store.js');
+  const employees = await import('/js/employees.js');
+  employees.upsertEmployee({
+    name: 'Jordan Lead', department: 'Cutting', shift: 'DAY',
+    role: 'LEAD_HAND', active: true, appAccess: true,
+  });
   const row = m.tasksForMachine('roll-auto').find((r) => r.status.key === 'NOT_STARTED');
   const key = m.taskStatusKey(row.task);
   s.setTaskStatus(key, 'IN_PROGRESS');
@@ -174,7 +179,7 @@ const queued = await pc.evaluate(() => import('/js/store.js').then((s) => ({
   pending: s.cloudStatus().pending,
   unsafeToClose: s.hasUnsyncedChanges(),
 })));
-if (queued.pending !== 3) throw new Error(`pending counter lost an edit: ${JSON.stringify(queued)}`);
+if (queued.pending !== 4) throw new Error(`pending counter lost an edit: ${JSON.stringify(queued)}`);
 if (!queued.unsafeToClose) throw new Error('pending cloud work would not warn before close');
 await pc.waitForFunction(() => document.querySelector('.sync-chip')?.textContent.includes('pending'));
 
@@ -225,6 +230,8 @@ const onPhone = await phone.evaluate((key) => import('/js/store.js').then((s) =>
     note: s.state.taskNote[key]?.text ?? null,
     rushPage: m.allRush().length,
     who: s.state.taskStatus[key]?.by ?? null,
+    employee: Object.values(s.state.employees || {}).find((record) => record.name === 'Jordan Lead') || null,
+    appUsers: s.appPeople(),
   }))), pcWork.key);
 step('phone sees: ' + JSON.stringify(onPhone));
 if (!onPhone.tasks) throw new Error('the phone did not receive the imported schedules');
@@ -232,6 +239,10 @@ if (onPhone.status !== 'IN_PROGRESS') throw new Error('status did not reach the 
 if (!onPhone.rush) throw new Error('rush did not reach the phone');
 if (!onPhone.note) throw new Error('note did not reach the phone');
 if (onPhone.who !== 'Abhay') throw new Error('the update lost who made it');
+if (onPhone.employee?.role !== 'LEAD_HAND' || !onPhone.employee?.appAccess
+    || !onPhone.appUsers.includes('Jordan Lead')) {
+  throw new Error('the employee directory or app-user status did not reach the phone');
+}
 
 // The phone should be able to work without importing anything itself.
 await phone.click('.mobile-route');

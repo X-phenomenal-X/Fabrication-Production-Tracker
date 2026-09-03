@@ -468,6 +468,19 @@ export function makeFixture({ today = '2026-08-14', volume = 'heavy' } = {}) {
         at: iso(base - 9000000), by: 'Abhay' },
     },
 
+    employees: Object.fromEntries(PEOPLE.map((name, index) => [`employee-${index + 1}`, {
+      id: `employee-${index + 1}`,
+      name,
+      department: index === 4 ? 'CNC' : 'Cutting',
+      shift: index % 2 ? 'AFTERNOON' : 'DAY',
+      role: name === 'Abhay' ? 'SUPERVISOR' : name === 'Marek' ? 'LEAD_HAND' : 'EMPLOYEE',
+      active: true,
+      appAccess: name === 'Abhay' || name === 'Marek',
+      aliases: [],
+      source: 'test-fixture',
+      at: iso(base - 86400000),
+      by: 'Abhay',
+    }])),
     people: PEOPLE,
     settings: { me: 'Abhay' },
   };

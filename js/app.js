@@ -5,9 +5,9 @@ import { allRush, allBackOrders, hasTasks, openTodos, openCountFor } from './mod
 import { machinesByGroup } from './machines.js';
 import { brandLockup } from './brand.js';
 import {
-  state, loadLocal, save, onChange, me, sharedFileName, cloudEnabled,
+  state, loadLocal, onChange, me, sharedFileName, cloudEnabled,
   initCloud, storageStatus, cloudStatus, sharedFileStatus, retrySync,
-  hasUnsyncedChanges, applyTheme,
+  hasUnsyncedChanges, applyTheme, appPeople, setCurrentAppUser,
 } from './store.js';
 import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
@@ -121,31 +121,18 @@ function go(key) {
 }
 
 function whoAmI() {
-  const people = state.people.length ? state.people : [];
+  const people = appPeople();
   // Width is a layout decision and belongs in the stylesheet — as an inline
   // style it beat the phone rules and squeezed the centre scroller to nothing.
   const sel = el('select.whopick', {
     'aria-label': 'Who are you?',
     onchange: (e) => {
-      if (e.target.value === '__add') {
-        const name = prompt('Your name');
-        if (name && name.trim()) {
-          const n = name.trim();
-          if (!state.people.includes(n)) state.people.push(n);
-          state.settings.me = n;
-          save();
-        }
-        scheduleRender();
-        return;
-      }
-      state.settings.me = e.target.value || null;
-      save();
+      setCurrentAppUser(e.target.value);
       scheduleRender();
     },
   },
-    el('option', { value: '', selected: !state.settings.me }, 'Who are you?'),
-    ...people.map((p) => el('option', { value: p, selected: state.settings.me === p }, p)),
-    el('option', { value: '__add' }, '+ Add name…'));
+    el('option', { value: '', selected: me() === 'Unassigned' }, 'Select app user'),
+    ...people.map((p) => el('option', { value: p, selected: me() === p }, p)));
   return sel;
 }
 

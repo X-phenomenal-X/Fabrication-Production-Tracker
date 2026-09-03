@@ -1,12 +1,13 @@
 /* Narrow employee roster import for Abhay's active direct crew.
 
    The public app never ships a real roster. A supervisor loads the internal
-   workbook from the Employees page; only display names are returned. Position
-   IDs, departments, shirt sizes and all source rows are discarded. */
+   workbook from the Employees page; only the operational directory fields —
+   display name, department and shift — are returned. Position IDs, clothing
+   sizes and all source rows are discarded. */
 
 import { readXlsx } from './xlsx.js';
 
-export const EMPLOYEE_ROSTER_PARSER_VERSION = 1;
+export const EMPLOYEE_ROSTER_PARSER_VERSION = 2;
 export const CREW_SHEET = 'Abhay';
 export const CREW_SUPERVISOR = 'Badhwar, Abhay';
 
@@ -28,19 +29,30 @@ export function employeeDisplayName(value) {
 
 function columns(sheet) {
   const headings = sheet.rows.find((row) => row.r === 1)?.cells || [];
-  const wanted = {
+  const required = {
     status: 'STATUS',
     name: 'NAME',
     supervisor: 'SUPERVISOR LEGAL NAME',
   };
+  const optional = {
+    department: 'DEPT NAME',
+    shift: 'SHIFT',
+  };
   const found = {};
-  for (const [field, heading] of Object.entries(wanted)) {
+  for (const [field, heading] of Object.entries({ ...required, ...optional })) {
     const index = headings.findIndex((value) => key(value) === heading);
     if (index >= 0) found[field] = index;
   }
-  const missing = Object.keys(wanted).filter((field) => found[field] == null);
+  const missing = Object.keys(required).filter((field) => found[field] == null);
   if (missing.length) throw new Error(`${CREW_SHEET} is missing ${missing.join(', ')} column${missing.length === 1 ? '' : 's'}.`);
   return found;
+}
+
+function shift(value) {
+  const valueKey = key(value);
+  if (valueKey === 'AFT' || valueKey.includes('AFTERNOON')) return 'AFTERNOON';
+  if (valueKey.includes('DAY')) return 'DAY';
+  return '';
 }
 
 export async function importEmployeeRoster(arrayBuffer, { fileName = 'Employee listing.xlsx' } = {}) {
@@ -51,7 +63,7 @@ export async function importEmployeeRoster(arrayBuffer, { fileName = 'Employee l
   }
 
   const cols = columns(sheet);
-  const names = new Map();
+  const records = new Map();
   let inactive = 0;
   let otherSupervisor = 0;
 
@@ -60,20 +72,31 @@ export async function importEmployeeRoster(arrayBuffer, { fileName = 'Employee l
     if (key(row.cells[cols.status]) !== 'ACTIVE') { inactive++; continue; }
     if (key(row.cells[cols.supervisor]) !== key(CREW_SUPERVISOR)) { otherSupervisor++; continue; }
     const name = employeeDisplayName(row.cells[cols.name]);
-    if (name) names.set(name.toLocaleLowerCase(), name);
+    if (name) records.set(name.toLocaleLowerCase(), {
+      name,
+      department: cols.department == null ? '' : text(row.cells[cols.department]),
+      shift: cols.shift == null ? '' : shift(row.cells[cols.shift]),
+      role: 'EMPLOYEE',
+      active: true,
+      appAccess: false,
+    });
   }
 
-  const people = [...names.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-  if (!people.length) throw new Error(`No active employees supervised by ${CREW_SUPERVISOR} were found.`);
+  const employees = [...records.values()]
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  if (!employees.length) throw new Error(`No active employees supervised by ${CREW_SUPERVISOR} were found.`);
 
   return {
-    people,
+    employees,
+    // Kept for older callers while the structured employee directory rolls
+    // out. New code consumes `employees` above.
+    people: employees.map((employee) => employee.name),
     report: {
       fileName,
       importedAt: new Date().toISOString(),
       parser: EMPLOYEE_ROSTER_PARSER_VERSION,
       supervisor: CREW_SUPERVISOR,
-      count: people.length,
+      count: employees.length,
       inactive,
       otherSupervisor,
     },

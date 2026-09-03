@@ -7,7 +7,7 @@ import {
   connectSharedFile, reconnectSharedFile, grantSharedFile, pullSharedFile,
   supportsSharedFile, sharedFileName, disconnectSharedFile, me,
   connectCloud, disconnectCloud, cloudStatus, cloudConfig, retrySync,
-  sharedFileStatus, storageStatus, applyTheme,
+  sharedFileStatus, storageStatus, applyTheme, appPeople, employeeDirectory,
 } from '../store.js';
 import { importMachineWorkbook } from '../import-machines.js';
 import { staleImports } from '../model.js';
@@ -317,6 +317,7 @@ function cloudSection(rerender) {
 function firstRun(rerender) {
   const mm = state.machineMeta || {};
   const sharing = cloudStatus().on || !!sharedFileName();
+  const users = appPeople();
 
   const steps = [
     { n: 1, label: 'Import the Rolling schedule', done: !!mm.rolling,
@@ -325,8 +326,8 @@ function firstRun(rerender) {
       hint: 'FOM 1–3, Multi Punch, CNC & FMC, and the shift update' },
     { n: 3, label: 'Set up sharing', done: sharing,
       hint: 'Cloud sync for phones, or one file on the shared drive' },
-    { n: 4, label: 'Add the crew', done: (state.people || []).length > 0,
-      hint: 'So every change is recorded against a name' },
+    { n: 4, label: 'Add an app user', done: users.length > 0,
+      hint: 'A lead hand, supervisor or manager who uses the tracker' },
   ];
   const left = steps.filter((s) => !s.done);
 
@@ -338,7 +339,7 @@ function firstRun(rerender) {
         el('span.small.muted', {},
           `${fmtNum((state.tasks || []).length)} lines loaded · `
           + `${cloudStatus().on ? 'syncing to the cloud' : sharedFileName() ? 'sharing a file' : ''}`
-          + ` · ${state.people.length} on the crew`)));
+          + ` · ${users.length} app user${users.length === 1 ? '' : 's'}`)));
   }
 
   return el('div.panel.setup-steps', {},
@@ -351,7 +352,7 @@ function firstRun(rerender) {
           el('div.small.muted', {}, s.hint)))))));
 }
 
-export function renderData(rerender) {
+export function renderData(rerender, go) {
   const mm = state.machineMeta || {};
   const scheduleMeta = { ...mm, daily: state.dailyMeta, projectColors: state.projectColorReference };
   const sharing = cloudStatus().on || !!sharedFileName();
@@ -558,34 +559,20 @@ export function renderData(rerender) {
           },
         }, 'Clear this device'))));
 
-  /* people */
-  const peopleInput = el('input', { placeholder: 'Add a name', style: { maxWidth: '220px' } });
+  /* Tracker identities are managed from the employee directory so a floor
+     employee cannot accidentally be granted access by typing a name here. */
+  const users = appPeople();
+  const employeeCount = employeeDirectory().length;
   const peoplePanel = el('div.panel', {},
-    el('header', {}, 'Who is using this'),
+    el('header', {}, 'Tracker users'),
     el('div.body', {},
-      el('div.row', { style: { marginBottom: '12px' } },
-        peopleInput,
-        el('button', {
-          onclick: () => {
-            const n = peopleInput.value.trim();
-            if (!n) return;
-            if (!state.people.includes(n)) state.people.push(n);
-            if (!state.settings.me) state.settings.me = n;
-            save(); peopleInput.value = ''; rerender();
-          },
-        }, 'Add')),
-      state.people.length
-        ? el('div.tag-row', {}, ...state.people.map((p) => el('span.chip' + (p === me() ? '.ok' : ''), {},
-            p,
-            el('button.ghost.sm', {
-              style: { padding: '0 2px', border: 'none' },
-              onclick: () => {
-                state.people = state.people.filter((x) => x !== p);
-                if (state.settings.me === p) state.settings.me = state.people[0] || null;
-                save(); rerender();
-              },
-            }, '×'))))
-        : el('div.small.muted', {}, 'No names yet. Add the people on your crew so updates are attributed.')));
+      el('p.small.muted', { style: { marginTop: 0 } },
+        'Only enabled lead hands, supervisors and managers appear in the app header.'),
+      users.length
+        ? el('div.tag-row', { style: { marginBottom: '12px' } },
+            ...users.map((person) => el('span.chip' + (person === me() ? '.ok' : ''), {}, person)))
+        : el('div.small.muted', { style: { marginBottom: '12px' } }, 'No tracker users are enabled yet.'),
+      el('button', { onclick: () => go?.('employees') }, icon('users', { size: 16 }), 'Manage employees and access')));
 
   const health = [
     {
@@ -605,8 +592,10 @@ export function renderData(rerender) {
       value: storage.ok ? 'Saving normally' : storage.error,
     },
     {
-      label: 'Crew identity', ok: (state.people || []).length > 0, icon: 'dot',
-      value: state.people.length ? `${state.people.length} people · ${me()}` : 'Add the crew',
+      label: 'Tracker access', ok: users.length > 0, icon: 'dot',
+      value: users.length
+        ? `${users.length} user${users.length === 1 ? '' : 's'} · ${employeeCount} employees · ${me()}`
+        : 'Enable a lead hand, supervisor or manager',
     },
     {
       label: 'Latest backup', ok: !!state.settings.lastBackupAt, icon: 'clock',

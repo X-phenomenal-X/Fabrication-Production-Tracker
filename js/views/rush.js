@@ -11,7 +11,7 @@
 import {
   el, chip, icon, fmtDate, fmtNum, fmtWhen, toast, modal,
 } from '../ui.js';
-import { state, setRush, clearRush, me } from '../store.js';
+import { setRush, clearRush, me, directoryPeople } from '../store.js';
 import {
   allRush, resolveRush, rushFor, taskStatusKey, hasTasks, today, addDays,
   machineConfig,
@@ -45,7 +45,7 @@ export function rushDialog(task, rerender) {
     onclick: () => { needBy.value = iso; flag.checked = true; },
   }, label);
 
-  const people = state.people || [];
+  const people = directoryPeople();
   const known = cur.assignee && !people.includes(cur.assignee) ? [cur.assignee] : [];
   const nameInput = el('input', {
     value: cur.assignee || '', placeholder: 'Name',

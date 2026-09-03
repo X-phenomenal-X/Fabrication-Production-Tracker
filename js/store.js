@@ -61,10 +61,28 @@ export const state = {
   manualTasks: {},  // id -> task-shaped record, plus { manual, at, by }
   todos: {},        // id -> { text, date, done, assignee, at, by, doneAt, doneBy }
   staging: {},      // line key -> { staged, stageFor, note, at, by }
+  /* The employee directory is distinct from the people allowed to operate
+     this app. A floor employee can still be assigned work without appearing
+     in the identity picker. Records are soft-archived so an old tablet cannot
+     restore somebody after the directory has removed them. */
+  employees: {},    // id -> { name, department, shift, role, active, appAccess, aliases, at, by }
   deletions: {},    // `${map}:${key}` -> { at, by } — see forget()
-  people: [],
+  people: [],       // legacy name list; retained for old builds and migrated lazily
   settings: { me: null, theme: null },   // theme: null = follow the device
 };
+
+export const EMPLOYEE_ROLES = Object.freeze([
+  'EMPLOYEE', 'LEAD_HAND', 'SUPERVISOR', 'MANAGER',
+]);
+
+export const EMPLOYEE_ROLE_LABELS = Object.freeze({
+  EMPLOYEE: 'Employee',
+  LEAD_HAND: 'Lead hand',
+  SUPERVISOR: 'Supervisor',
+  MANAGER: 'Manager',
+});
+
+const APP_EMPLOYEE_ROLES = new Set(['LEAD_HAND', 'SUPERVISOR', 'MANAGER']);
 
 const listeners = new Set();
 let localSaveProblem = null;
@@ -130,7 +148,9 @@ export function uid() {
 }
 
 export function me() {
-  return state.settings.me || 'Unassigned';
+  const selected = cleanEmployeeName(state.settings.me);
+  if (!selected) return 'Unassigned';
+  return appPeople().find((name) => employeeNameKey(name) === employeeNameKey(selected)) || 'Unassigned';
 }
 
 /* ---------- ordering edits across devices ---------- */
@@ -180,6 +200,116 @@ function nextRevision() {
 
 function changed(fields, { at = now(), by = me() } = {}) {
   return { ...fields, at, by, rev: nextRevision() };
+}
+
+/** Employee editing is lazy-loaded with its management page, but its records
+    still use the same logical clock as every other synced change. */
+export function changedEmployee(fields, options) {
+  return changed(fields, options);
+}
+
+/* ---------- employee directory and tracker access ---------- */
+
+export function cleanEmployeeName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+export function employeeNameKey(value) {
+  return cleanEmployeeName(value).toLocaleLowerCase();
+}
+
+export function employeeShift(value) {
+  const shift = String(value || '').trim().toUpperCase();
+  if (shift === 'AFT' || shift === 'AFTERNOON') return 'AFTERNOON';
+  if (shift === 'DAY') return 'DAY';
+  return '';
+}
+
+export function employeeRole(value) {
+  const role = String(value || '').trim().toUpperCase();
+  return EMPLOYEE_ROLES.includes(role) ? role : 'EMPLOYEE';
+}
+
+export function employeeRecordNames(record) {
+  return [record?.name, ...(record?.aliases || [])]
+    .map(cleanEmployeeName).filter(Boolean);
+}
+
+function structuredEmployeeEntries() {
+  return Object.entries(state.employees || {})
+    .filter(([, record]) => record && typeof record === 'object')
+    .map(([id, record]) => ({
+      ...record,
+      id: record.id || id,
+      name: cleanEmployeeName(record.name),
+      department: cleanEmployeeName(record.department),
+      shift: employeeShift(record.shift),
+      role: employeeRole(record.role),
+      active: record.active !== false,
+      appAccess: !!record.appAccess,
+      aliases: [...new Set((record.aliases || []).map(cleanEmployeeName).filter(Boolean))],
+    }))
+    .filter((record) => record.name);
+}
+
+/** Full, editable directory. Old name-only entries are presented as legacy
+    app users until they are edited or matched by a roster import. */
+export function employeeDirectory({ includeArchived = false } = {}) {
+  const structured = structuredEmployeeEntries();
+  const claimed = new Set(structured.flatMap(employeeRecordNames).map(employeeNameKey));
+  const legacy = [];
+  const seen = new Set();
+  for (const raw of state.people || []) {
+    const name = cleanEmployeeName(raw);
+    const key = employeeNameKey(name);
+    if (!name || seen.has(key) || claimed.has(key)) continue;
+    seen.add(key);
+    legacy.push({
+      id: `legacy:${key}`,
+      name,
+      department: '',
+      shift: '',
+      role: '',
+      active: true,
+      appAccess: true,
+      aliases: [],
+      legacy: true,
+    });
+  }
+  return [...structured.filter((record) => includeArchived || !record.archived), ...legacy]
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
+
+export function employeeCanUseApp(record) {
+  if (!record || record.archived || record.active === false) return false;
+  // Name-only records predate roles. Keep those existing users working until
+  // a supervisor reviews the record in Employees.
+  return record.legacy || (!!record.appAccess && APP_EMPLOYEE_ROLES.has(record.role));
+}
+
+export function appPeople() {
+  const out = [];
+  const seen = new Set();
+  for (const record of employeeDirectory()) {
+    if (!employeeCanUseApp(record)) continue;
+    const key = employeeNameKey(record.name);
+    if (!seen.has(key)) { seen.add(key); out.push(record.name); }
+  }
+  return out;
+}
+
+/** Active employees remain available in assignment fields even when they do
+    not have tracker access. */
+export function directoryPeople() {
+  return employeeDirectory()
+    .filter((record) => record.active !== false)
+    .map((record) => record.name);
+}
+
+export function setCurrentAppUser(name) {
+  const wanted = employeeNameKey(name);
+  state.settings.me = appPeople().find((person) => employeeNameKey(person) === wanted) || null;
+  save();
 }
 
 /* ---------- removing a record ---------- */
@@ -732,6 +862,7 @@ function snapshot() {
     manualTasks: state.manualTasks,
     todos: state.todos,
     staging: state.staging,
+    employees: state.employees,
     deletions: state.deletions,
     people: state.people,
     settings: state.settings,
@@ -934,6 +1065,7 @@ function observeSnapshot(snap) {
   for (const map of [...DELETABLE, 'deletions']) {
     for (const rec of Object.values(snap?.[map] || {})) observeRevision(rec?.rev);
   }
+  for (const rec of Object.values(snap?.employees || {})) observeRevision(rec?.rev);
   for (const rec of Object.values(snap?.machineMeta || {})) observeRevision(rec?.rev);
   observeRevision(snap?.dailyMeta?.rev);
   observeRevision(snap?.projectColorReference?.rev);
@@ -970,6 +1102,7 @@ function mergeSnapshot(remote) {
   state.manualTasks = mergeRecords(state.manualTasks, remote.manualTasks);
   state.todos = mergeRecords(state.todos, remote.todos);
   state.staging = mergeRecords(state.staging, remote.staging);
+  state.employees = mergeRecords(state.employees, remote.employees);
   // Merge the tombstones, then re-apply them: a record the other device
   // still holds must not walk back in after being deleted here.
   state.deletions = mergeRecords(state.deletions, remote.deletions);
