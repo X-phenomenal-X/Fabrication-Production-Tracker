@@ -292,6 +292,8 @@ js/views/today.js    (235)  Today: to-dos + the cross-machine board
 js/views/staging.js  (190)  Staging — an overlay on the rolling lines
 js/views/rush.js     (250)  rush dialog + Rush page
 js/views/backorders.js      shared back-order dialog + operational chase list
+js/material-plan.js         S/SA -> orderable extrusion, with provenance; no DOM, no state
+js/views/materials.js       Material Helper (lazy): shortage -> identified extrusion -> request row
 js/views/shiftupdate.js(548) Shift Update write/read page
 js/import-daily.js          narrow parser for the separate `Daily Sched` sheet
 js/import-material-colors.js aggregate-only Material Requests colour parser
@@ -305,7 +307,7 @@ js/views/dies.js            unified assembly/profile Engineering Lookup
 js/views/die-launcher.js    lightweight lazy entry from production rows
 js/views/routing.js  (156)  per-line routing + paperwork, and the rules
 js/views/manual.js   (138)  add a job that is in no workbook
-js/views/data.js     (485)  Setup: import, shared file, cloud, people, backup
+js/views/data.js     (485)  Setup: import, shared file, cloud, people, wall monitor, backup
 
 tools/parse-subassemblies.mjs   section-book Listings → js/subassemblies.js
 tools/extract-drawings.py       drawing PDFs → js/drawings.js
@@ -315,10 +317,11 @@ tools/extract-listing-thumbs.py Listing thumbnails → thumbs.json (gap filler)
 `js/views/centre.js` is parameterised by centre — `makeCentreView('FOM')`.
 All four centre pages are that one file with different data.
 
-**Sixteen nav pages:** Overview · Rolling · FOM · CNC & FMC · Multi Punch ·
-Jobs · Today · Daily Schedule · Projects · Staging · Rush · Back Orders · Forms
-· Employees · Engineering Lookup · Shift Update. Setup is the header gear
-rather than another operational page.
+**Seventeen nav pages:** Overview · Rolling · FOM · CNC & FMC · Multi Punch ·
+Jobs · Today · Daily Schedule · Projects · Staging · Rush · Back Orders ·
+Material Helper · Forms · Employees · Engineering Lookup · Shift Update. Setup
+is the header gear rather than another operational page, and it is where the
+wall monitor's `?monitor#overview` address is shown, opened and copied.
 
 `Cutting-Tracker.html` is deliberately large because it contains the full
 24 MB extrusion image library as well as every module and font. It remains the

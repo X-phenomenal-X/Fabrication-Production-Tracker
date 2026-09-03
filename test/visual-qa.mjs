@@ -72,6 +72,7 @@ const SCREENS = [
   { hash: 'punch', name: 'punch' },
   { hash: 'rush', name: 'rush' },
   { hash: 'backorders', name: 'backorders' },
+  { hash: 'materials', name: 'materials' },
   { hash: 'jobs', name: 'jobs' },
   { hash: 'dies', name: 'dies' },
   { hash: 'shift', name: 'shift' },
@@ -267,6 +268,45 @@ for (const theme of ['light', 'dark']) {
           fail(`resources @ phone/${theme}: form finder starts at ${resources.commandTop}px`);
         }
       }
+      /* The Material Helper is a supervisory tool used standing on the floor
+         with a phone: the shortage that started it and the one action on it
+         have to be reachable without a scroll expedition, and the shortage
+         list is bounded rather than every open shortage in the department. */
+      if (vp.name === 'phone' && screen.hash === 'materials') {
+        const helper = await page.evaluate(() => {
+          const first = document.querySelector('.mh-shortage');
+          const action = document.querySelector('.mh-shortage-go');
+          const box = action?.getBoundingClientRect();
+          return {
+            screens: Math.round((document.documentElement.scrollHeight / innerHeight) * 10) / 10,
+            shortages: document.querySelectorAll('.mh-shortage').length,
+            more: !!document.querySelector('.mh-panel .showmore'),
+            firstTop: first ? Math.round(first.getBoundingClientRect().top) : -1,
+            actionHeight: box ? Math.round(box.height) : 0,
+            scopeStated: /does not order anything/.test(
+              document.querySelector('.mh-scope')?.textContent || ''),
+          };
+        });
+        note(`materials @ phone/${theme}: ${helper.screens} screens, `
+          + `${helper.shortages} shortages${helper.more ? ' + more' : ''}, `
+          + `action ${helper.actionHeight}px`);
+        if (helper.shortages > 4) {
+          fail(`materials @ phone/${theme}: ${helper.shortages} shortages shown, the preview is four`);
+        }
+        if (helper.shortages && helper.actionHeight < 44) {
+          fail(`materials @ phone/${theme}: the Identify action is ${helper.actionHeight}px`);
+        }
+        if (helper.screens > 4) {
+          fail(`materials @ phone/${theme}: the page is ${helper.screens} screens tall, over 4`);
+        }
+        if (helper.shortages && (helper.firstTop < 96 || helper.firstTop > 520)) {
+          fail(`materials @ phone/${theme}: the first shortage starts at ${helper.firstTop}px`);
+        }
+        if (!helper.scopeStated) {
+          fail(`materials @ phone/${theme}: the page does not state that it orders nothing`);
+        }
+      }
+
       /* The phone header once hid both quick actions to buy nav width. That
          made the section book and Setup unreachable even though both features
          were still bundled. Assert visibility, then follow the exact route an
@@ -276,8 +316,8 @@ for (const theme of ['light', 'dark']) {
         await page.waitForSelector('dialog.mobile-nav-dialog');
         const destinations = await page.$$eval('.mobile-nav-item', (nodes) =>
           nodes.map((node) => node.querySelector('.mobile-nav-label')?.textContent?.trim()));
-        if (destinations.length !== 16) {
-          fail(`rolling @ phone/${theme}: page menu exposes ${destinations.length} of 16 destinations`);
+        if (destinations.length !== 17) {
+          fail(`rolling @ phone/${theme}: page menu exposes ${destinations.length} of 17 destinations`);
         }
         await page.click('dialog.mobile-nav-dialog button:has-text("Close")');
 

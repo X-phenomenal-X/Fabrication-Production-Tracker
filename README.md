@@ -54,9 +54,9 @@ re-read.
 4. At the end of the shift, **Shift Update** → Write.
 
 The nav reads **Overview · Rolling · FOM · CNC & FMC · Multi Punch · Jobs ·
-Today · Daily Schedule · Projects · Staging · Rush · Back Orders · Forms ·
-Employees · Engineering Lookup · Shift Update**. Setup is the gear in the
-header.
+Today · Daily Schedule · Projects · Staging · Rush · Back Orders · Material
+Helper · Forms · Employees · Engineering Lookup · Shift Update**. Setup is the
+gear in the header.
 
 To use it on a phone, set up **Sync across devices** in Setup once — see below.
 
@@ -70,6 +70,7 @@ To use it on a phone, set up **Sync across devices** in Setup once — see below
 | Multi Punch | Multi Punch | CNC workbook: `MultiPunch & SAW` |
 | Daily Schedule | Cutting-department day view grouped by project | Separate Daily Schedule workbook: exact `Daily Sched` sheet |
 | Projects | Project name, job code, colour/finish and series directory, ranked by scheduled quantity | Daily Schedule plus an optional compact colour reference from `Material Requests` and `Completed Orders` |
+| Material Helper | Turns a confirmed shortage into the extrusion that is actually short, then a request row to copy, print or export | Back Orders plus the Sub-Assembly Section Book |
 | Forms | Downloadable blank production, incident and orientation PDFs | Versioned templates in `assets/forms/` |
 | Employees | Searchable device/user selector and locally managed employee list; optional Abhay crew import | Saved `people` names; employee IDs and source rows are discarded and no real roster is committed |
 
@@ -101,6 +102,20 @@ The browser's normal print dialog still chooses the printer, copies or **Save
 as PDF**. Machine schedules and shift updates use landscape Letter; engineering
 records use portrait Letter. Every paper header uses the exact same three-shape
 BV mark as the screen. Print actions stay hidden in wall-monitor mode.
+
+## The wall monitor
+
+`?monitor#overview` turns the app into a read-only department board for a
+ceiling-mounted screen: the department pulse, four work-centre cards, the next
+three jobs, up to three attention alerts, and automatic rotation. Nothing on it
+is pressable — a display beside a walkway must not have a status set by a
+shoulder — and the ordinary navigation disappears.
+
+Because it is a flag in the address rather than a page, nothing in the
+navigation could point at it and the address was the only copy of it anybody
+had. **Setup → Wall monitor** now shows that address, offers **Open monitor
+dashboard** (in a new tab, since monitor mode takes the controls away) and
+copies the link for a bay PC's bookmark.
 
 ## Jobs — one work order across the department
 
@@ -702,6 +717,43 @@ the confirmed **one hinge per vent** requirement. Ordinary `P:Y` pin-hole rows
 are excluded. A blank vent quantity stays visibly uncounted rather than
 becoming zero.
 
+## Material Helper — which extrusion is actually short
+
+A shortage is reported against whatever the schedule says, and the schedule
+says `S80.104` — a *rolled sub-assembly*. Nobody can order `S80.104`. What is
+short is one of the extrusions inside it. Getting that step wrong is expensive
+and invisible: the request leaves the department looking complete and comes
+back weeks later wrong.
+
+**Material Helper** does that one step. Start from a confirmed shortage or
+enter a number by hand; an `S`/`SA` number is expanded through the
+Sub-Assembly Section Book into its real extrusions, and each one says where it
+came from — printed in the listing's component columns, recovered from a
+sibling HT/HTX row, or named only in the listing description. A recovered
+number is never presented as a printed one. A sub-assembly the book does not
+have, or whose listing row names no extrusions, produces **no** candidates at
+all and says why; the S-number itself is never offered as something to order.
+Numbers the listing mentions without saying what they are are shown and
+deliberately left out of the choices.
+
+Four quantities stay four fields, because they are not interchangeable and
+collapsing any pair of them is how a six-piece shortage becomes six 18-foot
+bars: **pieces short**, **bars to request**, **stock length** and **needed
+by**. The prepared request can be copied as a workbook row (nine tab-separated
+cells, ready to paste at the Date column), printed, or exported as a CSV that
+also carries the pieces short, the date and the provenance the workbook has no
+column for.
+
+**What it is not.** It raises no order, knows no vendor, holds no price, and
+submits nothing anywhere; the shared Material Requests workbook remains the
+order record. It also stores nothing: prepared requests live in the open tab
+and are gone on reload, which the page says on its face. No `materialOrders`
+state was reintroduced, and `test/app-check.mjs` asserts that a prepared
+request reaches neither saved nor synced state.
+
+The page is a lazy route, so it costs nothing on first load. Its rules are
+measured over all 997 Section Book rows in `test/material-helper-check.mjs`.
+
 ## Editing a line
 
 Any line can be corrected by hand: **project, floor/tag, die, quantity and
@@ -873,7 +925,10 @@ is derived directly from FOM 2 and shown on the affected production line; it is
 not a purchase request. The optional Material Requests import is similarly
 narrow: it retains only aggregate project/work-order colour mappings, never
 the source request rows, and adds no ordering workflow. Exact work-order
-matches are used before exact normalized project names.
+matches are used before exact normalized project names. **Material Helper**
+sits inside the same boundary: it identifies the extrusion behind a shortage
+and prepares a row for the existing external process, and it stores, prices,
+orders and submits nothing.
 
 The stored data went with it. On first load the app rewrites its saved payload
 without the retired fields, so an existing install — and the shared JSON on the
@@ -1059,6 +1114,15 @@ machine rename, the back-order dialog and page including the tri-state clear,
 and the shift update — pulling the workbook entry, inserting a chip, saving,
 and reading it back after a reload. It also asserts that a status, an edit and
 a back order all survive a reload and a re-import.
+
+`test/material-helper-check.mjs` needs neither a browser nor the workbooks: it
+runs the Material Helper's own resolution module over all 997 Section Book rows
+and asserts the guardrails on every one of them — that an `S`/`SA` number never
+becomes an orderable line, that every number offered traces to a component
+column, a sibling row or a labelled description reference *and says which*,
+that a row which cannot support an answer produces no candidates at all, and
+that pieces short, bars, stock length and needed-by stay four separate values
+from the form through to the clipboard and the CSV.
 
 `test/cloud-check.mjs` is the one worth knowing about. There is no Supabase to
 reach from a test, so it stands up a mock that speaks the same PostgREST

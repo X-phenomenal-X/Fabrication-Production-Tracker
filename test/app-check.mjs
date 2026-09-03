@@ -115,7 +115,7 @@ step('tabs: ' + tabs.join(', '));
 const setupGear = await page.$$eval('.hdr-setup', (ns) => ns.map((n) => n.getAttribute('aria-label')));
 step('setup control: ' + JSON.stringify(setupGear));
 if (setupGear.length !== 1) throw new Error('Setup is not reachable from the header');
-if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Daily Schedule,Projects,Staging,Rush,Back Orders,Forms,Employees,Engineering Lookup,Shift Update') {
+if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Daily Schedule,Projects,Staging,Rush,Back Orders,Material Helper,Forms,Employees,Engineering Lookup,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -737,6 +737,217 @@ if (await page.locator('text=Prepare order').count() || await page.locator('text
   throw new Error('purchasing controls remain on the Back Orders page');
 }
 await page.screenshot({ path: path.join(SHOT, 'back-orders.png'), fullPage: true });
+
+/* ---------- Material Helper ----------
+
+   The page between the shortage list and the department's Material Requests
+   process. It identifies the extrusion a shortage is actually about; it does
+   not order, price, or send anything, and it does not keep a record after the
+   row has been helperCopied out. Both halves of that are asserted, because both are
+   easy to reintroduce by accident.
+
+   The logic itself is measured over the whole Section Book in
+   test/material-helper-check.mjs. What is checked here is the part only a
+   browser can answer: that the guardrail is on the screen, that a chosen
+   component reaches the clipboard, and that the sub-assembly never does. */
+
+await gotoTab('Material Helper');
+await page.waitForSelector('.mh');
+if (!served.some((rel) => rel.endsWith('/js/views/materials.js'))) {
+  throw new Error('the Material Helper was bundled into the first load instead of being fetched on demand');
+}
+step('Material Helper loaded on demand: ' + served.filter((r) => r.endsWith('materials.js')).length + ' request');
+
+const helperScope = (await page.textContent('.mh-scope')).replace(/\s+/g, ' ');
+step('material helper scope: ' + helperScope.slice(0, 96) + '…');
+if (!/does not order anything/.test(helperScope) || !/not saved or synced/.test(helperScope)) {
+  throw new Error('the Material Helper does not state that it neither orders nor stores: ' + helperScope);
+}
+for (const forbidden of ['Purchase order', 'Vendor', 'Supplier order', 'Price', 'Cost', 'Receiving']) {
+  if (await page.locator(`.mh >> text=${forbidden}`).count()) {
+    throw new Error(`purchasing language is back on the Material Helper: ${forbidden}`);
+  }
+}
+
+/* A sub-assembly cannot be ordered, and an unknown one has no answer at all.
+   Both are refused on the screen rather than quietly passed through. */
+await page.click('.mh-new');
+await page.waitForSelector('dialog .mh-form');
+await page.fill('.mh-source input', 'S99.999');
+await page.dispatchEvent('.mh-source input', 'change');
+await page.waitForSelector('.mh-guardrail.bad');
+const helperUnknownSa = (await page.textContent('.mh-guardrail.bad')).replace(/\s+/g, ' ');
+step('unknown sub-assembly: ' + helperUnknownSa.slice(0, 84) + '…');
+if (!/Do not order the S-number/.test(helperUnknownSa)) {
+  throw new Error('an unresolved sub-assembly did not warn against ordering it');
+}
+if (await page.locator('.mh-candidate').count()) {
+  throw new Error('an unresolved sub-assembly still offered something to order');
+}
+await page.click('dialog footer button.primary');
+if (await page.locator('.mh-draft').count()) {
+  throw new Error('a request was created from an unresolved sub-assembly');
+}
+
+// A known one expands to its real extrusions, each saying where it came from.
+await page.fill('.mh-source input', 'S80.106');
+await page.dispatchEvent('.mh-source input', 'change');
+await page.waitForSelector('.mh-candidate');
+const helperCandidates = await page.$$eval('.mh-candidate', (ns) => ns.map((n) => ({
+  die: n.querySelector('.mh-candidate-id b').textContent.trim(),
+  role: n.querySelector('.mh-candidate-role').textContent.trim(),
+  source: n.querySelector('.mh-candidate-copy small').textContent.trim(),
+})));
+step('S80.106 expands to: ' + helperCandidates.map((c) => `${c.die} ${c.role}`).join(', '));
+if (helperCandidates.length !== 3 || helperCandidates[0].die !== '80.113') {
+  throw new Error('S80.106 did not expand to its listed extrusions: ' + JSON.stringify(helperCandidates));
+}
+if (helperCandidates.some((c) => /^S/i.test(c.die))) {
+  throw new Error('a sub-assembly number was offered as an order choice');
+}
+if (helperCandidates.some((c) => !c.source)) throw new Error('a component was offered with no stated source');
+
+await page.fill('.mh-job input >> nth=0', '39001');
+await page.fill('.mh-job input >> nth=1', 'Harbour Point');
+await page.fill('.mh-job input >> nth=3', '2026-09-14');
+await page.click('.mh-candidate >> nth=0');
+await page.fill('.mh-quantities input >> nth=0', '6');
+await page.fill('.mh-quantities input >> nth=1', '2');
+await page.fill('.mh-quantities input >> nth=2', '18');
+await page.fill('.mh-quantities input >> nth=3', 'K11704');
+await page.click('dialog footer button.primary');
+await page.waitForSelector('.mh-draft');
+
+/* The four quantities are the reason this page exists: a six-piece shortage is
+   not six bars, and neither is a length. They stay four labelled values. */
+const helperFacts = await page.$$eval('.mh-draft .mh-fact', (ns) => Object.fromEntries(
+  ns.map((n) => [n.querySelector('small').textContent.trim(), n.querySelector('b').textContent.trim()])));
+step('prepared request: ' + JSON.stringify(helperFacts));
+if (helperFacts['Pieces short'] !== '6' || helperFacts.Bars !== '2' || helperFacts.Length !== '18′') {
+  throw new Error('pieces short, bars and stock length did not stay separate: ' + JSON.stringify(helperFacts));
+}
+if (!helperFacts['Needed by'] || helperFacts['Needed by'] === '—') {
+  throw new Error('the request lost the date the work needs the material');
+}
+const helperProvenance = (await page.textContent('.mh-draft-source')).replace(/\s+/g, ' ').trim();
+step('provenance on the card: ' + helperProvenance);
+if (!/SA80-106/.test(helperProvenance)) throw new Error('the card does not say which assembly the number came from');
+
+await page.click('.mh-draft-actions button:has-text("Copy row")');
+await page.waitForFunction(() => (window.__clipboardText || '').includes('80.113'));
+const helperCopied = await page.evaluate(() => window.__clipboardText);
+step('workbook row: ' + helperCopied.replace(/\t/g, ' | '));
+const helperCells = helperCopied.split('\t');
+if (helperCells.length !== 9) throw new Error(`the pasted row has ${helperCells.length} helperCells, expected 9`);
+if (!helperCells.includes('80.113')) throw new Error('the pasted row does not carry the chosen extrusion');
+if (helperCells.some((cell) => /^S(?:A)?\d/i.test(cell))) {
+  throw new Error('a sub-assembly number reached the clipboard: ' + helperCopied);
+}
+if (helperCells[5] !== '18' || helperCells[7] !== '2') {
+  throw new Error('stock length and bars are not in their own pasted columns: ' + helperCopied);
+}
+
+const helperPrints = await page.evaluate(() => window.__printCaptures.length);
+await page.click('.mh-draft-tools button:has-text("Print")');
+await page.waitForFunction((n) => window.__printCaptures.length > n, helperPrints);
+const helperPrint = await page.evaluate(() => window.__printCaptures.at(-1));
+step('material print: ' + JSON.stringify({ title: helperPrint.title, rows: helperPrint.rows }));
+if (helperPrint.title !== 'Material requests') throw new Error('the printed sheet is not the material request sheet');
+if (!/This sheet is not an order/.test(helperPrint.text)) {
+  throw new Error('the printed sheet does not say it is not an order');
+}
+for (const expected of ['80.113', 'S80.106', 'Pieces short', 'Bars']) {
+  if (!helperPrint.text.includes(expected)) {
+    throw new Error(`the printed sheet is missing "${expected}"`);
+  }
+}
+
+/* Nothing about a prepared request may reach stored or synced state. The
+   retired purchasing workflow is what the department asked to be removed, and
+   a draft that quietly outlives the tab is the first step back to it. */
+const helperStorage = await page.evaluate(async () => {
+  const store = await import('/js/store.js');
+  store.save();
+  const raw = JSON.parse(localStorage.getItem('bv.cutting.v1') || '{}');
+  const text = JSON.stringify(raw);
+  const shaped = (keys) => keys.filter((k) => /^material(Order|Request|Draft)/i.test(k));
+  return {
+    // The finish typed into the draft appears nowhere else, so it is the
+    // cheapest proof that no part of the request was persisted.
+    mentionsDraft: /K11704/.test(text),
+    storedKeys: shaped(Object.keys(raw)),
+    stateKeys: shaped(Object.keys(store.state)),
+    history: (store.state.taskHistory || []).filter((entry) => /material/i.test(entry?.kind || '')).length,
+  };
+});
+step('material helper storage: ' + JSON.stringify(helperStorage));
+if (helperStorage.mentionsDraft || helperStorage.storedKeys.length
+  || helperStorage.stateKeys.length || helperStorage.history) {
+  throw new Error('a prepared material request was written into saved state: ' + JSON.stringify(helperStorage));
+}
+
+// And it really is gone on reload, exactly as the page promises.
+await page.reload();
+await page.waitForSelector('header.top');
+await gotoTab('Material Helper');
+await page.waitForSelector('.mh');
+if (await page.locator('.mh-draft').count()) {
+  throw new Error('a prepared request survived a reload — the page says drafts do not');
+}
+step('prepared requests do not survive a reload, as stated on the page');
+await page.screenshot({ path: path.join(SHOT, 'material-helper.png'), fullPage: true });
+
+/* ---------- the monitor dashboard is findable ----------
+
+   The wall board is turned on by a flag in the address rather than by a page,
+   so nothing in the navigation could point at it and the address itself was
+   the only copy anyone had. It is set up from Setup, which is reachable from
+   the header at every width. */
+await gotoTab('Setup');
+await page.waitForSelector('.monitor-invite');
+const monitorInvite = await page.evaluate(() => {
+  const open = document.querySelector('.monitor-invite-open');
+  const box = open?.getBoundingClientRect();
+  return {
+    href: open?.getAttribute('href') || '',
+    target: open?.getAttribute('target') || '',
+    visible: !!box && box.width > 0 && box.height >= 44,
+    shown: document.querySelector('.monitor-invite-url code')?.textContent.trim() || '',
+    copy: !!document.querySelector('.monitor-invite-copy'),
+    text: document.querySelector('.monitor-invite').textContent.replace(/\s+/g, ' '),
+  };
+});
+step('monitor shortcut: ' + monitorInvite.href);
+if (!monitorInvite.visible) throw new Error('the monitor shortcut is not a visible full-size control');
+if (!/\?monitor(&|$|#)/.test(monitorInvite.href) || !monitorInvite.href.includes('#overview')) {
+  throw new Error('the shortcut does not open ?monitor#overview: ' + monitorInvite.href);
+}
+if (monitorInvite.shown !== monitorInvite.href) {
+  throw new Error('the address shown for the wall PC is not the address the link opens');
+}
+// A new tab, deliberately: monitor mode removes every control, so switching
+// the supervisor's own tab into it would leave them no way back.
+if (monitorInvite.target !== '_blank') throw new Error('the monitor shortcut hijacks the current tab');
+if (!monitorInvite.copy) throw new Error('the wall PC address cannot be copied');
+if (!/no controls/i.test(monitorInvite.text)) {
+  throw new Error('the shortcut does not say the board cannot be operated');
+}
+
+// The board itself is still the board: read-only, and nothing on it is operable.
+await page.goto(monitorInvite.href);
+await page.waitForSelector('.monitor-shell');
+const monitorBoard = await page.evaluate(() => ({
+  mode: document.documentElement.dataset.display,
+  cards: document.querySelectorAll('.monitor-now-card').length,
+  live: Array.from(document.querySelectorAll('button, a, input, select, textarea, [role="button"]'))
+    .filter((n) => n.getBoundingClientRect().width > 0).length,
+}));
+step('monitor board from the shortcut: ' + JSON.stringify(monitorBoard));
+if (monitorBoard.mode !== 'monitor') throw new Error('the shortcut did not open monitor mode');
+if (monitorBoard.cards !== 4) throw new Error(`the board shows ${monitorBoard.cards} of 4 work-centre cards`);
+if (monitorBoard.live) throw new Error(`the board leaves ${monitorBoard.live} control(s) pressable`);
+await page.goto(base + '/index.html');
+await page.waitForSelector('header.top');
 
 /* One hinge is required per explicitly marked 8560 vent. This belongs on the
    FOM 2 production line and its printed schedule, not in a purchasing page.

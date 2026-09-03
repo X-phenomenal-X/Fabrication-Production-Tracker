@@ -1368,6 +1368,156 @@ button.bo-line:last-child { border-bottom: 0; }
 /* Long enough to actually explain the third state, so it gets room to read. */
 .bo-tristate { color: var(--ink-2); line-height: 1.5; margin-top: 3px; max-width: 60ch; }
 
+/* ---------- material helper: a shortage, identified ----------
+
+   Two panels and a dialog. The dialog is where the actual work happens, so it
+   is the part that gets the room: a candidate row is a 44px target carrying a
+   number, a role and where that number came from, because choosing the wrong
+   one of four is the failure this page exists to prevent. */
+
+.mh-scope { margin-bottom: var(--s4); align-items: flex-start; }
+.mh-scope svg { flex-shrink: 0; margin-top: 2px; }
+.mh-head .centre-title-row { align-items: center; flex-wrap: wrap; }
+.mh-head .centre-rail { background: var(--work); }
+.mh-new { flex-shrink: 0; }
+/* The desktop head is a single-column grid, which turns any action placed in
+   it into a full-width bar. Give this one its own column so the title keeps
+   the line and the stats keep the row below it. */
+@media (min-width: 1101px) {
+  .mh-head .centre-title-row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .mh-head .centre-stats { grid-column: 1 / -1; }
+}
+.mh-panel + .mh-panel { margin-top: var(--s4); }
+.mh-panel > header { display: flex; align-items: center; gap: var(--s3); }
+.mh-eyebrow {
+  color: var(--ink-3); font-size: var(--t-xs); font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+
+/* --- the shortage list --- */
+
+.mh-shortage {
+  display: grid; align-items: center; gap: var(--s3);
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  padding: var(--s3) var(--s4); border-top: 1px solid var(--line-soft);
+}
+.mh-shortages > .mh-shortage:first-child { border-top: 0; }
+.mh-shortage-main { min-width: 0; display: grid; gap: 3px; }
+.mh-shortage-id { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.mh-shortage-where { color: var(--ink-2); font-size: var(--t-sm); }
+.mh-shortage-note {
+  display: flex; align-items: flex-start; gap: 6px;
+  color: var(--ink-2); font-size: var(--t-sm); line-height: 1.4;
+}
+.mh-shortage-note svg { flex-shrink: 0; margin-top: 3px; }
+/* The workbook's B/O column counts bars, not pieces. Coloured as a caution so
+   it is never read as the piece count sitting beside it. */
+.mh-shortage-note.from-sheet { color: var(--warn); }
+.mh-shortage-qty { text-align: right; display: grid; gap: 1px; }
+.mh-shortage-qty b { font-size: var(--t-lg); color: var(--bad); }
+.mh-shortage-qty b.muted { color: var(--ink-3); }
+.mh-shortage-qty small { color: var(--ink-3); font-size: var(--t-xs); white-space: nowrap; }
+.mh-shortage-when { color: var(--ink-3); font-size: var(--t-sm); white-space: nowrap; }
+.mh-shortage-go {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  color: var(--accent); border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: var(--accent-soft);
+}
+
+/* --- the identify dialog --- */
+
+.mh-form { display: grid; gap: var(--s4); }
+.mh-job { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s3); }
+.mh-quantities { grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: var(--s3); }
+.mh-request { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--s3); }
+.mh-source small { display: block; margin-top: var(--s1); color: var(--ink-3); font-size: var(--t-sm); }
+.mh-identify { display: grid; gap: var(--s3); }
+.mh-guardrail { align-items: flex-start; }
+.mh-guardrail svg { flex-shrink: 0; margin-top: 2px; }
+.mh-assembly {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  padding: var(--s3); border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--panel-2); flex-wrap: wrap;
+}
+.mh-assembly > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.mh-assembly strong { font-size: var(--t-lg); }
+.mh-assembly-desc { color: var(--ink-2); font-size: var(--t-sm); }
+
+.mh-candidates { display: grid; gap: var(--s2); }
+.mh-candidate {
+  width: 100%; min-height: var(--tap); display: grid; align-items: center;
+  grid-template-columns: 22px minmax(0, 1fr); gap: var(--s3);
+  padding: var(--s3); text-align: left;
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel);
+}
+.mh-candidate.on {
+  border-color: var(--accent); background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.mh-candidate-mark { display: inline-flex; color: var(--ink-3); }
+.mh-candidate.on .mh-candidate-mark { color: var(--accent); }
+.mh-candidate-copy { min-width: 0; display: grid; gap: 2px; }
+.mh-candidate-id { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.mh-candidate-id b { font-size: var(--t-md); }
+.mh-candidate-role { color: var(--ink-2); font-size: var(--t-sm); }
+.mh-candidate-copy small { color: var(--ink-3); font-size: var(--t-xs); line-height: 1.4; }
+/* A recovered or description-sourced number is a cross-reference, not a
+   printed value. It stays choosable and stays visibly different. */
+.mh-candidate.unverified { border-left: 3px solid var(--warn); }
+.mh-references { line-height: 1.5; }
+
+/* --- prepared requests --- */
+
+.mh-draft-tools { gap: var(--s2); flex-wrap: nowrap; }
+.mh-drafts { display: grid; gap: var(--s3); }
+.mh-draft {
+  display: grid; gap: var(--s2); padding: var(--s4);
+  border: 1px solid var(--line); border-left: 3px solid var(--ok);
+  border-radius: var(--r-sm); background: var(--panel-2);
+}
+.mh-draft.incomplete { border-left-color: var(--warn); }
+.mh-draft-head { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.mh-draft-id { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; flex-wrap: wrap; }
+.mh-draft-id strong { font-size: var(--t-lg); }
+.mh-draft-role { color: var(--ink-2); font-size: var(--t-sm); }
+.mh-draft-head > .chip { margin-left: auto; }
+.mh-draft-job { display: grid; gap: 1px; }
+.mh-draft-job span { color: var(--ink-2); font-size: var(--t-sm); }
+/* Four separate numbers, laid out as four separate things. */
+.mh-draft-facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(94px, 1fr));
+  gap: var(--s2); padding: var(--s2) 0;
+  border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft);
+}
+.mh-fact { display: grid; gap: 1px; min-width: 0; }
+.mh-fact small { color: var(--ink-3); font-size: var(--t-xs); }
+.mh-fact b { font-size: var(--t-md); color: var(--ink); }
+.mh-draft-source, .mh-draft-note, .mh-draft-missing {
+  display: flex; align-items: flex-start; gap: 6px;
+  color: var(--ink-2); font-size: var(--t-sm); line-height: 1.45;
+}
+.mh-draft-source svg, .mh-draft-note svg, .mh-draft-missing svg { flex-shrink: 0; margin-top: 3px; }
+.mh-draft-source.unverified { color: var(--warn); }
+.mh-draft-missing { color: var(--warn); }
+.mh-draft-actions { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s1); }
+.mh-draft-actions .danger-text { color: var(--bad); }
+
+@media (max-width: 720px) {
+  /* One shortage becomes one card with its action at the bottom, rather than
+     four columns squeezed into 390px. */
+  .mh-shortage {
+    grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2);
+    padding: var(--s3);
+  }
+  .mh-shortage-main { grid-column: 1; }
+  .mh-shortage-qty { grid-column: 2; }
+  .mh-shortage-when { grid-column: 1; color: var(--ink-3); }
+  .mh-shortage-go { grid-column: 1 / -1; justify-content: center; width: 100%; }
+  .mh-draft-tools { flex-wrap: wrap; }
+  .mh-draft-tools button { flex: 1 1 auto; }
+  .mh-draft-actions button { flex: 1 1 auto; justify-content: center; }
+}
+
 .badge-hinge {
   display: inline-flex; align-items: center; gap: 4px;
   color: var(--warn); background: var(--warn-soft);
@@ -3596,6 +3746,9 @@ nav.tabs button[aria-current="true"] .nav-icon {
     display: block; margin-top: 1px; color: #64748b; font-size: 6.5pt;
     font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
   }
+  /* A standing sentence above a printed sheet: what it is, and what it is not.
+     Sized below the table so it reads as a caption rather than a heading. */
+  .print-note { margin: 0 0 .12in; color: #475569; font-size: 8pt; }
   .print-table-group { margin-top: .15in; break-inside: auto; }
   .print-table-group:first-child { margin-top: 0; }
   .print-table-group h2 {
@@ -3965,6 +4118,28 @@ button.sync-chip:active { transform: translateY(1px); }
   border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
   background: color-mix(in srgb, var(--accent) 4%, var(--panel));
   box-shadow: var(--shadow-2), var(--sheen); transform: translateY(-1px);
+}
+
+/* The wall board is a destination rather than a page of this app: it opens in
+   its own tab and takes its controls away when it does. It is set up from
+   Setup, alongside the other things about this particular device. */
+.monitor-invite { display: grid; gap: var(--s3); }
+.monitor-invite .banner { align-items: flex-start; }
+.monitor-invite .banner svg { flex-shrink: 0; margin-top: 2px; }
+.monitor-invite .row { gap: var(--s2); }
+.monitor-invite-url {
+  display: grid; gap: var(--s1); padding: var(--s3);
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel-2);
+}
+.monitor-invite-url .eyebrow {
+  color: var(--ink-3); font-size: var(--t-xs); letter-spacing: .08em; text-transform: uppercase;
+}
+/* Long enough to wrap on a phone rather than push the dialog sideways. */
+.monitor-invite-url code {
+  font-size: var(--t-sm); color: var(--ink); word-break: break-all; line-height: 1.45;
+}
+.monitor-invite-open, .monitor-invite-copy {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
 }
 
 .overview-empty, .overview-no-data {

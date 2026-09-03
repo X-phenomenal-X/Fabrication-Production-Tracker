@@ -352,8 +352,19 @@ function firstRun(rerender) {
           el('div.small.muted', {}, s.hint)))))));
 }
 
+/* Built from the current location rather than written as a literal, so the
+   address stays correct on the hosted app, on an installed PWA and on the
+   shared-drive file alike. */
+function monitorUrl() {
+  const url = new URL(location.href);
+  url.search = '?monitor';
+  url.hash = '#overview';
+  return url.href;
+}
+
 export function renderData(rerender, go) {
   const mm = state.machineMeta || {};
+  const monitorHref = monitorUrl();
   const scheduleMeta = { ...mm, daily: state.dailyMeta, projectColors: state.projectColorReference };
   const sharing = cloudStatus().on || !!sharedFileName();
   const sharingProblem = cloudStatus().error || sharedFileStatus().error;
@@ -574,6 +585,47 @@ export function renderData(rerender, go) {
         : el('div.small.muted', { style: { marginBottom: '12px' } }, 'No tracker users are enabled yet.'),
       el('button', { onclick: () => go?.('employees') }, icon('users', { size: 16 }), 'Manage employees and access')));
 
+  /* ---------- the wall board ----------
+
+     Monitor mode is turned on by a flag in the address rather than by a page,
+     which is right for a bay PC nobody logs into and wrong for finding it: no
+     nav button could point at it, so the address itself was the only copy of
+     it anyone had. This is where a wall display gets set up, so this is where
+     the address lives — visible at every width, unlike the phone-only
+     quick-start rail on the overview. */
+  const monitorPanel = el('div.panel', {},
+    el('header', {}, 'Wall monitor'),
+    el('div.body.monitor-invite', {},
+      el('p.small.muted', { style: { marginTop: 0 } },
+        'A read-only department board for the ceiling monitor: what is running, '
+        + 'what comes next and what needs attention, rotating on its own.'),
+      el('div.banner.info', {}, icon('alert', { size: 16 }),
+        el('div', {},
+          el('strong', {}, 'The board has no controls. '),
+          'Nothing on it can be pressed, so a screen beside a walkway cannot have '
+          + 'a status set by a shoulder.')),
+      el('div.monitor-invite-url', {},
+        el('span.eyebrow', {}, 'Bookmark this on the wall PC'),
+        el('code.mono', {}, monitorHref)),
+      el('div.row', {},
+        /* A link, not a button that scripts a navigation: whoever sets up a
+           wall PC wants "open in new tab", "copy address" and the middle mouse
+           button to behave the way they do everywhere else. Opening in this tab
+           would strand them, since monitor mode takes the controls away. */
+        el('a.btn.primary.monitor-invite-open', {
+          href: monitorHref, target: '_blank', rel: 'noopener',
+        }, icon('factory', { size: 16 }), 'Open monitor dashboard'),
+        el('button.monitor-invite-copy', {
+          onclick: async () => {
+            try {
+              await navigator.clipboard.writeText(monitorHref);
+              toast('Monitor link copied');
+            } catch {
+              toast('Clipboard access was blocked — the address is shown above');
+            }
+          },
+        }, icon('clipboard', { size: 16 }), 'Copy link'))));
+
   const health = [
     {
       label: 'Schedules', ok: !!mm.rolling && !!mm.cnc, icon: 'list',
@@ -616,6 +668,6 @@ export function renderData(rerender, go) {
     el('div', { style: { marginTop: '16px' } }, importPanel),
     el('div.grid.two', { style: { marginTop: '16px' } },
       el('div', {}, cloudPanel, sharedPanel, themePanel),
-      el('div', {}, peoplePanel)),
+      el('div', {}, peoplePanel, monitorPanel)),
     el('div', { style: { marginTop: '16px' } }, backupPanel));
 }

@@ -62,6 +62,9 @@ const renderSchedule = lazyView(() => import('./views/schedule.js'), 'renderSche
 const renderProjects = lazyView(() => import('./views/projects.js'), 'renderProjects', 'project directory');
 const renderResources = lazyView(() => import('./views/resources.js'), 'renderResources', 'department forms');
 const renderEmployees = lazyView(() => import('./views/employees.js'), 'renderEmployees', 'employee list');
+/* Lazy for the same reason as the rest: it is a supervisory tool reached a few
+   times a week, and first-load headroom belongs to the machine queues. */
+const renderMaterialHelper = lazyView(() => import('./views/materials.js'), 'renderMaterialHelper', 'Material Helper');
 
 // One page per work centre, so an operator opens their own machine's queue
 // instead of scrolling past everyone else's.
@@ -87,6 +90,9 @@ const TABS = [
   { key: 'staging', label: 'Staging', short: 'Stage', kind: 'tool', icon: 'staging', render: renderStaging },
   { key: 'rush', label: 'Rush', kind: 'tool', icon: 'bolt', render: renderRush },
   { key: 'backorders', label: 'Back Orders', short: 'B/O', kind: 'tool', icon: 'alert', render: renderBackOrders },
+  /* Straight after the shortage list, because that is the order the work
+     happens in: confirm the line is short, then work out what to ask for. */
+  { key: 'materials', label: 'Material Helper', short: 'Material', kind: 'tool', icon: 'extrusion', render: renderMaterialHelper },
   { key: 'resources', label: 'Forms', kind: 'tool', icon: 'file', render: renderResources },
   { key: 'employees', label: 'Employees', kind: 'tool', icon: 'users', render: renderEmployees },
   { key: 'dies', label: 'Engineering Lookup', short: 'Lookup', kind: 'tool', icon: 'search', render: renderDies },

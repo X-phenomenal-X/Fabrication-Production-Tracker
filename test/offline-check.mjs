@@ -111,7 +111,7 @@ const booted = await page.evaluate(() => ({
   chip: [...document.querySelectorAll('.hdr-id .chip')].map((node) => node.textContent.trim()),
   online: navigator.onLine,
 }));
-if (booted.tabs !== 16) fail(`the app did not render its nav offline (${booted.tabs} tabs)`);
+if (booted.tabs !== 17) fail(`the app did not render its nav offline (${booted.tabs} tabs)`);
 if (!booted.chip.includes('offline')) fail('the header does not say it is offline');
 
 await page.goto(base + '/#today');
