@@ -182,6 +182,49 @@ for (const heavy of ['js/extrusion-images.js', 'js/drawings.js', 'js/die-drawing
   }
 }
 note('heavy modules stayed behind their lazy boundaries on first load');
+
+/* The lazy routes, pinned.
+
+   The obvious version of this check reads the lazyView() calls out of app.js
+   and asserts none of them is fetched. It does not work, and the way it fails
+   is instructive: converting a route back to a static import *removes* its
+   lazyView() call, so the list shrinks and the check goes quiet about exactly
+   the change it exists to catch. Measured — making Employees eager that way
+   cost 20 KB and a request, and the derived check passed.
+
+   So the set is written down. Which pages are lazy is a product decision, not
+   an implementation detail, and a diff that drops one should be something a
+   reviewer has to look at rather than something a regex stops mentioning.
+
+   Two assertions, because there are two ways to lose a boundary: the
+   registration can disappear, or it can survive while something else drags the
+   module into the shell anyway. */
+const LAZY_ROUTES = [
+  'js/views/dies.js', 'js/views/schedule.js', 'js/views/projects.js',
+  'js/views/resources.js', 'js/views/employees.js', 'js/views/shiftupdate.js',
+  'js/views/materials.js',
+];
+const shell = fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8');
+const registered = [...shell.matchAll(/lazyView\(\s*\(\)\s*=>\s*import\('\.\/([^']+)'\)/g)]
+  .map((match) => 'js/' + match[1]).sort();
+const expected = [...LAZY_ROUTES].sort();
+if (registered.join(',') !== expected.join(',')) {
+  const lost = expected.filter((rel) => !registered.includes(rel));
+  const added = registered.filter((rel) => !expected.includes(rel));
+  fail('the set of lazy routes changed'
+    + (lost.length ? ` — ${lost.join(', ')} no longer loads on demand` : '')
+    + (added.length ? ` — ${added.join(', ')} is new; add it to LAZY_ROUTES` : ''));
+}
+const eager = LAZY_ROUTES.filter((rel) => got.has('/' + rel));
+if (eager.length) {
+  const cost = eager.reduce((n, rel) => n + (sizeOf[rel] || 0), 0);
+  fail(`${eager.join(', ')} (${(cost / KB).toFixed(1)} KB) loaded on first paint`
+    + ' — a lazy route has lost its dynamic import');
+} else {
+  note(`${LAZY_ROUTES.length} lazy routes stayed off the first load:`
+    + ` ${LAZY_ROUTES.map((rel) => rel.replace('js/views/', '')).join(', ')}`);
+}
+
 if (got.has('/js/photo-todos.js')) {
   fail('js/photo-todos.js is fetched on first load — an online-only feature lost its lazy boundary');
 } else {

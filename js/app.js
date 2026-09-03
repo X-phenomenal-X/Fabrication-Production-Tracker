@@ -15,7 +15,6 @@ import { renderJobs } from './views/job.js';
 import { renderToday } from './views/today.js';
 import { renderStaging } from './views/staging.js';
 import { renderOverview } from './views/overview.js';
-import { renderShiftUpdate } from './views/shiftupdate.js';
 import { renderRush } from './views/rush.js';
 import { renderData, initSharedFile } from './views/data.js';
 import {
@@ -29,8 +28,14 @@ import { pulseSyncMerge, reducedMotion } from './motion.js';
    are useful, but they are not part of running a machine queue. Loading those
    routes on demand keeps the first online visit small; the service worker
    still caches them after use, so a return visit can open them without a
-   signal. The standalone build bundles them exactly as before. */
-function lazyView(load, exportName, label) {
+   signal. The standalone build bundles them exactly as before.
+
+   `hint` exists because the default sentence is written about those libraries.
+   Shift Update is now lazy too, and telling the person trying to write the
+   handoff that "daily production pages remain available offline" would be
+   saying the opposite of what they are looking at. */
+function lazyView(load, exportName, label, hint = 'Connect once to download this library. '
+  + 'Daily production pages remain available offline.') {
   let renderer = null;
   let pending = null;
   let error = null;
@@ -49,8 +54,7 @@ function lazyView(load, exportName, label) {
         error ? icon('alert', { size: 18 }) : el('span.spinner', { 'aria-hidden': 'true' }),
         el('div', {},
           el('strong', {}, error ? `${label} is not available yet` : `Loading ${label}…`),
-          error ? el('div.small.muted', {},
-            'Connect once to download this library. Daily production pages remain available offline.') : null),
+          error ? el('div.small.muted', {}, hint) : null),
         error ? el('button', {
           onclick: () => { error = null; scheduleRender(); },
         }, 'Retry') : null));
@@ -62,6 +66,14 @@ const renderSchedule = lazyView(() => import('./views/schedule.js'), 'renderSche
 const renderProjects = lazyView(() => import('./views/projects.js'), 'renderProjects', 'project directory');
 const renderResources = lazyView(() => import('./views/resources.js'), 'renderResources', 'department forms');
 const renderEmployees = lazyView(() => import('./views/employees.js'), 'renderEmployees', 'employee list');
+/* Written once or twice a shift, from a page nobody lands on. It was the last
+   view still in the first-load graph with no reason to be there — 40 KB and a
+   request spent on every phone opening a machine queue. The service worker
+   still warms it in the background, so an offline device that has been used
+   once can still write the handoff. */
+const renderShiftUpdate = lazyView(() => import('./views/shiftupdate.js'), 'renderShiftUpdate',
+  'Shift Update',
+  'Connect once to download this page. Everything already on this device stays available offline.');
 /* Lazy for the same reason as the rest: it is a supervisory tool reached a few
    times a week, and first-load headroom belongs to the machine queues. */
 const renderMaterialHelper = lazyView(() => import('./views/materials.js'), 'renderMaterialHelper', 'Material Helper');
