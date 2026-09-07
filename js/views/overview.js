@@ -4,6 +4,8 @@
    shortages, rush flags and shift logs the working pages already use, so its
    priorities cannot drift into a second version of the schedule. */
 
+import { focusShiftUpdate } from './shiftupdate.js';
+import { renderCommandCenter } from './command-center.js';
 import { el, chip, icon, fmtDate, fmtNum, fmtWhen } from '../ui.js';
 import { state, me } from '../store.js';
 import {
@@ -292,8 +294,8 @@ export function renderOverview(rerender, go, sync = null) {
   const healthStrip = el('section.overview-health-strip', {
     'aria-label': 'Current shift health',
   },
-    healthStat('check', `${donePct}%`, 'Schedule complete', 'ok', `${fmtNum(done)} / ${fmtNum(all.length)} lines`),
-    healthStat('factory', String(runningMachines), 'Machines running', 'work', `${fmtNum(board.running.length)} active lines`),
+    healthStat('check', all.length ? `${donePct}%` : '—', 'Schedule complete', 'ok', `${fmtNum(done)} / ${fmtNum(all.length)} lines`),
+    healthStat('factory', String(runningMachines), 'Machines with active work', 'work', `${fmtNum(board.running.length)} active lines`),
     healthStat('calendar', String(board.dueToday.length), 'Due today', 'warn'),
     healthStat('alert', String(board.backOrders.length), 'Blocked', 'bad'),
     healthStat(syncState.icon || 'cloud', syncValue, 'Sync', syncState.tone || 'mute',
@@ -306,12 +308,15 @@ export function renderOverview(rerender, go, sync = null) {
       el('strong', {}, handoff.log.by || 'Previous shift'),
       el('span', {}, fmtWhen(handoff.log.at))) : null,
     el('p', {}, handoff.text),
-    el('button.ghost', { onclick: () => go('shift') },
+    el('button.ghost', { onclick: () => {
+      focusShiftUpdate(handoff.log ? handoff.date : shiftContext.date, handoff.log ? (handoff.log.shift || handoff.key) : shiftContext.key, handoff.log ? 'read' : 'write'); go('shift');
+    } },
       handoff.log ? 'View full handoff' : 'Write a handoff', icon('chevron', { size: 16 })));
 
   const brief = el('header.overview-brief', {},
     el('div.overview-intro', {},
-      el('div.overview-kicker', {}, 'Kinetic command stack'),
+      el('div.overview-kicker', {}, 'Fabrication operations · V2.1'),
+      el('h1.command-title', {}, 'Supervisor Command Center'),
       el('div.overview-date', {}, longDate(shiftContext.date)),
       /* `range` is the shift's own printed hours. This read shift.from/shift.to,
          which the two-shift rewrite removed, so the headline of the page the
@@ -357,6 +362,7 @@ export function renderOverview(rerender, go, sync = null) {
   if (!hasTasks()) {
     return el('div.overview', {},
       brief,
+      renderCommandCenter(rerender, go),
       el('div.overview-layout', {},
         el('div.overview-main', {},
           el('section.overview-no-data', {},
@@ -377,6 +383,7 @@ export function renderOverview(rerender, go, sync = null) {
 
   return el('div.overview', {},
     brief,
+    renderCommandCenter(rerender, go),
     el('div.overview-layout', {},
       el('div.overview-main', {},
         band(1, first?.status?.key === 'IN_PROGRESS' ? 'Running now' : 'Do now',

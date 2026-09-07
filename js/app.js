@@ -212,9 +212,17 @@ function openMobileNavigation() {
     el('h3', {}, label),
     el('div.mobile-nav-grid', {}, ...tabs.map(item)));
 
-  dlg = modal('Go to', el('div.mobile-nav-sheet', {},
+  const destinations = el('div', {},
     group('Production', TABS.filter((tab) => tab.kind === 'centre')),
-    group('Department tools', TABS.filter((tab) => tab.kind === 'tool' && tab.key !== 'setup'))));
+    group('Department tools', TABS.filter((tab) => tab.kind === 'tool' && tab.key !== 'setup')));
+  const noResults = el('p.small.muted', { hidden: true, role: 'status' }, 'No pages match. Try another name.');
+  const search = el('input', { type: 'search', placeholder: 'Find a page…', 'aria-label': 'Find a page', oninput: e => {
+    const query = e.target.value.trim().toLowerCase();
+    destinations.querySelectorAll('.mobile-nav-item').forEach(node => { node.hidden = !node.textContent.toLowerCase().includes(query); });
+    destinations.querySelectorAll('.mobile-nav-group').forEach(node => { node.hidden = !node.querySelector('.mobile-nav-item:not([hidden])'); });
+    noResults.hidden = !!destinations.querySelector('.mobile-nav-item:not([hidden])');
+  } });
+  dlg = modal('Go to', el('div.mobile-nav-sheet', {}, search, noResults, destinations));
   dlg.classList.add('mobile-nav-dialog');
 }
 

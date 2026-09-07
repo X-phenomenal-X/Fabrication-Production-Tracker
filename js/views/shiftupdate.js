@@ -13,6 +13,7 @@
    status was moved during the shift is offered as a one-click insert — so the
    update is mostly assembled from what the app already saw happen. */
 
+import { operationHandoverLines } from '../command-center.js';
 import {
   el, chip, icon, fmtDate, fmtWhen, toast, confirmDialog, printDocument, modal,
 } from '../ui.js';
@@ -978,10 +979,29 @@ export function renderShiftUpdate(rerender, go) {
 
   return el('div.centre', {},
     head,
+    view.mode === 'write' ? el('div.command-handover-include', {},
+      el('div', {}, el('strong', {}, 'Carry forward open issues'), el('p.small.muted', {}, 'Add current actions, downtime and quality follow-ups to your general notes. Review before saving.')),
+      el('button', { type: 'button', onclick: () => {
+        const lines = operationHandoverLines(view.date);
+        const d = loadDraft();
+        const fresh = lines.filter(line => !d.notes.split('\n').includes(line));
+        if (!fresh.length) { toast('No additional open issues to include'); return; }
+        modal('Include open issues in handover?', el('div.preline', {}, fresh.join('\n')), { actions: [{ label: 'Add to draft notes', class: 'primary', onClick: dlg => {
+          d.notes = [d.notes.trim(), ...fresh].filter(Boolean).join('\n');
+          dlg.close(); rerender(); toast('Added to draft. Save the shift update when ready.');
+        } }] });
+      } }, 'Include open issues')) : null,
     view.mode === 'write'
       ? el('div.su-write-surfaces', {},
           el('div.su-desktop-write', {}, writeView(rerender)),
           mobileWriteView(rerender))
       : readView(rerender),
     recent);
+}
+
+/** Command Center links select the shift they actually describe. */
+export function focusShiftUpdate(date, shift, mode = 'write') {
+  if (view.date !== date || view.shift !== shift) dropDraft();
+  view.date = date; view.shift = shift; view.mode = mode;
+  view.mobileKey = null; view.mobileSuggestions = false;
 }

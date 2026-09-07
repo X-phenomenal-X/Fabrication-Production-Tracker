@@ -1,0 +1,67 @@
+/* Exercise the new forms through the real store and rendering loop. */
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright';
+import fs from 'node:fs';
+import http from 'node:http';
+import path from 'node:path';
+import { ROOT, chromiumOptions } from './env.mjs';
+import { makeFixture } from './fixture.mjs';
+const server = http.createServer((req, res) => {
+  const file = path.join(ROOT, req.url.split('?')[0] === '/' ? 'index.html' : req.url.split('?')[0]);
+  if (!file.startsWith(ROOT + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
+  res.setHeader('content-type', { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[path.extname(file)] || 'application/octet-stream');
+  res.end(fs.readFileSync(file));
+});
+await new Promise(r => server.listen(0, '127.0.0.1', r));
+const browser = await chromium.launch(chromiumOptions());
+try {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  const date = new Date();
+  const ref = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const fixture = makeFixture({ today: ref, volume: 'light' }); fixture.todos = {};
+  await page.addInitScript(data => { if (!localStorage.getItem('bv.cutting.v1')) localStorage.setItem('bv.cutting.v1', JSON.stringify(data)); }, fixture);
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.getByRole('heading', { name: 'Supervisor Command Center' }).waitFor();
+  await page.getByRole('button', { name: 'Report downtime', exact: true }).click();
+  await page.getByLabel('Report details').fill('Stopper cylinder needs repair');
+  await page.getByLabel('Affected machine').selectOption('fom2');
+  await page.getByLabel('Lost minutes').fill('25');
+  await page.getByRole('button', { name: 'Save report', exact: true }).click();
+  const down = page.locator('.command-report').filter({ hasText: 'Stopper cylinder needs repair' });
+  await down.waitFor();
+  assert.match(await down.textContent(), /25 min reported/);
+  await down.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByLabel('Lost minutes').fill('40');
+  await page.getByRole('button', { name: 'Save report', exact: true }).click();
+  await page.reload(); await down.waitFor();
+  assert.match(await down.textContent(), /40 min reported/);
+  await page.getByRole('button', { name: 'Report quality issue', exact: true }).click();
+  await page.getByLabel('Report details').fill('Inspect scratched stops');
+  await page.getByLabel('Affected pieces').fill('12');
+  await page.getByRole('button', { name: 'Save report', exact: true }).click();
+  await page.getByLabel('Filter reports').selectOption('quality');
+  await page.waitForFunction(() => document.querySelectorAll('.command-report').length === 1);
+  assert.equal(await page.locator('.command-report').count(), 1);
+  await page.getByLabel('Filter reports').selectOption('all');
+  await down.getByRole('button', { name: 'Resolve', exact: true }).click();
+  await page.getByRole('button', { name: 'Resolve report', exact: true }).click();
+  await down.waitFor({ state: 'detached' });
+  await page.getByLabel('Show resolved').check();
+  await down.waitFor();
+  assert.match(await down.textContent(), /Resolved/);
+  await page.getByRole('button', { name: 'Write handover', exact: true }).click();
+  await page.getByRole('button', { name: 'Include open issues', exact: true }).click();
+  assert.match(await page.locator('dialog').textContent(), /Inspect scratched stops/);
+  assert.doesNotMatch(await page.locator('dialog').textContent(), /Stopper cylinder/);
+  await page.getByRole('button', { name: 'Add to draft notes', exact: true }).click();
+  await page.getByRole('button', { name: /Choose page/ }).click();
+  await page.getByLabel('Find a page').fill('quality-no-match');
+  assert.equal(await page.locator('.mobile-nav-item:visible').count(), 0);
+  await page.getByLabel('Find a page').fill('Overview');
+  await page.locator('.mobile-nav-item:visible').click();
+  await page.getByRole('heading', { name: 'Supervisor Command Center' }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  assert.deepEqual(errors, []);
+  console.log('Command Center UI: create/edit/reload/filter/resolve, handover and mobile navigation OK');
+} finally { await browser.close(); await new Promise(r => server.close(r)); }

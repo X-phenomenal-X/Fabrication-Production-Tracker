@@ -697,13 +697,14 @@ export function deleteManualTask(id) {
 /** A job to do that no schedule knows about: chase a supplier, change a blade,
     walk a drawing over. Dated, so the list is about a day rather than growing
     forever, but an unfinished one follows the day forward — see openTodos(). */
-export function addTodo(text, { date, assignee = null } = {}) {
+export function addTodo(text, { date, assignee = null, operation = null } = {}) {
   const body = String(text || '').trim();
   if (!body) return null;
   const id = uid();
   state.todos = {
     ...state.todos,
-    [id]: changed({ id, text: body, date, assignee, done: false }),
+    [id]: changed({ id, text: body, date, assignee, done: false,
+      ...(operation ? { operation } : {}) }),
   };
   save();
   return id;
