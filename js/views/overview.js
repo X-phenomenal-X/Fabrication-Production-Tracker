@@ -311,7 +311,8 @@ export function renderOverview(rerender, go, sync = null) {
 
   const brief = el('header.overview-brief', {},
     el('div.overview-intro', {},
-      el('div.overview-kicker', {}, 'Kinetic command stack'),
+      el('div.overview-kicker', {}, 'Cutting department'),
+      el('h1.overview-title', {}, 'Production overview'),
       el('div.overview-date', {}, longDate(shiftContext.date)),
       /* `range` is the shift's own printed hours. This read shift.from/shift.to,
          which the two-shift rewrite removed, so the headline of the page the
@@ -329,7 +330,10 @@ export function renderOverview(rerender, go, sync = null) {
         shiftContext.live ? crew : 'Nobody on the floor right now',
         me() ? ` · ${me()}` : '')),
     handoffCard,
-    healthStrip);
+    healthStrip,
+    el('progress.overview-meter.overview-schedule-progress', {
+      value: donePct, max: 100, 'aria-label': `Schedule ${donePct}% complete`,
+    }));
 
   const currentLog = state.shiftLogs?.[`${shiftContext.date}|${shiftContext.key}`] || null;
   const loggedMachines = currentLog ? Object.keys(currentLog.rows || {}).length : 0;

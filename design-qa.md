@@ -1,4 +1,22 @@
-# Kinetic Command Stack — Design QA
+# Front-end design QA
+
+## Supervisor overview refresh — 8 September 2026
+
+The current overview replaces the earlier kinetic presentation below with solid
+cards, a clear page title, restrained type, and a desktop split between active
+work/upcoming work and shift risks. Phone health totals use a two-column grid
+plus a full-width sync row. A labelled native progress bar shows overall schedule
+completion. The Done action retains its existing status and undo behavior.
+
+Shared screen styles simplify panel surfaces and sidebar elevation. Screen fonts
+use the device sans-serif stack; the existing print font rules remain in place.
+This is an implementation refresh of the existing app, not a fidelity comparison
+against the earlier generated concept. Current screenshots use sanitized fixtures.
+Browser screenshots: `test/screens/qa/overview-{phone,desktop}-{light,dark}.png`.
+
+The historical comparison notes below describe the prior presentation.
+
+# Previous Kinetic Command Stack — Design QA
 
 ## Comparison target
 
