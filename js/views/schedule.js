@@ -2,12 +2,75 @@
    grouped by project. Machine queues remain owned by their own two workbooks;
    this page never pretends a Daily Sched order is assigned to a machine. */
 
-import { el, icon, chip, fmtDate, fmtNum, printDocument } from '../ui.js';
+import { el, icon, chip, fmtDate, fmtNum, printDocument, modal } from '../ui.js';
 import { state } from '../store.js';
 import { today } from '../model.js';
 
 const PAGE = 6;
-const view = { date: null, expanded: {} };
+const view = { date: null, expanded: {}, scope: 'day', query: '', project: '', section: '', status: '', sort: 'row', direction: 1, limit: 60, groupLimit: 6 };
+
+const COLUMNS = [
+  ['wo', 'Work order'], ['project', 'Project'], ['jobCode', 'Job code'],
+  ['floor', 'Floor / area'], ['qty', 'Units'], ['series', 'Series'],
+  ['color', 'Colour'], ['cuttingDate', 'Cutting'], ['glazingDate', 'Glazing'],
+  ['shipDate', 'Shipping'], ['cutStatus', 'Cut status'], ['materialStatus', 'Material'],
+];
+
+function openOrder(row, origin) {
+  modal(`Work order ${row.wo || 'not listed'}`, el('div.schedule-detail', {},
+    el('p', {}, row.project || 'Project not listed'),
+    el('dl.schedule-detail-grid', {},
+      ...[...COLUMNS.slice(2), ['section', 'Workbook section'], ['row', 'Excel row']].map(([key, label]) =>
+        el('div', {}, el('dt', {}, label), el('dd', {}, row[key] ?? 'Not listed')))),
+    el('h3', {}, 'Workbook notes'), el('p.schedule-detail-note', {}, row.notes || 'No notes in the workbook.'),
+    el('p.small.muted', {}, 'Read from the separate Daily Schedule workbook. Refresh that file in Setup to update these values.')),
+  { wide: true, origin });
+}
+
+function matches(row) {
+  if (view.scope === 'day' && row.cuttingDate !== view.date) return false;
+  if (view.scope === 'undated' && row.cuttingDate) return false;
+  if (view.project && row.project !== view.project) return false;
+  if (view.section && row.section !== view.section) return false;
+  if (view.status && statusOf(row).tone !== view.status) return false;
+  const haystack = [...COLUMNS.map(([key]) => row[key]), row.notes, row.section].join(' ').toLowerCase();
+  return view.query.trim().toLowerCase().split(/\s+/).every(term => haystack.includes(term));
+}
+
+function sheetSort(a, b) {
+  const key = view.sort;
+  const av = a[key], bv = b[key];
+  if (av == null && bv != null) return 1;
+  if (bv == null && av != null) return -1;
+  const order = key === 'qty' || key === 'row'
+    ? (Number(av) || 0) - (Number(bv) || 0)
+    : String(av || '').localeCompare(String(bv || ''), undefined, { numeric: true, sensitivity: 'base' });
+  return order * view.direction || (a.row || 0) - (b.row || 0);
+}
+
+function spreadsheet(rows, rerender) {
+  return el('section.schedule-sheet.schedule-machine', {},
+    el('div.schedule-sheet-scroll', { tabindex: 0, role: 'region', 'aria-label': 'Schedule spreadsheet. Scroll horizontally for dates and material status.' },
+      el('table.schedule-table', {},
+        el('caption', {}, 'Select a work order for notes and details. Scroll right for glazing, shipping and material. Click a heading to sort.'),
+        el('thead', {}, el('tr', {},
+          el('th', { scope: 'col', 'aria-sort': view.sort === 'row' ? (view.direction === 1 ? 'ascending' : 'descending') : 'none' },
+            el('button', { onclick: () => { view.sort = 'row'; view.direction = 1; rerender(); } }, 'Excel row')),
+          ...COLUMNS.map(([key, label]) => el('th', { scope: 'col', 'aria-sort': view.sort === key ? (view.direction === 1 ? 'ascending' : 'descending') : 'none' },
+            el('button', { onclick: () => {
+              view.direction = view.sort === key ? -view.direction : 1;
+              view.sort = key; view.limit = 60; rerender();
+            } }, label, view.sort === key ? (view.direction === 1 ? ' ↑' : ' ↓') : ''))))),
+        el('tbody', {}, ...rows.slice(0, view.limit).map(row => el('tr.schedule-row', {},
+          el('td.muted', {}, row.row ?? '—'),
+          ...COLUMNS.map(([key]) => el('td' + (key === 'qty' ? '.num' : ''), {},
+            key === 'wo' ? el('button.schedule-order-link', { onclick: event => openOrder(row, event.currentTarget), 'aria-label': `Details for work order ${row.wo}` }, row.wo || '—', row.notes ? icon('note', { size: 14 }) : null)
+              : key === 'cutStatus' ? chip(statusOf(row).label, statusOf(row).tone)
+                : key === 'qty' ? fmtNum(row.qty)
+                  : key.endsWith('Date') ? (row[key] ? fmtDate(row[key]) : '—') : row[key] || '—'))))))),
+    rows.length > view.limit ? el('button.schedule-more', { onclick: () => { view.limit += 60; rerender(); } },
+      `Show ${Math.min(60, rows.length - view.limit)} more · ${view.limit} of ${rows.length} orders shown`) : null);
+}
 
 function defaultDate(dates) {
   const ref = today();
@@ -23,22 +86,17 @@ function statusOf(row) {
   return { label: raw || 'Not started', tone: 'mute', rank: 2 };
 }
 
-function rowSort(a, b) {
-  return statusOf(a).rank - statusOf(b).rank
-    || String(a.wo || '').localeCompare(String(b.wo || ''), undefined, { numeric: true })
-    || String(a.floor || '').localeCompare(String(b.floor || ''), undefined, { numeric: true });
-}
-
 function scheduleRow(row) {
   const status = statusOf(row);
-  return el(`div.schedule-row.status-${status.tone}`, {},
+  return el(`button.schedule-row.status-${status.tone}`, { type: 'button', 'aria-label': `Details for work order ${row.wo}`, onclick: event => openOrder(row, event.currentTarget) },
     el('span.schedule-row-main', {},
       el('span.schedule-row-id', {},
         el('span.mono', {}, row.wo || '—'),
         row.jobCode ? chip(row.jobCode, 'mute') : null,
         row.color ? chip(row.color, 'mute') : null),
       el('span.schedule-row-project', {}, row.floor || 'No floor listed',
-        row.series ? el('span.muted', {}, ` · ${row.series}`) : null)),
+        row.series ? el('span.muted', {}, ` · ${row.series}`) : null),
+      el('span.schedule-row-project', {}, `${row.cuttingDate ? fmtDate(row.cuttingDate) : 'No cutting date'} · ${status.label}`)),
     el('span.schedule-row-qty', {}, el('b.mono', {}, fmtNum(row.qty)), el('small', {}, 'units')),
     chip(status.label, status.tone));
 }
@@ -71,7 +129,9 @@ function printSchedule(date, groups) {
       el('table.print-table', {},
         el('thead', {}, el('tr', {},
           el('th', {}, 'Work order'), el('th', {}, 'Job code'), el('th', {}, 'Floor'),
-          el('th', {}, 'Series'), el('th', {}, 'Qty'), el('th', {}, 'Colour'), el('th', {}, 'Cut status'))),
+          el('th', {}, 'Series'), el('th', {}, 'Qty'), el('th', {}, 'Colour'),
+          el('th', {}, 'Cutting'), el('th', {}, 'Glazing'), el('th', {}, 'Shipping'),
+          el('th', {}, 'Cut status'), el('th', {}, 'Material'))),
         el('tbody', {}, ...rows.map((row) => el('tr', {},
           el('td.mono', {}, row.wo || '—'),
           el('td.mono', {}, row.jobCode || '—'),
@@ -79,10 +139,11 @@ function printSchedule(date, groups) {
           el('td', {}, row.series || '—'),
           el('td.num.mono', {}, fmtNum(row.qty)),
           el('td', {}, row.color || '—'),
-          el('td', {}, statusOf(row).label))))))));
+          ...['cuttingDate', 'glazingDate', 'shipDate'].map(key => el('td', {}, row[key] || '—')),
+          el('td', {}, statusOf(row).label), el('td', {}, row.materialStatus || '—'))))))));
   printDocument({
-    title: `Daily Schedule — ${fmtDate(date, { withDay: true })}`,
-    subtitle: 'Separate Daily Schedule workbook · grouped by project',
+    title: `Daily Schedule — ${view.scope === 'day' ? fmtDate(date, { withDay: true }) : view.scope === 'undated' ? 'No cutting date' : 'All dates'}`,
+    subtitle: 'Current filtered results · grouped by project',
     meta: [`${groups.reduce((n, [, rows]) => n + rows.length, 0)} orders`],
     body,
     landscape: true,
@@ -94,7 +155,7 @@ export function renderSchedule(rerender, go) {
   const dates = [...new Set(source.map((row) => row.cuttingDate).filter(Boolean))].sort();
   if (!view.date) view.date = defaultDate(dates);
   const date = view.date;
-  const rows = source.filter((row) => row.cuttingDate === date).sort(rowSort);
+  const rows = source.filter(matches).sort(sheetSort);
   const grouped = new Map();
   for (const row of rows) {
     const project = row.project || '';
@@ -118,13 +179,13 @@ export function renderSchedule(rerender, go) {
         el('div', {},
           el('h1.centre-title', {}, 'Daily Schedule'),
           el('div.centre-sub', {}, state.dailyMeta
-            ? `${fmtDate(date, { withDay: true })} · ${state.dailyMeta.fileName}`
+            ? `${view.scope === 'day' ? fmtDate(date, { withDay: true }) : view.scope === 'all' ? 'All dates' : 'No cutting date'} · ${state.dailyMeta.fileName}`
             : 'Separate Daily Schedule workbook'))),
       el('span.spacer'),
       el('button.print-action', {
         type: 'button', disabled: !rows.length,
         onclick: () => printSchedule(date, groups),
-      }, icon('print', { size: 17 }), 'Print day')));
+      }, icon('print', { size: 17 }), 'Print results')));
 
   if (!source.length) {
     return el('div.centre.daily-schedule', {}, head,
@@ -137,23 +198,46 @@ export function renderSchedule(rerender, go) {
 
   return el('div.centre.daily-schedule', {},
     head,
+    el('section.schedule-filters', { 'aria-label': 'Find schedule orders' },
+      el('label.schedule-search', {}, el('span', {}, 'Find an order'),
+        el('input', { type: 'search', value: view.query, placeholder: 'Work order, project, code, colour or notes…',
+          oninput: event => {
+            const input = event.currentTarget;
+            const position = input.selectionStart;
+            view.query = input.value; view.limit = 60; view.expanded = {}; rerender();
+            requestAnimationFrame(() => {
+              if (document.activeElement !== document.body && document.activeElement !== input) return;
+              const replacement = document.querySelector('.schedule-search input');
+              replacement?.focus({ preventScroll: true });
+              if (replacement && position != null) replacement.setSelectionRange(position, position);
+            });
+          } })),
+      ...[
+        ['scope', 'Date range', [['day', 'Selected day'], ['all', 'All dates'], ['undated', 'No cutting date']]],
+        ['project', 'Project', [['', 'All projects'], ...[...new Set(source.map(row => row.project).filter(Boolean))].sort().map(x => [x, x])]],
+        ['section', 'Workbook section', [['', 'All sections'], ...[...new Set(source.map(row => row.section).filter(Boolean))].sort().map(x => [x, x])]],
+        ['status', 'Cut status', [['', 'All statuses'], ['work', 'In progress'], ['ok', 'Complete'], ['bad', 'Needs attention'], ['mute', 'Other / not started']]],
+      ].map(([key, label, options]) => el('label', {}, el('span', {}, label),
+        el('select', { 'aria-label': label, value: view[key], onchange: event => { view[key] = event.target.value; view.limit = 60; view.expanded = {}; rerender(); } },
+          ...options.map(([value, text]) => el('option', { value, selected: view[key] === value }, text))))),
+      el('button', { onclick: () => { Object.assign(view, { scope: 'day', date: defaultDate(dates), query: '', project: '', section: '', status: '', limit: 60, expanded: {}, sort: 'row', direction: 1 }); rerender(); } }, 'Reset filters')),
     el('section.schedule-toolbar', { 'aria-label': 'Schedule date' },
       el('button.schedule-date-step', {
-        type: 'button', disabled: !previous, 'aria-label': 'Previous scheduled day',
+        type: 'button', disabled: view.scope !== 'day' || !previous, 'aria-label': 'Previous scheduled day',
         onclick: () => { view.date = previous; view.expanded = {}; rerender(); },
       }, icon('chevron-left', { size: 19 })),
       el('label.schedule-date', {},
         el('span', {}, 'Cutting date'),
         el('input', {
-          type: 'date', value: date,
+          type: 'date', value: date, disabled: view.scope !== 'day',
           onchange: (event) => { view.date = event.target.value || today(); view.expanded = {}; rerender(); },
         })),
       el('button.schedule-date-step', {
-        type: 'button', disabled: !next, 'aria-label': 'Next scheduled day',
+        type: 'button', disabled: view.scope !== 'day' || !next, 'aria-label': 'Next scheduled day',
         onclick: () => { view.date = next; view.expanded = {}; rerender(); },
       }, icon('chevron', { size: 19 })),
       date !== today() && dates.includes(today()) ? el('button.schedule-today', {
-        type: 'button', onclick: () => { view.date = today(); view.expanded = {}; rerender(); },
+        type: 'button', onclick: () => { view.scope = 'day'; view.date = today(); view.expanded = {}; rerender(); },
       }, 'Today') : null),
 
     el('div.schedule-kpis', {},
@@ -162,13 +246,16 @@ export function renderSchedule(rerender, go) {
       el('div.schedule-kpi.work', {}, el('b', {}, fmtNum(running)), el('span', {}, 'in progress')),
       el('div.schedule-kpi.ok', {}, el('b', {}, `${pct}%`), el('span', {}, `${done} done`))),
 
+    el('p.schedule-result-summary', { role: 'status' }, `${rows.length} matching orders of ${source.length} imported · ${view.scope === 'day' ? fmtDate(date) : view.scope === 'undated' ? 'No cutting date' : 'All dates'}. Search uses this date range.`,
+      view.scope === 'day' ? el('button.ghost', { onclick: () => { view.scope = 'all'; view.limit = 60; view.expanded = {}; rerender(); } }, 'Search all dates') : null),
     rows.length
-      ? el('div.schedule-grid', {}, ...groups.map(([project, projectRows]) =>
-          projectCard(project, projectRows, rerender)))
+      ? el('div.schedule-results', {}, spreadsheet(rows, rerender),
+          el('div.schedule-grid.schedule-mobile', {}, ...groups.slice(0, view.groupLimit).map(([project, projectRows]) =>
+            projectCard(project, projectRows, rerender)),
+            groups.length > view.groupLimit ? el('button.schedule-more', { onclick: () => { view.groupLimit += 6; rerender(); } },
+              `Show ${Math.min(6, groups.length - view.groupLimit)} more projects · ${view.groupLimit} of ${groups.length}`) : null))
       : el('div.panel', {}, el('div.empty', {},
           el('div.empty-icon', {}, icon('calendar', { size: 28 })),
-          el('h3', {}, 'Nothing has this cutting date'),
-          el('p', {}, previous || next
-            ? 'Use the arrows to move to the nearest date in the Daily Schedule.'
-            : 'No other cutting date was found in the imported file.'))));
+          el('h3', {}, 'No orders match these filters'),
+          el('p', {}, 'Try All dates, a shorter search, or Reset filters.'))));
 }
