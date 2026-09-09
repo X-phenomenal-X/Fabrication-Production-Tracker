@@ -6223,6 +6223,192 @@ a.resource-download:active, button.resource-download:active { transform: transla
   .resource-card, .employee-card, .project-card, a.resource-download, button.resource-download { transition: none; }
 }
 
+/* Supervisor workspace: solid surfaces, quieter hierarchy and visible totals.
+   Screen-only rules keep the dedicated print and monitor layouts independent. */
+@media screen {
+  :root {
+    --font-sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+    --font-display: "Segoe UI", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  }
+  :root:not([data-display="monitor"]) main {
+    --shadow-1: 0 1px 3px rgb(15 23 42 / .04);
+    --shadow-2: 0 3px 16px rgb(15 23 42 / .06);
+  }
+  main .panel, main .dgroup-body, main .nowrun, main .sucard,
+  main .resource-card, main .employee-card, main .project-card {
+    background: var(--panel); backdrop-filter: none; -webkit-backdrop-filter: none;
+    box-shadow: var(--shadow-1); border-radius: 12px;
+  }
+  .overview { grid-template-columns: minmax(0, 1fr); gap: 18px; padding-bottom: 28px; }
+  .overview-brief { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .overview-intro { padding: 4px 0; min-height: 0; }
+  .overview-kicker { font-weight: 600; letter-spacing: .1em; font-size: 11px; margin-bottom: 6px; }
+  .overview-title { margin: 0; font-size: clamp(26px, 2.8vw, 38px); font-weight: 700; line-height: 1.15; letter-spacing: -.035em; }
+  .overview-date { margin-top: 8px; font-size: 15px; line-height: 1.4; font-weight: 400; letter-spacing: 0; color: var(--ink-2); }
+  .overview-shift { font-size: 14px; margin-top: 8px; }
+  .overview-shift strong { font-size: 14px; font-weight: 600; }
+  .overview-crew { font-size: 13px; margin-top: 5px; }
+  .overview-health-strip {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    background: var(--panel); border-radius: 12px; box-shadow: var(--shadow-1);
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  .overview-health-stat { min-height: 100px; padding: 16px; gap: 10px; }
+  .overview-health-icon { width: 32px; height: 32px; flex-basis: 32px; border: 0; box-shadow: none; }
+  .overview-health-stat strong { font-family: var(--font-sans); font-size: 28px; font-weight: 700; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
+  .overview-health-stat span { font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+  .overview-health-stat small { font-size: 12px; }
+  .overview-schedule-progress { grid-column: 1 / -1; width: 100%; height: 5px; margin-top: -10px; }
+  .overview-handoff {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 16px; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  .overview-handoff-title { font-weight: 600; }
+  .overview-main {
+    gap: 16px; border: 0; background: transparent; box-shadow: none;
+    backdrop-filter: none; -webkit-backdrop-filter: none; overflow: visible;
+  }
+  .overview-main::before { display: none; }
+  .overview-band, .overview-band.work {
+    padding: 0; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--panel); box-shadow: var(--shadow-1); overflow: hidden;
+  }
+  .overview-band:last-child { border-bottom: 1px solid var(--line); }
+  .overview-band-head { padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line-soft); gap: 10px; }
+  .overview-band-head h2 { font-size: 16px; font-weight: 600; text-transform: none; letter-spacing: -.01em; }
+  .overview-step {
+    position: static; width: 26px; height: 26px; flex-basis: 26px;
+    font-size: 12px; border-radius: 7px; box-shadow: none;
+  }
+  .overview-focus-card { grid-template-columns: 44px minmax(0, 1fr) auto; padding: 20px; gap: 14px; }
+  .overview-focus-icon { width: 44px; height: 44px; border: 0; border-radius: 10px; box-shadow: none; }
+  .overview-task-id > strong { font-family: var(--font-sans); font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .overview-project { font-size: 16px; font-weight: 600; }
+  .overview-done, .overview-open { grid-column: 1 / -1; width: 100%; min-height: 88px; border-radius: 10px; box-shadow: none; }
+  .overview-done::before { display: none; }
+  .overview-done:hover { filter: none; box-shadow: var(--shadow-2); }
+  .overview-done-mark { box-shadow: none; width: 42px; height: 42px; flex-basis: 42px; }
+  .overview-done strong { font-size: 23px; letter-spacing: 0; text-transform: none; }
+  .overview-done small { font-size: 13px; }
+  .overview-upcoming-row, .overview-watch-row { padding: 14px 16px; }
+  .overview-shift-rail { background: var(--panel); border-radius: 12px; box-shadow: none; }
+  .overview-shift-rail > strong, .overview-shift-rail-state { text-transform: none; letter-spacing: 0; }
+}
+@media screen and (min-width: 1101px) {
+  header.top { box-shadow: none; }
+  nav.tabs { gap: 16px; }
+  nav.tabs button { border-radius: 9px; }
+  nav.tabs button .nav-icon { box-shadow: none !important; }
+  main { padding: 28px 32px; }
+  .overview-brief { grid-template-columns: minmax(0, 1fr) minmax(300px, .85fr); align-items: center; }
+  .overview-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .overview-band.work { grid-column: 1; grid-row: 1 / span 2; }
+  .overview-band.accent, .overview-band.bad { grid-column: 2; }
+  .overview-band-head { flex-wrap: wrap; }
+  .overview-band-head > span:last-child { flex-basis: 100%; padding-left: 36px; }
+  .overview-upcoming-row { grid-template-columns: 32px minmax(0, 1fr) auto; }
+  .overview-row-date { grid-column: 2; font-size: 12px; }
+  .overview-upcoming-row > .ui-icon:last-child { grid-column: 3; grid-row: 1 / span 2; }
+  .overview-row-qty { display: none; }
+  .overview-watch-row { grid-template-columns: 32px minmax(0, 1fr) auto; }
+  .overview-watch-label, .overview-watch-main { grid-column: 2; }
+  .overview-watch-qty { grid-column: 3; grid-row: 1; }
+  .overview-watch-row > .ui-icon:last-child { grid-column: 3; grid-row: 2; }
+  .overview-band.work { grid-row: 1; }
+  .overview-band.accent { grid-column: 1; grid-row: 2; }
+  .overview-band.bad { grid-column: 2; grid-row: 1 / span 2; }
+}
+@media screen and (max-width: 720px) {
+  .overview { gap: 12px; padding-bottom: 24px; }
+  .overview-title { font-size: 27px; }
+  .overview-date { font-size: 13px; margin-top: 5px; }
+  .overview-brief { gap: 12px; }
+  .overview-health-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; }
+  .overview-health-stat { min-width: 0; min-height: 78px; padding: 12px; border-bottom: 1px solid var(--line-soft); }
+  .overview-health-stat:nth-child(even) { border-right: 0; }
+  .overview-health-stat:last-child { grid-column: 1 / -1; min-height: 44px; border-bottom: 0; padding-block: 6px; }
+  .overview-health-stat:last-child > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .overview-health-stat:last-child strong { font-size: 13px; }
+  .overview-health-stat strong { font-size: 24px; }
+  .overview-health-stat small { font-size: 11px; }
+  .overview-handoff { padding: 10px; }
+  .overview-main { gap: 12px; }
+  .overview-band-head { min-height: 46px; padding: 10px 12px; }
+  .overview-band-head h2 { font-size: 15px; }
+  .overview-focus-card { padding: 12px; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+  .overview-focus-icon { display: none; }
+  .overview-task-id > strong { font-size: 28px; }
+  .overview-project { font-size: 14px; }
+  .overview-done, .overview-open { min-height: 64px; }
+  .overview-upcoming-row, .overview-watch-row { padding: 12px; }
+  .overview-band .overview-empty { padding: 12px; }
+}
+
+@media screen {
+  .overview { font-family: var(--font-sans); }
+  .overview button, .overview h2, .overview-done strong {
+    font-family: var(--font-sans);
+  }
+  .overview-watch-row { gap: 6px 10px; }
+  .overview-watch-icon { grid-row: 1 / span 2; }
+  .overview-watch-main span {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  }
+  .overview-band-head > span:last-child { font-size: 12px; }
+}
+
+/* Daily workbook workspace: one filter state for the sheet and phone cards. */
+.schedule-filters {
+  display: grid; grid-template-columns: minmax(240px, 2fr) repeat(4, minmax(110px, 1fr)) auto;
+  gap: 12px; align-items: end; margin-block: 16px; padding: 16px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+}
+.schedule-filters label { min-width: 0; display: grid; gap: 6px; }
+.schedule-filters label > span { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.schedule-filters input, .schedule-filters select { width: 100%; min-width: 0; min-height: 48px; }
+.schedule-filters > button { min-height: 48px; }
+.schedule-result-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.schedule-result-summary button { min-height: 44px; }
+.schedule-sheet { min-width: 0; max-width: 100%; }
+.schedule-sheet-scroll { max-height: 68vh; overflow: auto; overscroll-behavior: contain; border-radius: 10px; }
+.schedule-table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 1480px; font-size: 13px; }
+.schedule-table caption { text-align: left; padding: 12px 16px; color: var(--ink-2); background: var(--panel-2); }
+.schedule-table th { position: sticky; top: 0; z-index: 2; padding: 0; background: var(--panel-2); border-bottom: 2px solid var(--line); text-align: left; }
+.schedule-table th button { min-height: 48px; width: 100%; justify-content: flex-start; padding: 8px 12px; border: 0; border-radius: 0; background: transparent; box-shadow: none; white-space: nowrap; }
+.schedule-table th[aria-sort]:not([aria-sort="none"]) button { color: var(--accent); background: var(--accent-soft); }
+.schedule-table .schedule-row { display: table-row; padding: 0; box-shadow: none; background: var(--panel); }
+.schedule-table .schedule-row:nth-child(even) { background: var(--panel-2); }
+.schedule-table .schedule-row:hover, .schedule-table .schedule-row:focus-within { background: var(--accent-soft); }
+.schedule-table td { padding: 8px 12px; border-bottom: 1px solid var(--line-soft); border-right: 1px solid var(--line-soft); vertical-align: middle; max-width: 240px; overflow-wrap: anywhere; }
+.schedule-table td:nth-child(3) { min-width: 200px; }
+.schedule-table td:nth-child(2), .schedule-table th:nth-child(2) { position: sticky; left: 0; z-index: 1; background: var(--panel); box-shadow: 2px 0 0 var(--line); }
+.schedule-table th:nth-child(2) { z-index: 3; background: var(--panel-2); }
+.schedule-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.schedule-order-link { min-height: 44px; min-width: 68px; padding: 4px 8px; font-weight: 700; color: var(--accent); background: var(--accent-soft); white-space: nowrap; }
+.schedule-mobile { display: none; }
+.schedule-detail > p:first-child { font-size: 20px; font-weight: 600; }
+.schedule-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.schedule-detail-grid > div { min-width: 0; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.schedule-detail-grid dt { font-size: 12px; color: var(--ink-3); }
+.schedule-detail-grid dd { margin: 5px 0 0; overflow-wrap: anywhere; font-weight: 600; }
+.schedule-detail-note { white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px; background: var(--panel-2); border-radius: 8px; }
+@media (max-width: 1200px) {
+  .schedule-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .schedule-search { grid-column: span 2; }
+}
+@media (max-width: 720px) {
+  .schedule-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; gap: 10px; }
+  .schedule-search { grid-column: 1 / -1; }
+  .schedule-filters > button { grid-column: 1 / -1; }
+  .schedule-sheet { display: none; }
+  .schedule-mobile { display: grid; }
+  .schedule-mobile .schedule-row { width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line-soft); border-radius: 0; }
+  .schedule-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media print {
+  .schedule-filters, .schedule-sheet, .schedule-mobile, .schedule-result-summary { display: none !important; }
+}
+
 /* V2.1 — Supervisor Command Center.
    The shared surfaces also redesign the existing operational pages. Semantic
    colours, print rules, control sizes and the two theme palettes stay shared. */

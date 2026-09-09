@@ -33,13 +33,26 @@ await page.waitForSelector('header.top');
 step('opened from file:// — app booted');
 
 await page.evaluate(() => document.fonts.ready);
-const type = await page.evaluate(() => ({
-  sans: getComputedStyle(document.body).fontFamily,
-  mono: getComputedStyle(document.querySelector('.mono')).fontFamily,
-}));
-step('bundled typefaces: ' + JSON.stringify(type));
-if (!type.sans.includes('IBM Plex Sans') || !type.mono.includes('IBM Plex Mono')) {
-  throw new Error('bundled IBM Plex typefaces are not active');
+const type = await page.evaluate(async () => {
+  // Dashboard totals deliberately use the screen sans-serif. Probe the shared
+  // mono utility itself rather than assuming the first metric is a code field.
+  const probe = document.createElement('span');
+  probe.className = 'mono';
+  probe.textContent = 'S80.106';
+  document.body.append(probe);
+  const bundled = await document.fonts.load('12px "IBM Plex Mono"');
+  const result = {
+    sans: getComputedStyle(document.body).fontFamily,
+    mono: getComputedStyle(probe).fontFamily,
+    bundledMonoLoaded: bundled.some(face => face.status === 'loaded'),
+  };
+  probe.remove();
+  return result;
+});
+step('offline typefaces: ' + JSON.stringify(type));
+if (!type.sans.includes('Segoe UI') || !type.sans.includes('sans-serif')
+    || !type.mono.includes('IBM Plex Mono') || !type.bundledMonoLoaded) {
+  throw new Error('screen font stack or bundled offline monospace is unavailable');
 }
 
 step('secure context: ' + await page.evaluate(() => window.isSecureContext));

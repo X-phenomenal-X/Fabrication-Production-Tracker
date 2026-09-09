@@ -334,7 +334,10 @@ export function renderOverview(rerender, go, sync = null) {
         shiftContext.live ? crew : 'Nobody on the floor right now',
         me() ? ` · ${me()}` : '')),
     handoffCard,
-    healthStrip);
+    healthStrip,
+    el('progress.overview-meter.overview-schedule-progress', {
+      value: donePct, max: 100, 'aria-label': `Schedule ${donePct}% complete`,
+    }));
 
   const currentLog = state.shiftLogs?.[`${shiftContext.date}|${shiftContext.key}`] || null;
   const loggedMachines = currentLog ? Object.keys(currentLog.rows || {}).length : 0;
