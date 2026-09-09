@@ -44,13 +44,12 @@ jobs:
       - name: Verify importer, sync, UI, offline and standalone operation
         run: npm test
 
-      - name: Warn if the committed build is stale
-        run: |
-          if ! git diff --quiet -- Cutting-Tracker.html; then
-            echo "::warning::Cutting-Tracker.html in the repo differs from a fresh build."
-            echo "The published site is correct, but the copy on the shared drive is out of date —" >> "$GITHUB_STEP_SUMMARY"
-            echo "run \`node build.mjs\` and commit the result." >> "$GITHUB_STEP_SUMMARY"
-          fi
+      - name: Save the verified offline tracker
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-tracker
+          path: Cutting-Tracker.html
+          if-no-files-found: error
 
       - name: Assemble the modular online app
         run: npm run build:site
@@ -69,3 +68,27 @@ jobs:
     steps:
       - id: deploy
         uses: actions/deploy-pages@v4
+
+  refresh-offline:
+    needs: build
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: offline-tracker
+      - name: Refresh the repository's verified offline download
+        env:
+          TRACKER_BRANCH: ${{ github.ref_name }}
+        run: |
+          if git diff --quiet -- Cutting-Tracker.html; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cutting-Tracker.html
+          git commit -m "Refresh verified standalone tracker [skip ci]"
+          git push origin "HEAD:$TRACKER_BRANCH"

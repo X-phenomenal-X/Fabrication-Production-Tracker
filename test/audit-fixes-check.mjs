@@ -21,6 +21,9 @@ try {
   await page.addInitScript(data => { if (!localStorage.getItem('bv.cutting.v1')) localStorage.setItem('bv.cutting.v1', JSON.stringify(data)); }, fixture);
   await page.goto(`http://127.0.0.1:${server.address().port}/#schedule`);
   await page.waitForSelector('.schedule-table');
+  page.on('console', msg => console.log('BROWSER:', msg.text()));
+  await page.evaluate(() => { for (const type of ['input', 'change']) { document.addEventListener(type, e => console.log('capture', type, e.target.value), true); document.addEventListener(type, e => console.log('bubble', type, e.target.value)); } });
+  console.log('Options', await page.getByLabel('Date range', {exact:true}).innerHTML());
   await page.getByLabel('Date range', { exact: true }).selectOption('all');
   await page.waitForTimeout(200);
   console.log('Schedule state:', await page.getByLabel('Date range', { exact:true }).inputValue(), await page.locator('.schedule-result-summary').textContent(), 'rows:', await page.locator('.schedule-table tbody tr').count());
