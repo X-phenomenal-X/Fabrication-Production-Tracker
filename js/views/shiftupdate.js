@@ -324,6 +324,20 @@ function activeMobileIndex(rows, d) {
   return index;
 }
 
+function saveDraft(rerender) {
+  const d = loadDraft();
+  const rows = Object.fromEntries(Object.entries(d.rows).filter(([, row]) => hasContent(row)));
+  if (!Object.keys(rows).length && !d.notes.trim()) {
+    toast('Add machine or general handover notes first');
+    return;
+  }
+  saveShiftLog(view.date, view.shift, { rows, notes: d.notes.trim() });
+  dropDraft();
+  view.mode = 'read';
+  toast('Shift update saved');
+  rerender();
+}
+
 function mobileShiftActions(rerender) {
   const d = loadDraft();
   const closeThen = (event, action) => {
@@ -331,6 +345,9 @@ function mobileShiftActions(rerender) {
     setTimeout(action, 0);
   };
   modal('Shift update actions', el('div.mobile-su-menu', {},
+    view.mode === 'write' && operationalShift() ? el('button.primary', {
+      onclick: event => closeThen(event, () => saveDraft(rerender)),
+    }, 'Save shift update') : null,
     el('button', {
       onclick: (event) => closeThen(event, () => {
         view.mode = view.mode === 'write' ? 'read' : 'write';
@@ -631,19 +648,7 @@ function writeView(rerender) {
         },
       }, 'Delete') : null,
       el('button.primary', {
-        onclick: () => {
-          const rows = Object.fromEntries(
-            Object.entries(d.rows).filter(([, r]) => hasContent(r)));
-          if (!Object.keys(rows).length && !d.notes.trim()) {
-            toast('Fill in at least one machine first');
-            return;
-          }
-          saveShiftLog(view.date, view.shift, { rows, notes: d.notes.trim() });
-          dropDraft();
-          view.mode = 'read';
-          toast('Shift update saved');
-          rerender();
-        },
+        onclick: () => saveDraft(rerender),
       }, icon('check', { size: 14 }), 'Save shift update')));
 }
 

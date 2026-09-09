@@ -21,9 +21,6 @@ try {
   await page.addInitScript(data => { if (!localStorage.getItem('bv.cutting.v1')) localStorage.setItem('bv.cutting.v1', JSON.stringify(data)); }, fixture);
   await page.goto(`http://127.0.0.1:${server.address().port}/#schedule`);
   await page.waitForSelector('.schedule-table');
-  page.on('console', msg => console.log('BROWSER:', msg.text()));
-  await page.evaluate(() => { for (const type of ['input', 'change']) { document.addEventListener(type, e => console.log('capture', type, e.target.value), true); document.addEventListener(type, e => console.log('bubble', type, e.target.value)); } });
-  console.log('Options', await page.getByLabel('Date range', {exact:true}).innerHTML());
   await page.getByLabel('Date range', { exact: true }).selectOption('all');
   await page.waitForTimeout(200);
   console.log('Schedule state:', await page.getByLabel('Date range', { exact:true }).inputValue(), await page.locator('.schedule-result-summary').textContent(), 'rows:', await page.locator('.schedule-table tbody tr').count());
@@ -60,11 +57,18 @@ try {
   // A fresh device can save handover notes before importing any schedule.
   const blank = await browser.newPage({ viewport:{ width:390, height:844 } });
   blank.on('pageerror', e => errors.push(e.message));
-  const empty = makeFixture(); empty.tasks = []; empty.dailyOrders = []; empty.shiftLogs = {};
+  const empty = makeFixture(); empty.tasks = []; empty.dailyOrders = []; empty.shiftLogs = {}; empty.manualTasks = {}; empty.shiftUpdate = {}; empty.machineMeta = {};
   await blank.addInitScript(data => { if (!localStorage.getItem('bv.cutting.v1')) localStorage.setItem('bv.cutting.v1', JSON.stringify(data)); }, empty);
   await blank.goto(`http://127.0.0.1:${server.address().port}/#shift`);
   await blank.getByRole('heading', { name:'Shift update', exact:true }).waitFor();
-  console.log('Empty handover controls:', await blank.locator('main').innerText());
+  await blank.getByRole('button', { name:'Shift update actions', exact:true }).click();
+  await blank.getByLabel('General shift notes', { exact:true }).fill('Material arriving tomorrow; check unloading space.');
+  await blank.locator('dialog').getByRole('button', { name:'Save shift update', exact:true }).click();
+  await blank.getByText('Shift update saved', { exact:true }).waitFor();
+  await blank.reload();
+  await blank.getByRole('button', { name:'Shift update actions', exact:true }).click();
+  await blank.getByRole('button', { name:'Read saved update', exact:true }).click();
+  await blank.getByText('Material arriving tomorrow; check unloading space.', { exact:true }).waitFor();
   assert.match(await blank.locator('main').textContent(), /You can still save/);
   assert.equal(await blank.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   assert.deepEqual(errors, []);

@@ -592,7 +592,7 @@ armShiftClock();
 if (document.documentElement.dataset.display === 'monitor') armMonitorRotation(scheduleRender);
 registerServiceWorker();
 watchConnection(scheduleRender);
-initSharedFile(render);
+initSharedFile(scheduleRender);
 initCloud();
 
 // Browsers intentionally ignore custom before-close wording, but setting
