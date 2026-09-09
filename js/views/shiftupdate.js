@@ -840,15 +840,6 @@ function readView(rerender) {
 /* ---------- page ---------- */
 
 export function renderShiftUpdate(rerender, go) {
-  if (!hasTasks()) {
-    return el('div.panel', {},
-      el('div.empty', {},
-        el('div.empty-icon', {}, icon('upload', { size: 28 })),
-        el('h3', {}, 'No schedule loaded yet'),
-        el('p', {}, 'Import the Rolling and CNC workbooks to get started.'),
-        el('button.primary', { onclick: () => go('setup') }, 'Go to Setup')));
-  }
-
   const posted = Object.values(state.shiftLogs || {})
     .sort((a, b) => ((a.date + shiftSortRank(a.shift)) < (b.date + shiftSortRank(b.shift)) ? 1 : -1));
   const saved = currentLog();
@@ -979,6 +970,8 @@ export function renderShiftUpdate(rerender, go) {
 
   return el('div.centre', {},
     head,
+    !hasTasks() ? el('div.banner', {}, 'Schedules are not loaded. You can still save machine and general handover notes. ',
+      el('button', { onclick: () => go('setup') }, 'Import schedules')) : null,
     view.mode === 'write' ? el('div.command-handover-include', {},
       el('div', {}, el('strong', {}, 'Carry forward open issues'), el('p.small.muted', {}, 'Add current actions, downtime and quality follow-ups to your general notes. Review before saving.')),
       el('button', { type: 'button', onclick: () => {

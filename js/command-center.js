@@ -9,19 +9,20 @@ export const OPERATION_KINDS = ['action', 'downtime', 'quality'];
 export function operationKind(item) {
   return OPERATION_KINDS.includes(item.operation?.kind) ? item.operation.kind : 'action';
 }
-export function createOperation({ id = null, kind, text, machine = '', assignee = null, priority = 'normal', minutes = '', quantity = '', wo = '', date = today() }) {
+export function createOperation({ id = null, kind, text, machine = '', assignee = null, priority = 'normal', minutes = '', quantity = '', wo = '', date = today(), dueDate = '' }) {
   if (!OPERATION_KINDS.includes(kind)) throw new Error('Choose a valid report type.');
   if (!String(text || '').trim()) throw new Error('Describe what needs attention.');
   if (machine && !MACHINES.some(m => m.key === machine && !m.queue)) throw new Error('Choose a machine.');
   if (kind === 'downtime' && !machine) throw new Error('Choose the affected machine.');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date || date > today()) throw new Error('Choose a report date.');
+  if (kind === 'action' && dueDate && (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || !Number.isFinite(Date.parse(dueDate)) || new Date(dueDate).toISOString().slice(0, 10) !== dueDate)) throw new Error('Choose a valid due date.');
   const number = (value, label) => {
     if (value === '' || value == null) return null;
     const n = Number(value);
     if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) throw new Error(`${label} must be a whole number of zero or more.`);
     return n;
   };
-  const operation = { kind, machine, priority: priority === 'high' ? 'high' : 'normal', wo: String(wo).trim(),
+  const operation = { kind, machine, dueDate: kind === 'action' ? dueDate || null : null, priority: priority === 'high' ? 'high' : 'normal', wo: String(wo).trim(),
     minutes: kind === 'downtime' ? number(minutes, 'Lost minutes') : null,
     quantity: kind === 'quality' ? number(quantity, 'Affected quantity') : null };
   const prefix = kind === 'action' ? '' : `[${kind === 'quality' ? 'Quality' : 'Downtime'}] `;
@@ -69,6 +70,6 @@ export function operationHandoverLines(ref = today()) {
   return Object.values(state.todos || {}).filter(t => !t.done && t.date <= ref).map(t => {
     const op = t.operation || {};
     const machine = MACHINES.find(m => m.key === op.machine);
-    return `${t.text} — ${t.assignee || 'Unassigned'}${machine ? ' · ' + machineConfig(machine).label : ''}${op.wo ? ' · W/O ' + op.wo : ''}${op.minutes != null ? ' · ' + op.minutes + ' min reported' : ''}`;
+    return `${t.text} — ${t.assignee || 'Unassigned'}${machine ? ' · ' + machineConfig(machine).label : ''}${op.wo ? ' · W/O ' + op.wo : ''}${op.dueDate ? ' · Due ' + op.dueDate : ''}${op.minutes != null ? ' · ' + op.minutes + ' min reported' : ''}`;
   });
 }

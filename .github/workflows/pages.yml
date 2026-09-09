@@ -17,15 +17,11 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    # Publish only from the default branch, whatever it happens to be called.
-    # Naming a branch here would silently stop publishing the day the repo is
-    # reorganised.
-    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +38,9 @@ jobs:
 
       # The same command developers run locally. The generated sanitized XLSX
       # fixtures keep customer names and work orders out of this public repo.
+      - name: Verify audit fixes
+        run: node test/audit-fixes-check.mjs
+
       - name: Verify importer, sync, UI, offline and standalone operation
         run: npm test
 
@@ -61,6 +60,7 @@ jobs:
           path: _site
 
   deploy:
+    if: github.ref_name == github.event.repository.default_branch
     needs: build
     runs-on: ubuntu-latest
     environment:
