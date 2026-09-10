@@ -715,6 +715,14 @@ export function setTodo(id, patch) {
   if (!cur) return;
   const next = changed({ ...cur, ...patch });
   if (patch.done === true && !cur.done) { next.doneAt = now(); next.doneBy = me(); }
+  // Completing from Today must stop the same timer as Command Center.
+  if (patch.done === true && next.operation?.timer?.startedAt) {
+    const timer = next.operation.timer;
+    const endedAt = new Date(Math.max(Date.now(), Date.parse(timer.startedAt))).toISOString();
+    const intervals = [...(timer.intervals || []), [timer.startedAt, endedAt]];
+    next.operation = { ...next.operation, timer: { intervals, startedAt: null },
+      minutes: Math.round(intervals.reduce((sum, [start, end]) => sum + Math.max(0, Date.parse(end) - Date.parse(start)), 0) / 60000) };
+  }
   if (patch.done === false) { next.doneAt = null; next.doneBy = null; }
   state.todos = { ...state.todos, [id]: next };
   save();
@@ -753,7 +761,19 @@ export function clearStaging(key) {
 export function saveShiftLog(date, shift, patch) {
   const key = `${date}|${shift}`;
   const cur = state.shiftLogs[key] || { date, shift, rows: {} };
-  state.shiftLogs[key] = changed({ ...cur, ...patch, date, shift });
+  const next = { ...cur, ...patch, date, shift };
+  if ('rows' in patch || 'notes' in patch) {
+    // Snapshot report references, not duplicated editable tasks. Open records
+    // automatically follow the next handover; later closure remains visible.
+    const current = new Date();
+    const ref = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+    const yesterday = new Date(current); yesterday.setDate(yesterday.getDate() - 1);
+    const previousDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+    const cutoff = date === previousDate && shift === 'AFT' && current.getHours() < 7 ? ref : date;
+    next.carryover = Object.values(state.todos || {}).filter(t => !t.done && t.date <= cutoff).map(t => ({ id: t.id, text: t.text }));
+    if (JSON.stringify([cur.rows, cur.notes, cur.carryover]) !== JSON.stringify([next.rows, next.notes, next.carryover])) next.acknowledgement = null;
+  }
+  state.shiftLogs[key] = changed(next);
   save();
   return key;
 }

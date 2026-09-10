@@ -14,6 +14,7 @@
    update is mostly assembled from what the app already saw happen. */
 
 import { operationHandoverLines, handoverReportDate } from '../command-center.js';
+import { acknowledgeHandover, handoverAcknowledged } from '../floor-operations.js';
 import {
   el, chip, icon, fmtDate, fmtWhen, toast, confirmDialog, printDocument, modal,
 } from '../ui.js';
@@ -975,6 +976,14 @@ export function renderShiftUpdate(rerender, go) {
 
   return el('div.centre', {},
     head,
+    saved ? el('section.command-handover-include', {},
+      el('div', {}, el('strong', {}, handoverAcknowledged(saved) ? `Acknowledged by ${saved.acknowledgement.by}` : 'Incoming supervisor acknowledgement pending'),
+        handoverAcknowledged(saved) ? el('p', {}, fmtWhen(saved.acknowledgement.at)) : el('p.small.muted', {}, 'Confirm after reviewing this saved handover. Editing the handover requires a new acknowledgement.'),
+        saved.carryover?.length ? el('details', {}, el('summary', {}, `${saved.carryover.length} follow-ups included automatically`),
+          el('ul', {}, ...saved.carryover.map(t => el('li', {}, t.text, state.todos[t.id]?.done ? ' · Resolved since handover' : state.todos[t.id] ? ' · Still open' : ' · No longer available')))) : null),
+      !handoverAcknowledged(saved) ? el('button', {type:'button',onclick:()=>{
+        try { acknowledgeHandover(view.date,view.shift); rerender(); } catch(e) { toast(e.message); }
+      }},'Acknowledge handover') : null) : null,
     !hasTasks() ? el('div.banner', {}, 'Schedules are not loaded. You can still save machine and general handover notes. ',
       el('button', { onclick: () => go('setup') }, 'Import schedules')) : null,
     view.mode === 'write' ? el('div.command-handover-include', {},

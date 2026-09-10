@@ -4,12 +4,13 @@ import { state, addTodo, setTodo } from './store.js';
 import { MACHINES } from './machines.js';
 import { machineConfig, todayBoard, today, shiftUpdateFor, workInShift } from './model.js';
 import { shiftContextAt } from './shifts.js';
+import { lossMinutesOn, LOSS_REASONS, MAINTENANCE_STATES, QUALITY_STATES } from './floor-operations.js';
 
 export const OPERATION_KINDS = ['action', 'downtime', 'quality'];
 export function operationKind(item) {
   return OPERATION_KINDS.includes(item.operation?.kind) ? item.operation.kind : 'action';
 }
-export function createOperation({ id = null, kind, text, machine = '', assignee = null, priority = 'normal', minutes = '', quantity = '', wo = '', date = today(), dueDate = '' }) {
+export function createOperation({ id = null, kind, text, machine = '', assignee = null, priority = 'normal', minutes = '', quantity = '', wo = '', date = today(), dueDate = '', details = {} }) {
   if (!OPERATION_KINDS.includes(kind)) throw new Error('Choose a valid report type.');
   if (!String(text || '').trim()) throw new Error('Describe what needs attention.');
   if (machine && !MACHINES.some(m => m.key === machine && !m.queue)) throw new Error('Choose a machine.');
@@ -22,9 +23,26 @@ export function createOperation({ id = null, kind, text, machine = '', assignee 
     if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) throw new Error(`${label} must be a whole number of zero or more.`);
     return n;
   };
-  const operation = { kind, machine, dueDate: kind === 'action' ? dueDate || null : null, priority: priority === 'high' ? 'high' : 'normal', wo: String(wo).trim(),
+  const previous = id ? state.todos?.[id]?.operation || {} : {};
+  if (previous.timer && previous.machine !== machine) throw new Error('A timed event cannot be moved to another machine.');
+  const operation = { ...previous, kind, machine, dueDate: kind === 'action' ? dueDate || null : null, priority: priority === 'high' ? 'high' : 'normal', wo: String(wo).trim(),
     minutes: kind === 'downtime' ? number(minutes, 'Lost minutes') : null,
     quantity: kind === 'quality' ? number(quantity, 'Affected quantity') : null };
+  if (previous.timer) operation.minutes = previous.minutes;
+  if (kind === 'downtime') {
+    operation.reason = LOSS_REASONS.includes(details.reason) ? details.reason : previous.reason || 'Other';
+    operation.planned = details.planned === undefined ? !!previous.planned : !!details.planned;
+    operation.maintenance = MAINTENANCE_STATES.includes(details.maintenance) ? details.maintenance : previous.maintenance || 'Not notified';
+  }
+  if (kind === 'quality') {
+    for (const key of ['defect', 'source', 'containment', 'resolution']) operation[key] = String(details[key] ?? previous[key] ?? '').trim().slice(0, 2000);
+    operation.qualityState = QUALITY_STATES.includes(details.qualityState) ? details.qualityState : previous.qualityState || 'Open';
+    for (const key of ['rejected', 'reworked', 'replacement']) operation[key] = number(details[key] ?? previous[key] ?? '', key);
+    operation.photos = details.photos ?? previous.photos ?? [];
+    if (!Array.isArray(operation.photos) || operation.photos.length > 2 || operation.photos.some(p => typeof p.data !== 'string' || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(p.data) || p.data.length > 160000)) throw new Error('Maximum two compressed JPEG evidence photos.');
+    const otherBytes = Object.values(state.todos).filter(t => t.id !== id).reduce((n, t) => n + JSON.stringify(t.operation?.photos || []).length, 0);
+    if (otherBytes + JSON.stringify(operation.photos).length > 1500000) throw new Error('Evidence storage is full. Export a backup and review older photos.');
+  }
   const prefix = kind === 'action' ? '' : `[${kind === 'quality' ? 'Quality' : 'Downtime'}] `;
   const body = prefix + String(text).trim();
   if (id) {
@@ -62,7 +80,7 @@ export function commandSnapshot(ref = today(), now = new Date()) {
   const losses = reports.filter(t => t.date === ref && operationKind(t) === 'downtime');
   return { context, board, reports, open, down, machines, completed, log, documented,
     quality: open.filter(t => operationKind(t) === 'quality'),
-    minutes: losses.reduce((n, t) => n + (Number(t.operation?.minutes) || 0), 0),
+    minutes: Math.round(reports.filter(t => operationKind(t) === 'downtime').reduce((n, t) => n + lossMinutesOn(t, ref, now), 0)),
     unknownMinutes: losses.filter(t => t.operation?.minutes == null).length };
 }
 

@@ -4,6 +4,8 @@ import { directoryPeople, me } from '../store.js';
 import { today, machineConfig } from '../model.js';
 import { MACHINES } from '../machines.js';
 import { commandSnapshot, createOperation, completeOperation, operationKind } from '../command-center.js';
+import { LOSS_REASONS, MAINTENANCE_STATES, QUALITY_STATES, elapsedMinutes, toggleDowntime, prepareEvidence } from '../floor-operations.js';
+import { openSupervisorReport } from './supervisor-report.js';
 
 const GROUP_PAGE = { Rolling: 'rolling', FOM: 'fom', CNC: 'cnc', Punch: 'punch' };
 const filters = { group: '', attention: false, kind: 'all', resolved: false, allMachines: false };
@@ -27,6 +29,32 @@ export function openOperationDialog(kind, rerender, machine = '', item = null) {
   const dueDate = el('input', { type: 'date', 'aria-label': 'Due date' });
   const wo = el('input', { 'aria-label': 'Work order', maxLength: 80, placeholder: 'Optional' });
   const amount = el('input', { type: 'number', min: 0, step: 1, 'aria-label': kind === 'quality' ? 'Affected pieces' : 'Lost minutes', placeholder: 'Unknown / not measured' });
+  const op = item?.operation || {};
+  const select = (label, options, value) => el('select', { 'aria-label': label }, ...options.map(v => el('option', { value: v, selected: v === value }, v)));
+  const reason = select('Downtime reason', LOSS_REASONS, op.reason || 'Other');
+  const maintenance = select('Maintenance status', MAINTENANCE_STATES, op.maintenance || 'Not notified');
+  const planned = el('input', { type: 'checkbox', checked: op.planned, 'aria-label': 'Planned downtime' });
+  const qualityState = select('Quality stage', QUALITY_STATES, op.qualityState || 'Open');
+  const qualityFields = Object.fromEntries(['defect', 'source', 'containment', 'resolution', 'rejected', 'reworked', 'replacement'].map(key => [key,
+    el('input', { 'aria-label': key, value: op[key] ?? '', type: ['rejected', 'reworked', 'replacement'].includes(key) ? 'number' : 'text', min: 0, step: 1, maxLength: 2000 })]));
+  let photos = [...(op.photos || [])];
+  let preparing = false;
+  const photoList = el('div.evidence-list');
+  const showPhotos = () => {
+    photoList.replaceChildren(...photos.map((photo, index) => el('figure', {},
+      el('img', { src: photo.data, alt: `Quality evidence: ${photo.name || 'photo'}` }),
+      button('Remove photo ' + (index + 1), () => { photos.splice(index, 1); showPhotos(); }))));
+  };
+  showPhotos();
+  const photoInput = el('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', 'aria-label': 'Quality evidence photo', onchange: async () => {
+    if (!photoInput.files[0]) return;
+    preparing = true; photoInput.disabled = true;
+    try {
+      if (photos.length >= 2) throw new Error('Maximum two evidence photos per issue.');
+      photos.push(await prepareEvidence(photoInput.files[0])); showPhotos(); error.textContent = '';
+    } catch (e) { error.textContent = e.message; }
+    finally { preparing = false; photoInput.disabled = false; photoInput.value = ''; }
+  } });
   if (item) {
     text.value = item.text.replace(/^\[(Quality|Downtime)\] /, '');
     station.value = item.operation?.machine || '';
@@ -36,19 +64,28 @@ export function openOperationDialog(kind, rerender, machine = '', item = null) {
     dueDate.value = item.operation?.dueDate || '';
     date.value = item.date; wo.value = item.operation?.wo || '';
     amount.value = (kind === 'quality' ? item.operation?.quantity : item.operation?.minutes) ?? '';
+    if (op.timer) { amount.value = elapsedMinutes(op); amount.disabled = true; }
   }
   const error = el('p.command-error', { role: 'alert' });
   let dialog;
   const form = el('form.command-form', { onsubmit: event => {
     event.preventDefault();
     try {
+      if (preparing) throw new Error('Wait for the evidence photo to finish.');
       createOperation({ id: item?.id, kind, text: text.value, machine: station.value, assignee: owner.value || null, priority: priority.value,
-        date: date.value, dueDate: dueDate.value, wo: wo.value, minutes: amount.value, quantity: amount.value });
+        date: date.value, dueDate: dueDate.value, wo: wo.value, minutes: amount.value, quantity: amount.value,
+        details: { reason: reason.value, maintenance: maintenance.value, planned: planned.checked, qualityState: qualityState.value,
+          ...Object.fromEntries(Object.entries(qualityFields).map(([key, input]) => [key, input.value])), photos } });
       dialog.close(); rerender(); toast('Saved. This report also appears in Today.');
     } catch (reason) { error.textContent = reason.message; }
   } },
   field('Details', text), el('div.command-form-grid', {}, field('Machine', station), field('Owner', owner), field('Priority', priority), field('Report date', date), kind === 'action' ? field('Due date · optional', dueDate) : null,
     field('Work order · optional', wo), kind !== 'action' ? field(kind === 'quality' ? 'Affected pieces · optional' : 'Lost minutes · optional', amount) : null),
+  kind === 'downtime' ? el('div.command-form-grid', {}, field('Reason', reason), field('Maintenance status', maintenance), field('Planned downtime', planned),
+    el('p.small.muted', {}, 'Leave minutes blank to use Start timer after saving. Maintenance status is a record only; no notification is sent.')) : null,
+  kind === 'quality' ? el('fieldset', {}, el('legend', {}, 'Containment and disposition'),
+    el('div.command-form-grid', {}, field('Stage', qualityState), ...Object.entries(qualityFields).map(([key, input]) => field({defect:'Defect type',source:'Suspected source · not confirmed',containment:'Containment action',resolution:'Disposition / resolution notes',rejected:'Rejected pieces',reworked:'Reworked pieces',replacement:'Replacement pieces'}[key], input))),
+    field('Evidence · up to two photos', photoInput), el('p.small.muted', {}, 'Compressed photos are saved in this tracker and included in its configured sync and backups. Do not attach sensitive personal information.'), photoList) : null,
   el('p.small.muted', {}, kind === 'downtime' ? 'Enter measured lost time. Closing a report does not clear a workbook down flag.'
     : kind === 'quality' ? 'Record the issue and follow-up here. A report does not reject or change scheduled quantities.' : 'Open actions carry forward until completed.'),
   error, el('button.primary', { type: 'submit' }, 'Save report'));
@@ -57,7 +94,7 @@ export function openOperationDialog(kind, rerender, machine = '', item = null) {
 
 function chooseIssue(rerender, machine) {
   modal('What needs attention?', el('p', {}, 'Choose the report type for this machine.'), { actions:
-    [['downtime', 'Downtime'], ['quality', 'Quality issue'], ['action', 'Other / action']].map(([kind, label]) => ({
+    [['downtime', 'Downtime'], ['quality', 'Quality issue'], ['action', 'Follow-up action']].map(([kind, label]) => ({
       label, onClick: dialog => { dialog.close(); openOperationDialog(kind, rerender, machine); },
     })) });
 }
@@ -76,9 +113,20 @@ function reportRow(item, rerender) {
         op.dueDate ? ` · Due ${fmtDate(op.dueDate)}` : '',
         op.wo ? ` · W/O ${op.wo}` : '',
         op.machine ? ` · ${machineConfig(MACHINES.find(m => m.key === op.machine) || { label: op.machine }).label}` : ''),
-      kind === 'downtime' ? el('small', {}, op.minutes == null ? 'Lost time not measured' : `${op.minutes} min reported`) : null,
-      kind === 'quality' ? el('small', {}, op.quantity == null ? 'Affected quantity not recorded' : `${op.quantity} affected pcs`) : null),
+      kind === 'downtime' ? el('small', {}, elapsedMinutes(op) == null ? 'Lost time not measured' : `${elapsedMinutes(op)} min reported`,
+        op.timer?.startedAt ? ` · Timer running since ${new Date(op.timer.startedAt).toLocaleTimeString()}` : '',
+        ` · ${op.planned ? 'Planned' : 'Unplanned'} · ${op.reason || 'Other'} · ${op.maintenance || 'Not notified'}`) : null,
+      kind === 'quality' ? el('div', {}, el('small', {}, op.quantity == null ? 'Affected quantity not recorded' : `${op.quantity} affected pcs`),
+        el('p', {}, `${op.qualityState || 'Open'}${op.defect ? ' · ' + op.defect : ''}`),
+        op.containment ? el('p', {}, 'Containment: ' + op.containment) : null,
+        op.resolution ? el('p', {}, 'Disposition: ' + op.resolution) : null,
+        op.photos?.length ? button(`View ${op.photos.length} evidence photo${op.photos.length === 1 ? '' : 's'}`, () => {
+          modal('Quality evidence', el('div.evidence-list', {}, ...op.photos.map(p => el('img', { src: p.data, alt: p.name || 'Quality evidence' }))));
+        }) : null) : null),
     el('div.command-report-actions', {}, button('Edit', () => openOperationDialog(kind, rerender, op.machine, item), 'ghost'),
+    kind === 'downtime' && !item.done && (op.timer || op.minutes == null) ? button(op.timer?.startedAt ? 'Stop timer' : 'Start timer', () => {
+      try { toggleDowntime(item.id); rerender(); } catch (e) { toast(e.message); }
+    }) : null,
     !item.done ? button('Resolve', () => {
       modal('Resolve this report?', el('p', {}, item.text), { actions: [{ label: 'Resolve report', class: 'primary', onClick: dlg => {
         completeOperation(item.id); dlg.close(); rerender(); toast('Report resolved');
@@ -132,7 +180,7 @@ export function renderCommandCenter(rerender, go) {
       button('Prepare handover', openHandover, 'primary')));
   return el('div.command-center', {},
     el('div.command-toolbar', {}, el('div', {}, el('span.command-eyebrow', {}, 'Floor control'), el('h2', {}, 'Keep the next decision clear.')),
-      el('div.command-toolbar-actions', {}, button('Add action', () => openOperationDialog('action', rerender)), button('Write handover', openHandover, 'primary'))),
+      el('div.command-toolbar-actions', {}, button('Supervisor report', openSupervisorReport), button('Add action', () => openOperationDialog('action', rerender)), button('Write handover', openHandover, 'primary'))),
     machinePanel,
     el('div.command-insights', {}, losses, quality, handover), actions);
 }
