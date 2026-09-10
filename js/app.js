@@ -15,6 +15,7 @@ import { renderJobs } from './views/job.js';
 import { renderToday } from './views/today.js';
 import { renderStaging } from './views/staging.js';
 import { renderOverview } from './views/overview.js';
+import { quickEntry } from './views/quick-entry.js';
 import { renderShiftUpdate } from './views/shiftupdate.js';
 import { renderRush } from './views/rush.js';
 import { renderData, initSharedFile } from './views/data.js';
@@ -519,7 +520,7 @@ function render() {
         el('div.small', { style: { marginTop: '4px' } },
           `${storage.detail} Open Setup → Backup, transfer and reset to export the current copy.`))) : null,
     tab.render(scheduleRender, go, syncViewState()));
-  root.replaceChildren(header(), next);
+  root.replaceChildren(header(), next, quickEntry(scheduleRender, go));
   pageMotion = false;
   measureHeader();
   settleNav();

@@ -315,7 +315,7 @@ export function renderOverview(rerender, go, sync = null) {
 
   const brief = el('header.overview-brief', {},
     el('div.overview-intro', {},
-      el('div.overview-kicker', {}, 'Fabrication operations · V2.1'),
+      el('div.overview-kicker', {}, 'Fabrication operations · V2.2'),
       el('h1.command-title', {}, 'Supervisor Command Center'),
       el('div.overview-date', {}, longDate(shiftContext.date)),
       /* `range` is the shift's own printed hours. This read shift.from/shift.to,
