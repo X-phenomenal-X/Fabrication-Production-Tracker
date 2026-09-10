@@ -218,7 +218,13 @@ export function renderSchedule(rerender, go) {
         ['section', 'Workbook section', [['', 'All sections'], ...[...new Set(source.map(row => row.section).filter(Boolean))].sort().map(x => [x, x])]],
         ['status', 'Cut status', [['', 'All statuses'], ['work', 'In progress'], ['ok', 'Complete'], ['bad', 'Needs attention'], ['mute', 'Other / not started']]],
       ].map(([key, label, options]) => el('label', {}, el('span', {}, label),
-        el('select', { 'aria-label': label, value: view[key], onchange: event => { view[key] = event.target.value; view.limit = 60; view.expanded = {}; rerender(); } },
+        el('select', { 'aria-label': label, value: view[key], onchange: event => {
+          view[key] = event.currentTarget.value; view.limit = 60; view.expanded = {};
+          // The app replaces this surface on the next frame. Prevent a second
+          // selection from landing on controls that are about to be detached.
+          for (const control of event.currentTarget.closest('.schedule-filters').querySelectorAll('select')) control.disabled = true;
+          rerender();
+        } },
           ...options.map(([value, text]) => el('option', { value, selected: view[key] === value }, text))))),
       el('button', { onclick: () => { Object.assign(view, { scope: 'day', date: defaultDate(dates), query: '', project: '', section: '', status: '', limit: 60, expanded: {}, sort: 'row', direction: 1 }); rerender(); } }, 'Reset filters')),
     el('section.schedule-toolbar', { 'aria-label': 'Schedule date' },
