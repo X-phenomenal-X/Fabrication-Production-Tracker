@@ -9,6 +9,7 @@ import { openSupervisorReport } from './supervisor-report.js';
 
 const GROUP_PAGE = { Rolling: 'rolling', FOM: 'fom', CNC: 'cnc', Punch: 'punch' };
 const filters = { group: '', attention: false, kind: 'all', resolved: false, allMachines: false };
+let timerRefresh = null;
 const button = (label, fn, cls = '') => el('button' + (cls ? '.' + cls : ''), { type: 'button', onclick: fn }, label);
 const empty = text => el('p.command-empty', {}, icon('check', { size: 18 }), text);
 const field = (label, input) => el('label.command-field', {}, el('span', {}, label), input);
@@ -136,6 +137,10 @@ function reportRow(item, rerender) {
 
 export function renderCommandCenter(rerender, go) {
   const data = commandSnapshot();
+  clearTimeout(timerRefresh);
+  if (data.open.some(item => item.operation?.timer?.startedAt)) {
+    timerRefresh = setTimeout(rerender, 60000 - (Date.now() % 60000));
+  }
   const openHandover = () => { focusShiftUpdate(data.context.date, data.context.key); go('shift'); };
   const machines = data.machines.filter(m => (!filters.group || m.group === filters.group) && (!filters.attention || ['bad', 'warn'].includes(m.tone)));
   machines.sort((a, b) => ['bad', 'warn', 'work', 'mute'].indexOf(a.tone) - ['bad', 'warn', 'work', 'mute'].indexOf(b.tone));
