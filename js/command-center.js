@@ -66,6 +66,13 @@ export function commandSnapshot(ref = today(), now = new Date()) {
     unknownMinutes: losses.filter(t => t.operation?.minutes == null).length };
 }
 
+// The most recent shift can be handed over after midnight. Include reports
+// entered today for that handover, but keep historical handovers date-bounded.
+export function handoverReportDate(date, shift, ref = today(), now = new Date()) {
+  const context = shiftContextAt(ref, now);
+  return date === context.date && shift === context.key ? ref : date;
+}
+
 export function operationHandoverLines(ref = today()) {
   return Object.values(state.todos || {}).filter(t => !t.done && t.date <= ref).map(t => {
     const op = t.operation || {};

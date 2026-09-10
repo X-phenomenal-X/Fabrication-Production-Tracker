@@ -21,6 +21,17 @@ try {
   await page.addInitScript(data => { if (!localStorage.getItem('bv.cutting.v1')) localStorage.setItem('bv.cutting.v1', JSON.stringify(data)); }, fixture);
   await page.goto(`http://127.0.0.1:${server.address().port}/#schedule`);
   await page.waitForSelector('.schedule-table');
+  const handoverDates = await page.evaluate(async () => {
+    const { handoverReportDate } = await import('/js/command-center.js');
+    const overnight = new Date(2026, 8, 10, 3, 0);
+    return [
+      handoverReportDate('2026-09-09', 'AFT', '2026-09-10', overnight),
+      handoverReportDate('2026-09-08', 'AFT', '2026-09-10', overnight),
+      handoverReportDate('2026-09-09', 'DAY', '2026-09-10', overnight),
+      handoverReportDate('2026-09-10', 'DAY', '2026-09-10', new Date(2026, 8, 10, 10, 0)),
+    ];
+  });
+  assert.deepEqual(handoverDates, ['2026-09-10', '2026-09-08', '2026-09-09', '2026-09-10']);
   await page.getByLabel('Date range', { exact: true }).selectOption('all');
   await page.waitForTimeout(200);
   console.log('Schedule state:', await page.getByLabel('Date range', { exact:true }).inputValue(), await page.locator('.schedule-result-summary').textContent(), 'rows:', await page.locator('.schedule-table tbody tr').count());
