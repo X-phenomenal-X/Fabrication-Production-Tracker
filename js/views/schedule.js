@@ -151,6 +151,7 @@ function printSchedule(date, groups) {
 }
 
 export function renderSchedule(rerender, go) {
+  console.log('SCHEDULE RENDER', view.scope, view.status);
   const source = state.dailyOrders || [];
   const dates = [...new Set(source.map((row) => row.cuttingDate).filter(Boolean))].sort();
   if (!view.date) view.date = defaultDate(dates);
@@ -219,6 +220,7 @@ export function renderSchedule(rerender, go) {
         ['status', 'Cut status', [['', 'All statuses'], ['work', 'In progress'], ['ok', 'Complete'], ['bad', 'Needs attention'], ['mute', 'Other / not started']]],
       ].map(([key, label, options]) => el('label', {}, el('span', {}, label),
         el('select', { 'aria-label': label, value: view[key], onchange: event => {
+          console.log('FILTER CHANGE', key, event.currentTarget.value, event.currentTarget.isConnected);
           view[key] = event.currentTarget.value; view.limit = 60; view.expanded = {};
           // The app replaces this surface on the next frame. Prevent a second
           // selection from landing on controls that are about to be detached.
