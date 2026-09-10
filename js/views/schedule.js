@@ -9,6 +9,9 @@ import { today } from '../model.js';
 const PAGE = 6;
 const view = { date: null, expanded: {}, scope: 'day', query: '', project: '', section: '', status: '', sort: 'row', direction: 1, limit: 60, groupLimit: 6 };
 
+let filterPanel = null;
+let filterSource = null;
+
 const COLUMNS = [
   ['wo', 'Work order'], ['project', 'Project'], ['jobCode', 'Job code'],
   ['floor', 'Floor / area'], ['qty', 'Units'], ['series', 'Series'],
@@ -151,7 +154,6 @@ function printSchedule(date, groups) {
 }
 
 export function renderSchedule(rerender, go) {
-  console.log('SCHEDULE RENDER', view.scope, view.status);
   const source = state.dailyOrders || [];
   const dates = [...new Set(source.map((row) => row.cuttingDate).filter(Boolean))].sort();
   if (!view.date) view.date = defaultDate(dates);
@@ -197,9 +199,12 @@ export function renderSchedule(rerender, go) {
         el('button.primary', { onclick: () => go('setup') }, 'Import in Setup'))));
   }
 
-  return el('div.centre.daily-schedule', {},
-    head,
-    el('section.schedule-filters', { 'aria-label': 'Find schedule orders' },
+  // Keep interactive filters alive across result redraws. Replacing a select
+  // while a second change is being dispatched can discard the user's choice.
+  // Rebuild the options only when a new workbook replaces the source rows.
+  if (!filterPanel || filterSource !== source) {
+    filterSource = source;
+    filterPanel = el('section.schedule-filters', { 'aria-label': 'Find schedule orders' },
       el('label.schedule-search', {}, el('span', {}, 'Find an order'),
         el('input', { type: 'search', value: view.query, placeholder: 'Work order, project, code, colour or notes…',
           oninput: event => {
@@ -220,15 +225,20 @@ export function renderSchedule(rerender, go) {
         ['status', 'Cut status', [['', 'All statuses'], ['work', 'In progress'], ['ok', 'Complete'], ['bad', 'Needs attention'], ['mute', 'Other / not started']]],
       ].map(([key, label, options]) => el('label', {}, el('span', {}, label),
         el('select', { 'aria-label': label, value: view[key], onchange: event => {
-          console.log('FILTER CHANGE', key, event.currentTarget.value, event.currentTarget.isConnected);
           view[key] = event.currentTarget.value; view.limit = 60; view.expanded = {};
-          // The app replaces this surface on the next frame. Prevent a second
-          // selection from landing on controls that are about to be detached.
-          for (const control of event.currentTarget.closest('.schedule-filters').querySelectorAll('select')) control.disabled = true;
           rerender();
         } },
           ...options.map(([value, text]) => el('option', { value, selected: view[key] === value }, text))))),
-      el('button', { onclick: () => { Object.assign(view, { scope: 'day', date: defaultDate(dates), query: '', project: '', section: '', status: '', limit: 60, expanded: {}, sort: 'row', direction: 1 }); rerender(); } }, 'Reset filters')),
+      el('button', { onclick: () => { Object.assign(view, { scope: 'day', date: defaultDate(dates), query: '', project: '', section: '', status: '', limit: 60, expanded: {}, sort: 'row', direction: 1 }); rerender(); } }, 'Reset filters'));
+  }
+  filterPanel.querySelector('input[type=search]').value = view.query;
+  for (const [index, key] of ['scope', 'project', 'section', 'status'].entries()) {
+    filterPanel.querySelectorAll('select')[index].value = view[key];
+  }
+
+  return el('div.centre.daily-schedule', {},
+    head,
+    filterPanel,
     el('section.schedule-toolbar', { 'aria-label': 'Schedule date' },
       el('button.schedule-date-step', {
         type: 'button', disabled: view.scope !== 'day' || !previous, 'aria-label': 'Previous scheduled day',

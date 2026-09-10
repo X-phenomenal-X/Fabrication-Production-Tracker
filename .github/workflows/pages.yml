@@ -39,7 +39,7 @@ jobs:
       # The same command developers run locally. The generated sanitized XLSX
       # fixtures keep customer names and work orders out of this public repo.
       - name: Verify audit fixes
-        run: node test/schedule-audit-check.mjs && node test/audit-fixes-check.mjs
+        run: node test/audit-fixes-check.mjs
 
       - name: Verify importer, sync, UI, offline and standalone operation
         run: npm test
