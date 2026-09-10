@@ -24,6 +24,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript(snap => {
     localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+    for (const type of ['input', 'change']) document.addEventListener(type, e => console.log('EVENT', type, e.target.outerHTML, e.target.value), true);
     window.print = () => { window.__schedulePrint = document.body.innerText; };
   }, fixture);
   await page.goto(`http://127.0.0.1:${server.address().port}/#schedule`);
@@ -62,6 +63,7 @@ try {
   await scope.selectOption('all');
   await page.getByLabel('Cut status', { exact: true }).selectOption('ok');
   await page.waitForTimeout(100);
+  console.log('SELECT STATE', await page.getByLabel('Cut status', {exact:true}).evaluate(e=>({html:e.outerHTML,value:e.value,connected:e.isConnected})));
   const statuses = await page.locator('.schedule-table tbody td:nth-child(12)').allTextContents();
   assert.ok(statuses.length && statuses.every(status => /^(DONE|OK)$/.test(status)));
   await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
