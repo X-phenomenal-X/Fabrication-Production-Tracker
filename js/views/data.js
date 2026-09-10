@@ -21,7 +21,7 @@ export async function initSharedFile(rerender) {
   try {
     const r = await reconnectSharedFile();
     if (r?.needsPermission) pendingHandle = r.handle;
-    rerender();
+    if (r) rerender();
   } catch { /* nothing stored yet */ }
 }
 

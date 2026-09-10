@@ -24,6 +24,7 @@ export function openOperationDialog(kind, rerender, machine = '', item = null) {
     ...directoryPeople().map(p => el('option', { value: p, selected: p === me() }, p)));
   const priority = el('select', { 'aria-label': 'Priority' }, el('option', { value: 'normal' }, 'Normal'), el('option', { value: 'high' }, 'High — needs attention'));
   const date = el('input', { type: 'date', value: today(), required: true, max: today(), 'aria-label': 'Report date' });
+  const dueDate = el('input', { type: 'date', 'aria-label': 'Due date' });
   const wo = el('input', { 'aria-label': 'Work order', maxLength: 80, placeholder: 'Optional' });
   const amount = el('input', { type: 'number', min: 0, step: 1, 'aria-label': kind === 'quality' ? 'Affected pieces' : 'Lost minutes', placeholder: 'Unknown / not measured' });
   if (item) {
@@ -32,6 +33,7 @@ export function openOperationDialog(kind, rerender, machine = '', item = null) {
     if (item.assignee && !Array.from(owner.options).some(o => o.value === item.assignee)) owner.append(el('option', { value: item.assignee }, item.assignee));
     owner.value = item.assignee || '';
     priority.value = item.operation?.priority || 'normal';
+    dueDate.value = item.operation?.dueDate || '';
     date.value = item.date; wo.value = item.operation?.wo || '';
     amount.value = (kind === 'quality' ? item.operation?.quantity : item.operation?.minutes) ?? '';
   }
@@ -41,16 +43,23 @@ export function openOperationDialog(kind, rerender, machine = '', item = null) {
     event.preventDefault();
     try {
       createOperation({ id: item?.id, kind, text: text.value, machine: station.value, assignee: owner.value || null, priority: priority.value,
-        date: date.value, wo: wo.value, minutes: amount.value, quantity: amount.value });
+        date: date.value, dueDate: dueDate.value, wo: wo.value, minutes: amount.value, quantity: amount.value });
       dialog.close(); rerender(); toast('Saved. This report also appears in Today.');
     } catch (reason) { error.textContent = reason.message; }
   } },
-  field('Details', text), el('div.command-form-grid', {}, field('Machine', station), field('Owner', owner), field('Priority', priority), field('Report date', date),
+  field('Details', text), el('div.command-form-grid', {}, field('Machine', station), field('Owner', owner), field('Priority', priority), field('Report date', date), kind === 'action' ? field('Due date · optional', dueDate) : null,
     field('Work order · optional', wo), kind !== 'action' ? field(kind === 'quality' ? 'Affected pieces · optional' : 'Lost minutes · optional', amount) : null),
   el('p.small.muted', {}, kind === 'downtime' ? 'Enter measured lost time. Closing a report does not clear a workbook down flag.'
     : kind === 'quality' ? 'Record the issue and follow-up here. A report does not reject or change scheduled quantities.' : 'Open actions carry forward until completed.'),
   error, el('button.primary', { type: 'submit' }, 'Save report'));
   dialog = modal(title, form);
+}
+
+function chooseIssue(rerender, machine) {
+  modal('What needs attention?', el('p', {}, 'Choose the report type for this machine.'), { actions:
+    [['downtime', 'Downtime'], ['quality', 'Quality issue'], ['action', 'Other / action']].map(([kind, label]) => ({
+      label, onClick: dialog => { dialog.close(); openOperationDialog(kind, rerender, machine); },
+    })) });
 }
 
 function reportRow(item, rerender) {
@@ -60,9 +69,11 @@ function reportRow(item, rerender) {
     el('div.command-report-copy', {},
       el('div.command-report-tags', {}, chip(kind === 'action' ? 'Action' : kind === 'quality' ? 'Quality' : 'Downtime', kind === 'quality' ? 'warn' : kind === 'downtime' ? 'bad' : 'mute'),
         op.priority === 'high' ? chip('High priority', 'bad') : null,
+        !item.done && op.dueDate && op.dueDate < today() ? chip('Overdue', 'bad') : null,
         item.done ? chip('Resolved', 'ok') : item.date < today() ? chip('Carried over', 'warn') : null),
       el('strong', {}, item.text),
       el('p', {}, `${item.assignee || 'Unassigned'} · ${fmtDate(item.date)}`,
+        op.dueDate ? ` · Due ${fmtDate(op.dueDate)}` : '',
         op.wo ? ` · W/O ${op.wo}` : '',
         op.machine ? ` · ${machineConfig(MACHINES.find(m => m.key === op.machine) || { label: op.machine }).label}` : ''),
       kind === 'downtime' ? el('small', {}, op.minutes == null ? 'Lost time not measured' : `${op.minutes} min reported`) : null,
@@ -93,7 +104,7 @@ export function renderCommandCenter(rerender, go) {
         el('small', {}, m.incidents.length ? `${m.incidents.length} open downtime report${m.incidents.length === 1 ? '' : 's'}`
           : m.update ? `Shift update ${fmtDate(m.update.date)}${m.update.staleDown ? ` · down flag from ${fmtDate(m.update.staleDown)}` : ''}` : 'No shift update recorded'),
         el('div.command-machine-actions', {}, button('Open queue', () => go(GROUP_PAGE[m.group]), 'ghost'),
-          button('Report issue', () => openOperationDialog('downtime', rerender, m.key), 'ghost'))))) : empty('No machines match these filters.'),
+          button('Report issue', () => chooseIssue(rerender, m.key), 'ghost'))))) : empty('No machines match these filters.'),
       machines.length > 4 ? button(filters.allMachines ? 'Show priority machines' : `View all ${machines.length} machines`, () => { filters.allMachines = !filters.allMachines; rerender(); }, 'command-more') : null));
   const losses = panel('Downtime', 'Reported losses today; unknown time stays unmeasured.',
     el('div.command-summary-body', {}, el('div.command-big', {}, fmtNum(data.minutes), el('small', {}, ' min reported')),
@@ -104,7 +115,7 @@ export function renderCommandCenter(rerender, go) {
     el('div.command-summary-body', {}, el('div.command-big', {}, fmtNum(data.quality.length), el('small', {}, ' open issues')),
       data.quality.length ? el('p.command-emphasis', {}, data.quality[0].text) : empty('No open quality reports.'),
       el('p.small.muted', {}, 'Issue counts are not a defect rate.'), button('Report quality issue', () => openOperationDialog('quality', rerender), 'ghost')));
-  const visibleReports = (filters.resolved ? data.reports.filter(t => t.done) : data.open).filter(t => filters.kind === 'all' || operationKind(t) === filters.kind);
+  const visibleReports = (filters.resolved ? [...data.open, ...data.reports.filter(t => t.done)] : data.open).filter(t => filters.kind === 'all' || operationKind(t) === filters.kind);
   const actions = panel('Supervisor actions', 'Owners, priorities and outstanding follow-ups in one place.',
     el('div', {}, el('div.command-filters', {},
       el('select', { 'aria-label': 'Filter reports', onchange: e => { filters.kind = e.target.value; rerender(); } },

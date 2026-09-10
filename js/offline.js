@@ -28,7 +28,9 @@ export function watchConnection(rerender) {
   if ('serviceWorker' in navigator) {
     const receive = (e) => {
       if (e.data?.type !== 'bv-network') return;
-      workerOnline = e.data.online !== false;
+      const online = e.data.online !== false;
+      if (workerOnline === online) return;
+      workerOnline = online;
       rerender();
     };
     const ask = () => navigator.serviceWorker.controller?.postMessage('connection-status');

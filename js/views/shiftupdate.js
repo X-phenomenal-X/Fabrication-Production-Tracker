@@ -13,7 +13,7 @@
    status was moved during the shift is offered as a one-click insert — so the
    update is mostly assembled from what the app already saw happen. */
 
-import { operationHandoverLines } from '../command-center.js';
+import { operationHandoverLines, handoverReportDate } from '../command-center.js';
 import {
   el, chip, icon, fmtDate, fmtWhen, toast, confirmDialog, printDocument, modal,
 } from '../ui.js';
@@ -324,6 +324,20 @@ function activeMobileIndex(rows, d) {
   return index;
 }
 
+function saveDraft(rerender) {
+  const d = loadDraft();
+  const rows = Object.fromEntries(Object.entries(d.rows).filter(([, row]) => hasContent(row)));
+  if (!Object.keys(rows).length && !d.notes.trim()) {
+    toast('Add machine or general handover notes first');
+    return;
+  }
+  saveShiftLog(view.date, view.shift, { rows, notes: d.notes.trim() });
+  dropDraft();
+  view.mode = 'read';
+  toast('Shift update saved');
+  rerender();
+}
+
 function mobileShiftActions(rerender) {
   const d = loadDraft();
   const closeThen = (event, action) => {
@@ -331,6 +345,9 @@ function mobileShiftActions(rerender) {
     setTimeout(action, 0);
   };
   modal('Shift update actions', el('div.mobile-su-menu', {},
+    view.mode === 'write' && operationalShift() ? el('button.primary', {
+      onclick: event => closeThen(event, () => saveDraft(rerender)),
+    }, 'Save shift update') : null,
     el('button', {
       onclick: (event) => closeThen(event, () => {
         view.mode = view.mode === 'write' ? 'read' : 'write';
@@ -631,19 +648,7 @@ function writeView(rerender) {
         },
       }, 'Delete') : null,
       el('button.primary', {
-        onclick: () => {
-          const rows = Object.fromEntries(
-            Object.entries(d.rows).filter(([, r]) => hasContent(r)));
-          if (!Object.keys(rows).length && !d.notes.trim()) {
-            toast('Fill in at least one machine first');
-            return;
-          }
-          saveShiftLog(view.date, view.shift, { rows, notes: d.notes.trim() });
-          dropDraft();
-          view.mode = 'read';
-          toast('Shift update saved');
-          rerender();
-        },
+        onclick: () => saveDraft(rerender),
       }, icon('check', { size: 14 }), 'Save shift update')));
 }
 
@@ -840,15 +845,6 @@ function readView(rerender) {
 /* ---------- page ---------- */
 
 export function renderShiftUpdate(rerender, go) {
-  if (!hasTasks()) {
-    return el('div.panel', {},
-      el('div.empty', {},
-        el('div.empty-icon', {}, icon('upload', { size: 28 })),
-        el('h3', {}, 'No schedule loaded yet'),
-        el('p', {}, 'Import the Rolling and CNC workbooks to get started.'),
-        el('button.primary', { onclick: () => go('setup') }, 'Go to Setup')));
-  }
-
   const posted = Object.values(state.shiftLogs || {})
     .sort((a, b) => ((a.date + shiftSortRank(a.shift)) < (b.date + shiftSortRank(b.shift)) ? 1 : -1));
   const saved = currentLog();
@@ -979,10 +975,12 @@ export function renderShiftUpdate(rerender, go) {
 
   return el('div.centre', {},
     head,
+    !hasTasks() ? el('div.banner', {}, 'Schedules are not loaded. You can still save machine and general handover notes. ',
+      el('button', { onclick: () => go('setup') }, 'Import schedules')) : null,
     view.mode === 'write' ? el('div.command-handover-include', {},
       el('div', {}, el('strong', {}, 'Carry forward open issues'), el('p.small.muted', {}, 'Add current actions, downtime and quality follow-ups to your general notes. Review before saving.')),
       el('button', { type: 'button', onclick: () => {
-        const lines = operationHandoverLines(view.date);
+        const lines = operationHandoverLines(handoverReportDate(view.date, view.shift));
         const d = loadDraft();
         const fresh = lines.filter(line => !d.notes.split('\n').includes(line));
         if (!fresh.length) { toast('No additional open issues to include'); return; }

@@ -1,0 +1,87 @@
+/* Regression coverage for the V2.1 audit fixes; original tests stay intact. */
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright';
+import fs from 'node:fs';
+import http from 'node:http';
+import path from 'node:path';
+import { ROOT, chromiumOptions } from './env.mjs';
+import { makeFixture } from './fixture.mjs';
+const server = http.createServer((req, res) => {
+  const file = path.join(ROOT, req.url.split('?')[0] === '/' ? 'index.html' : req.url.split('?')[0]);
+  if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
+  res.setHeader('content-type', { '.html':'text/html', '.js':'text/javascript', '.css':'text/css' }[path.extname(file)] || 'application/octet-stream');
+  res.end(fs.readFileSync(file));
+});
+await new Promise(r => server.listen(0, '127.0.0.1', r));
+const browser = await chromium.launch(chromiumOptions());
+try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
+  const errors = []; page.on('pageerror', e => { errors.push(e.message); console.log('PAGE ERROR:', e.message); });
+  const fixture = makeFixture(); fixture.todos = {};
+  await page.addInitScript(data => { if (!localStorage.getItem('bv.cutting.v1')) localStorage.setItem('bv.cutting.v1', JSON.stringify(data)); }, fixture);
+  await page.goto(`http://127.0.0.1:${server.address().port}/#schedule`);
+  await page.waitForSelector('.schedule-table');
+  const handoverDates = await page.evaluate(async () => {
+    const { handoverReportDate } = await import('/js/command-center.js');
+    const overnight = new Date(2026, 8, 10, 3, 0);
+    return [
+      handoverReportDate('2026-09-09', 'AFT', '2026-09-10', overnight),
+      handoverReportDate('2026-09-08', 'AFT', '2026-09-10', overnight),
+      handoverReportDate('2026-09-09', 'DAY', '2026-09-10', overnight),
+      handoverReportDate('2026-09-10', 'DAY', '2026-09-10', new Date(2026, 8, 10, 10, 0)),
+    ];
+  });
+  assert.deepEqual(handoverDates, ['2026-09-10', '2026-09-08', '2026-09-09', '2026-09-10']);
+  await page.getByLabel('Date range', { exact: true }).selectOption('all');
+  await page.waitForTimeout(200);
+  console.log('Schedule state:', await page.getByLabel('Date range', { exact:true }).inputValue(), await page.locator('.schedule-result-summary').textContent(), 'rows:', await page.locator('.schedule-table tbody tr').count());
+  assert.equal(await page.locator('.schedule-table tbody tr').count(), 60);
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('heading', { name: 'Supervisor Command Center' }).waitFor();
+  const machine = page.locator('.command-machine').first();
+  await machine.getByRole('button', { name: 'Report issue', exact: true }).click();
+  await page.getByRole('button', { name: 'Quality issue', exact: true }).click();
+  await page.getByLabel('Report details').fill('Audit quality follow-up');
+  await page.getByRole('button', { name: 'Save report', exact: true }).click();
+  const quality = page.locator('.command-report').filter({ hasText: 'Audit quality follow-up' });
+  await quality.waitFor();
+  assert.match(await quality.textContent(), /Quality/);
+  await page.getByRole('button', { name: 'Add action', exact: true }).first().click();
+  await page.getByLabel('Report details').fill('Audit overdue action');
+  await page.getByLabel('Due date', { exact: true }).fill('2026-01-01');
+  await page.getByRole('button', { name: 'Save report', exact: true }).click();
+  const action = page.locator('.command-report').filter({ hasText: 'Audit overdue action' });
+  await action.waitFor(); assert.match(await action.textContent(), /Overdue/);
+  await quality.getByRole('button', { name: 'Resolve', exact:true }).click();
+  await page.getByRole('button', { name: 'Resolve report', exact:true }).click();
+  await quality.waitFor({ state: 'detached' });
+  await page.getByLabel('Show resolved').check(); await quality.waitFor();
+  assert.equal(await action.isVisible(), true);
+  await action.getByRole('button', { name: 'Edit', exact:true }).click();
+  await page.getByLabel('Due date', { exact:true }).fill('2099-01-01');
+  await page.getByRole('button', { name:'Save report', exact:true }).click();
+  await page.reload(); await action.waitFor();
+  assert.doesNotMatch(await action.textContent(), /Overdue/);
+  await action.getByRole('button', { name:'Edit', exact:true }).click();
+  assert.equal(await page.getByLabel('Due date', { exact:true }).inputValue(), '2099-01-01');
+  await page.getByRole('button', { name:'Close', exact:true }).click();
+  // A fresh device can save handover notes before importing any schedule.
+  const blank = await browser.newPage({ viewport:{ width:390, height:844 } });
+  blank.on('pageerror', e => errors.push(e.message));
+  const empty = makeFixture(); empty.tasks = []; empty.dailyOrders = []; empty.shiftLogs = {}; empty.manualTasks = {}; empty.shiftUpdate = {}; empty.machineMeta = {};
+  await blank.addInitScript(data => { if (!localStorage.getItem('bv.cutting.v1')) localStorage.setItem('bv.cutting.v1', JSON.stringify(data)); }, empty);
+  await blank.goto(`http://127.0.0.1:${server.address().port}/#shift`);
+  await blank.getByRole('heading', { name:'Shift update', exact:true }).waitFor();
+  await blank.getByRole('button', { name:'Shift update actions', exact:true }).click();
+  await blank.getByLabel('General shift notes', { exact:true }).fill('Material arriving tomorrow; check unloading space.');
+  await blank.locator('dialog').getByRole('button', { name:'Save shift update', exact:true }).click();
+  await blank.getByText('Shift update saved', { exact:true }).waitFor();
+  await blank.reload();
+  await blank.getByRole('button', { name:'Shift update actions', exact:true }).click();
+  await blank.getByRole('button', { name:'Read saved update', exact:true }).click();
+  await blank.getByText('Material arriving tomorrow; check unloading space.', { exact:true }).waitFor();
+  assert.match(await blank.locator('main').textContent(), /You can still save/);
+  assert.equal(await blank.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  assert.deepEqual(errors, []);
+  console.log('Audit fixes: all-dates filter, report types, combined resolved view, due dates and empty handover OK');
+} finally { await browser.close(); await new Promise(r => server.close(r)); }
