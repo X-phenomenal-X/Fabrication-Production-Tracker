@@ -37,6 +37,14 @@ try {
   await steps.getByRole('button',{name:'Review report',exact:true}).first().click();
   assert.equal(await page.getByLabel('Report details').inputValue(),'Guidance timer check');
   await page.getByRole('button',{name:'Close',exact:true}).click();
+  await page.getByLabel('Filter reports').focus();
+  await page.evaluate(async()=>{
+    const {state,setTodo}=await import('/js/store.js');
+    const item=Object.values(state.todos).find(t=>t.text.includes('Guidance timer check'));
+    setTodo(item.id,{text:item.text+' updated'});
+  });
+  await page.waitForFunction(()=>document.querySelector('.command-report')?.textContent.includes('Guidance timer check updated'));
+  assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'Filter reports','store updates preserve keyboard focus');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   assert.deepEqual(errors,[]);
   console.log('Guidance UI: empty-state meaning, setup link, running/stopped suggestions, report review and phone reflow OK');
