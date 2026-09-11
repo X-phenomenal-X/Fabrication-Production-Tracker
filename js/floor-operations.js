@@ -4,6 +4,41 @@ import { state, setTodo, saveShiftLog, me } from './store.js';
 export const LOSS_REASONS = ['Equipment', 'Material', 'Setup', 'Staffing', 'Other'];
 export const MAINTENANCE_STATES = ['Not notified', 'Notified', 'In progress', 'Waiting on parts', 'Repaired'];
 export const QUALITY_STATES = ['Open', 'Contained', 'Under review', 'Disposition complete'];
+
+// Shift-local plans never derive window counts from imported piece quantities.
+export function machineTarget(machine, input) {
+  const number = (key, label, { optional = false, whole = false } = {}) => {
+    const raw = input[key];
+    if (raw == null || String(raw).trim() === '') {
+      if (optional) return null;
+      throw new Error(`Enter ${label}.`);
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0 || n > 1000000 || (whole && !Number.isInteger(n)))
+      throw new Error(`Use a valid non-negative ${whole ? 'whole ' : ''}number for ${label}.`);
+    return n;
+  };
+  const rate = number('rate', 'hourly standard');
+  const available = number('available', 'available minutes');
+  const setup = number('setup', 'planned setup minutes');
+  const bandsaw = machine === 'saw' ? number('bandsaw', 'planned bandsaw minutes') : 0;
+  const actual = number('actual', 'good output', { optional: true, whole: true });
+  if (rate <= 0) throw new Error('Hourly standard must be greater than zero.');
+  if (available > 1440 || setup + bandsaw > available) throw new Error('Time allowances must fit within available minutes (maximum 1440).');
+  const productive = available - setup - bandsaw;
+  const target = Math.floor(rate * productive / 60);
+  if (!Number.isSafeInteger(target)) throw new Error('Target is too large.');
+  return { version: 1, unit: machine === 'multipunch' ? 'windows' : 'pieces', rate, available, setup, bandsaw, productive, target, actual };
+}
+
+export function machineTargetText(plan) {
+  if (!plan) return '';
+  const attainment = plan.actual != null && plan.target > 0
+    ? ` · ${Math.round(plan.actual / plan.target * 100)}% of plan` : '';
+  return `Target ${plan.target} ${plan.unit} · Good output ${plan.actual == null ? 'not recorded' : plan.actual + ' ' + plan.unit}${attainment}. `
+    + `Standard ${plan.rate}/h × ${plan.productive} production min ÷ 60 (rounded down). `
+    + `Available after breaks ${plan.available} min; planned setup ${plan.setup} min; planned bandsaw ${plan.bandsaw} min. Actual downtime does not reduce this plan.`;
+}
 export function validCalendarDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(value + 'T00:00:00Z');

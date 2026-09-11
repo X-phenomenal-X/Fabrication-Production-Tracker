@@ -47,6 +47,9 @@ jobs:
       - name: Verify reporting logic and supervisor guidance
         run: TZ=UTC node test/logic-guidance-check.mjs && TZ=America/Toronto node test/logic-guidance-check.mjs && node test/logic-guidance-ui-check.mjs
 
+      - name: Verify machine target plans
+        run: node test/machine-targets-check.mjs && node test/machine-targets-ui-check.mjs
+
       - name: Verify importer, sync, UI, offline and standalone operation
         run: npm test
 

@@ -14,7 +14,7 @@
    update is mostly assembled from what the app already saw happen. */
 
 import { operationHandoverLines, handoverReportDate } from '../command-center.js';
-import { acknowledgeHandover, handoverAcknowledged } from '../floor-operations.js';
+import { acknowledgeHandover, handoverAcknowledged, machineTarget, machineTargetText } from '../floor-operations.js';
 import {
   el, chip, icon, fmtDate, fmtWhen, toast, confirmDialog, printDocument, modal,
 } from '../ui.js';
@@ -100,7 +100,38 @@ function rowFor(key) {
 }
 
 function hasContent(r) {
-  return !!(r && (r.done || r.next || r.notes || r.ops));
+  return !!(r && (r.done || r.next || r.notes || r.ops || r.targetPlan));
+}
+
+function targetEditor(machine, row, rerender) {
+  if (machine.standing) return null;
+  return el('div', { style: { padding: '12px' } },
+    row.targetPlan ? el('p.small', {}, machineTargetText(row.targetPlan)) : null,
+    el('button', { type: 'button', onclick: () => {
+      const unit = machine.key === 'multipunch' ? 'windows' : 'pieces';
+      const inputs = {};
+      const fields = [['rate', `Approved standard (${unit}/hour)`], ['available', 'Available minutes after breaks'],
+        ['setup', 'Planned setup minutes'], ...(machine.key === 'saw' ? [['bandsaw', 'Planned bandsaw minutes']] : []),
+        ['actual', `Good output (${unit}, optional)`]];
+      const error = el('p', { role: 'alert' });
+      const body = el('div', {},
+        el('p', {}, 'Enter an agreed standard; no target is assumed. Available time excludes breaks. Setup and bandsaw allowances must not overlap. Enter only Elumatec cutting output for the saw plan.'),
+        el('p', {}, 'Good output is manually counted accepted output, excluding rejects and duplicate rework. Multi Punch uses windows; imported schedule pieces are never converted. Leave output blank until measured.'),
+        el('div.command-form-grid', {}, ...fields.map(([key, label]) => {
+          inputs[key] = el('input', { type: 'number', min: '0', step: key === 'actual' ? '1' : 'any',
+            inputmode: 'decimal', value: row.targetPlan?.[key] ?? (['setup', 'bandsaw'].includes(key) ? 0 : ''), 'aria-label': label });
+          return el('label', {}, label, inputs[key]);
+        })), error,
+        el('p.small.muted', {}, 'Target = hourly standard × (available − setup − bandsaw) ÷ 60, rounded down. Actual downtime is recorded separately. This is plan attainment, not OEE. Apply updates this draft; save the handover to retain it.'));
+      const dialog = modal(`${machine.label} target plan`, body, { actions: [
+        { label: 'Clear plan', onClick: () => { delete row.targetPlan; dialog.close(); rerender(); } },
+        { label: 'Apply to draft', onClick: () => {
+          try { row.targetPlan = machineTarget(machine.key, Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value]))); }
+          catch (e) { error.textContent = e.message; return; }
+          dialog.close(); rerender();
+        } },
+      ] });
+    } }, row.targetPlan ? 'Edit target plan' : 'Add target plan'));
 }
 
 /* The department's own printed sheet now carries only one standing row, Back
@@ -297,6 +328,7 @@ function card(machine, rerender) {
           oninput: (e) => { row.ops = e.target.value; },
         }))),
 
+    targetEditor(machine, row, rerender),
     el('div.sucard-body', {},
       box('done', 'Work done / in progress', '1-\n2-\n3-', 3),
       box('next', 'Next in schedule', '1-\n2-\n3-', 3),
@@ -437,6 +469,7 @@ function mobileEditor(machine, index, total, rerender) {
           type: 'button', 'aria-label': 'Increase operator count', title: 'More operators',
           onclick: () => changeOps(1),
         }, icon('plus', { size: 18 })))),
+    targetEditor(machine, row, rerender),
     el('div.mobile-su-fields', {},
       field('done', 'Work done / in progress', 'What ran, what finished, or what is still active?', 3),
       field('next', 'Next in schedule', 'What should this machine run next?', 2),
@@ -494,7 +527,8 @@ function mobileWriteView(rerender) {
     }
     const savedRows = Object.fromEntries(
       Object.entries(d.rows).filter(([, value]) => hasContent(value)));
-    saveShiftLog(view.date, view.shift, { rows: savedRows, notes: d.notes.trim() });
+    // Keep later draft edits separate from the saved record and its acknowledgement.
+    saveShiftLog(view.date, view.shift, { rows: structuredClone(savedRows), notes: d.notes.trim() });
 
     const after = rows.findIndex((item, itemIndex) => itemIndex > index && !hasContent(d.rows[item.key]));
     const anywhere = rows.findIndex((item) => !hasContent(d.rows[item.key]));
@@ -665,6 +699,7 @@ function asText(log) {
     for (const m of rows) {
       const r = log.rows[m.key];
       out.push(`${m.label}${r.ops ? `  (${r.ops} ops)` : ''}`);
+      if (r.targetPlan) out.push('  ' + machineTargetText(r.targetPlan));
       for (const [field, label] of FIELDS) {
         if (!r[field]) continue;
         out.push(`  ${label}:`);
@@ -703,7 +738,7 @@ function printShiftUpdate(log, { draft: isDraft = false, blank = false } = {}) {
             el('td', {}, el('strong', {}, machine.label),
               machine.note ? el('small', {}, machine.note) : null),
             el('td.mono.num', {}, blank ? '\u00a0' : row.ops || '—'),
-            el('td.preline', {}, blank ? '\u00a0' : row.done || '—'),
+            el('td.preline', {}, blank ? '\u00a0' : [row.done, machineTargetText(row.targetPlan)].filter(Boolean).join('\n') || '—'),
             el('td.preline', {}, blank ? '\u00a0' : row.next || '—'),
             el('td.preline', {}, blank ? '\u00a0' : row.notes || '—'));
         }))));
@@ -801,6 +836,7 @@ function readView(rerender) {
           el('div.suread-name', {},
             el('strong', {}, m.label),
             r.ops ? chip(`${r.ops} ops`, 'mute') : null),
+          r.targetPlan ? el('p.small', {}, machineTargetText(r.targetPlan)) : null,
           el('div.suread-cols', {}, ...FIELDS.map(([field, label]) => (r[field]
             ? el('div.suread-col', {},
                 el('div.su-label', {}, label),
