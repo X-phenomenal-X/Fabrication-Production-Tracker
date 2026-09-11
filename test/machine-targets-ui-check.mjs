@@ -37,7 +37,8 @@ try {
   });
   assert.equal(savedActual,null,'applying a draft does not mutate a saved shift');
   await page.getByRole('button',{name:/^Save & next/}).click();
-  await page.getByRole('button',{name:'Read',exact:true}).click();
+  await page.getByRole('button',{name:'Shift update actions',exact:true}).click();
+  await page.getByRole('button',{name:'Read saved update',exact:true}).click();
   await page.getByText(/Target 390 windows.*0% of plan/).waitFor();
   await page.reload();
   assert.equal(await page.evaluate(()=>Object.values(JSON.parse(localStorage.getItem('bv.cutting.v1')).shiftLogs).find(l=>l.rows.multipunch).rows.multipunch.targetPlan.actual),0);
