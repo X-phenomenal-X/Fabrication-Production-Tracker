@@ -25,7 +25,8 @@ try {
   await page.getByLabel('Available minutes after breaks',{exact:true}).fill('420');
   await page.getByLabel('Planned setup minutes',{exact:true}).fill('30');
   await page.getByRole('button',{name:'Apply to draft',exact:true}).click();
-  await page.getByText(/Target 390 windows/).waitFor();
+  await page.locator('.mobile-su-editor').getByText(/Target 390 windows/).waitFor();
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.getByRole('button',{name:/^Save & next/}).click();
   await page.locator('.mobile-su-step[title="Multi Punch"]').click();
   await page.getByRole('button',{name:'Edit target plan',exact:true}).click();
