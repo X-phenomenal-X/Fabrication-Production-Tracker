@@ -18,7 +18,9 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   const steps=page.locator('.command-panel').filter({has:page.getByRole('heading',{name:'Suggested next steps',exact:true})});
   await steps.getByRole('button',{name:'Open Setup',exact:true}).click();
-  await page.getByRole('button',{name:'Overview',exact:true}).click();
+  await page.getByRole('heading',{name:'Setup',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Choose page. Current page: Setup',exact:true}).click();
+  await page.getByRole('dialog').getByRole('button',{name:'Overview',exact:true}).click();
   assert.equal(await page.locator('.overview-schedule-progress').count(),0,'empty schedules do not expose 0% progress');
   await page.getByRole('button',{name:'Supervisor report',exact:true}).click();
   assert.match(await page.locator('dialog').innerText(),/These zeros do not confirm/);
