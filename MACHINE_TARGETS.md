@@ -9,3 +9,5 @@ Target = floor(hourly standard × (available minutes − planned setup − plann
 Plans are optional snapshots on each machine's existing shift-log row. Saved read views, copied handover text and printed reports include the unit, inputs, target and actual. Existing backup/sync handles the row. Editing a saved handover remains possible and requires renewed acknowledgement. No global default can retrospectively change a saved plan. Mobile draft edits are detached from saved records.
 
 These plans are entered per shift; no historical trend or dashboard aggregate combines windows and pieces. Further automation needs agreed standards and a reliable source of accepted output. Existing tests are preserved; new calculation/persistence and mobile/desktop browser checks are added to CI.
+
+The full regression run also exposed a delayed autofocus race in the employee editor: typing a department could append to the employee name. Initial focus is now set synchronously after opening the dialog, before the user can move to another field. The existing employee-edit regression covers this flow.

@@ -170,7 +170,9 @@ function openEmployeeEditor(record, rerender, origin = null) {
   });
 
   const dlg = modal(editing ? 'Edit employee' : 'Add employee', body, { actions, origin });
-  requestAnimationFrame(() => name.focus());
+  // The dialog is already open. Delaying this can steal focus from a field
+  // the user has just selected and send their typing into the name instead.
+  name.focus();
   return dlg;
 }
 
