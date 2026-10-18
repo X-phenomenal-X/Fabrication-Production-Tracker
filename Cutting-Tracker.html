@@ -24527,7 +24527,7 @@ create policy "member reads own row"
   function scheduleRender() {
     if (scheduled) return;
     scheduled = true;
-    requestAnimationFrame(() => {
+    queueMicrotask(() => {
       scheduled = false;
       render();
     });

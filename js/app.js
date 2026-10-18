@@ -591,7 +591,15 @@ function render() {
 function scheduleRender() {
   if (scheduled) return;
   scheduled = true;
-  requestAnimationFrame(() => { scheduled = false; render(); });
+  // A click or change handler has to finish before the page is rebuilt —
+  // replacing the control mid-event throws. A paint frame is the wrong wait
+  // for that: a busy or unfocused tab can go a long time without one, and the
+  // screen stays on the previous list. A microtask runs after this event and
+  // still before the next paint.
+  queueMicrotask(() => {
+    scheduled = false;
+    render();
+  });
 }
 
 /* Shift and break boundaries can pass while a wall monitor sits untouched.

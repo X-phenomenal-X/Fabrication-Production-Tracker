@@ -40,9 +40,14 @@ try {
   await page.getByLabel('Report details').fill('Inspect scratched stops');
   await page.getByLabel('Affected pieces').fill('12');
   await page.getByRole('button', { name: 'Save report', exact: true }).click();
+  const quality = page.locator('.command-report').filter({ hasText: 'Inspect scratched stops' });
+  await quality.waitFor();
   await page.getByLabel('Filter reports').selectOption('quality');
-  await page.waitForFunction(() => document.querySelectorAll('.command-report').length === 1);
+  await down.waitFor({ state: 'hidden' });
+  await quality.waitFor();
   assert.equal(await page.locator('.command-report').count(), 1);
+  assert.match(await quality.innerText(), /Inspect scratched stops/);
+  assert.match(await quality.innerText(), /12 affected/);
   await page.getByLabel('Filter reports').selectOption('all');
   await down.getByRole('button', { name: 'Resolve', exact: true }).click();
   await page.getByRole('button', { name: 'Resolve report', exact: true }).click();
