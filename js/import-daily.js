@@ -1,11 +1,15 @@
 /* Read the separate Daily Schedule workbook. This is intentionally a narrow
    import: orders, dates, project identity and the Cutting status columns. It
-   does not restore the retired purchasing workflow that once used this file. */
+   does not restore the retired purchasing workflow that once used this file.
+
+   The CNC workbook has its own Daily Sched tab. That tab is not this import.
+   Daily orders come only from the separate Daily Schedule file. */
 
 import { readXlsx } from './xlsx.js';
 
 export const DAILY_PARSER_VERSION = 1;
 const SHEET = 'Daily Sched';
+export const DAILY_SHEET = SHEET;
 const PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
 
 const FALLBACK = {
@@ -82,6 +86,21 @@ function sectionOf(cells) {
     ? upper.replace(/[.\s]+$/, '') : null;
 }
 
+/** The heading is a cell in the first rows, not a joined title-plus-header. */
+export function dailySheetHasWorkOrderHeader(sheet) {
+  if (!sheet?.rows) return false;
+  for (const row of sheet.rows) {
+    if (row.r > 6) break;
+    for (const cell of row.cells || []) {
+      const part = text(cell);
+      if (!part) continue;
+      const upper = part.toUpperCase();
+      if (ALIASES.wo.some((pattern) => pattern.test(upper))) return true;
+    }
+  }
+  return false;
+}
+
 function isOrder(value) {
   const raw = text(value);
   if (!raw) return false;
@@ -96,6 +115,7 @@ export async function importDailySchedule(arrayBuffer, { fileName = 'Daily Sched
   }
 
   const columns = headerMap(sheet);
+  const woHeaderFound = dailySheetHasWorkOrderHeader(sheet);
   const rows = [];
   const seen = new Map();
   let section = null;
@@ -149,6 +169,7 @@ export async function importDailySchedule(arrayBuffer, { fileName = 'Daily Sched
       colors: colors.size,
       columns,
       colorColumnFound: !!columns.color,
+      woHeaderFound,
       sheet: SHEET,
     },
   };

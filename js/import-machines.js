@@ -21,8 +21,9 @@ import { readXlsx } from './xlsx.js';
      2  FMC 1 / FMC 2, and the CNC & FMC shared queue
      3  shift update read from the visible tab only; CNC-3 mapped to CNC 1
      4  non-numeric work orders retained; shift update pinned to its source tab
-     5  live shift-update worksheet renamed from Shift Update 2 to Shift Update */
-export const PARSER_VERSION = 5;
+     5  live shift-update worksheet renamed from Shift Update 2 to Shift Update
+     6  Shift Update still matches when Excel saved a surrounding space */
+export const PARSER_VERSION = 6;
 
 const PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
 
@@ -208,10 +209,12 @@ function parseMachineSheet(sheet, spec, report) {
 /* The CNC workbook's Shift Update sheet carries the latest word on most
    machines — what ran, what is next, and whether a machine is down.
 
-   The department renamed the live worksheet from `Shift Update 2` to the exact
-   name `Shift Update`. The similarly named `Shift Update 2`, `Shift Update (3)`
-   and `Shift Update Old` tabs must never be considered as fallbacks. Choosing
-   by visibility was plausible but unsafe: a workbook with the live tab
+   The department renamed the live worksheet from `Shift Update 2` to
+   `Shift Update`. Excel has also saved that live tab as ` Shift Update`
+   (a leading space). Matching trims surrounding space and Excel's `_xNNNN_`
+   escapes, so that tab is the live one. `Shift Update 2`, `Shift Update (3)`
+   and `Shift Update Old` do not match and are never fallbacks. Choosing by
+   visibility was plausible but unsafe: a workbook with the live tab
    accidentally hidden could silently feed the app an archived update.
 
    A block is laid out as two side-by-side halves so it prints on one page:
@@ -230,6 +233,42 @@ function parseMachineSheet(sheet, spec, report) {
    archived `Shift Update 2` tab, so the live import correctly has no update
    for them. */
 export const SHIFT_UPDATE_SHEET = 'Shift Update';
+
+/* Excel stores a leading space as a real character or as `_x0020_`. Trim only
+   after that decode. `Shift Update 2` still canonicalises to itself, so the
+   archived tabs cannot satisfy a request for `Shift Update`. */
+export function canonicalSheetName(name) {
+  const decoded = String(name ?? '').replace(/_x([0-9A-Fa-f]{4})_/g, (all, hex) => {
+    const code = Number.parseInt(hex, 16);
+    return Number.isFinite(code) ? String.fromCharCode(code) : all;
+  });
+  return decoded.trim();
+}
+
+/** Exact sheet name, or the one tab whose trimmed name is that name. */
+export function resolveSheetName(sheetNames, expected) {
+  if (sheetNames.includes(expected)) return expected;
+  const hits = sheetNames.filter((name) => canonicalSheetName(name) === expected);
+  return hits.length === 1 ? hits[0] : null;
+}
+
+function sheetMatches(actual, expected) {
+  return actual === expected || canonicalSheetName(actual) === expected;
+}
+
+const WO_HEADER = /^(?:W\s*\/?\s*O\s*#?|WORK\s*ORDER(?:\s*(?:NO\.?|#))?)$/i;
+
+/** True when an early row carries the work-order heading in the expected column. */
+export function sheetHasWorkOrderHeader(sheet, column = 1) {
+  if (!sheet?.rows) return false;
+  for (const row of sheet.rows) {
+    if (row.r > 20) break;
+    const value = row.cells?.[column - 1];
+    if (value == null || typeof value === 'object') continue;
+    if (WO_HEADER.test(String(value).trim())) return true;
+  }
+  return false;
+}
 
 /* Sheet labels -> machine keys. Anything not listed (Proline, Notching, the
    Saws, the standing SERVICE ORDERS / K1285 / BACK ORDER rows) is outside the
@@ -400,35 +439,44 @@ export async function importMachineWorkbook(arrayBuffer, { kind, fileName = 'sch
 
   const report = {
     kind, fileName, importedAt: new Date().toISOString(),
-    parser: PARSER_VERSION, sheets: [], missing: [],
+    parser: PARSER_VERSION, sheets: [], missing: [], badHeaders: [],
   };
 
   const wanted = specs.map((s) => s.sheet);
   const wb = await readXlsx(arrayBuffer, {
-    only: (n) => wanted.includes(n) || (kind === 'cnc' && n === SHIFT_UPDATE_SHEET),
+    only: (name) => wanted.some((expected) => sheetMatches(name, expected))
+      || (kind === 'cnc' && sheetMatches(name, SHIFT_UPDATE_SHEET)),
   });
+  report.workbookSheets = wb.sheetNames;
 
   let tasks = [];
   for (const spec of specs) {
-    const sheet = wb.sheets[spec.sheet];
+    const actual = resolveSheetName(wb.sheetNames, spec.sheet);
+    const sheet = actual ? wb.sheets[actual] : null;
     if (!sheet) { report.missing.push(spec.sheet); continue; }
+    if (!sheetHasWorkOrderHeader(sheet, spec.cols.wo || 1)) report.badHeaders.push(spec.sheet);
     tasks = tasks.concat(parseMachineSheet(sheet, spec, report));
   }
 
   // The CNC workbook also carries the shift update — the latest word on most
-  // machines, and finer than the per-line Status columns.
+  // machines, and finer than the per-line Status columns. A Daily Sched tab in
+  // this same workbook is not read here; that page comes from its own file.
   let shiftUpdate = null;
   if (kind === 'cnc') {
-    shiftUpdate = parseShiftUpdate(wb.sheets[SHIFT_UPDATE_SHEET]);
+    const actual = resolveSheetName(wb.sheetNames, SHIFT_UPDATE_SHEET);
+    shiftUpdate = parseShiftUpdate(actual ? wb.sheets[actual] : null);
     if (!shiftUpdate) report.missing.push(SHIFT_UPDATE_SHEET);
-    else report.shiftUpdate = {
-      date: shiftUpdate.date, shift: shiftUpdate.shift,
-      sheet: SHIFT_UPDATE_SHEET,
-      machines: Object.keys(shiftUpdate.machines).length,
-      // Machine names on the sheet the app has no work centre for. Worth
-      // showing: it is how the department finds out the app is behind the floor.
-      unknown: shiftUpdate.unknown,
-    };
+    else {
+      report.shiftSheet = actual;
+      report.shiftUpdate = {
+        date: shiftUpdate.date, shift: shiftUpdate.shift,
+        sheet: SHIFT_UPDATE_SHEET,
+        machines: Object.keys(shiftUpdate.machines).length,
+        // Machine names on the sheet the app has no work centre for. Worth
+        // showing: it is how the department finds out the app is behind the floor.
+        unknown: shiftUpdate.unknown,
+      };
+    }
   }
 
   if (!tasks.length) {

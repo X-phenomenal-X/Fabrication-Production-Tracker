@@ -385,7 +385,7 @@ export function renderData(rerender, go) {
         })),
         slot('Daily schedule', 'daily', dropZone({
           title: 'Daily Schedule workbook',
-          hint: 'Daily Sched sheet · projects, job codes, colours and dates',
+          hint: 'Separate workbook · Daily Sched sheet · not the CNC tab',
           onFile: (f) => handleDailyFile(f, rerender),
         })),
         slot('Project colour reference', 'projectColors', dropZone({
