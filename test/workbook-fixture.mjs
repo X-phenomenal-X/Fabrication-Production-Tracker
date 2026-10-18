@@ -9,6 +9,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import zlib from 'zlib';
 
 const XML = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -186,19 +187,30 @@ function employeeRosterRows() {
   return rows;
 }
 
-function storedZip(files) {
+function storedZip(files, { deflate = false, padBytes = 0 } = {}) {
   const locals = [];
   const centrals = [];
   let offset = 0;
+  const entries = Object.entries(files).map(([name, text]) => {
+    const raw = Buffer.from(text);
+    return {
+      name,
+      data: deflate ? zlib.deflateRawSync(raw) : raw,
+      method: deflate ? 8 : 0,
+    };
+  });
+  if (padBytes) {
+    entries.push({ name: 'xl/media/pad.bin', data: Buffer.alloc(padBytes, 0x5a), method: 0 });
+  }
 
-  for (const [name, text] of Object.entries(files)) {
-    const filename = Buffer.from(name);
-    const data = Buffer.from(text);
+  for (const entry of entries) {
+    const filename = Buffer.from(entry.name);
+    const data = entry.data;
     const local = Buffer.alloc(30 + filename.length);
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(20, 4);
     local.writeUInt16LE(0, 6);
-    local.writeUInt16LE(0, 8); // stored, because the app supports uncompressed ZIP members
+    local.writeUInt16LE(entry.method, 8);
     local.writeUInt32LE(0, 14); // CRC is not consulted by the app's reader
     local.writeUInt32LE(data.length, 18);
     local.writeUInt32LE(data.length, 22);
@@ -211,7 +223,7 @@ function storedZip(files) {
     central.writeUInt16LE(20, 4);
     central.writeUInt16LE(20, 6);
     central.writeUInt16LE(0, 8);
-    central.writeUInt16LE(0, 10);
+    central.writeUInt16LE(entry.method, 10);
     central.writeUInt32LE(0, 16);
     central.writeUInt32LE(data.length, 20);
     central.writeUInt32LE(data.length, 24);
@@ -232,7 +244,7 @@ function storedZip(files) {
   return Buffer.concat([...locals, ...centrals, eocd]);
 }
 
-function workbook(sheets) {
+function workbook(sheets, options) {
   const names = Object.keys(sheets);
   const wb = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
     + `<workbook xmlns="${XML}" xmlns:r="${REL}"><sheets>`
@@ -250,7 +262,15 @@ function workbook(sheets) {
     'xl/styles.xml': styles,
   };
   names.forEach((name, i) => { files[`xl/worksheets/sheet${i + 1}.xml`] = sheetXml(sheets[name]); });
-  return storedZip(files);
+  return storedZip(files, options);
+}
+
+export function makeWorkbook(sheets, options) {
+  return workbook(sheets, options);
+}
+
+export function makeRawXlsx(files, options) {
+  return storedZip(files, options);
 }
 
 export function ensureWorkbookFixtures() {

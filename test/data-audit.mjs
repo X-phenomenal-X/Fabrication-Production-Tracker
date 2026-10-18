@@ -57,7 +57,7 @@ const out = await page.evaluate(async (files) => {
     return a.buffer;
   };
   const { readXlsx } = await import('/js/xlsx.js');
-  const { importMachineWorkbook } = await import('/js/import-machines.js');
+  const { importMachineWorkbook, canonicalSheetName } = await import('/js/import-machines.js');
   const { dieForms } = await import('/js/dies.js');
 
   /* Every sheet, so the audit can speak about the ones the importer skips.
@@ -85,11 +85,12 @@ const out = await page.evaluate(async (files) => {
     const names = book.sheetNames || Object.keys(book.sheets || {});
     const hidden = new Set(book.hiddenSheets || []);
     const rowsOf = (n) => (book.sheets?.[n]?.rows?.filter((r) => !r.empty).length ?? 0);
+    const isRead = (n) => READ.has(n) || READ.has(canonicalSheetName(n));
     sheetReport[kind] = {
       total: names.length,
-      read: names.filter((n) => READ.has(n)),
-      readButHidden: names.filter((n) => READ.has(n) && hidden.has(n)),
-      visibleUnread: names.filter((n) => !hidden.has(n) && !READ.has(n))
+      read: names.filter(isRead),
+      readButHidden: names.filter((n) => isRead(n) && hidden.has(n)),
+      visibleUnread: names.filter((n) => !hidden.has(n) && !isRead(n))
         .map((n) => ({ sheet: n, rows: rowsOf(n) }))
         .sort((a, b) => b.rows - a.rows),
       archived: names.filter((n) => hidden.has(n)).length,

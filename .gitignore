@@ -8,3 +8,5 @@ _site/
 supabase/.temp/
 supabase/functions/.env
 supabase/functions/.env.*
+.env
+scripts/.env

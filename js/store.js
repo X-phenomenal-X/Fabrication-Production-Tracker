@@ -809,22 +809,238 @@ export function setMachineConfig(key, patch) {
   save();
 }
 
+/* How a manual import replaces schedule lines.
+
+   Rolling and CNC each replace only their own jobs. Daily Schedule replaces
+   only the daily order list. Statuses, notes and handovers live in the other
+   cloud document and are not part of this object. The weekday script uses the
+   same functions, so a hand import and the script land on the same board. */
+
+export function emptySchedulePackage() {
+  return {
+    v: 2,
+    tasks: [],
+    machineMeta: {},
+    shiftUpdate: null,
+    dailyOrders: [],
+    dailyMeta: null,
+    projectColorReference: null,
+  };
+}
+
+export function asSchedulePackage(remote) {
+  const empty = emptySchedulePackage();
+  if (!remote || typeof remote !== 'object' || Array.isArray(remote)) return empty;
+  const next = { ...empty, ...remote };
+  if (!Array.isArray(next.tasks)) next.tasks = [];
+  if (!Array.isArray(next.dailyOrders)) next.dailyOrders = [];
+  if (!next.machineMeta || typeof next.machineMeta !== 'object' || Array.isArray(next.machineMeta)) {
+    next.machineMeta = {};
+  }
+  return next;
+}
+
+/** The same replacement Setup performs for a Rolling or CNC workbook. */
+export function applyMachineImport(base, { tasks, shiftUpdate, report }, stamp) {
+  const machines = new Set(tasks.map((task) => task.machine));
+  return {
+    ...base,
+    tasks: (base.tasks || [])
+      .filter((task) => task.source !== report.kind && !machines.has(task.machine))
+      .concat(tasks.map((task) => ({ ...task, source: report.kind }))),
+    machineMeta: {
+      ...(base.machineMeta || {}),
+      [report.kind]: stamp({
+        fileName: report.fileName,
+        importedAt: report.importedAt,
+        count: tasks.length,
+        parser: report.parser ?? 1,
+      }),
+    },
+    shiftUpdate: shiftUpdate
+      ? { ...shiftUpdate, importedAt: report.importedAt }
+      : base.shiftUpdate,
+  };
+}
+
+/** The same replacement Setup performs for the separate Daily Schedule file. */
+export function applyDailyImport(base, { rows, report }, stamp) {
+  return {
+    ...base,
+    dailyOrders: rows,
+    dailyMeta: stamp({
+      fileName: report.fileName,
+      importedAt: report.importedAt,
+      count: rows.length,
+      projects: report.projects || 0,
+      colors: report.colors || 0,
+      parser: report.parser || 1,
+      colorColumnFound: !!report.colorColumnFound,
+    }),
+  };
+}
+
+function highestRevision(base) {
+  let max = 0;
+  const take = (rev) => {
+    const match = /^(\d+)@/.exec(String(rev || ''));
+    if (match) max = Math.max(max, Number(match[1]));
+  };
+  for (const record of Object.values(base?.machineMeta || {})) take(record?.rev);
+  take(base?.dailyMeta?.rev);
+  take(base?.projectColorReference?.rev);
+  return max;
+}
+
+/** A revision newer than anything already in the schedules package. */
+export function revisionStamp(base, by = 'Schedule import') {
+  let counter = highestRevision(base);
+  return (fields) => {
+    counter += 1;
+    return { ...fields, at: new Date().toISOString(), by, rev: `${counter}@schedule-import` };
+  };
+}
+
+function stableString(value) {
+  if (Array.isArray(value)) return `[${value.map(stableString).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value).filter((key) => value[key] !== undefined).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableString(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+function stripTask(task) {
+  const copy = { ...task };
+  delete copy.id;
+  delete copy.row;
+  return copy;
+}
+
+function stripOrder(row) {
+  const copy = { ...row };
+  delete copy.id;
+  delete copy.row;
+  return copy;
+}
+
+function taskKey(task) {
+  return `${task.machine}|${task.wo}|${task.die || ''}`;
+}
+
+function orderKey(row) {
+  return `${row.wo}|${row.floor || ''}|${row.project || ''}`;
+}
+
+export function diffRecords(before, after, keyFn, strip) {
+  const group = (rows) => {
+    const map = new Map();
+    for (const row of rows || []) {
+      const key = keyFn(row);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(strip(row));
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => {
+        const left = stableString(a);
+        const right = stableString(b);
+        return left < right ? -1 : left > right ? 1 : 0;
+      });
+    }
+    return map;
+  };
+  const oldGroups = group(before);
+  const newGroups = group(after);
+  let added = 0;
+  let removed = 0;
+  let changed = 0;
+  for (const key of new Set([...oldGroups.keys(), ...newGroups.keys()])) {
+    const left = oldGroups.get(key) || [];
+    const right = newGroups.get(key) || [];
+    const shared = Math.min(left.length, right.length);
+    for (let i = 0; i < shared; i += 1) {
+      if (stableString(left[i]) !== stableString(right[i])) changed += 1;
+    }
+    if (right.length > left.length) added += right.length - left.length;
+    if (left.length > right.length) removed += left.length - right.length;
+  }
+  return { added, changed, removed };
+}
+
+function shiftBody(shiftUpdate) {
+  if (!shiftUpdate) return null;
+  const rest = { ...shiftUpdate };
+  delete rest.importedAt;
+  return rest;
+}
+
+/**
+ * Apply one or more parsed workbooks the way a hand import would, skipping a
+ * file whose jobs (and, for CNC, shift update) are already on the board.
+ */
+export function planScheduleUpdate(remoteBase, loaded, by = 'Schedule import') {
+  let next = asSchedulePackage(remoteBase);
+  const stamp = revisionStamp(next, by);
+  const files = [];
+  let changed = false;
+
+  for (const item of loaded) {
+    if (item.kind === 'daily') {
+      const diff = diffRecords(next.dailyOrders, item.rows, orderKey, stripOrder);
+      const same = !diff.added && !diff.changed && !diff.removed;
+      if (!same) {
+        next = applyDailyImport(next, item, stamp);
+        changed = true;
+      }
+      files.push(fileSummary(item, same, diff, false, item.rows.length, 'orders'));
+      continue;
+    }
+
+    const before = (next.tasks || []).filter((task) => task.source === item.kind);
+    const after = item.tasks.map((task) => ({ ...task, source: item.kind }));
+    const diff = diffRecords(before, after, taskKey, stripTask);
+    const incomingShift = item.shiftUpdate
+      ? { ...item.shiftUpdate, importedAt: item.report.importedAt }
+      : null;
+    const shiftChanged = !!incomingShift
+      && stableString(shiftBody(next.shiftUpdate)) !== stableString(shiftBody(incomingShift));
+    const same = !diff.added && !diff.changed && !diff.removed && !shiftChanged;
+    if (!same) {
+      next = applyMachineImport(next, item, stamp);
+      changed = true;
+    }
+    files.push(fileSummary(item, same, diff, shiftChanged, item.tasks.length, 'jobs'));
+  }
+
+  return { next, files, changed };
+}
+
+function fileSummary(item, same, diff, shiftChanged, count, noun) {
+  return {
+    fileName: item.fileName,
+    kind: item.kind,
+    status: same ? 'unchanged' : 'loaded',
+    diff,
+    warnings: item.warnings || [],
+    notes: item.notes || [],
+    count,
+    noun,
+    shiftChanged: !!shiftChanged,
+  };
+}
+
 /** Load a machine workbook. Tasks for that workbook's machines are replaced;
     the other workbook's tasks are left alone, so Rolling and CNC can be
     imported independently. */
-export function setMachineImport({ tasks, shiftUpdate, report }) {
-  const machines = new Set(tasks.map((t) => t.machine));
-  state.tasks = state.tasks
-    .filter((t) => t.source !== report.kind && !machines.has(t.machine))
-    .concat(tasks.map((t) => ({ ...t, source: report.kind })));
-  state.machineMeta = {
-    ...state.machineMeta,
-    [report.kind]: changed({
-      fileName: report.fileName, importedAt: report.importedAt,
-      count: tasks.length, parser: report.parser ?? 1,
-    }),
-  };
-  if (shiftUpdate) state.shiftUpdate = { ...shiftUpdate, importedAt: report.importedAt };
+export function setMachineImport(payload) {
+  const next = applyMachineImport({
+    tasks: state.tasks,
+    machineMeta: state.machineMeta,
+    shiftUpdate: state.shiftUpdate,
+  }, payload, changed);
+  state.tasks = next.tasks;
+  state.machineMeta = next.machineMeta;
+  state.shiftUpdate = next.shiftUpdate;
   save();
   // The imported workbooks are the only thing that puts the heavy half of the
   // snapshot out of date, so this is the one place it gets pushed.
@@ -833,17 +1049,13 @@ export function setMachineImport({ tasks, shiftUpdate, report }) {
 
 /** Replace the separate Daily Schedule revision. It is read-only source data;
     importing it does not touch machine queues or any operator status overlay. */
-export function setDailyImport({ rows, report }) {
-  state.dailyOrders = rows;
-  state.dailyMeta = changed({
-    fileName: report.fileName,
-    importedAt: report.importedAt,
-    count: rows.length,
-    projects: report.projects || 0,
-    colors: report.colors || 0,
-    parser: report.parser || 1,
-    colorColumnFound: !!report.colorColumnFound,
-  });
+export function setDailyImport(payload) {
+  const next = applyDailyImport({
+    dailyOrders: state.dailyOrders,
+    dailyMeta: state.dailyMeta,
+  }, payload, changed);
+  state.dailyOrders = next.dailyOrders;
+  state.dailyMeta = next.dailyMeta;
   save();
   queueCloudPush({ base: true, change: false });
 }

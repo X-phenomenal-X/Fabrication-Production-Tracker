@@ -1053,6 +1053,55 @@ sign in" and keeps the work already stored on that phone.
 Without either, the app still works fully, storing data in that browser.
 Export / Import moves it between machines.
 
+### Weekday schedule import
+
+A shop computer can load the schedules on weekday afternoons without anyone
+opening the tracker. It uses the same reader as Setup, writes only the shared
+schedules, and leaves statuses, notes and handovers alone. A file that has not
+changed is skipped. A file that is missing its sheet or its `W/O #` / `WO#`
+header is refused, and nothing is written.
+
+```
+node scripts/import-schedules.mjs --rolling "Rolling Schedule_2026.xlsx" --cnc "CNC Schedule_Rev E.xlsx" --daily "Daily Schedule Oct 13 Rev B.xlsx"
+```
+
+`--daily` can be left off. `--dry-run` prints the changes and saves nothing.
+
+| Command | File the fetcher should pass | What is read |
+|---|---|---|
+| `--rolling` | `Rolling Schedule_2026.xlsx` | Sheets `Auto`, `Manual`, `Complete` |
+| `--cnc` | `CNC Schedule_Rev E.xlsx` | Sheets `FOM1`, `FOM2`, `FOM3`, `CNC & FMC`, `Shift Update` (a leading space on that tab still counts). `MultiPunch & SAW` when the tab exists. The `Daily Sched` tab in this file is ignored |
+| `--daily` | `Daily Schedule <Mon DD>[ Rev X].xlsx`, for example `Daily Schedule Oct 13 Rev B.xlsx` | The separate workbook's `Daily Sched` sheet, which must contain a `W/O #` header |
+
+`(AutoRecovered)` copies and lock files are refused. A different workbook, such
+as `MILL PULL SCHEDULE - Oct 12TH.xlsx`, is refused because it has no
+`Daily Sched` sheet. The current CNC file has no `MultiPunch & SAW` tab, so a
+CNC import clears the Multi Punch queue, the same as importing that file by hand.
+
+Create one editor account for the job. Do not use a supervisor's login, and
+do not put the service role key on the computer.
+
+1. In Supabase, Authentication → Users → Add user. Use an address such as
+   `tracker-import@your-company.com`, set a long password, and turn on
+   Auto Confirm. Leave public sign-up off; this does not add a Create account
+   button to the tracker.
+2. Copy that user's id. In the SQL editor, add an editor row (the same statement
+   Setup shows for a person):
+
+```sql
+insert into public.tracker_members (user_id, role, email)
+values ('PASTE-THE-USER-ID', 'editor', 'tracker-import@your-company.com')
+on conflict (user_id) do update set role = excluded.role, email = excluded.email;
+```
+
+3. On the computer that runs the job, put the project URL, the anon (publishable)
+   key, the email and the password in a file that is not in git. A blank copy
+   is `scripts/import-schedules.env.example`. Restrict that file to the account
+   that runs the job.
+4. Run the command on weekday afternoons, after the fetcher has downloaded the
+   newest real files. The anon key is only the gateway. The editor login is
+   what the row rules check.
+
 ### Putting it on a URL
 
 `.github/workflows/pages.yml` verifies and publishes the modular `_site`

@@ -8516,33 +8516,57 @@ a.resource-download:active, button.resource-download:active { transform: transla
     state.machineConfig[key2] = next;
     save();
   }
-  function setMachineImport({ tasks, shiftUpdate, report }) {
-    const machines = new Set(tasks.map((t) => t.machine));
-    state.tasks = state.tasks.filter((t) => t.source !== report.kind && !machines.has(t.machine)).concat(tasks.map((t) => ({ ...t, source: report.kind })));
-    state.machineMeta = {
-      ...state.machineMeta,
-      [report.kind]: changed({
+  function applyMachineImport(base, { tasks, shiftUpdate, report }, stamp) {
+    const machines = new Set(tasks.map((task) => task.machine));
+    return {
+      ...base,
+      tasks: (base.tasks || []).filter((task) => task.source !== report.kind && !machines.has(task.machine)).concat(tasks.map((task) => ({ ...task, source: report.kind }))),
+      machineMeta: {
+        ...base.machineMeta || {},
+        [report.kind]: stamp({
+          fileName: report.fileName,
+          importedAt: report.importedAt,
+          count: tasks.length,
+          parser: report.parser ?? 1
+        })
+      },
+      shiftUpdate: shiftUpdate ? { ...shiftUpdate, importedAt: report.importedAt } : base.shiftUpdate
+    };
+  }
+  function applyDailyImport(base, { rows, report }, stamp) {
+    return {
+      ...base,
+      dailyOrders: rows,
+      dailyMeta: stamp({
         fileName: report.fileName,
         importedAt: report.importedAt,
-        count: tasks.length,
-        parser: report.parser ?? 1
+        count: rows.length,
+        projects: report.projects || 0,
+        colors: report.colors || 0,
+        parser: report.parser || 1,
+        colorColumnFound: !!report.colorColumnFound
       })
     };
-    if (shiftUpdate) state.shiftUpdate = { ...shiftUpdate, importedAt: report.importedAt };
+  }
+  function setMachineImport(payload) {
+    const next = applyMachineImport({
+      tasks: state.tasks,
+      machineMeta: state.machineMeta,
+      shiftUpdate: state.shiftUpdate
+    }, payload, changed);
+    state.tasks = next.tasks;
+    state.machineMeta = next.machineMeta;
+    state.shiftUpdate = next.shiftUpdate;
     save();
     queueCloudPush({ base: true, change: false });
   }
-  function setDailyImport({ rows, report }) {
-    state.dailyOrders = rows;
-    state.dailyMeta = changed({
-      fileName: report.fileName,
-      importedAt: report.importedAt,
-      count: rows.length,
-      projects: report.projects || 0,
-      colors: report.colors || 0,
-      parser: report.parser || 1,
-      colorColumnFound: !!report.colorColumnFound
-    });
+  function setDailyImport(payload) {
+    const next = applyDailyImport({
+      dailyOrders: state.dailyOrders,
+      dailyMeta: state.dailyMeta
+    }, payload, changed);
+    state.dailyOrders = next.dailyOrders;
+    state.dailyMeta = next.dailyMeta;
     save();
     queueCloudPush({ base: true, change: false });
   }
@@ -9540,6 +9564,31 @@ a.resource-download:active, button.resource-download:active { transform: transla
     report.sheets.push({ sheet: spec.sheet, machine: spec.machine, rows: out.length });
     return out;
   }
+  function canonicalSheetName(name) {
+    const decoded = String(name ?? "").replace(/_x([0-9A-Fa-f]{4})_/g, (all, hex) => {
+      const code = Number.parseInt(hex, 16);
+      return Number.isFinite(code) ? String.fromCharCode(code) : all;
+    });
+    return decoded.trim();
+  }
+  function resolveSheetName(sheetNames, expected) {
+    if (sheetNames.includes(expected)) return expected;
+    const hits = sheetNames.filter((name) => canonicalSheetName(name) === expected);
+    return hits.length === 1 ? hits[0] : null;
+  }
+  function sheetMatches(actual, expected) {
+    return actual === expected || canonicalSheetName(actual) === expected;
+  }
+  function sheetHasWorkOrderHeader(sheet, column = 1) {
+    if (!sheet?.rows) return false;
+    for (const row of sheet.rows) {
+      if (row.r > 20) break;
+      const value2 = row.cells?.[column - 1];
+      if (value2 == null || typeof value2 === "object") continue;
+      if (WO_HEADER.test(String(value2).trim())) return true;
+    }
+    return false;
+  }
   function suKey(label) {
     return String(label || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   }
@@ -9648,34 +9697,42 @@ a.resource-download:active, button.resource-download:active { transform: transla
       importedAt: (/* @__PURE__ */ new Date()).toISOString(),
       parser: PARSER_VERSION,
       sheets: [],
-      missing: []
+      missing: [],
+      badHeaders: []
     };
     const wanted = specs.map((s) => s.sheet);
     const wb = await readXlsx(arrayBuffer, {
-      only: (n) => wanted.includes(n) || kind === "cnc" && n === SHIFT_UPDATE_SHEET
+      only: (name) => wanted.some((expected) => sheetMatches(name, expected)) || kind === "cnc" && sheetMatches(name, SHIFT_UPDATE_SHEET)
     });
+    report.workbookSheets = wb.sheetNames;
     let tasks = [];
     for (const spec of specs) {
-      const sheet = wb.sheets[spec.sheet];
+      const actual = resolveSheetName(wb.sheetNames, spec.sheet);
+      const sheet = actual ? wb.sheets[actual] : null;
       if (!sheet) {
         report.missing.push(spec.sheet);
         continue;
       }
+      if (!sheetHasWorkOrderHeader(sheet, spec.cols.wo || 1)) report.badHeaders.push(spec.sheet);
       tasks = tasks.concat(parseMachineSheet(sheet, spec, report));
     }
     let shiftUpdate = null;
     if (kind === "cnc") {
-      shiftUpdate = parseShiftUpdate(wb.sheets[SHIFT_UPDATE_SHEET]);
+      const actual = resolveSheetName(wb.sheetNames, SHIFT_UPDATE_SHEET);
+      shiftUpdate = parseShiftUpdate(actual ? wb.sheets[actual] : null);
       if (!shiftUpdate) report.missing.push(SHIFT_UPDATE_SHEET);
-      else report.shiftUpdate = {
-        date: shiftUpdate.date,
-        shift: shiftUpdate.shift,
-        sheet: SHIFT_UPDATE_SHEET,
-        machines: Object.keys(shiftUpdate.machines).length,
-        // Machine names on the sheet the app has no work centre for. Worth
-        // showing: it is how the department finds out the app is behind the floor.
-        unknown: shiftUpdate.unknown
-      };
+      else {
+        report.shiftSheet = actual;
+        report.shiftUpdate = {
+          date: shiftUpdate.date,
+          shift: shiftUpdate.shift,
+          sheet: SHIFT_UPDATE_SHEET,
+          machines: Object.keys(shiftUpdate.machines).length,
+          // Machine names on the sheet the app has no work centre for. Worth
+          // showing: it is how the department finds out the app is behind the floor.
+          unknown: shiftUpdate.unknown
+        };
+      }
     }
     if (!tasks.length) {
       throw new Error(
@@ -9685,11 +9742,11 @@ a.resource-download:active, button.resource-download:active { transform: transla
     report.count = tasks.length;
     return { tasks, shiftUpdate, report };
   }
-  var PARSER_VERSION, PHANTOM_BEFORE, WO_HEADING, SHEET_MAP, SHIFT_UPDATE_SHEET, SU_MACHINE, SU_SKIP, SU_SHIFT_RANK;
+  var PARSER_VERSION, PHANTOM_BEFORE, WO_HEADING, SHEET_MAP, SHIFT_UPDATE_SHEET, WO_HEADER, SU_MACHINE, SU_SKIP, SU_SHIFT_RANK;
   var init_import_machines = __esm({
     "js/import-machines.js"() {
       init_xlsx();
-      PARSER_VERSION = 5;
+      PARSER_VERSION = 6;
       PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
       WO_HEADING = /^(?:W\/?O\s*#?|WORK\s*ORDER\s*#?|PROJECT|MACHINE|DATE|SHIFT|TOTALS?|SERVICE\s*ORDERS?|BACK\s*ORDERS?)$/i;
       SHEET_MAP = {
@@ -9833,6 +9890,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
         ]
       };
       SHIFT_UPDATE_SHEET = "Shift Update";
+      WO_HEADER = /^(?:W\s*\/?\s*O\s*#?|WORK\s*ORDER(?:\s*(?:NO\.?|#))?)$/i;
       SU_MACHINE = {
         "ROLLINGETASAUTO": "roll-auto",
         "ROLLINGIOTAMANUAL": "roll-man",
@@ -15270,6 +15328,8 @@ ${add2.join("\n")}` : add2.join("\n");
   var import_daily_exports = {};
   __export(import_daily_exports, {
     DAILY_PARSER_VERSION: () => DAILY_PARSER_VERSION,
+    DAILY_SHEET: () => DAILY_SHEET,
+    dailySheetHasWorkOrderHeader: () => dailySheetHasWorkOrderHeader,
     importDailySchedule: () => importDailySchedule
   });
   function text2(value2) {
@@ -15317,6 +15377,19 @@ ${add2.join("\n")}` : add2.join("\n");
     const upper = candidate.toUpperCase();
     return /IN CUTTING|MAT.?L REQUIRED|ON HOLD|WINDOW WALL|SHIPPING|SCHEDULING|IN GLAZING|COMMERCIAL DOOR/.test(upper) ? upper.replace(/[.\s]+$/, "") : null;
   }
+  function dailySheetHasWorkOrderHeader(sheet) {
+    if (!sheet?.rows) return false;
+    for (const row of sheet.rows) {
+      if (row.r > 6) break;
+      for (const cell of row.cells || []) {
+        const part = text2(cell);
+        if (!part) continue;
+        const upper = part.toUpperCase();
+        if (ALIASES3.wo.some((pattern) => pattern.test(upper))) return true;
+      }
+    }
+    return false;
+  }
   function isOrder(value2) {
     const raw = text2(value2);
     if (!raw) return false;
@@ -15329,6 +15402,7 @@ ${add2.join("\n")}` : add2.join("\n");
       throw new Error(`This workbook has no "${SHEET}" sheet. Sheets found: ${workbook.sheetNames.join(", ")}`);
     }
     const columns3 = headerMap(sheet);
+    const woHeaderFound = dailySheetHasWorkOrderHeader(sheet);
     const rows = [];
     const seen = /* @__PURE__ */ new Map();
     let section = null;
@@ -15385,16 +15459,18 @@ ${add2.join("\n")}` : add2.join("\n");
         colors: colors.size,
         columns: columns3,
         colorColumnFound: !!columns3.color,
+        woHeaderFound,
         sheet: SHEET
       }
     };
   }
-  var DAILY_PARSER_VERSION, SHEET, PHANTOM_BEFORE2, FALLBACK, ALIASES3;
+  var DAILY_PARSER_VERSION, SHEET, DAILY_SHEET, PHANTOM_BEFORE2, FALLBACK, ALIASES3;
   var init_import_daily = __esm({
     "js/import-daily.js"() {
       init_xlsx();
       DAILY_PARSER_VERSION = 1;
       SHEET = "Daily Sched";
+      DAILY_SHEET = SHEET;
       PHANTOM_BEFORE2 = Date.UTC(1990, 0, 1);
       FALLBACK = {
         wo: 1,
@@ -23078,7 +23154,7 @@ create policy "member reads own row"
           })),
           slot("Daily schedule", "daily", dropZone({
             title: "Daily Schedule workbook",
-            hint: "Daily Sched sheet \xB7 projects, job codes, colours and dates",
+            hint: "Separate workbook \xB7 Daily Sched sheet \xB7 not the CNC tab",
             onFile: (f) => handleDailyFile(f, rerender)
           })),
           slot("Project colour reference", "projectColors", dropZone({
@@ -24451,7 +24527,7 @@ create policy "member reads own row"
   function scheduleRender() {
     if (scheduled) return;
     scheduled = true;
-    requestAnimationFrame(() => {
+    queueMicrotask(() => {
       scheduled = false;
       render();
     });
