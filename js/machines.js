@@ -39,7 +39,9 @@ export const MACHINES = [
      it is empty — the saw is run off the floor's own knowledge, not off the
      file — so its lines are put on it by hand, and the learned routing picks up
      which components go there once it has seen a couple. */
-  { key: 'multipunch', label: 'Multi Punch', short: 'PUN',       group: 'Punch', ops: 1, note: 'pcs not frames' },
+  /* Counted output is windows — the same unit as a shift target — not loose
+     pieces and not a complete frame counted as one piece. */
+  { key: 'multipunch', label: 'Multi Punch', short: 'PUN',       group: 'Punch', ops: 1, note: 'windows' },
   { key: 'saw',        label: 'Elumatec Saw', short: 'SAW',      group: 'Punch', ops: 1, note: 'heights' },
 ];
 

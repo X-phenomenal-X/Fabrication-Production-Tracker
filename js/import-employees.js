@@ -51,6 +51,7 @@ function columns(sheet) {
 function shift(value) {
   const valueKey = key(value);
   if (valueKey === 'AFT' || valueKey.includes('AFTERNOON')) return 'AFTERNOON';
+  if (valueKey === 'NIGHT' || valueKey.includes('MIDNIGHT')) return 'MIDNIGHT';
   if (valueKey.includes('DAY')) return 'DAY';
   return '';
 }

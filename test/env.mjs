@@ -39,6 +39,28 @@ export function workbookPaths() {
   return ensureWorkbookFixtures();
 }
 
+/** Pin the shop calendar so August fixture dates stay in open groups.
+    10:00 on 14 Aug 2026 is a Day shift, and the synthetic workbooks are dated
+    that week. Only `Date` moves; timers and animation frames stay real.
+    Pass a Playwright page or browser context. */
+export async function installShopClock(pageOrContext, when = new Date(2026, 7, 14, 10, 0, 0)) {
+  await pageOrContext.addInitScript((epoch) => {
+    const RealDate = Date;
+    const offset = epoch - RealDate.now();
+    function ShopDate(...args) {
+      const date = args.length ? new RealDate(...args) : new RealDate(RealDate.now() + offset);
+      if (!new.target) return date.toString();
+      return date;
+    }
+    ShopDate.prototype = RealDate.prototype;
+    Object.setPrototypeOf(ShopDate, RealDate);
+    ShopDate.now = () => RealDate.now() + offset;
+    ShopDate.parse = RealDate.parse;
+    ShopDate.UTC = RealDate.UTC;
+    window.Date = ShopDate;
+  }, when.getTime());
+}
+
 export function chromiumOptions() {
   const candidates = [
     process.env.PLAYWRIGHT_CHROMIUM_PATH,

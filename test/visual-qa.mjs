@@ -18,7 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { makeFixture } from './fixture.mjs';
-import { chromiumOptions } from './env.mjs';
+import { chromiumOptions, installShopClock } from './env.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SHOT = path.join(ROOT, 'test', 'screens', 'qa');
@@ -46,6 +46,12 @@ const note = (m) => console.log('  • ' + m);
 const fail = (m) => { errors.push(m); console.log('  ✗ ' + m); };
 
 const browser = await chromium.launch(chromiumOptions());
+const openContext = browser.newContext.bind(browser);
+browser.newContext = async (options) => {
+  const ctx = await openContext(options);
+  await installShopClock(ctx);
+  return ctx;
+};
 
 /* The three principal layouts, plus the edges of the middle one. `shoot` marks
    the two that get captured for review; the rest are measured only, so the run

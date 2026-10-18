@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
 import http from 'http';
-import { ROOT, workbookPaths, chromiumOptions } from './env.mjs';
+import { ROOT, workbookPaths, chromiumOptions, installShopClock } from './env.mjs';
 
 const books = workbookPaths();
 const ROLLING = books.rolling;
@@ -44,6 +44,7 @@ fs.mkdirSync(SHOT, { recursive: true });
 
 const browser = await chromium.launch(chromiumOptions());
 const page = await browser.newPage({ viewport: { width: 1440, height: 950 } });
+await installShopClock(page);
 await page.addInitScript(() => {
   window.__printCaptures = [];
   window.__clipboardText = '';
@@ -100,8 +101,8 @@ step('app booted');
 
 const overviewShift = await page.textContent('.overview-shift');
 if (/undefined/i.test(overviewShift || '')
-  || !/(07:00–15:30|15:30–00:00)/.test(overviewShift || '')) {
-  throw new Error('overview does not show a valid two-shift range: ' + overviewShift);
+  || !/(07:00–15:30|15:30–00:00|15:30–20:30|23:45–07:15|20:30–07:00)/.test(overviewShift || '')) {
+  throw new Error('overview does not show a valid shift range: ' + overviewShift);
 }
 step('overview shift range: ' + overviewShift.trim());
 
@@ -1071,8 +1072,8 @@ await page.waitForSelector('.sucard');
 const shiftChoices = await page.$$eval('.su-when .subtabs button', (ns) =>
   ns.map((n) => n.textContent.trim()));
 step('active shifts: ' + shiftChoices.join(' | '));
-if (shiftChoices.join(',') !== 'Day,Afternoon') {
-  throw new Error('Shift Update still offers an inactive shift: ' + shiftChoices.join(','));
+if (shiftChoices.join(',') !== 'Day,Afternoon,Midnight') {
+  throw new Error('Shift Update is missing a current shift: ' + shiftChoices.join(','));
 }
 await page.click('.su-when .subtabs button:has-text("Day")');
 await page.waitForFunction(() => document.querySelector('.su-breaks')?.textContent.includes('09:15'));
@@ -1614,25 +1615,18 @@ if (restart.finished !== 'DONE') {
     + ` — upstream stayed ${restart.finished}, so the derived cache went stale`);
 }
 
-/* ---------- the hours when no shift is running ---------- */
+/* ---------- the hours after midnight ---------- */
 
-/* Production runs 07:00 to midnight in two shifts, so between midnight and
-   07:00 shiftAt() correctly answers "nobody is on the floor". Pages that have
-   to *name* a shift cannot use that answer directly: Overview and Today both
-   indexed the shift table with it, got undefined, and took themselves down —
-   Overview being the page the app opens on, so the whole app showed nothing.
-
-   Those are exactly the hours somebody comes in early, a wall panel sits on
-   overnight, or anyone opens it from a timezone the schedule was not written
-   for. Every page is loaded at 03:00 here, because "does it render at all" is
-   not a property worth assuming. */
+/* Midnight runs until 07:15, and work logged then belongs to the date the
+   shift started. Pages that name a shift used to crash in this window because
+   they indexed the shift table with a null. Every page is loaded at 03:14
+   here, on a date the fixture has data for. This page uses its own clock and
+   must not inherit the August 14 shop clock used by the rest of this file. */
 {
   const ctx = await browser.newContext();
   const night = await ctx.newPage();
   const crashes = [];
   night.on('pageerror', (e) => crashes.push(e.message));
-  // 03:14 local — inside the gap between the Afternoon shift ending and Day
-  // starting, on a date the fixture has data for.
   await night.clock.install({ time: new Date('2026-08-28T03:14:00') });
   await night.addInitScript((snap) => {
     localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
@@ -1657,9 +1651,8 @@ if (restart.finished !== 'DONE') {
   if (crashes.length) throw new Error(`the app threw overnight: ${crashes.join(' | ')}`);
   const empty = Object.entries(rendered).filter(([, n]) => n < 50).map(([k]) => k);
   if (empty.length) throw new Error(`rendered nothing at 03:14: ${empty.join(', ')}`);
-  if (shiftNamed.live) throw new Error('03:14 should not be reported as a shift in progress');
-  if (shiftNamed.key !== 'AFT' || shiftNamed.date !== '2026-08-27') {
-    throw new Error('overnight should name the Afternoon shift that just ended, dated yesterday');
+  if (!shiftNamed.live || shiftNamed.key !== 'NIGHT' || shiftNamed.date !== '2026-08-27') {
+    throw new Error('03:14 should be Midnight, dated the evening the shift started: ' + JSON.stringify(shiftNamed));
   }
 }
 
@@ -1969,7 +1962,7 @@ const stagedRec = await page.evaluate(() => import('/js/store.js').then((m) => {
 }));
 step('staged: ' + JSON.stringify(stagedRec));
 if (!stagedRec?.staged || !stagedRec.stageFor) throw new Error('staging for a shift recorded nothing');
-if (!/\|(DAY|AFT)$/.test(stagedRec.stageFor)) {
+if (!/\|(DAY|AFT|NIGHT)$/.test(stagedRec.stageFor)) {
   throw new Error('stage-for should be a shift: ' + stagedRec.stageFor);
 }
 

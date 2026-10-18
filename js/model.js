@@ -6,7 +6,7 @@ import { state, EDITABLE_FIELDS, stateRev } from './store.js';
 import { PARSER_VERSION } from './import-machines.js';
 import { MACHINES } from './machines.js';
 import { sopMachine } from './routing.js';
-import { SHIFTS, normalizeShift } from './shifts.js';
+import { SHIFTS, normalizeShift, shiftFor } from './shifts.js';
 
 /* machineKey -> centre, for keeping a learned route inside its own centre. */
 const MACHINE_GROUP = Object.fromEntries(MACHINES.map((m) => [m.key, m.group]));
@@ -779,7 +779,7 @@ function writtenShiftUpdateFor(machineKey) {
     const done = lines(row.done);
     const next = lines(row.next);
     const notes = lines(row.notes);
-    if (!done.length && !next.length && !notes.length) continue;
+    if (!done.length && !next.length && !notes.length && !row.targetPlan) continue;
     if (best && rank(log.date, log.shift) <= rank(best.date, best.shift)) continue;
     best = {
       date: log.date, shift: log.shift,
@@ -833,9 +833,10 @@ export function shiftUpdateAge(date, ref = today()) {
 
 /* ---------- shift windows ---------- */
 
-/* The active schedule is Day 07:00–15:30 and Afternoon 15:30–00:00. The
-   historical NIGHT definition is retained only so old saved logs still have
-   the correct window. Times are local, matching how the floor talks. */
+/* Day 07:00–15:30. Afternoon is 15:30–00:00, except Sunday when it ends at
+   20:30. Midnight is 23:45–07:15, except a Midnight shift that starts on
+   Sunday, which is 20:30–07:00. A shift whose end is not after its start runs
+   past midnight; the date on the log is the date it started. */
 export function shiftWindow(date, shift) {
   const mk = (d, minutes) => {
     const x = new Date(d + 'T00:00:00');
@@ -843,7 +844,7 @@ export function shiftWindow(date, shift) {
     return x.getTime();
   };
   const key = normalizeShift(shift);
-  const selected = SHIFTS[key] || SHIFTS.DAY;
+  const selected = shiftFor(key, date) || SHIFTS.DAY;
   const endDate = selected.end <= selected.start ? addDays(date, 1) : date;
   return [mk(date, selected.start), mk(endDate, selected.end)];
 }

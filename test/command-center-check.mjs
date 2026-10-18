@@ -44,6 +44,10 @@ assert.equal(commandSnapshot(ref, now).open.length, 3, 'future actions do not en
 state.machineConfig.fom1 = { hidden: true };
 state.shiftLogs[`${ref}|AFT`] = { date: ref, shift: 'AFT', rows: { fom2: { notes: ' ' }, fom3: { next: 'Load material' } } };
 assert.equal(commandSnapshot(ref, now).documented, 1, 'blank and ops-only rows are not handover coverage');
+state.shiftLogs[`${ref}|AFT`].rows.saw = { ops: '2' };
+assert.equal(commandSnapshot(ref, now).documented, 1, 'an operator count alone is not handover coverage');
+state.shiftLogs[`${ref}|AFT`].rows.saw = { targetPlan: { target: 10, unit: 'pieces' } };
+assert.equal(commandSnapshot(ref, now).documented, 2, 'a saved target with no notes still counts as written');
 assert.equal(commandSnapshot(ref, now).machines.some(m => m.key === 'fom1'), false);
 deleteTodo(action);
 assert.equal(state.todos[action], undefined);

@@ -14,7 +14,7 @@
    update is mostly assembled from what the app already saw happen. */
 
 import { operationHandoverLines, handoverReportDate } from '../command-center.js';
-import { acknowledgeHandover, handoverAcknowledged, machineTarget, machineTargetText } from '../floor-operations.js';
+import { acknowledgeHandover, handoverAcknowledged, machineTarget, machineTargetText, shiftRowHasContent } from '../floor-operations.js';
 import {
   el, chip, icon, fmtDate, fmtWhen, toast, confirmDialog, printDocument, modal,
 } from '../ui.js';
@@ -25,7 +25,7 @@ import {
 } from '../model.js';
 import { machinesByGroup, STANDING_ROWS } from '../machines.js';
 import {
-  SHIFTS, SHIFT_ORDER, breakRanges, normalizeShift, shiftAt, shiftLabel,
+  SHIFTS, SHIFT_ORDER, breakRanges, normalizeShift, shiftContextAt, shiftFor, shiftLabel,
 } from '../shifts.js';
 
 /* Centres in the order the sheet prints them. Only these four are tracked,
@@ -43,13 +43,14 @@ const FIELDS = [
   ['notes', 'Notes'],
 ];
 
+const opening = shiftContextAt(today());
 const view = {
-  date: today(), shift: shiftAt() || 'DAY', mode: 'write', onlyIncomplete: false,
+  date: opening.date, shift: opening.key || 'DAY', mode: 'write', onlyIncomplete: false,
   mobileKey: null, mobileSuggestions: false, mobileSuggestionAll: false,
 };
 
-function shiftDef(value = view.shift) {
-  return SHIFTS[normalizeShift(value)] || {
+function shiftDef(value = view.shift, date = view.date) {
+  return shiftFor(value, date) || {
     key: value, label: String(value || 'Unknown'), range: '', breaks: [], full: true,
   };
 }
@@ -100,7 +101,7 @@ function rowFor(key) {
 }
 
 function hasContent(r) {
-  return !!(r && (r.done || r.next || r.notes || r.ops || r.targetPlan));
+  return shiftRowHasContent(r);
 }
 
 function targetEditor(machine, row, rerender) {
@@ -280,6 +281,8 @@ function card(machine, rerender) {
       value: row[field] || '',
       placeholder,
       rows: lines,
+      'data-keep-focus': `${machine.key}:${field}`,
+      'aria-label': `${machine.label} ${label}`,
       oninput: (e) => { row[field] = e.target.value; },
     }));
 
@@ -325,6 +328,8 @@ function card(machine, rerender) {
           type: 'number', min: '0', inputmode: 'numeric',
           value: row.ops ?? '',
           placeholder: machine.ops == null ? '—' : String(machine.ops),
+          'data-keep-focus': `${machine.key}:ops`,
+          'aria-label': `${machine.label} operator count`,
           oninput: (e) => { row.ops = e.target.value; },
         }))),
 
@@ -402,6 +407,8 @@ function mobileShiftActions(rerender) {
         rows: 4,
         value: d.notes,
         placeholder: 'People, material, safety, visitors or anything not tied to one machine.',
+        'data-keep-focus': 'general-notes',
+        'aria-label': 'General shift notes',
         oninput: (event) => { d.notes = event.target.value; },
       })) : null));
 }
@@ -429,6 +436,8 @@ function mobileEditor(machine, index, total, rerender) {
       rows: lines,
       value: row[key] || '',
       placeholder: prompt,
+      'data-keep-focus': `${machine.key}:${key}`,
+      'aria-label': `${machine.label} ${label}`,
       oninput: (event) => { row[key] = event.target.value; },
     }));
 
@@ -461,7 +470,8 @@ function mobileEditor(machine, index, total, rerender) {
           onclick: () => changeOps(-1),
         }, icon('minus', { size: 18 })),
         el('input', {
-          type: 'number', min: '0', inputmode: 'numeric', 'aria-label': 'Operator count',
+          type: 'number', min: '0', inputmode: 'numeric', 'aria-label': `${machine.label} operator count`,
+          'data-keep-focus': `${machine.key}:ops`,
           value: row.ops ?? '', placeholder: machine.ops == null ? '0' : String(machine.ops),
           oninput: (event) => { row.ops = event.target.value; },
         }),
@@ -660,6 +670,8 @@ function writeView(rerender) {
           value: d.notes,
           rows: 3,
           placeholder: 'Anything not tied to one machine — people, material, safety, visitors.',
+          'data-keep-focus': 'general-notes',
+          'aria-label': 'General shift notes',
           oninput: (e) => { d.notes = e.target.value; },
         }))),
 
@@ -756,14 +768,14 @@ function printShiftUpdate(log, { draft: isDraft = false, blank = false } = {}) {
         : isDraft ? `Draft prepared by ${me()}`
           : `Written by ${log.by || '—'}${log.at ? ` · ${fmtWhen(log.at)}` : ''}`));
 
-  const selected = shiftDef(log.shift);
+  const selected = shiftDef(log.shift, log.date);
 
   printDocument({
     title: `${shiftLabel(log.shift)} shift update${blank ? ' — blank' : ''}`,
     subtitle: [
       fmtDate(log.date, { withDay: true }),
       blank && selected.range ? selected.range : null,
-      blank && selected.breaks?.length ? `Breaks ${breakRanges(log.shift).join(' · ')}` : null,
+      blank && selected.breaks?.length ? `Breaks ${breakRanges(log.shift, log.date).join(' · ')}` : null,
     ].filter(Boolean).join(' · '),
     meta: [blank ? 'BLANK FORM · FILL BY HAND' : isDraft ? 'DRAFT — NOT SAVED' : 'Saved shift record'],
     body,
@@ -821,7 +833,7 @@ function readView(rerender) {
         style: { marginTop: '12px' },
         onclick: () => { view.mode = 'write'; rerender(); },
       }, 'Write the update') : el('p.small.muted', {},
-        'This is a historical shift. New updates are available only for Day and Afternoon.')));
+        'This shift is not on the current schedule. New updates are for Day, Afternoon and Midnight.')));
   }
 
   const blocks = sections().map((s) => {
@@ -929,7 +941,7 @@ export function renderShiftUpdate(rerender, go) {
         type: 'button', disabled: !operationalShift(),
         title: operationalShift()
           ? `Print a blank ${selectedShift.label.toLowerCase()} form to fill by hand`
-          : 'Blank forms are available for Day and Afternoon shifts',
+          : 'Blank forms are for Day, Afternoon and Midnight',
         onclick: printBlankShiftUpdate,
       }, icon('note', { size: 16 }), el('span', {}, 'Print blank')),
       el('div.su-when', {},
@@ -945,7 +957,7 @@ export function renderShiftUpdate(rerender, go) {
         }),
         el('div.subtabs', {}, ...SHIFT_ORDER.map((k) => el('button', {
           'aria-current': String(view.shift === k),
-          title: `${SHIFTS[k].label} · ${SHIFTS[k].range} · Breaks: ${breakRanges(k).join(', ')}`,
+          title: `${shiftFor(k, view.date).label} · ${shiftFor(k, view.date).range}${breakRanges(k, view.date).length ? ` · Breaks: ${breakRanges(k, view.date).join(', ')}` : ''}`,
           onclick: () => {
             view.shift = k;
             view.mobileKey = null;
@@ -980,7 +992,7 @@ export function renderShiftUpdate(rerender, go) {
     !selectedShift.legacy ? el('div.su-breaks', {},
       icon('clock', { size: 14 }),
       el('strong', {}, `${selectedShift.label} breaks`),
-      el('span', {}, breakRanges(view.shift).join(' · '))) : null,
+      el('span', {}, breakRanges(view.shift, view.date).join(' · ') || 'No scheduled breaks')) : null,
 
     /* The bar is the at-a-glance proportion; the number and the way to act on
        it live in the rail below, which also lists what is still missing. Both

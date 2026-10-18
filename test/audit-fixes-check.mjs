@@ -25,13 +25,16 @@ try {
     const { handoverReportDate } = await import('/js/command-center.js');
     const overnight = new Date(2026, 8, 10, 3, 0);
     return [
+      handoverReportDate('2026-09-09', 'NIGHT', '2026-09-10', overnight),
       handoverReportDate('2026-09-09', 'AFT', '2026-09-10', overnight),
       handoverReportDate('2026-09-08', 'AFT', '2026-09-10', overnight),
       handoverReportDate('2026-09-09', 'DAY', '2026-09-10', overnight),
       handoverReportDate('2026-09-10', 'DAY', '2026-09-10', new Date(2026, 8, 10, 10, 0)),
     ];
   });
-  assert.deepEqual(handoverDates, ['2026-09-10', '2026-09-08', '2026-09-09', '2026-09-10']);
+  // 03:00 is Midnight that started on the 9th, so this morning's reports belong
+  // to that handover. Afternoon has already ended and keeps its own date.
+  assert.deepEqual(handoverDates, ['2026-09-10', '2026-09-09', '2026-09-08', '2026-09-09', '2026-09-10']);
   await page.getByLabel('Date range', { exact: true }).selectOption('all');
   await page.waitForTimeout(200);
   console.log('Schedule state:', await page.getByLabel('Date range', { exact:true }).inputValue(), await page.locator('.schedule-result-summary').textContent(), 'rows:', await page.locator('.schedule-table tbody tr').count());
@@ -73,7 +76,7 @@ try {
   await blank.goto(`http://127.0.0.1:${server.address().port}/#shift`);
   await blank.getByRole('heading', { name:'Shift update', exact:true }).waitFor();
   await blank.getByRole('button', { name:'Shift update actions', exact:true }).click();
-  await blank.getByLabel('General shift notes', { exact:true }).fill('Material arriving tomorrow; check unloading space.');
+  await blank.locator('dialog').getByLabel('General shift notes', { exact: true }).fill('Material arriving tomorrow; check unloading space.');
   await blank.locator('dialog').getByRole('button', { name:'Save shift update', exact:true }).click();
   await blank.getByText('Shift update saved', { exact:true }).waitFor();
   await blank.reload();

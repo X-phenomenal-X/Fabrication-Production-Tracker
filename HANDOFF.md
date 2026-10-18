@@ -128,10 +128,14 @@ row number, because they stack.
 - Work orders are **not** numeric-only. `MU2026-012`, `DAN 509`, `29038so`,
   `PARCEL29-SWD`, `TRIMS`, `PREP` are all legitimate. An early numeric-only rule
   discarded 274 real orders.
-- Active shifts: **Day 07:00–15:30** and **Afternoon 15:30–00:00** only.
-  Day breaks are 09:15–09:30, 12:30–13:00 and 14:15–14:30. Afternoon breaks
-  are 18:00–18:15, 20:00–20:30 and 23:00–23:15. Midnight is retained only as
-  a read-only legacy label for historical saved updates.
+- Active shifts: **Day 07:00–15:30**, **Afternoon 15:30–00:00**, and
+  **Midnight 23:45–07:15**. On Sunday, Midnight is **20:30–07:00** (Sunday
+  evening through Monday 07:00) and Afternoon ends at 20:30. Day breaks are
+  09:15–09:30, 12:30–13:00 and 14:15–14:30. Afternoon breaks are 18:00–18:15,
+  20:00–20:30 and 23:00–23:15 (the 23:00 break is not on Sunday). Midnight has
+  no scheduled breaks. A handover written after midnight is dated the evening
+  the shift started. Older Midnight updates keep the same saved shift and
+  still open.
 - **Panels belong to another department. Louvres belong to Cutting.**
 - 8560 vents need one hinge each. Only explicit `8560` / `8560 HT` markers
   from FOM 2 create the inline requirement badge; ordinary `P:Y` pin-hole rows

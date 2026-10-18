@@ -5,7 +5,7 @@
 import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
-import { ROOT, workbookPaths, chromiumOptions } from './env.mjs';
+import { ROOT, workbookPaths, chromiumOptions, installShopClock } from './env.mjs';
 
 const FILE = path.join(ROOT, 'Cutting-Tracker.html');
 const books = workbookPaths();
@@ -21,6 +21,7 @@ if (!built.includes('data:font/woff2;base64,')) throw new Error('standalone buil
 
 const browser = await chromium.launch(chromiumOptions());
 const page = await browser.newPage({ viewport: { width: 1440, height: 950 } });
+await installShopClock(page);
 
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
