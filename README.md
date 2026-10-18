@@ -780,7 +780,8 @@ fold behind a `＋ Service Orders and K1285 Pulls` link, and open themselves
 whenever they already carry something, so nothing written is ever hidden.
 
 Pick the **date** and the **shift** (Day · Afternoon · Midnight), then **Write** or
-**Read**. Midnight runs 23:45–07:15. Work written after midnight stays on the
+**Read**. Midnight runs 23:45–07:15. On Sunday it starts earlier, 20:30–07:00,
+and that shift ends Monday morning. Work written after midnight stays on the
 date the shift started, not the next calendar day. Older Midnight records use
 the same saved shift and still open.
 
@@ -801,11 +802,15 @@ shift windows and breaks are shown directly on the page:
 
 - **Day 07:00–15:30:** 09:15–09:30, 12:30–13:00, 14:15–14:30.
 - **Afternoon 15:30–00:00:** 18:00–18:15, 20:00–20:30, 23:00–23:15.
-- **Midnight 23:45–07:15:** no scheduled breaks.
+  On Sunday, Afternoon ends at 20:30, when Midnight starts.
+- **Midnight 23:45–07:15:** no scheduled breaks. A Midnight shift that starts
+  on Sunday is **20:30–07:00** instead.
 
 The header marks the active shift and changes to **Break** during the Day and
-Afternoon break windows. From midnight until 07:00 the active shift is Midnight.
-Afternoon still owns the floor through 23:59, and Day takes over at 07:00.
+Afternoon break windows. From midnight until Day starts, the active shift is
+Midnight. On Monday through Saturday, Afternoon still owns the floor through
+23:59 and Day takes over at 07:00. On Sunday, Midnight is the current shift
+from 20:30, and Monday morning until 07:00 still belongs to Sunday.
 
 **Reading** is a clean block per machine, plus **Copy as text**, which lays the
 whole update out as plain text for pasting into an email or a chat. Recent

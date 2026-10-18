@@ -7458,6 +7458,158 @@ a.resource-download:active, button.resource-download:active { transform: transla
     }
   });
 
+  // js/shifts.js
+  function normalizeShift(value2) {
+    const key2 = String(value2 || "").trim().toUpperCase();
+    return ALIASES[key2] || key2;
+  }
+  function shiftLabel(value2) {
+    const key2 = normalizeShift(value2);
+    return SHIFTS[key2]?.label || value2 || "Unknown shift";
+  }
+  function clock(minutes) {
+    const value2 = (minutes % 1440 + 1440) % 1440;
+    return `${String(Math.floor(value2 / 60)).padStart(2, "0")}:${String(value2 % 60).padStart(2, "0")}`;
+  }
+  function isSundayDate(value2) {
+    if (value2 instanceof Date) return value2.getDay() === 0;
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value2 || ""));
+    if (!match) return false;
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).getDay() === 0;
+  }
+  function shiftFor(key2, date3) {
+    const base = SHIFTS[normalizeShift(key2)];
+    if (!base || !isSundayDate(date3)) return base || null;
+    if (base.key === "NIGHT") {
+      return { ...base, start: SUNDAY_NIGHT_START, end: SUNDAY_NIGHT_END, range: "20:30\u201307:00" };
+    }
+    if (base.key === "AFT") {
+      return {
+        ...base,
+        end: SUNDAY_NIGHT_START,
+        range: "15:30\u201320:30",
+        breaks: base.breaks.filter((b) => b.from < SUNDAY_NIGHT_START)
+      };
+    }
+    return base;
+  }
+  function breakRanges(value2, date3) {
+    const shift2 = date3 ? shiftFor(value2, date3) : SHIFTS[normalizeShift(value2)];
+    return (shift2?.breaks || []).map((b) => `${clock(b.from)}\u2013${clock(b.to)}`);
+  }
+  function covers(shift2, minute) {
+    if (shift2.end > shift2.start) return minute >= shift2.start && minute < shift2.end;
+    return minute >= shift2.start || minute < shift2.end;
+  }
+  function shiftAt(date3 = /* @__PURE__ */ new Date()) {
+    const minute = date3.getHours() * 60 + date3.getMinutes();
+    if (date3.getDay() === 0 && minute >= SUNDAY_NIGHT_START) return "NIGHT";
+    const matches2 = SHIFT_ORDER.filter((key2) => covers(SHIFTS[key2], minute));
+    if (!matches2.length) return null;
+    if (matches2.length === 1) return matches2[0];
+    return matches2.find((key2) => SHIFTS[key2].end > SHIFTS[key2].start) || matches2[0];
+  }
+  function nightEndForMorning(now2) {
+    return isSundayDate(previousIso(now2)) ? SUNDAY_NIGHT_END : SHIFTS.NIGHT.end;
+  }
+  function shiftStartDate(key2, now2, ref) {
+    if (key2 !== "NIGHT") return ref;
+    const minute = now2.getHours() * 60 + now2.getMinutes();
+    if (minute < 12 * 60 && minute < nightEndForMorning(now2)) return previousIso(now2);
+    return ref;
+  }
+  function isoDate(date3) {
+    return `${date3.getFullYear()}-${String(date3.getMonth() + 1).padStart(2, "0")}-${String(date3.getDate()).padStart(2, "0")}`;
+  }
+  function previousIso(now2) {
+    const previous = new Date(now2.getTime());
+    previous.setDate(previous.getDate() - 1);
+    return isoDate(previous);
+  }
+  function shiftContextAt(ref, now2 = /* @__PURE__ */ new Date()) {
+    const key2 = shiftAt(now2);
+    if (key2) {
+      const date3 = shiftStartDate(key2, now2, ref);
+      return { key: key2, date: date3, shift: shiftFor(key2, date3), live: true };
+    }
+    return { key: "AFT", date: previousIso(now2), shift: SHIFTS.AFT, live: false };
+  }
+  function shiftStatusAt(date3 = /* @__PURE__ */ new Date()) {
+    const minute = date3.getHours() * 60 + date3.getMinutes();
+    const key2 = shiftAt(date3);
+    if (!key2) {
+      return {
+        key: null,
+        shift: null,
+        onBreak: false,
+        label: "Off shift",
+        detail: "No production shift is active."
+      };
+    }
+    const startDate = shiftStartDate(key2, date3, isoDate(date3));
+    const shift2 = shiftFor(key2, startDate);
+    const currentBreak = shift2.breaks.find((b) => minute >= b.from && minute < b.to) || null;
+    const nextBreak = shift2.breaks.find((b) => b.from > minute) || null;
+    const allBreaks = breakRanges(key2, startDate).join(", ");
+    const live = !shift2.breaks.length ? "No scheduled breaks." : currentBreak ? `Break now ${clock(currentBreak.from)}\u2013${clock(currentBreak.to)}.` : nextBreak ? `Next break ${clock(nextBreak.from)}\u2013${clock(nextBreak.to)}.` : "All scheduled breaks are complete.";
+    return {
+      key: key2,
+      shift: shift2,
+      onBreak: !!currentBreak,
+      currentBreak,
+      nextBreak,
+      label: `${shift2.label}${currentBreak ? " \xB7 Break" : ""}`,
+      detail: shift2.breaks.length ? `${shift2.label} shift ${shift2.range}. ${live} Breaks: ${allBreaks}.` : `${shift2.label} shift ${shift2.range}. ${live}`
+    };
+  }
+  var breakAt, SHIFTS, SHIFT_ORDER, ALIASES, SUNDAY_NIGHT_START, SUNDAY_NIGHT_END;
+  var init_shifts = __esm({
+    "js/shifts.js"() {
+      breakAt = (from, to) => ({ from, to });
+      SHIFTS = {
+        DAY: {
+          key: "DAY",
+          label: "Day",
+          start: 7 * 60,
+          end: 15 * 60 + 30,
+          range: "07:00\u201315:30",
+          full: true,
+          breaks: [
+            breakAt(9 * 60 + 15, 9 * 60 + 30),
+            breakAt(12 * 60 + 30, 13 * 60),
+            breakAt(14 * 60 + 15, 14 * 60 + 30)
+          ]
+        },
+        AFT: {
+          key: "AFT",
+          label: "Afternoon",
+          start: 15 * 60 + 30,
+          end: 24 * 60,
+          range: "15:30\u201300:00",
+          full: true,
+          breaks: [
+            breakAt(18 * 60, 18 * 60 + 15),
+            breakAt(20 * 60, 20 * 60 + 30),
+            breakAt(23 * 60, 23 * 60 + 15)
+          ]
+        },
+        NIGHT: {
+          key: "NIGHT",
+          label: "Midnight",
+          start: 23 * 60 + 45,
+          end: 7 * 60 + 15,
+          range: "23:45\u201307:15",
+          full: true,
+          breaks: []
+        }
+      };
+      SHIFT_ORDER = ["DAY", "AFT", "NIGHT"];
+      ALIASES = { AFTERNOON: "AFT", MIDNIGHT: "NIGHT" };
+      SUNDAY_NIGHT_START = 20 * 60 + 30;
+      SUNDAY_NIGHT_END = 7 * 60;
+    }
+  });
+
   // js/store.js
   function applyTheme() {
     const choice = state.settings?.theme;
@@ -7935,7 +8087,8 @@ a.resource-download:active, button.resource-download:active { transform: transla
       yesterday.setDate(yesterday.getDate() - 1);
       const previousDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
       const minute = current2.getHours() * 60 + current2.getMinutes();
-      const midnightHandover = shift2 === "NIGHT" && date3 === previousDate && minute < 7 * 60 + 15;
+      const nightEnd = isSundayDate(date3) ? 7 * 60 : 7 * 60 + 15;
+      const midnightHandover = shift2 === "NIGHT" && date3 === previousDate && minute < nightEnd;
       const afternoonAfterMidnight = date3 === previousDate && shift2 === "AFT" && minute < 7 * 60;
       const cutoff = midnightHandover || afternoonAfterMidnight ? ref : date3;
       next.carryover = Object.values(state.todos || {}).filter((t) => !t.done && t.date <= cutoff).map((t) => ({ id: t.id, text: t.text }));
@@ -8503,6 +8656,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
   var init_store = __esm({
     "js/store.js"() {
       init_cloud();
+      init_shifts();
       init_cloud();
       LS_KEY = "bv.cutting.v1";
       LS_DEVICE = "bv.cutting.device.v1";
@@ -9822,130 +9976,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
     }
   });
 
-  // js/shifts.js
-  function normalizeShift(value2) {
-    const key2 = String(value2 || "").trim().toUpperCase();
-    return ALIASES[key2] || key2;
-  }
-  function shiftLabel(value2) {
-    const key2 = normalizeShift(value2);
-    return SHIFTS[key2]?.label || value2 || "Unknown shift";
-  }
-  function clock(minutes) {
-    const value2 = (minutes % 1440 + 1440) % 1440;
-    return `${String(Math.floor(value2 / 60)).padStart(2, "0")}:${String(value2 % 60).padStart(2, "0")}`;
-  }
-  function breakRanges(value2) {
-    const shift2 = SHIFTS[normalizeShift(value2)];
-    return (shift2?.breaks || []).map((b) => `${clock(b.from)}\u2013${clock(b.to)}`);
-  }
-  function covers(shift2, minute) {
-    if (shift2.end > shift2.start) return minute >= shift2.start && minute < shift2.end;
-    return minute >= shift2.start || minute < shift2.end;
-  }
-  function shiftAt(date3 = /* @__PURE__ */ new Date()) {
-    const minute = date3.getHours() * 60 + date3.getMinutes();
-    const matches2 = SHIFT_ORDER.filter((key2) => covers(SHIFTS[key2], minute));
-    if (!matches2.length) return null;
-    if (matches2.length === 1) return matches2[0];
-    return matches2.find((key2) => SHIFTS[key2].end > SHIFTS[key2].start) || matches2[0];
-  }
-  function isoDate(date3) {
-    return `${date3.getFullYear()}-${String(date3.getMonth() + 1).padStart(2, "0")}-${String(date3.getDate()).padStart(2, "0")}`;
-  }
-  function previousIso(now2) {
-    const previous = new Date(now2.getTime());
-    previous.setDate(previous.getDate() - 1);
-    return isoDate(previous);
-  }
-  function shiftContextAt(ref, now2 = /* @__PURE__ */ new Date()) {
-    const key2 = shiftAt(now2);
-    if (key2) {
-      const shift2 = SHIFTS[key2];
-      const minute = now2.getHours() * 60 + now2.getMinutes();
-      const startedYesterday = shift2.end <= shift2.start && minute < shift2.end;
-      return {
-        key: key2,
-        date: startedYesterday ? previousIso(now2) : ref,
-        shift: shift2,
-        live: true
-      };
-    }
-    return { key: "AFT", date: previousIso(now2), shift: SHIFTS.AFT, live: false };
-  }
-  function shiftStatusAt(date3 = /* @__PURE__ */ new Date()) {
-    const minute = date3.getHours() * 60 + date3.getMinutes();
-    const key2 = shiftAt(date3);
-    if (!key2) {
-      return {
-        key: null,
-        shift: null,
-        onBreak: false,
-        label: "Off shift",
-        detail: "No production shift is active."
-      };
-    }
-    const shift2 = SHIFTS[key2];
-    const currentBreak = shift2.breaks.find((b) => minute >= b.from && minute < b.to) || null;
-    const nextBreak = shift2.breaks.find((b) => b.from > minute) || null;
-    const allBreaks = breakRanges(key2).join(", ");
-    const live = !shift2.breaks.length ? "No scheduled breaks." : currentBreak ? `Break now ${clock(currentBreak.from)}\u2013${clock(currentBreak.to)}.` : nextBreak ? `Next break ${clock(nextBreak.from)}\u2013${clock(nextBreak.to)}.` : "All scheduled breaks are complete.";
-    return {
-      key: key2,
-      shift: shift2,
-      onBreak: !!currentBreak,
-      currentBreak,
-      nextBreak,
-      label: `${shift2.label}${currentBreak ? " \xB7 Break" : ""}`,
-      detail: shift2.breaks.length ? `${shift2.label} shift ${shift2.range}. ${live} Breaks: ${allBreaks}.` : `${shift2.label} shift ${shift2.range}. ${live}`
-    };
-  }
-  var breakAt, SHIFTS, SHIFT_ORDER, ALIASES;
-  var init_shifts = __esm({
-    "js/shifts.js"() {
-      breakAt = (from, to) => ({ from, to });
-      SHIFTS = {
-        DAY: {
-          key: "DAY",
-          label: "Day",
-          start: 7 * 60,
-          end: 15 * 60 + 30,
-          range: "07:00\u201315:30",
-          full: true,
-          breaks: [
-            breakAt(9 * 60 + 15, 9 * 60 + 30),
-            breakAt(12 * 60 + 30, 13 * 60),
-            breakAt(14 * 60 + 15, 14 * 60 + 30)
-          ]
-        },
-        AFT: {
-          key: "AFT",
-          label: "Afternoon",
-          start: 15 * 60 + 30,
-          end: 24 * 60,
-          range: "15:30\u201300:00",
-          full: true,
-          breaks: [
-            breakAt(18 * 60, 18 * 60 + 15),
-            breakAt(20 * 60, 20 * 60 + 30),
-            breakAt(23 * 60, 23 * 60 + 15)
-          ]
-        },
-        NIGHT: {
-          key: "NIGHT",
-          label: "Midnight",
-          start: 23 * 60 + 45,
-          end: 7 * 60 + 15,
-          range: "23:45\u201307:15",
-          full: true,
-          breaks: []
-        }
-      };
-      SHIFT_ORDER = ["DAY", "AFT", "NIGHT"];
-      ALIASES = { AFTERNOON: "AFT", MIDNIGHT: "NIGHT" };
-    }
-  });
-
   // js/model.js
   function today(date3 = /* @__PURE__ */ new Date()) {
     return `${date3.getFullYear()}-${String(date3.getMonth() + 1).padStart(2, "0")}-${String(date3.getDate()).padStart(2, "0")}`;
@@ -10431,7 +10461,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
       return x.getTime();
     };
     const key2 = normalizeShift(shift2);
-    const selected = SHIFTS[key2] || SHIFTS.DAY;
+    const selected = shiftFor(key2, date3) || SHIFTS.DAY;
     const endDate = selected.end <= selected.start ? addDays(date3, 1) : date3;
     return [mk(date3, selected.start), mk(endDate, selected.end)];
   }
@@ -13381,8 +13411,8 @@ a.resource-download:active, button.resource-download:active { transform: transla
   });
 
   // js/views/shiftupdate.js
-  function shiftDef(value2 = view.shift) {
-    return SHIFTS[normalizeShift(value2)] || {
+  function shiftDef(value2 = view.shift, date3 = view.date) {
+    return shiftFor(value2, date3) || {
       key: value2,
       label: String(value2 || "Unknown"),
       range: "",
@@ -14207,13 +14237,13 @@ ${add2.join("\n")}` : add2.join("\n");
         blank ? "Completed by: ______________________________    Time: ______________" : isDraft ? `Draft prepared by ${me()}` : `Written by ${log.by || "\u2014"}${log.at ? ` \xB7 ${fmtWhen(log.at)}` : ""}`
       )
     );
-    const selected = shiftDef(log.shift);
+    const selected = shiftDef(log.shift, log.date);
     printDocument({
       title: `${shiftLabel(log.shift)} shift update${blank ? " \u2014 blank" : ""}`,
       subtitle: [
         fmtDate(log.date, { withDay: true }),
         blank && selected.range ? selected.range : null,
-        blank && selected.breaks?.length ? `Breaks ${breakRanges(log.shift).join(" \xB7 ")}` : null
+        blank && selected.breaks?.length ? `Breaks ${breakRanges(log.shift, log.date).join(" \xB7 ")}` : null
       ].filter(Boolean).join(" \xB7 "),
       meta: [blank ? "BLANK FORM \xB7 FILL BY HAND" : isDraft ? "DRAFT \u2014 NOT SAVED" : "Saved shift record"],
       body,
@@ -14432,7 +14462,7 @@ ${add2.join("\n")}` : add2.join("\n");
           }),
           el("div.subtabs", {}, ...SHIFT_ORDER.map((k) => el("button", {
             "aria-current": String(view.shift === k),
-            title: `${SHIFTS[k].label} \xB7 ${SHIFTS[k].range}${breakRanges(k).length ? ` \xB7 Breaks: ${breakRanges(k).join(", ")}` : ""}`,
+            title: `${shiftFor(k, view.date).label} \xB7 ${shiftFor(k, view.date).range}${breakRanges(k, view.date).length ? ` \xB7 Breaks: ${breakRanges(k, view.date).join(", ")}` : ""}`,
             onclick: () => {
               view.shift = k;
               view.mobileKey = null;
@@ -14482,7 +14512,7 @@ ${add2.join("\n")}` : add2.join("\n");
         {},
         icon("clock", { size: 14 }),
         el("strong", {}, `${selectedShift.label} breaks`),
-        el("span", {}, breakRanges(view.shift).join(" \xB7 ") || "No scheduled breaks")
+        el("span", {}, breakRanges(view.shift, view.date).join(" \xB7 ") || "No scheduled breaks")
       ) : null,
       /* The bar is the at-a-glance proportion; the number and the way to act on
          it live in the rail below, which also lists what is still missing. Both
@@ -16417,7 +16447,7 @@ ${add2.join("\n")}` : add2.join("\n");
       el("option", { value: "", selected: !record?.shift }, "Not set"),
       el("option", { value: "DAY", selected: record?.shift === "DAY" }, "Day \xB7 07:00\u201315:30"),
       el("option", { value: "AFTERNOON", selected: record?.shift === "AFTERNOON" }, "Afternoon \xB7 15:30\u201300:00"),
-      el("option", { value: "MIDNIGHT", selected: record?.shift === "MIDNIGHT" }, "Midnight \xB7 23:45\u201307:15")
+      el("option", { value: "MIDNIGHT", selected: record?.shift === "MIDNIGHT" }, "Midnight \xB7 23:45\u201307:15 (Sun 20:30\u201307:00)")
     );
     const role = el(
       "select.employee-role-input",

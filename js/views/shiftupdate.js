@@ -25,7 +25,7 @@ import {
 } from '../model.js';
 import { machinesByGroup, STANDING_ROWS } from '../machines.js';
 import {
-  SHIFTS, SHIFT_ORDER, breakRanges, normalizeShift, shiftContextAt, shiftLabel,
+  SHIFTS, SHIFT_ORDER, breakRanges, normalizeShift, shiftContextAt, shiftFor, shiftLabel,
 } from '../shifts.js';
 
 /* Centres in the order the sheet prints them. Only these four are tracked,
@@ -49,8 +49,8 @@ const view = {
   mobileKey: null, mobileSuggestions: false, mobileSuggestionAll: false,
 };
 
-function shiftDef(value = view.shift) {
-  return SHIFTS[normalizeShift(value)] || {
+function shiftDef(value = view.shift, date = view.date) {
+  return shiftFor(value, date) || {
     key: value, label: String(value || 'Unknown'), range: '', breaks: [], full: true,
   };
 }
@@ -768,14 +768,14 @@ function printShiftUpdate(log, { draft: isDraft = false, blank = false } = {}) {
         : isDraft ? `Draft prepared by ${me()}`
           : `Written by ${log.by || '—'}${log.at ? ` · ${fmtWhen(log.at)}` : ''}`));
 
-  const selected = shiftDef(log.shift);
+  const selected = shiftDef(log.shift, log.date);
 
   printDocument({
     title: `${shiftLabel(log.shift)} shift update${blank ? ' — blank' : ''}`,
     subtitle: [
       fmtDate(log.date, { withDay: true }),
       blank && selected.range ? selected.range : null,
-      blank && selected.breaks?.length ? `Breaks ${breakRanges(log.shift).join(' · ')}` : null,
+      blank && selected.breaks?.length ? `Breaks ${breakRanges(log.shift, log.date).join(' · ')}` : null,
     ].filter(Boolean).join(' · '),
     meta: [blank ? 'BLANK FORM · FILL BY HAND' : isDraft ? 'DRAFT — NOT SAVED' : 'Saved shift record'],
     body,
@@ -957,7 +957,7 @@ export function renderShiftUpdate(rerender, go) {
         }),
         el('div.subtabs', {}, ...SHIFT_ORDER.map((k) => el('button', {
           'aria-current': String(view.shift === k),
-          title: `${SHIFTS[k].label} · ${SHIFTS[k].range}${breakRanges(k).length ? ` · Breaks: ${breakRanges(k).join(', ')}` : ''}`,
+          title: `${shiftFor(k, view.date).label} · ${shiftFor(k, view.date).range}${breakRanges(k, view.date).length ? ` · Breaks: ${breakRanges(k, view.date).join(', ')}` : ''}`,
           onclick: () => {
             view.shift = k;
             view.mobileKey = null;
@@ -992,7 +992,7 @@ export function renderShiftUpdate(rerender, go) {
     !selectedShift.legacy ? el('div.su-breaks', {},
       icon('clock', { size: 14 }),
       el('strong', {}, `${selectedShift.label} breaks`),
-      el('span', {}, breakRanges(view.shift).join(' · ') || 'No scheduled breaks')) : null,
+      el('span', {}, breakRanges(view.shift, view.date).join(' · ') || 'No scheduled breaks')) : null,
 
     /* The bar is the at-a-glance proportion; the number and the way to act on
        it live in the rail below, which also lists what is still missing. Both

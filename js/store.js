@@ -13,6 +13,7 @@ import {
   setCloudConfig, cloudEnabled, cloudHost,
   cloudPull, cloudPush, cloudTest, CLOUD_PARTS,
 } from './cloud.js';
+import { isSundayDate } from './shifts.js';
 
 export { cloudEnabled, cloudHost, cloudConfig } from './cloud.js';
 
@@ -771,7 +772,8 @@ export function saveShiftLog(date, shift, patch) {
     const yesterday = new Date(current); yesterday.setDate(yesterday.getDate() - 1);
     const previousDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
     const minute = current.getHours() * 60 + current.getMinutes();
-    const midnightHandover = shift === 'NIGHT' && date === previousDate && minute < (7 * 60 + 15);
+    const nightEnd = isSundayDate(date) ? 7 * 60 : 7 * 60 + 15;
+    const midnightHandover = shift === 'NIGHT' && date === previousDate && minute < nightEnd;
     const afternoonAfterMidnight = date === previousDate && shift === 'AFT' && minute < 7 * 60;
     const cutoff = midnightHandover || afternoonAfterMidnight ? ref : date;
     next.carryover = Object.values(state.todos || {}).filter(t => !t.done && t.date <= cutoff).map(t => ({ id: t.id, text: t.text }));

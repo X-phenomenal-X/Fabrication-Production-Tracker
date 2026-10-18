@@ -101,7 +101,7 @@ step('app booted');
 
 const overviewShift = await page.textContent('.overview-shift');
 if (/undefined/i.test(overviewShift || '')
-  || !/(07:00–15:30|15:30–00:00|23:45–07:15)/.test(overviewShift || '')) {
+  || !/(07:00–15:30|15:30–00:00|15:30–20:30|23:45–07:15|20:30–07:00)/.test(overviewShift || '')) {
   throw new Error('overview does not show a valid shift range: ' + overviewShift);
 }
 step('overview shift range: ' + overviewShift.trim());

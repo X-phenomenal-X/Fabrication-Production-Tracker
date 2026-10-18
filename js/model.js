@@ -6,7 +6,7 @@ import { state, EDITABLE_FIELDS, stateRev } from './store.js';
 import { PARSER_VERSION } from './import-machines.js';
 import { MACHINES } from './machines.js';
 import { sopMachine } from './routing.js';
-import { SHIFTS, normalizeShift } from './shifts.js';
+import { SHIFTS, normalizeShift, shiftFor } from './shifts.js';
 
 /* machineKey -> centre, for keeping a learned route inside its own centre. */
 const MACHINE_GROUP = Object.fromEntries(MACHINES.map((m) => [m.key, m.group]));
@@ -833,9 +833,10 @@ export function shiftUpdateAge(date, ref = today()) {
 
 /* ---------- shift windows ---------- */
 
-/* Day 07:00–15:30, Afternoon 15:30–00:00, Midnight 23:45–07:15. A shift whose
-   end is not after its start runs past midnight; the date on the log is the
-   date it started. Times are local, matching how the floor talks. */
+/* Day 07:00–15:30. Afternoon is 15:30–00:00, except Sunday when it ends at
+   20:30. Midnight is 23:45–07:15, except a Midnight shift that starts on
+   Sunday, which is 20:30–07:00. A shift whose end is not after its start runs
+   past midnight; the date on the log is the date it started. */
 export function shiftWindow(date, shift) {
   const mk = (d, minutes) => {
     const x = new Date(d + 'T00:00:00');
@@ -843,7 +844,7 @@ export function shiftWindow(date, shift) {
     return x.getTime();
   };
   const key = normalizeShift(shift);
-  const selected = SHIFTS[key] || SHIFTS.DAY;
+  const selected = shiftFor(key, date) || SHIFTS.DAY;
   const endDate = selected.end <= selected.start ? addDays(date, 1) : date;
   return [mk(date, selected.start), mk(endDate, selected.end)];
 }
