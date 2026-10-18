@@ -2234,13 +2234,20 @@ await page.evaluate(() => {
   localStorage.setItem('bv.cutting.cloud', JSON.stringify({
     url: 'https://photo-test.supabase.co', key: 'sb_publishable_test', site: 'cutting',
   }));
-  localStorage.setItem('bv.cutting.photo-todo.access.v1', 'department-test-code');
+  localStorage.setItem('bv.cutting.auth', JSON.stringify({
+    accessToken: 'editor-test-token',
+    refreshToken: 'editor-refresh',
+    expiresAt: Date.now() + 3600000,
+    email: 'lead@example.com',
+    userId: '11111111-1111-1111-1111-111111111111',
+    role: 'editor',
+  }));
 });
 let photoRequest = null;
 await page.route('https://photo-test.supabase.co/functions/v1/photo-to-todos', async (route) => {
   const request = route.request();
   photoRequest = {
-    key: request.headers()['x-photo-todo-key'],
+    authorization: request.headers().authorization,
     apikey: request.headers().apikey,
     body: request.postDataJSON(),
   };
@@ -2295,8 +2302,8 @@ if (photoTodos.rows.length !== 2
   throw new Error('Photo review did not save exactly the approved, edited To-Dos');
 }
 if (photoTodos.rawHasImage) throw new Error('Photo data leaked into the synced tracker state');
-if (photoRequest?.key !== 'department-test-code' || photoRequest?.apikey !== 'sb_publishable_test') {
-  throw new Error('Photo request lost its device access or Supabase gateway key');
+if (photoRequest?.authorization !== 'Bearer editor-test-token' || photoRequest?.apikey !== 'sb_publishable_test') {
+  throw new Error('Photo request lost its editor login or Supabase gateway key');
 }
 if (!/^data:image\/jpeg;base64,/.test(photoRequest?.body?.image || '')
   || photoRequest?.body?.guidance !== 'Only actions for afternoon shift') {

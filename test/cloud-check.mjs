@@ -2,13 +2,14 @@
 
    There is no Supabase to point at from here, so this stands up a mock that
    speaks the same PostgREST shapes the client uses — the `site=eq.` /
-   `part=in.()` filters, the `on_conflict` upsert with
-   `Prefer: resolution=merge-duplicates`, and the CORS preflight that the
-   apikey and Prefer headers force the browser to send. Getting any of those
-   wrong fails here rather than on the shop floor.
+   `part=in.()` filters, an insert that fails when the row already exists, a
+   PATCH that writes only when `updated_at` is still the value just read, and
+   the CORS preflight that the apikey and Prefer headers force the browser to
+   send. Getting any of those wrong fails here rather than on the shop floor.
 
    Then it drives two browser contexts as two people: one on the PC that
-   imported the workbooks, one on a phone that has never seen them.
+   imported the workbooks, one on a phone that has never seen them. It also
+   holds two saves in the air at once, so one cannot quietly replace the other.
 
    Run: node test/cloud-check.mjs */
 import { chromium } from 'playwright';
@@ -16,6 +17,13 @@ import fs from 'fs';
 import path from 'path';
 import http from 'http';
 import { ROOT, workbookPaths, chromiumOptions } from './env.mjs';
+import { SETUP_SQL } from '../js/setup-sql.js';
+
+const migrationPath = path.join(ROOT, 'supabase', 'migrations', '20261018120000_tracker_auth.sql');
+const migrationSql = fs.readFileSync(migrationPath, 'utf8').trim();
+if (SETUP_SQL.trim() !== migrationSql) {
+  throw new Error('Setup SQL has drifted from supabase/migrations/20261018120000_tracker_auth.sql');
+}
 
 const books = workbookPaths();
 const ROLLING = books.rolling;
@@ -42,13 +50,41 @@ const appBase = `http://127.0.0.1:${appServer.address().port}`;
 
 const KEY = 'test-anon-key';
 const table = new Map();            // `${site}|${part}` -> { site, part, data, updated_at }
-const seen = { get: 0, post: 0, preflight: 0, badAuth: 0 };
+const seen = { get: 0, post: 0, patch: 0, preflight: 0, badAuth: 0, conflict: 0 };
+let patchHold = null;
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'apikey,authorization,content-type,prefer',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
 };
+
+function finishPatch(url, bodyText, res) {
+  const site = (url.searchParams.get('site') || '').replace(/^eq\./, '');
+  const part = (url.searchParams.get('part') || '').replace(/^eq\./, '');
+  const expected = (url.searchParams.get('updated_at') || '').replace(/^eq\./, '');
+  const patch = JSON.parse(bodyText);
+  const key = `${site}|${part}`;
+  const current = table.get(key);
+  if (!current || current.updated_at !== expected) {
+    seen.conflict++;
+    res.writeHead(200, { ...cors, 'content-type': 'application/json' });
+    res.end('[]');
+    return;
+  }
+  const next = {
+    ...current,
+    data: patch.data,
+    updated_at: patch.updated_at || new Date().toISOString(),
+  };
+  table.set(key, next);
+  res.writeHead(200, { ...cors, 'content-type': 'application/json' });
+  res.end(JSON.stringify([next]));
+}
+
+function holdNextPatches(count) {
+  patchHold = { left: count, total: count, queue: [] };
+}
 
 const cloudServer = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
@@ -74,7 +110,7 @@ const cloudServer = http.createServer(async (req, res) => {
     const site = (url.searchParams.get('site') || '').replace(/^eq\./, '');
     const partsRaw = (url.searchParams.get('part') || '').replace(/^in\.\(|\)$/g, '');
     const parts = partsRaw ? partsRaw.split(',').map((p) => p.replace(/"/g, '')) : null;
-    const select = (url.searchParams.get('select') || '').split(',');
+    const select = (url.searchParams.get('select') || '').split(',').filter(Boolean);
 
     const rows = [...table.values()]
       .filter((r) => r.site === site && (!parts || parts.includes(r.part)))
@@ -84,17 +120,52 @@ const cloudServer = http.createServer(async (req, res) => {
     return res.end(JSON.stringify(rows));
   }
 
+  if (!/return=representation/.test(req.headers.prefer || '')) {
+    res.writeHead(400, { ...cors, 'content-type': 'application/json' });
+    return res.end(JSON.stringify({ message: 'missing return=representation' }));
+  }
+
   if (req.method === 'POST') {
     seen.post++;
-    if (!/merge-duplicates/.test(req.headers.prefer || '')) {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    const row = JSON.parse(body);
+    if (!row || Array.isArray(row) || !row.site || !row.part) {
+      res.writeHead(400, { ...cors, 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ message: 'expected one row' }));
+    }
+    const key = `${row.site}|${row.part}`;
+    if (table.has(key)) {
       res.writeHead(409, { ...cors, 'content-type': 'application/json' });
       return res.end(JSON.stringify({ message: 'duplicate key value violates unique constraint' }));
     }
+    const stored = { ...row, updated_at: row.updated_at || new Date().toISOString() };
+    table.set(key, stored);
+    res.writeHead(201, { ...cors, 'content-type': 'application/json' });
+    return res.end(JSON.stringify([stored]));
+  }
+
+  if (req.method === 'PATCH') {
+    seen.patch++;
     let body = '';
     for await (const chunk of req) body += chunk;
-    for (const row of JSON.parse(body)) table.set(`${row.site}|${row.part}`, row);
-    res.writeHead(201, { ...cors, 'content-type': 'application/json' });
-    return res.end('');
+    const hold = patchHold;
+    if (hold && hold.left > 0) {
+      hold.left -= 1;
+      await new Promise((resolve) => {
+        hold.queue.push({ url, body, res, resolve });
+        if (hold.queue.length === hold.total) {
+          for (const item of hold.queue) {
+            finishPatch(item.url, item.body, item.res);
+            item.resolve();
+          }
+          patchHold = null;
+        }
+      });
+      return;
+    }
+    finishPatch(url, body, res);
+    return;
   }
 
   res.writeHead(405, cors); res.end();
@@ -386,6 +457,51 @@ const reflagged = await pc.evaluate((k) => import('/js/store.js').then((s) =>
 step('re-flagged after the delete: ' + reflagged);
 if (reflagged !== 'Marek') throw new Error('a tombstone outlived a newer edit');
 
+/* ---------- two devices save in the same moment ---------- */
+
+/* Both phones have read the same updated_at. The mock keeps the next two
+   writes in the air until both have left the device, then applies them in
+   arrival order. The second matches nothing, the app merges, and retries.
+   An empty PATCH list is a conflict on purpose: a 409 would be a console
+   error, and this suite treats unexpected console errors as failures. */
+/* waitForFunction treats a returned promise as truthy immediately, so this
+   polls from Node until the debounced upload has actually finished. */
+async function waitDrained(page) {
+  const start = Date.now();
+  let last = null;
+  while (Date.now() - start < 20000) {
+    last = await page.evaluate(() => import('/js/store.js').then((m) => m.cloudStatus()));
+    if (last.pending === 0 && !last.pushing && !last.error) return;
+    await page.waitForTimeout(100);
+  }
+  throw new Error('cloud queue did not drain: ' + JSON.stringify(last));
+}
+await Promise.all([waitDrained(pc), waitDrained(phone)]);
+holdNextPatches(2);
+await Promise.all([
+  pc.evaluate((key) => import('/js/store.js').then((s) =>
+    s.setTaskNote(key, 'PC note from the same moment.')), pcWork.key),
+  phone.evaluate((key) => import('/js/store.js').then((s) =>
+    s.setTaskNote(key, 'Phone note from the same moment.')), phoneWork.key),
+]);
+await Promise.all([waitDrained(pc), waitDrained(phone)]);
+await pc.evaluate(() => import('/js/store.js').then((m) => m.pullCloud()));
+await phone.evaluate(() => import('/js/store.js').then((m) => m.pullCloud()));
+const bothNotes = (page) => page.evaluate(([a, b]) => import('/js/store.js').then((s) => ({
+  pc: s.state.taskNote[a]?.text ?? null,
+  phone: s.state.taskNote[b]?.text ?? null,
+})), [pcWork.key, phoneWork.key]);
+const notesPc = await bothNotes(pc);
+const notesPhone = await bothNotes(phone);
+step('same-moment notes — PC: ' + JSON.stringify(notesPc) + ' phone: ' + JSON.stringify(notesPhone));
+if (notesPc.pc !== 'PC note from the same moment.' || notesPc.phone !== 'Phone note from the same moment.') {
+  throw new Error('a simultaneous upload lost a note: ' + JSON.stringify({ notesPc, notesPhone, conflict: seen.conflict }));
+}
+if (JSON.stringify(notesPc) !== JSON.stringify(notesPhone)) {
+  throw new Error('devices did not converge after a simultaneous upload: ' + JSON.stringify({ notesPc, notesPhone }));
+}
+if (seen.conflict < 1) throw new Error('two devices saving together never hit compare-and-swap');
+
 /* ---------- failure is reported, not swallowed ---------- */
 
 const rejected = await phone.evaluate(([url]) => import('/js/cloud.js').then(async (c) => {
@@ -396,7 +512,7 @@ step('wrong key says: ' + rejected);
 if (!/rejected the key/.test(rejected || '')) throw new Error('a bad key was not explained');
 if (!seen.badAuth) throw new Error('the mock never saw the bad key');
 
-step(`mock cloud handled ${seen.get} reads, ${seen.post} writes, ${seen.preflight} preflights`);
+step(`mock cloud handled ${seen.get} reads, ${seen.post} inserts, ${seen.patch} updates, ${seen.conflict} conflicts, ${seen.preflight} preflights`);
 if (!seen.preflight) throw new Error('no CORS preflight — the request shape is not what a browser sends');
 
 console.log('\nERRORS:', errors.length ? '\n  ' + errors.join('\n  ') : 'none');

@@ -24,7 +24,7 @@ function requestOrigin(request: Request): string | null {
 function cors(origin: string | null): HeadersInit {
   return {
     ...(origin ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {}),
-    'Access-Control-Allow-Headers': 'apikey, content-type, x-photo-todo-key',
+    'Access-Control-Allow-Headers': 'authorization, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Max-Age': '86400',
   };
@@ -37,13 +37,49 @@ function json(status: number, body: unknown, origin: string | null): Response {
   });
 }
 
-function safeEqual(left: string, right: string): boolean {
-  const a = new TextEncoder().encode(left);
-  const b = new TextEncoder().encode(right);
-  if (a.length !== b.length) return false;
-  let difference = 0;
-  for (let index = 0; index < a.length; index += 1) difference |= a[index] ^ b[index];
-  return difference === 0;
+function jwtSub(token: string): string {
+  const part = token.split('.')[1];
+  if (!part) return '';
+  try {
+    const padded = part.replace(/-/g, '+').replace(/_/g, '/')
+      + '='.repeat((4 - (part.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded));
+    return typeof payload.sub === 'string' ? payload.sub : '';
+  } catch {
+    return '';
+  }
+}
+
+/** A valid login is not enough: viewers can see the board and must not spend
+    the photo allowance. Membership is read with the caller's own token, so a
+    forged token fails the database check instead of being trusted here. */
+async function requireEditor(request: Request, origin: string | null): Promise<Response | null> {
+  const header = request.headers.get('authorization') || '';
+  const token = header.replace(/^Bearer\s+/i, '').trim();
+  const userId = jwtSub(token);
+  if (!token || !userId) return json(401, { error: 'Sign in as an editor to use photo analysis.' }, origin);
+
+  const supabaseUrl = env('SUPABASE_URL');
+  const anonKey = env('SUPABASE_ANON_KEY');
+  if (!supabaseUrl || !anonKey) {
+    return json(503, { error: 'Photo analysis has not been configured yet.' }, origin);
+  }
+  let response: Response;
+  try {
+    response = await fetch(
+      `${supabaseUrl}/rest/v1/tracker_members?user_id=eq.${encodeURIComponent(userId)}&select=role`,
+      { headers: { apikey: anonKey, Authorization: `Bearer ${token}` } },
+    );
+  } catch {
+    return json(502, { error: 'Photo analysis could not check who is signed in. Try again.' }, origin);
+  }
+  if (!response.ok) return json(401, { error: 'Sign in as an editor to use photo analysis.' }, origin);
+  let rows: { role?: string }[] = [];
+  try { rows = await response.json(); } catch { /* treated as no membership */ }
+  if (rows?.[0]?.role !== 'editor') {
+    return json(403, { error: 'Photo analysis is for editors. This account can only view the board.' }, origin);
+  }
+  return null;
 }
 
 function outputText(response: Record<string, unknown>): string {
@@ -95,12 +131,8 @@ Deno.serve(async (request: Request) => {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(origin) });
   if (request.method !== 'POST') return json(405, { error: 'Use POST for photo analysis.' }, origin);
 
-  const departmentKey = env('PHOTO_TODO_ACCESS_KEY');
-  const suppliedKey = request.headers.get('x-photo-todo-key') || '';
-  if (!departmentKey) return json(503, { error: 'Photo analysis has not been configured yet.' }, origin);
-  if (!suppliedKey || !safeEqual(suppliedKey, departmentKey)) {
-    return json(401, { error: 'That department access code was not accepted.' }, origin);
-  }
+  const denied = await requireEditor(request, origin);
+  if (denied) return denied;
 
   const openAiKey = env('OPENAI_API_KEY');
   if (!openAiKey) return json(503, { error: 'Photo analysis has not been configured yet.' }, origin);

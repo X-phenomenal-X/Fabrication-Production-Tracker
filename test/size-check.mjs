@@ -79,7 +79,7 @@ if (!marked) {
   const missing = precache.filter((rel) => !(rel in sizeOf));
   if (missing.length) fail(`precache lists files the build did not produce: ${missing.join(', ')}`);
 
-  const NEVER_PRECACHE = ['js/extrusion-images.js', 'js/photo-todos.js'];
+  const NEVER_PRECACHE = ['js/extrusion-images.js', 'js/photo-todos.js', 'js/setup-sql.js', 'js/views/signin.js'];
   for (const rel of NEVER_PRECACHE) {
     if (precache.includes(rel)) {
       fail(`${rel} (${(sizeOf[rel] / MB).toFixed(1)} MB) is in the offline shell`

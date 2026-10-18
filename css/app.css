@@ -6592,3 +6592,55 @@ a.resource-download:active, button.resource-download:active { transform: transla
   .overview-handoff p { grid-column: 1; grid-row: 3; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .overview-handoff button { grid-column: 2; grid-row: 1 / 4; align-self: center; margin: 0; }
 }
+
+/* Sign-in. 16px on the email field keeps iPhone from zooming the whole page
+   when the keyboard opens. The screen is the whole app only when sharing has
+   been locked; Setup uses the same form in a smaller block. */
+.signin-screen {
+  min-height: 100dvh;
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  width: min(440px, 100%);
+  margin: 0 auto;
+  padding: 28px 20px calc(28px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+.signin-kicker {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.signin-screen h1 {
+  margin: 0;
+  font-size: clamp(32px, 9vw, 44px);
+  line-height: 1.05;
+  letter-spacing: -.03em;
+}
+.signin-copy, .signin-note, .signin-status {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 16px;
+  line-height: 1.45;
+}
+.signin-form { display: grid; gap: 12px; margin: 4px 0 8px; }
+.signin-form input[type="email"] { font-size: 16px; min-height: 48px; }
+.signin-form .primary, .signin-actions .primary { min-height: 48px; font-size: 17px; }
+.signin-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.signin-actions button { min-height: 48px; }
+.signin-signed-in {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 4px 0 12px;
+}
+.signin-signed-in p { margin: 0; display: grid; gap: 2px; }
+.signin-role { color: var(--ink-3); font-size: 13px; font-weight: 650; }
+:root[data-display="monitor"] .signin-screen { width: min(760px, 100%); gap: 22px; }
+:root[data-display="monitor"] .signin-screen h1 { font-size: clamp(48px, 6vw, 72px); }
+:root[data-display="monitor"] .signin-copy,
+:root[data-display="monitor"] .signin-note { font-size: clamp(20px, 2vw, 28px); }
+:root[data-display="monitor"] .signin-form input[type="email"] { min-height: 64px; font-size: 28px; }
+:root[data-display="monitor"] .signin-form .primary,
+:root[data-display="monitor"] .signin-actions button { min-height: 64px; font-size: 24px; }

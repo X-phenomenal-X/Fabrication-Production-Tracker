@@ -42,7 +42,9 @@ const build = (process.env.GITHUB_SHA || hash.digest('hex')).slice(0, 12);
 /* The 24 MB extrusion image map is cached by the runtime strategy only after
    somebody opens an individual profile. Photo to To-Do is also on-demand: it
    cannot work offline and should not spend first-load bandwidth on devices
-   that never use it. Department documents are likewise cached after somebody
+   that never use it. The setup SQL and the sign-in screen are fetched when
+   someone opens them, so a machine queue does not pay for them on first paint.
+   Department documents are likewise cached after somebody
    opens a file, so expanding the forms library does not silently increase
    every device's first warm.
    Everything else is small enough to warm in the background, including the
@@ -52,6 +54,8 @@ const precache = published
   .filter((rel) => rel !== 'cover-options.html'
     && rel !== 'js/extrusion-images.js'
     && rel !== 'js/photo-todos.js'
+    && rel !== 'js/setup-sql.js'
+    && rel !== 'js/views/signin.js'
     && !/\.(pdf|docx|xlsx|pptx)$/i.test(rel))
   .map((rel) => `./${rel}`);
 
