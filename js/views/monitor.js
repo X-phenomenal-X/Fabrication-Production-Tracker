@@ -253,7 +253,7 @@ function monitorHeader(sync) {
       el('div.monitor-product', {},
         el('strong', {}, 'BV CUTTING'),
         el('span.monitor-shift-label', {}, shiftText))),
-    el('time.monitor-clock', {}, clock.time),
+    el('time.monitor-clock', { 'data-keep-focus': 'monitor-clock', tabindex: '-1' }, clock.time),
     el('div.monitor-health', {},
       el(`strong.${connection.tone}`, {}, connection.label),
       el('span.monitor-refresh', {}, `${connection.detail || 'Status current'} · ${clock.date}`)),

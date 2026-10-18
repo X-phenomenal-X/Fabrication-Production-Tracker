@@ -11,16 +11,17 @@ import { HINGES_PER_8560_VENT, hingeRequirement, is8560VentTask } from '../js/ma
 
 const localTime = (hour, minute = 0) => new Date(2026, 7, 28, hour, minute, 0, 0);
 
-// The department currently runs exactly two shifts, with a half-hour handoff.
-if (SHIFT_ORDER.join(',') !== 'DAY,AFT') throw new Error('an inactive shift is still selectable');
-if (shiftAt(localTime(7)) !== 'DAY' || shiftAt(localTime(15, 29)) !== 'DAY') {
+// Day, Afternoon and Midnight. Afternoon still owns the floor through midnight,
+// and Day still starts at 07:00. Midnight is the active shift from 00:00 to 07:00.
+if (SHIFT_ORDER.join(',') !== 'DAY,AFT,NIGHT') throw new Error('a current shift is missing from the picker');
+if (shiftAt(localTime(7)) !== 'DAY' || shiftAt(localTime(7, 14)) !== 'DAY' || shiftAt(localTime(15, 29)) !== 'DAY') {
   throw new Error('Day shift is not 07:00–15:30');
 }
-if (shiftAt(localTime(15, 30)) !== 'AFT' || shiftAt(localTime(23, 59)) !== 'AFT') {
+if (shiftAt(localTime(15, 30)) !== 'AFT' || shiftAt(localTime(23, 45)) !== 'AFT' || shiftAt(localTime(23, 59)) !== 'AFT') {
   throw new Error('Afternoon shift is not 15:30–00:00');
 }
-if (shiftAt(localTime(0)) !== null || shiftAt(localTime(6, 59)) !== null) {
-  throw new Error('the app claims a production shift is active overnight');
+if (shiftAt(localTime(0)) !== 'NIGHT' || shiftAt(localTime(6, 59)) !== 'NIGHT') {
+  throw new Error('Midnight is not the active shift from midnight until Day starts');
 }
 if (today(localTime(23, 59)) !== '2026-08-28') {
   throw new Error('the Afternoon shift date changed early because UTC reached tomorrow');
@@ -29,7 +30,8 @@ if (today(localTime(23, 59)) !== '2026-08-28') {
 const dayBreaks = breakRanges('DAY').join(',');
 const aftBreaks = breakRanges('AFT').join(',');
 if (dayBreaks !== '09:15–09:30,12:30–13:00,14:15–14:30'
-    || aftBreaks !== '18:00–18:15,20:00–20:30,23:00–23:15') {
+    || aftBreaks !== '18:00–18:15,20:00–20:30,23:00–23:15'
+    || breakRanges('NIGHT').length) {
   throw new Error('the production break schedule is wrong');
 }
 if (!shiftStatusAt(localTime(9, 15)).onBreak || shiftStatusAt(localTime(9, 30)).onBreak) {
@@ -57,7 +59,7 @@ if (dayFrom.getHours() !== 7 || dayFrom.getMinutes() !== 0
     || dayTo.getHours() !== 15 || dayTo.getMinutes() !== 30
     || aftFrom.getHours() !== 15 || aftFrom.getMinutes() !== 30
     || aftTo.getDate() !== 29 || aftTo.getHours() !== 0 || aftTo.getMinutes() !== 0) {
-  throw new Error('shift history windows do not match the two-shift schedule');
+  throw new Error('shift history windows do not match the Day and Afternoon schedule');
 }
 
 // Device B's wall clock is years behind, but it observed A's revision before

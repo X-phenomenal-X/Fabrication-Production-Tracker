@@ -25,6 +25,7 @@ function initials(name) {
 
 function shiftLabel(shift) {
   if (shift === 'AFTERNOON') return 'Afternoon shift';
+  if (shift === 'MIDNIGHT') return 'Midnight shift';
   if (shift === 'DAY') return 'Day shift';
   return 'Shift not set';
 }
@@ -80,7 +81,8 @@ function openEmployeeEditor(record, rerender, origin = null) {
   const shift = el('select.employee-shift-input', { 'aria-label': 'Employee shift' },
     el('option', { value: '', selected: !record?.shift }, 'Not set'),
     el('option', { value: 'DAY', selected: record?.shift === 'DAY' }, 'Day · 07:00–15:30'),
-    el('option', { value: 'AFTERNOON', selected: record?.shift === 'AFTERNOON' }, 'Afternoon · 15:30–00:00'));
+    el('option', { value: 'AFTERNOON', selected: record?.shift === 'AFTERNOON' }, 'Afternoon · 15:30–00:00'),
+    el('option', { value: 'MIDNIGHT', selected: record?.shift === 'MIDNIGHT' }, 'Midnight · 23:45–07:15'));
   const role = el('select.employee-role-input', { 'aria-label': 'Employee role' },
     legacy ? el('option', { value: '', selected: true, disabled: true }, 'Choose a role') : null,
     ...EMPLOYEE_ROLES.map((key) => el('option', {

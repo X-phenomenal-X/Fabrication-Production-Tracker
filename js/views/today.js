@@ -187,10 +187,9 @@ function pileList(title, rows, tone, cap = 5) {
 
 export function renderToday(rerender, go) {
   const ref = today();
-  /* Never null, even between midnight and 07:00 when no shift is running —
-     this page names a shift in three places and an undefined one took the
-     whole page down. */
-  const { key: shiftKey, shift } = shiftContextAt(ref);
+  /* Never null. After midnight the Midnight shift still belongs to the date
+     it started, which is not the new calendar day. */
+  const { key: shiftKey, shift, date: shiftDate } = shiftContextAt(ref);
 
   const head = el('div.centre-head', {},
     el('div.row.centre-title-row', {},
@@ -219,7 +218,7 @@ export function renderToday(rerender, go) {
   }
 
   const b = todayBoard(ref);
-  const written = shiftWritten(ref, shiftKey);
+  const written = shiftWritten(shiftDate, shiftKey);
 
   return el('div.centre', {},
     head,

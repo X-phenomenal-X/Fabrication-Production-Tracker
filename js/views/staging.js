@@ -18,7 +18,7 @@ import {
 } from '../model.js';
 import { MACHINE_BY_KEY } from '../machines.js';
 import { dieDialog } from './die-launcher.js';
-import { SHIFTS, SHIFT_ORDER, shiftAt } from '../shifts.js';
+import { SHIFTS, SHIFT_ORDER, shiftContextAt } from '../shifts.js';
 
 const vs = { q: '', showStaged: true };
 
@@ -39,9 +39,11 @@ function stageForLabel(v) {
 /** The next few shifts, starting with the one after the current one — you
     stage for what is coming, not for the shift you are standing in. */
 function upcomingShifts(n = 4) {
+  const context = shiftContextAt(today());
   const out = [];
-  let date = today();
-  let i = SHIFT_ORDER.indexOf(shiftAt());
+  let date = context.date;
+  let i = SHIFT_ORDER.indexOf(context.key);
+  if (i < 0) { date = today(); i = -1; }
   for (let k = 0; k < n; k++) {
     i += 1;
     if (i >= SHIFT_ORDER.length) { i = 0; date = addDays(date, 1); }

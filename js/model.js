@@ -779,7 +779,7 @@ function writtenShiftUpdateFor(machineKey) {
     const done = lines(row.done);
     const next = lines(row.next);
     const notes = lines(row.notes);
-    if (!done.length && !next.length && !notes.length) continue;
+    if (!done.length && !next.length && !notes.length && !row.targetPlan) continue;
     if (best && rank(log.date, log.shift) <= rank(best.date, best.shift)) continue;
     best = {
       date: log.date, shift: log.shift,
@@ -833,9 +833,9 @@ export function shiftUpdateAge(date, ref = today()) {
 
 /* ---------- shift windows ---------- */
 
-/* The active schedule is Day 07:00–15:30 and Afternoon 15:30–00:00. The
-   historical NIGHT definition is retained only so old saved logs still have
-   the correct window. Times are local, matching how the floor talks. */
+/* Day 07:00–15:30, Afternoon 15:30–00:00, Midnight 23:45–07:15. A shift whose
+   end is not after its start runs past midnight; the date on the log is the
+   date it started. Times are local, matching how the floor talks. */
 export function shiftWindow(date, shift) {
   const mk = (d, minutes) => {
     const x = new Date(d + 'T00:00:00');

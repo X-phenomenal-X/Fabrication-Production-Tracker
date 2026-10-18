@@ -64,8 +64,10 @@ export function commandSnapshot(ref = today(), now = new Date()) {
     || Number(!!b.operation?.dueDate && b.operation.dueDate < ref) - Number(!!a.operation?.dueDate && a.operation.dueDate < ref)
     || (a.operation?.dueDate || '9999-12-31').localeCompare(b.operation?.dueDate || '9999-12-31') || a.date.localeCompare(b.date));
   const down = open.filter(t => operationKind(t) === 'downtime');
+  const log = state.shiftLogs?.[`${context.date}|${context.key}`];
   const machines = MACHINES.filter(m => !m.queue).map(machineConfig).filter(m => !m.hidden).map(m => {
     const update = shiftUpdateFor(m.key);
+    const targetPlan = log?.rows?.[m.key]?.targetPlan || null;
     const incidents = down.filter(t => t.operation.machine === m.key);
     const activeIncidents = incidents.filter(t => !downtimeNeedsVerification(t));
     const running = board.running.filter(r => r.machine === m.key);
@@ -73,13 +75,14 @@ export function commandSnapshot(ref = today(), now = new Date()) {
     const status = activeIncidents.length || m.down ? 'Reported down' : update?.down || update?.staleDown ? 'Check down report' : incidents.length ? 'Verify machine status'
       : running.length ? 'Work in progress' : shortages.length ? 'Material shortage' : 'No active line';
     const tone = activeIncidents.length || m.down ? 'bad' : incidents.length || update?.down || update?.staleDown || shortages.length ? 'warn' : running.length ? 'work' : 'mute';
-    return { ...m, update, incidents, running, shortages, status, tone };
+    return { ...m, update, targetPlan, incidents, running, shortages, status, tone };
   });
   const completed = machines.flatMap(m => workInShift(m.key, context.date, context.key)).filter(h => h.to === 'DONE');
-  const log = state.shiftLogs?.[`${context.date}|${context.key}`];
   const documented = machines.filter(m => {
     const row = log?.rows?.[m.key];
-    return row && ['done', 'next', 'notes'].some(k => String(row[k] || '').trim());
+    if (!row) return false;
+    if (['done', 'next', 'notes'].some(k => String(row[k] || '').trim())) return true;
+    return !!row.targetPlan && Number.isFinite(Number(row.targetPlan.target));
   }).length;
   const losses = reports.filter(t => t.date === ref && operationKind(t) === 'downtime');
   return { context, board, reports, open, down, machines, completed, log, documented,

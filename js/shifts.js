@@ -1,9 +1,14 @@
-/* The department currently runs two production shifts. Minutes since midnight
-   are used rather than whole hours because the handoff is at 15:30.
+/* The department runs three production shifts. Minutes since midnight are
+   used rather than whole hours because the handoffs are not on the hour.
 
-   NIGHT remains as a read-only legacy definition so an old saved update does
-   not turn into an unknown code. It is deliberately absent from SHIFT_ORDER:
-   no new Midnight update or staging target can be created from the UI. */
+   Afternoon still ends at midnight. Midnight starts at 23:45, so the last
+   fifteen minutes of Afternoon overlap the start of Midnight, and Day still
+   starts at 07:00, fifteen minutes before Midnight's scheduled end. During
+   an overlap the shift that already owns that boundary stays the active one.
+   Midnight is what is running from midnight until Day starts.
+
+   Saved logs use the key NIGHT. Older Midnight records (previously described
+   as 23:00–07:00) keep that same key, so they still open. */
 
 const breakAt = (from, to) => ({ from, to });
 
@@ -27,12 +32,13 @@ export const SHIFTS = {
     ],
   },
   NIGHT: {
-    key: 'NIGHT', label: 'Midnight (historical)', start: 23 * 60, end: 7 * 60,
-    range: '23:00–07:00', legacy: true, full: false, breaks: [],
+    key: 'NIGHT', label: 'Midnight', start: 23 * 60 + 45, end: 7 * 60 + 15,
+    range: '23:45–07:15', full: true,
+    breaks: [],
   },
 };
 
-export const SHIFT_ORDER = ['DAY', 'AFT'];
+export const SHIFT_ORDER = ['DAY', 'AFT', 'NIGHT'];
 
 const ALIASES = { AFTERNOON: 'AFT', MIDNIGHT: 'NIGHT' };
 
@@ -56,41 +62,59 @@ export function breakRanges(value) {
   return (shift?.breaks || []).map((b) => `${clock(b.from)}–${clock(b.to)}`);
 }
 
-/** The active production shift, or null between midnight and 07:00. */
-export function shiftAt(date = new Date()) {
-  const minute = date.getHours() * 60 + date.getMinutes();
-  return SHIFT_ORDER.find((key) => {
-    const shift = SHIFTS[key];
-    return minute >= shift.start && minute < shift.end;
-  }) || null;
+function covers(shift, minute) {
+  if (shift.end > shift.start) return minute >= shift.start && minute < shift.end;
+  return minute >= shift.start || minute < shift.end;
 }
 
-/** Which shift a moment belongs to for the purposes of naming a handoff, a
-    shift update or a briefing — and never null, which is the difference
-    between this and shiftAt().
+/** The active production shift. Afternoon keeps the floor through midnight,
+    and Day takes over at 07:00, so the overlap at each end is not a second
+    active crew. From 00:00 until 07:00 the active shift is Midnight. */
+export function shiftAt(date = new Date()) {
+  const minute = date.getHours() * 60 + date.getMinutes();
+  const matches = SHIFT_ORDER.filter((key) => covers(SHIFTS[key], minute));
+  if (!matches.length) return null;
+  if (matches.length === 1) return matches[0];
+  return matches.find((key) => SHIFTS[key].end > SHIFTS[key].start) || matches[0];
+}
 
-    Production runs 07:00 to midnight in two shifts. Between midnight and 07:00
-    nobody is on the floor, but the app is still opened then: by whoever comes
-    in early, by a wall panel that never sleeps, and by anyone in a timezone the
-    schedule was not written for. shiftAt() correctly answers "no shift is
-    running"; a page that has to name a shift needs the shift that just ended,
-    which in those hours is yesterday's Afternoon.
+function isoDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    + `-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function previousIso(now) {
+  const previous = new Date(now.getTime());
+  previous.setDate(previous.getDate() - 1);
+  return isoDate(previous);
+}
+
+/** Which shift a moment belongs to for naming a handoff, a shift update or a
+    briefing — and never null, which is the difference between this and shiftAt().
 
     `ref` is the shop date, passed in because the Toronto-date rule lives in
     model.js and model.js imports this file.
 
-    Returns { key, date, shift, live } — `live` false when the answer is the
-    shift that has ended rather than one in progress, so a page can say so
-    rather than implying a crew is standing there. */
+    Work logged after midnight on the Midnight shift belongs to the date that
+    shift started, not the new calendar day.
+
+    Returns { key, date, shift, live } — `live` false only when no shift covers
+    the moment and the answer is the shift that has ended. */
 export function shiftContextAt(ref, now = new Date()) {
   const key = shiftAt(now);
-  if (key) return { key, date: ref, shift: SHIFTS[key], live: true };
+  if (key) {
+    const shift = SHIFTS[key];
+    const minute = now.getHours() * 60 + now.getMinutes();
+    const startedYesterday = shift.end <= shift.start && minute < shift.end;
+    return {
+      key,
+      date: startedYesterday ? previousIso(now) : ref,
+      shift,
+      live: true,
+    };
+  }
 
-  const previous = new Date(now.getTime());
-  previous.setDate(previous.getDate() - 1);
-  const date = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`
-    + `-${String(previous.getDate()).padStart(2, '0')}`;
-  return { key: 'AFT', date, shift: SHIFTS.AFT, live: false };
+  return { key: 'AFT', date: previousIso(now), shift: SHIFTS.AFT, live: false };
 }
 
 /** Header-ready live state, including current/next break detail. */
@@ -100,7 +124,7 @@ export function shiftStatusAt(date = new Date()) {
   if (!key) {
     return {
       key: null, shift: null, onBreak: false, label: 'Off shift',
-      detail: 'No production shift is active. Day shift starts at 07:00.',
+      detail: 'No production shift is active.',
     };
   }
 
@@ -108,15 +132,19 @@ export function shiftStatusAt(date = new Date()) {
   const currentBreak = shift.breaks.find((b) => minute >= b.from && minute < b.to) || null;
   const nextBreak = shift.breaks.find((b) => b.from > minute) || null;
   const allBreaks = breakRanges(key).join(', ');
-  const live = currentBreak
-    ? `Break now ${clock(currentBreak.from)}–${clock(currentBreak.to)}.`
-    : nextBreak
-      ? `Next break ${clock(nextBreak.from)}–${clock(nextBreak.to)}.`
-      : 'All scheduled breaks are complete.';
+  const live = !shift.breaks.length
+    ? 'No scheduled breaks.'
+    : currentBreak
+      ? `Break now ${clock(currentBreak.from)}–${clock(currentBreak.to)}.`
+      : nextBreak
+        ? `Next break ${clock(nextBreak.from)}–${clock(nextBreak.to)}.`
+        : 'All scheduled breaks are complete.';
 
   return {
     key, shift, onBreak: !!currentBreak, currentBreak, nextBreak,
     label: `${shift.label}${currentBreak ? ' · Break' : ''}`,
-    detail: `${shift.label} shift ${shift.range}. ${live} Breaks: ${allBreaks}.`,
+    detail: shift.breaks.length
+      ? `${shift.label} shift ${shift.range}. ${live} Breaks: ${allBreaks}.`
+      : `${shift.label} shift ${shift.range}. ${live}`,
   };
 }

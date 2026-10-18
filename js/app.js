@@ -504,20 +504,30 @@ let hdrObserver = null;
 function focusAfterRender() {
   const active = document.activeElement;
   if (!active || !root.contains(active)) return () => {};
-  const attrs = ['id', 'aria-label', 'name', 'href'];
+  const attrs = ['data-keep-focus', 'id', 'aria-label', 'name', 'href'];
   const identity = attrs.map(key => [key, active.getAttribute(key)]).filter(([, value]) => value);
   const text = active.tagName === 'BUTTON' ? active.textContent : null;
   const reportId = active.closest('[data-report-id]')?.getAttribute('data-report-id');
+  const selection = active.tagName === 'TEXTAREA' || active.tagName === 'INPUT'
+    ? { start: active.selectionStart, end: active.selectionEnd }
+    : null;
   if (!identity.length && !text) return () => {};
   return () => {
     // Do not steal focus from a dialog or a control focused during rendering.
-    if (document.activeElement !== document.body && document.activeElement?.isConnected) return;
+    const focused = document.activeElement;
+    const focusLost = !focused || focused === document.body || focused === document.documentElement || !focused.isConnected;
+    if (!focusLost) return;
     const matches = [...root.querySelectorAll(active.tagName)].filter(node =>
       identity.every(([key, value]) => node.getAttribute(key) === value)
       && (text == null || node.textContent === text)
       && (!reportId || node.closest('[data-report-id]')?.getAttribute('data-report-id') === reportId)
       && !node.disabled && node.getClientRects().length);
-    if (matches.length === 1) matches[0].focus({ preventScroll: true });
+    if (matches.length !== 1) return;
+    matches[0].focus({ preventScroll: true });
+    if (selection && typeof matches[0].setSelectionRange === 'function'
+        && Number.isInteger(selection.start) && Number.isInteger(selection.end)) {
+      try { matches[0].setSelectionRange(selection.start, selection.end); } catch { /* number fields have no caret */ }
+    }
   };
 }
 
@@ -531,6 +541,7 @@ function render() {
   if (document.documentElement.dataset.display === 'monitor' && current === 'overview') {
     root.replaceChildren(renderMonitorDashboard(syncViewState()));
     pageMotion = false;
+    restoreFocus();
     return;
   }
   // Views are handed scheduleRender, never render, so a redraw requested from

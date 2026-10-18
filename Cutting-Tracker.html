@@ -5164,7 +5164,7 @@ button.sync-chip:active { transform: translateY(1px); }
   }
   .su-head-page .su-when {
     grid-column: 1 / -1; grid-row: 2; display: grid;
-    grid-template-columns: minmax(0, .9fr) minmax(0, 1.2fr);
+    grid-template-columns: 1fr;
     align-items: stretch; gap: var(--s2); margin-top: var(--s1);
   }
   .su-head-page .su-date {
@@ -5180,6 +5180,7 @@ button.sync-chip:active { transform: translateY(1px); }
     flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--s2);
     border: 0; border-radius: var(--r-pill); background: transparent; box-shadow: none;
     font-size: var(--t-sm); font-weight: 750;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .su-head-page .su-when .subtabs button[aria-current="true"] {
     background: var(--accent); color: var(--on-fill);
@@ -7537,6 +7538,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
   function employeeShift(value2) {
     const shift2 = String(value2 || "").trim().toUpperCase();
     if (shift2 === "AFT" || shift2 === "AFTERNOON") return "AFTERNOON";
+    if (shift2 === "NIGHT" || shift2 === "MIDNIGHT" || shift2.includes("MIDNIGHT")) return "MIDNIGHT";
     if (shift2 === "DAY") return "DAY";
     return "";
   }
@@ -7932,7 +7934,10 @@ a.resource-download:active, button.resource-download:active { transform: transla
       const yesterday = new Date(current2);
       yesterday.setDate(yesterday.getDate() - 1);
       const previousDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
-      const cutoff = date3 === previousDate && shift2 === "AFT" && current2.getHours() < 7 ? ref : date3;
+      const minute = current2.getHours() * 60 + current2.getMinutes();
+      const midnightHandover = shift2 === "NIGHT" && date3 === previousDate && minute < 7 * 60 + 15;
+      const afternoonAfterMidnight = date3 === previousDate && shift2 === "AFT" && minute < 7 * 60;
+      const cutoff = midnightHandover || afternoonAfterMidnight ? ref : date3;
       next.carryover = Object.values(state.todos || {}).filter((t) => !t.done && t.date <= cutoff).map((t) => ({ id: t.id, text: t.text }));
       if (JSON.stringify([cur.rows, cur.notes, cur.carryover]) !== JSON.stringify([next.rows, next.notes, next.carryover])) next.acknowledgement = null;
     }
@@ -9304,7 +9309,9 @@ a.resource-download:active, button.resource-download:active { transform: transla
              it is empty — the saw is run off the floor's own knowledge, not off the
              file — so its lines are put on it by hand, and the learned routing picks up
              which components go there once it has seen a couple. */
-        { key: "multipunch", label: "Multi Punch", short: "PUN", group: "Punch", ops: 1, note: "pcs not frames" },
+        /* Counted output is windows — the same unit as a shift target — not loose
+           pieces and not a complete frame counted as one piece. */
+        { key: "multipunch", label: "Multi Punch", short: "PUN", group: "Punch", ops: 1, note: "windows" },
         { key: "saw", label: "Elumatec Saw", short: "SAW", group: "Punch", ops: 1, note: "heights" }
       ];
       STANDING_ROWS = [
@@ -9832,20 +9839,39 @@ a.resource-download:active, button.resource-download:active { transform: transla
     const shift2 = SHIFTS[normalizeShift(value2)];
     return (shift2?.breaks || []).map((b) => `${clock(b.from)}\u2013${clock(b.to)}`);
   }
+  function covers(shift2, minute) {
+    if (shift2.end > shift2.start) return minute >= shift2.start && minute < shift2.end;
+    return minute >= shift2.start || minute < shift2.end;
+  }
   function shiftAt(date3 = /* @__PURE__ */ new Date()) {
     const minute = date3.getHours() * 60 + date3.getMinutes();
-    return SHIFT_ORDER.find((key2) => {
-      const shift2 = SHIFTS[key2];
-      return minute >= shift2.start && minute < shift2.end;
-    }) || null;
+    const matches2 = SHIFT_ORDER.filter((key2) => covers(SHIFTS[key2], minute));
+    if (!matches2.length) return null;
+    if (matches2.length === 1) return matches2[0];
+    return matches2.find((key2) => SHIFTS[key2].end > SHIFTS[key2].start) || matches2[0];
+  }
+  function isoDate(date3) {
+    return `${date3.getFullYear()}-${String(date3.getMonth() + 1).padStart(2, "0")}-${String(date3.getDate()).padStart(2, "0")}`;
+  }
+  function previousIso(now2) {
+    const previous = new Date(now2.getTime());
+    previous.setDate(previous.getDate() - 1);
+    return isoDate(previous);
   }
   function shiftContextAt(ref, now2 = /* @__PURE__ */ new Date()) {
     const key2 = shiftAt(now2);
-    if (key2) return { key: key2, date: ref, shift: SHIFTS[key2], live: true };
-    const previous = new Date(now2.getTime());
-    previous.setDate(previous.getDate() - 1);
-    const date3 = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, "0")}-${String(previous.getDate()).padStart(2, "0")}`;
-    return { key: "AFT", date: date3, shift: SHIFTS.AFT, live: false };
+    if (key2) {
+      const shift2 = SHIFTS[key2];
+      const minute = now2.getHours() * 60 + now2.getMinutes();
+      const startedYesterday = shift2.end <= shift2.start && minute < shift2.end;
+      return {
+        key: key2,
+        date: startedYesterday ? previousIso(now2) : ref,
+        shift: shift2,
+        live: true
+      };
+    }
+    return { key: "AFT", date: previousIso(now2), shift: SHIFTS.AFT, live: false };
   }
   function shiftStatusAt(date3 = /* @__PURE__ */ new Date()) {
     const minute = date3.getHours() * 60 + date3.getMinutes();
@@ -9856,14 +9882,14 @@ a.resource-download:active, button.resource-download:active { transform: transla
         shift: null,
         onBreak: false,
         label: "Off shift",
-        detail: "No production shift is active. Day shift starts at 07:00."
+        detail: "No production shift is active."
       };
     }
     const shift2 = SHIFTS[key2];
     const currentBreak = shift2.breaks.find((b) => minute >= b.from && minute < b.to) || null;
     const nextBreak = shift2.breaks.find((b) => b.from > minute) || null;
     const allBreaks = breakRanges(key2).join(", ");
-    const live = currentBreak ? `Break now ${clock(currentBreak.from)}\u2013${clock(currentBreak.to)}.` : nextBreak ? `Next break ${clock(nextBreak.from)}\u2013${clock(nextBreak.to)}.` : "All scheduled breaks are complete.";
+    const live = !shift2.breaks.length ? "No scheduled breaks." : currentBreak ? `Break now ${clock(currentBreak.from)}\u2013${clock(currentBreak.to)}.` : nextBreak ? `Next break ${clock(nextBreak.from)}\u2013${clock(nextBreak.to)}.` : "All scheduled breaks are complete.";
     return {
       key: key2,
       shift: shift2,
@@ -9871,7 +9897,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
       currentBreak,
       nextBreak,
       label: `${shift2.label}${currentBreak ? " \xB7 Break" : ""}`,
-      detail: `${shift2.label} shift ${shift2.range}. ${live} Breaks: ${allBreaks}.`
+      detail: shift2.breaks.length ? `${shift2.label} shift ${shift2.range}. ${live} Breaks: ${allBreaks}.` : `${shift2.label} shift ${shift2.range}. ${live}`
     };
   }
   var breakAt, SHIFTS, SHIFT_ORDER, ALIASES;
@@ -9907,16 +9933,15 @@ a.resource-download:active, button.resource-download:active { transform: transla
         },
         NIGHT: {
           key: "NIGHT",
-          label: "Midnight (historical)",
-          start: 23 * 60,
-          end: 7 * 60,
-          range: "23:00\u201307:00",
-          legacy: true,
-          full: false,
+          label: "Midnight",
+          start: 23 * 60 + 45,
+          end: 7 * 60 + 15,
+          range: "23:45\u201307:15",
+          full: true,
           breaks: []
         }
       };
-      SHIFT_ORDER = ["DAY", "AFT"];
+      SHIFT_ORDER = ["DAY", "AFT", "NIGHT"];
       ALIASES = { AFTERNOON: "AFT", MIDNIGHT: "NIGHT" };
     }
   });
@@ -10361,7 +10386,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
       const done = lines(row.done);
       const next = lines(row.next);
       const notes = lines(row.notes);
-      if (!done.length && !next.length && !notes.length) continue;
+      if (!done.length && !next.length && !notes.length && !row.targetPlan) continue;
       if (best && rank(log.date, log.shift) <= rank(best.date, best.shift)) continue;
       best = {
         date: log.date,
@@ -13092,6 +13117,51 @@ a.resource-download:active, button.resource-download:active { transform: transla
   });
 
   // js/floor-operations.js
+  function machineTarget(machine, input) {
+    const number2 = (key2, label, { optional = false, whole = false } = {}) => {
+      const raw = input[key2];
+      if (raw == null || String(raw).trim() === "") {
+        if (optional) return null;
+        throw new Error(`Enter ${label}.`);
+      }
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0 || n > 1e6 || whole && !Number.isInteger(n))
+        throw new Error(`Use a valid non-negative ${whole ? "whole " : ""}number for ${label}.`);
+      return n;
+    };
+    const rate = number2("rate", "hourly standard");
+    const available = number2("available", "available minutes");
+    const setup = number2("setup", "planned setup minutes");
+    const bandsaw = machine === "saw" ? number2("bandsaw", "planned bandsaw minutes") : 0;
+    const actual = number2("actual", "good output", { optional: true, whole: true });
+    if (rate <= 0) throw new Error("Hourly standard must be greater than zero.");
+    if (available > 1440 || setup + bandsaw > available) throw new Error("Time allowances must fit within available minutes (maximum 1440).");
+    const productive = available - setup - bandsaw;
+    const target = Math.floor(rate * productive / 60);
+    if (!Number.isSafeInteger(target)) throw new Error("Target is too large.");
+    return { version: 1, unit: machine === "multipunch" ? "windows" : "pieces", rate, available, setup, bandsaw, productive, target, actual };
+  }
+  function shiftRowHasContent(row) {
+    if (!row || typeof row !== "object") return false;
+    if (row.done || row.next || row.notes || row.ops) return true;
+    const plan = row.targetPlan;
+    return !!plan && typeof plan === "object" && Number.isFinite(Number(plan.target));
+  }
+  function machineTargetText(plan) {
+    if (!plan) return "";
+    const attainment = plan.actual != null && plan.target > 0 ? ` \xB7 ${Math.round(plan.actual / plan.target * 100)}% of plan` : "";
+    const bandsaw = Number(plan.bandsaw) > 0 ? `; planned bandsaw ${plan.bandsaw} min` : "";
+    return `Target ${plan.target} ${plan.unit} \xB7 Good output ${plan.actual == null ? "not recorded" : plan.actual + " " + plan.unit}${attainment}. Standard ${plan.rate}/h \xD7 ${plan.productive} production min \xF7 60 (rounded down). Available after breaks ${plan.available} min; planned setup ${plan.setup} min${bandsaw}. Actual downtime does not reduce this plan.`;
+  }
+  function validCalendarDate(value2) {
+    if (typeof value2 !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value2)) return false;
+    const parsed = /* @__PURE__ */ new Date(value2 + "T00:00:00Z");
+    return Number.isFinite(+parsed) && parsed.toISOString().slice(0, 10) === value2;
+  }
+  function downtimeNeedsVerification(item) {
+    const op = item.operation;
+    return !item.done && op?.kind === "downtime" && !op.timer?.startedAt && (!!op.timer || op.maintenance === "Repaired");
+  }
   function elapsedMinutes(op, now2 = /* @__PURE__ */ new Date()) {
     const timer = op?.timer;
     if (!timer) return op?.minutes ?? null;
@@ -13192,6 +13262,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
       return n;
     };
     const previous = id ? state.todos?.[id]?.operation || {} : {};
+    if (id && state.todos?.[id] && operationKind(state.todos[id]) !== kind) throw new Error("Report type cannot be changed. Create a separate report.");
     if (previous.timer && previous.machine !== machine) throw new Error("A timed event cannot be moved to another machine.");
     const operation = {
       ...previous,
@@ -13214,7 +13285,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
       operation.qualityState = QUALITY_STATES.includes(details.qualityState) ? details.qualityState : previous.qualityState || "Open";
       for (const key2 of ["rejected", "reworked", "replacement"]) operation[key2] = number2(details[key2] ?? previous[key2] ?? "", key2);
       operation.photos = details.photos ?? previous.photos ?? [];
-      if (!Array.isArray(operation.photos) || operation.photos.length > 2 || operation.photos.some((p) => typeof p.data !== "string" || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(p.data) || p.data.length > 16e4)) throw new Error("Maximum two compressed JPEG evidence photos.");
+      if (!Array.isArray(operation.photos) || operation.photos.length > 2 || operation.photos.some((p) => !p || typeof p.data !== "string" || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(p.data) || p.data.length > 16e4)) throw new Error("Maximum two compressed JPEG evidence photos.");
       const otherBytes = Object.values(state.todos).filter((t) => t.id !== id).reduce((n, t) => n + JSON.stringify(t.operation?.photos || []).length, 0);
       if (otherBytes + JSON.stringify(operation.photos).length > 15e5) throw new Error("Evidence storage is full. Export a backup and review older photos.");
     }
@@ -13234,22 +13305,26 @@ a.resource-download:active, button.resource-download:active { transform: transla
     const context = shiftContextAt(ref, now2);
     const board = todayBoard(ref);
     const reports = Object.values(state.todos || {}).filter((t) => t.date <= ref);
-    const open = reports.filter((t) => !t.done).sort((a, b) => Number(b.operation?.priority === "high") - Number(a.operation?.priority === "high") || a.date.localeCompare(b.date));
+    const open = reports.filter((t) => !t.done).sort((a, b) => Number(b.operation?.priority === "high") - Number(a.operation?.priority === "high") || Number(!!b.operation?.dueDate && b.operation.dueDate < ref) - Number(!!a.operation?.dueDate && a.operation.dueDate < ref) || (a.operation?.dueDate || "9999-12-31").localeCompare(b.operation?.dueDate || "9999-12-31") || a.date.localeCompare(b.date));
     const down = open.filter((t) => operationKind(t) === "downtime");
+    const log = state.shiftLogs?.[`${context.date}|${context.key}`];
     const machines = MACHINES.filter((m) => !m.queue).map(machineConfig).filter((m) => !m.hidden).map((m) => {
       const update = shiftUpdateFor(m.key);
+      const targetPlan = log?.rows?.[m.key]?.targetPlan || null;
       const incidents = down.filter((t) => t.operation.machine === m.key);
+      const activeIncidents = incidents.filter((t) => !downtimeNeedsVerification(t));
       const running = board.running.filter((r) => r.machine === m.key);
       const shortages = board.backOrders.filter((r) => r.machine === m.key);
-      const status = incidents.length || m.down ? "Reported down" : update?.down || update?.staleDown ? "Check down report" : running.length ? "Work in progress" : shortages.length ? "Material shortage" : "No active line";
-      const tone = incidents.length || m.down ? "bad" : update?.down || update?.staleDown || shortages.length ? "warn" : running.length ? "work" : "mute";
-      return { ...m, update, incidents, running, shortages, status, tone };
+      const status = activeIncidents.length || m.down ? "Reported down" : update?.down || update?.staleDown ? "Check down report" : incidents.length ? "Verify machine status" : running.length ? "Work in progress" : shortages.length ? "Material shortage" : "No active line";
+      const tone = activeIncidents.length || m.down ? "bad" : incidents.length || update?.down || update?.staleDown || shortages.length ? "warn" : running.length ? "work" : "mute";
+      return { ...m, update, targetPlan, incidents, running, shortages, status, tone };
     });
     const completed = machines.flatMap((m) => workInShift(m.key, context.date, context.key)).filter((h) => h.to === "DONE");
-    const log = state.shiftLogs?.[`${context.date}|${context.key}`];
     const documented = machines.filter((m) => {
       const row = log?.rows?.[m.key];
-      return row && ["done", "next", "notes"].some((k) => String(row[k] || "").trim());
+      if (!row) return false;
+      if (["done", "next", "notes"].some((k) => String(row[k] || "").trim())) return true;
+      return !!row.targetPlan && Number.isFinite(Number(row.targetPlan.target));
     }).length;
     const losses = reports.filter((t) => t.date === ref && operationKind(t) === "downtime");
     return {
@@ -13271,11 +13346,26 @@ a.resource-download:active, button.resource-download:active { transform: transla
     const context = shiftContextAt(ref, now2);
     return date3 === context.date && shift2 === context.key ? ref : date3;
   }
-  function operationHandoverLines(ref = today()) {
+  function commandSuggestions(data, ref = today()) {
+    const suggestions2 = [];
+    const reportHint = (key2, items, title, reason) => {
+      if (items.length) suggestions2.push({ key: key2, title, reason: `${items.length} open report${items.length === 1 ? "" : "s"}. ${reason}`, report: items[0] });
+    };
+    reportHint("running-loss", data.down.filter((t) => t.operation?.timer?.startedAt), "Check running downtime timers", "Confirm the loss is ongoing; stop the timer when it ends.");
+    reportHint("verify-machine", data.down.filter(downtimeNeedsVerification), "Verify machine recovery", "A stopped timer or repair note does not confirm production has resumed.");
+    reportHint("quality-containment", data.quality.filter((t) => !String(t.operation?.containment || "").trim() && t.operation?.qualityState !== "Disposition complete"), "Review quality containment", "Containment is not documented. Confirm the next step with Quality.");
+    reportHint("overdue", data.open.filter((t) => t.operation?.dueDate && t.operation.dueDate < ref), "Follow up overdue actions", "Review the owner and due date; do not silently move the deadline.");
+    reportHint("unassigned", data.open.filter((t) => !t.assignee || t.assignee === "Unassigned"), "Assign follow-up owners", "Choose who will follow through; assignment does not send a notification.");
+    if (!(state.tasks || []).length) suggestions2.push({ key: "setup", title: "Load production schedules", reason: "No schedule lines are loaded. Empty production counts do not confirm an idle floor.", page: "setup" });
+    if (!data.log) suggestions2.push({ key: "handover", title: "Prepare the shift handover", reason: "No saved handover exists for the displayed shift.", page: "shift" });
+    return suggestions2;
+  }
+  function operationHandoverLines(ref = today(), now2 = /* @__PURE__ */ new Date()) {
     return Object.values(state.todos || {}).filter((t) => !t.done && t.date <= ref).map((t) => {
       const op = t.operation || {};
       const machine = MACHINES.find((m) => m.key === op.machine);
-      return `${t.text} \u2014 ${t.assignee || "Unassigned"}${machine ? " \xB7 " + machineConfig(machine).label : ""}${op.wo ? " \xB7 W/O " + op.wo : ""}${op.dueDate ? " \xB7 Due " + op.dueDate : ""}${op.minutes != null ? " \xB7 " + op.minutes + " min reported" : ""}`;
+      const minutes = op.kind === "downtime" ? elapsedMinutes(op, now2) : null;
+      return `${t.text} \u2014 ${t.assignee || "Unassigned"}${machine ? " \xB7 " + machineConfig(machine).label : ""}${op.wo ? " \xB7 W/O " + op.wo : ""}${op.dueDate ? " \xB7 Due " + op.dueDate : ""}${minutes != null ? " \xB7 " + minutes + " min reported" : ""}${op.timer?.startedAt ? " \xB7 timer still running" : ""}${downtimeNeedsVerification(t) ? " \xB7 verify machine status" : ""}`;
     });
   }
   var OPERATION_KINDS;
@@ -13334,7 +13424,63 @@ a.resource-download:active, button.resource-download:active { transform: transla
     return d.rows[key2];
   }
   function hasContent(r) {
-    return !!(r && (r.done || r.next || r.notes || r.ops));
+    return shiftRowHasContent(r);
+  }
+  function targetEditor(machine, row, rerender) {
+    if (machine.standing) return null;
+    return el(
+      "div",
+      { style: { padding: "12px" } },
+      row.targetPlan ? el("p.small", {}, machineTargetText(row.targetPlan)) : null,
+      el("button", { type: "button", onclick: () => {
+        const unit = machine.key === "multipunch" ? "windows" : "pieces";
+        const inputs = {};
+        const fields = [
+          ["rate", `Approved standard (${unit}/hour)`],
+          ["available", "Available minutes after breaks"],
+          ["setup", "Planned setup minutes"],
+          ...machine.key === "saw" ? [["bandsaw", "Planned bandsaw minutes"]] : [],
+          ["actual", `Good output (${unit}, optional)`]
+        ];
+        const error = el("p", { role: "alert" });
+        const body = el(
+          "div",
+          {},
+          el("p", {}, "Enter an agreed standard; no target is assumed. Available time excludes breaks. Setup and bandsaw allowances must not overlap. Enter only Elumatec cutting output for the saw plan."),
+          el("p", {}, "Good output is manually counted accepted output, excluding rejects and duplicate rework. Multi Punch uses windows; imported schedule pieces are never converted. Leave output blank until measured."),
+          el("div.command-form-grid", {}, ...fields.map(([key2, label]) => {
+            inputs[key2] = el("input", {
+              type: "number",
+              min: "0",
+              step: key2 === "actual" ? "1" : "any",
+              inputmode: "decimal",
+              value: row.targetPlan?.[key2] ?? (["setup", "bandsaw"].includes(key2) ? 0 : ""),
+              "aria-label": label
+            });
+            return el("label", {}, label, inputs[key2]);
+          })),
+          error,
+          el("p.small.muted", {}, "Target = hourly standard \xD7 (available \u2212 setup \u2212 bandsaw) \xF7 60, rounded down. Actual downtime is recorded separately. This is plan attainment, not OEE. Apply updates this draft; save the handover to retain it.")
+        );
+        const dialog = modal(`${machine.label} target plan`, body, { actions: [
+          { label: "Clear plan", onClick: () => {
+            delete row.targetPlan;
+            dialog.close();
+            rerender();
+          } },
+          { label: "Apply to draft", onClick: () => {
+            try {
+              row.targetPlan = machineTarget(machine.key, Object.fromEntries(Object.entries(inputs).map(([key2, input]) => [key2, input.value])));
+            } catch (e) {
+              error.textContent = e.message;
+              return;
+            }
+            dialog.close();
+            rerender();
+          } }
+        ] });
+      } }, row.targetPlan ? "Edit target plan" : "Add target plan")
+    );
   }
   function sections() {
     const byGroup = machinesByGroup();
@@ -13458,6 +13604,8 @@ ${text4}` : text4;
         value: row[field2] || "",
         placeholder,
         rows: lines2,
+        "data-keep-focus": `${machine.key}:${field2}`,
+        "aria-label": `${machine.label} ${label}`,
         oninput: (e) => {
           row[field2] = e.target.value;
         }
@@ -13512,12 +13660,15 @@ ${add2.join("\n")}` : add2.join("\n");
             inputmode: "numeric",
             value: row.ops ?? "",
             placeholder: machine.ops == null ? "\u2014" : String(machine.ops),
+            "data-keep-focus": `${machine.key}:ops`,
+            "aria-label": `${machine.label} operator count`,
             oninput: (e) => {
               row.ops = e.target.value;
             }
           })
         )
       ),
+      targetEditor(machine, row, rerender),
       el(
         "div.sucard-body",
         {},
@@ -13592,6 +13743,8 @@ ${add2.join("\n")}` : add2.join("\n");
           rows: 4,
           value: d.notes,
           placeholder: "People, material, safety, visitors or anything not tied to one machine.",
+          "data-keep-focus": "general-notes",
+          "aria-label": "General shift notes",
           oninput: (event) => {
             d.notes = event.target.value;
           }
@@ -13618,6 +13771,8 @@ ${add2.join("\n")}` : add2.join("\n");
         rows: lines2,
         value: row[key2] || "",
         placeholder: prompt,
+        "data-keep-focus": `${machine.key}:${key2}`,
+        "aria-label": `${machine.label} ${label}`,
         oninput: (event) => {
           row[key2] = event.target.value;
         }
@@ -13674,7 +13829,8 @@ ${add2.join("\n")}` : add2.join("\n");
             type: "number",
             min: "0",
             inputmode: "numeric",
-            "aria-label": "Operator count",
+            "aria-label": `${machine.label} operator count`,
+            "data-keep-focus": `${machine.key}:ops`,
             value: row.ops ?? "",
             placeholder: machine.ops == null ? "0" : String(machine.ops),
             oninput: (event) => {
@@ -13689,6 +13845,7 @@ ${add2.join("\n")}` : add2.join("\n");
           }, icon("plus", { size: 18 }))
         )
       ),
+      targetEditor(machine, row, rerender),
       el(
         "div.mobile-su-fields",
         {},
@@ -13755,7 +13912,7 @@ ${add2.join("\n")}` : add2.join("\n");
       const savedRows = Object.fromEntries(
         Object.entries(d.rows).filter(([, value2]) => hasContent(value2))
       );
-      saveShiftLog(view.date, view.shift, { rows: savedRows, notes: d.notes.trim() });
+      saveShiftLog(view.date, view.shift, { rows: structuredClone(savedRows), notes: d.notes.trim() });
       const after = rows.findIndex((item, itemIndex) => itemIndex > index && !hasContent(d.rows[item.key]));
       const anywhere = rows.findIndex((item) => !hasContent(d.rows[item.key]));
       const nextIndex = after >= 0 ? after : anywhere;
@@ -13930,6 +14087,8 @@ ${add2.join("\n")}` : add2.join("\n");
             value: d.notes,
             rows: 3,
             placeholder: "Anything not tied to one machine \u2014 people, material, safety, visitors.",
+            "data-keep-focus": "general-notes",
+            "aria-label": "General shift notes",
             oninput: (e) => {
               d.notes = e.target.value;
             }
@@ -13976,6 +14135,7 @@ ${add2.join("\n")}` : add2.join("\n");
       for (const m of rows) {
         const r = log.rows[m.key];
         out.push(`${m.label}${r.ops ? `  (${r.ops} ops)` : ""}`);
+        if (r.targetPlan) out.push("  " + machineTargetText(r.targetPlan));
         for (const [field2, label] of FIELDS2) {
           if (!r[field2]) continue;
           out.push(`  ${label}:`);
@@ -14018,7 +14178,7 @@ ${add2.join("\n")}` : add2.join("\n");
                 machine.note ? el("small", {}, machine.note) : null
               ),
               el("td.mono.num", {}, blank ? "\xA0" : row.ops || "\u2014"),
-              el("td.preline", {}, blank ? "\xA0" : row.done || "\u2014"),
+              el("td.preline", {}, blank ? "\xA0" : [row.done, machineTargetText(row.targetPlan)].filter(Boolean).join("\n") || "\u2014"),
               el("td.preline", {}, blank ? "\xA0" : row.next || "\u2014"),
               el("td.preline", {}, blank ? "\xA0" : row.notes || "\u2014")
             );
@@ -14122,7 +14282,7 @@ ${add2.join("\n")}` : add2.join("\n");
         }, "Write the update") : el(
           "p.small.muted",
           {},
-          "This is a historical shift. New updates are available only for Day and Afternoon."
+          "This shift is not on the current schedule. New updates are for Day, Afternoon and Midnight."
         )
       ));
     }
@@ -14144,6 +14304,7 @@ ${add2.join("\n")}` : add2.join("\n");
               el("strong", {}, m.label),
               r.ops ? chip(`${r.ops} ops`, "mute") : null
             ),
+            r.targetPlan ? el("p.small", {}, machineTargetText(r.targetPlan)) : null,
             el("div.suread-cols", {}, ...FIELDS2.map(([field2, label]) => r[field2] ? el(
               "div.suread-col",
               {},
@@ -14251,7 +14412,7 @@ ${add2.join("\n")}` : add2.join("\n");
         el("button.print-action.print-blank-action", {
           type: "button",
           disabled: !operationalShift(),
-          title: operationalShift() ? `Print a blank ${selectedShift.label.toLowerCase()} form to fill by hand` : "Blank forms are available for Day and Afternoon shifts",
+          title: operationalShift() ? `Print a blank ${selectedShift.label.toLowerCase()} form to fill by hand` : "Blank forms are for Day, Afternoon and Midnight",
           onclick: printBlankShiftUpdate
         }, icon("note", { size: 16 }), el("span", {}, "Print blank")),
         el(
@@ -14271,7 +14432,7 @@ ${add2.join("\n")}` : add2.join("\n");
           }),
           el("div.subtabs", {}, ...SHIFT_ORDER.map((k) => el("button", {
             "aria-current": String(view.shift === k),
-            title: `${SHIFTS[k].label} \xB7 ${SHIFTS[k].range} \xB7 Breaks: ${breakRanges(k).join(", ")}`,
+            title: `${SHIFTS[k].label} \xB7 ${SHIFTS[k].range}${breakRanges(k).length ? ` \xB7 Breaks: ${breakRanges(k).join(", ")}` : ""}`,
             onclick: () => {
               view.shift = k;
               view.mobileKey = null;
@@ -14321,7 +14482,7 @@ ${add2.join("\n")}` : add2.join("\n");
         {},
         icon("clock", { size: 14 }),
         el("strong", {}, `${selectedShift.label} breaks`),
-        el("span", {}, breakRanges(view.shift).join(" \xB7 "))
+        el("span", {}, breakRanges(view.shift).join(" \xB7 ") || "No scheduled breaks")
       ) : null,
       /* The bar is the at-a-glance proportion; the number and the way to act on
          it live in the rail below, which also lists what is still missing. Both
@@ -14430,7 +14591,7 @@ ${add2.join("\n")}` : add2.join("\n");
     view.mobileKey = null;
     view.mobileSuggestions = false;
   }
-  var CENTRES, FIELDS2, view, draft, draftKey, PRIMARY_STANDING, showExtraStanding;
+  var CENTRES, FIELDS2, opening, view, draft, draftKey, PRIMARY_STANDING, showExtraStanding;
   var init_shiftupdate = __esm({
     "js/views/shiftupdate.js"() {
       init_command_center();
@@ -14451,9 +14612,10 @@ ${add2.join("\n")}` : add2.join("\n");
         ["next", "Next in schedule"],
         ["notes", "Notes"]
       ];
+      opening = shiftContextAt(today());
       view = {
-        date: today(),
-        shift: shiftAt() || "DAY",
+        date: opening.date,
+        shift: opening.key || "DAY",
         mode: "write",
         onlyIncomplete: false,
         mobileKey: null,
@@ -16106,6 +16268,7 @@ ${add2.join("\n")}` : add2.join("\n");
   function shift(value2) {
     const valueKey = key(value2);
     if (valueKey === "AFT" || valueKey.includes("AFTERNOON")) return "AFTERNOON";
+    if (valueKey === "NIGHT" || valueKey.includes("MIDNIGHT")) return "MIDNIGHT";
     if (valueKey.includes("DAY")) return "DAY";
     return "";
   }
@@ -16181,6 +16344,7 @@ ${add2.join("\n")}` : add2.join("\n");
   }
   function shiftLabel2(shift2) {
     if (shift2 === "AFTERNOON") return "Afternoon shift";
+    if (shift2 === "MIDNIGHT") return "Midnight shift";
     if (shift2 === "DAY") return "Day shift";
     return "Shift not set";
   }
@@ -16252,7 +16416,8 @@ ${add2.join("\n")}` : add2.join("\n");
       { "aria-label": "Employee shift" },
       el("option", { value: "", selected: !record?.shift }, "Not set"),
       el("option", { value: "DAY", selected: record?.shift === "DAY" }, "Day \xB7 07:00\u201315:30"),
-      el("option", { value: "AFTERNOON", selected: record?.shift === "AFTERNOON" }, "Afternoon \xB7 15:30\u201300:00")
+      el("option", { value: "AFTERNOON", selected: record?.shift === "AFTERNOON" }, "Afternoon \xB7 15:30\u201300:00"),
+      el("option", { value: "MIDNIGHT", selected: record?.shift === "MIDNIGHT" }, "Midnight \xB7 23:45\u201307:15")
     );
     const role = el(
       "select.employee-role-input",
@@ -16368,7 +16533,7 @@ ${add2.join("\n")}` : add2.join("\n");
       }
     });
     const dlg = modal(editing ? "Edit employee" : "Add employee", body, { actions, origin });
-    requestAnimationFrame(() => name.focus());
+    name.focus();
     return dlg;
   }
   function employeeCard(record, rerender) {
@@ -18340,12 +18505,12 @@ ${add2.join("\n")}` : add2.join("\n");
     const sheetNote = t.comments || (bo.on ? null : t.boStat);
     const selected = vs3.selected.has(key2);
     const active = vs3.active === key2;
-    const opening = vs3.motion?.type === "select" && vs3.motion.key === key2;
+    const opening2 = vs3.motion?.type === "select" && vs3.motion.key === key2;
     const statusChanged = vs3.motion?.type === "status" && vs3.motion.key === key2;
     const canMove = canMoveIn(group);
     const suggestion = canMove ? suggestedMachine(t) : null;
     const node = el(
-      "div.line" + (selected ? ".sel" : "") + (active ? ".active" : "") + (opening ? ".line-opening" : "") + (statusChanged ? ".status-changed" : "") + (rush.on ? ".rush" : "") + (bo.on ? ".is-bo" : "") + (t.editedAt ? ".is-edited" : ""),
+      "div.line" + (selected ? ".sel" : "") + (active ? ".active" : "") + (opening2 ? ".line-opening" : "") + (statusChanged ? ".status-changed" : "") + (rush.on ? ".rush" : "") + (bo.on ? ".is-bo" : "") + (t.editedAt ? ".is-edited" : ""),
       {
         "data-motion-key": key2,
         onclick: (e) => {
@@ -18712,7 +18877,7 @@ ${add2.join("\n")}` : add2.join("\n");
     const parked = !!park?.on;
     const updates = [row.status?.at, note?.at, bo.at, rush.at, park?.at, t.editedAt].filter(Boolean).sort();
     const last = updates.at(-1);
-    const opening = vs3.motion?.type === "select" && vs3.motion.key === key2;
+    const opening2 = vs3.motion?.type === "select" && vs3.motion.key === key2;
     const detail = (label, value2, cls = "") => value2 != null && value2 !== "" ? el(
       "div.inspector-detail" + (cls ? "." + cls : ""),
       {},
@@ -18738,7 +18903,7 @@ ${add2.join("\n")}` : add2.join("\n");
       ).finished.then(finish, finish);
     };
     return el(
-      "aside.line-inspector" + (opening ? ".opening" : ""),
+      "aside.line-inspector" + (opening2 ? ".opening" : ""),
       {
         "aria-label": `Selected line ${t.wo}`
       },
@@ -20117,7 +20282,7 @@ ${add2.join("\n")}` : add2.join("\n");
   }
   function renderToday(rerender, go2) {
     const ref = today();
-    const { key: shiftKey, shift: shift2 } = shiftContextAt(ref);
+    const { key: shiftKey, shift: shift2, date: shiftDate } = shiftContextAt(ref);
     const head = el(
       "div.centre-head",
       {},
@@ -20163,7 +20328,7 @@ ${add2.join("\n")}` : add2.join("\n");
       );
     }
     const b = todayBoard(ref);
-    const written = shiftWritten(ref, shiftKey);
+    const written = shiftWritten(shiftDate, shiftKey);
     return el(
       "div.centre",
       {},
@@ -20275,9 +20440,14 @@ ${add2.join("\n")}` : add2.join("\n");
     return `${SHIFTS[shift2]?.label || shift2} \xB7 ${fmtDate(date3, { withDay: true })}`;
   }
   function upcomingShifts(n = 4) {
+    const context = shiftContextAt(today());
     const out = [];
-    let date3 = today();
-    let i = SHIFT_ORDER.indexOf(shiftAt());
+    let date3 = context.date;
+    let i = SHIFT_ORDER.indexOf(context.key);
+    if (i < 0) {
+      date3 = today();
+      i = -1;
+    }
     for (let k = 0; k < n; k++) {
       i += 1;
       if (i >= SHIFT_ORDER.length) {
@@ -20687,8 +20857,15 @@ ${add2.join("\n")}` : add2.join("\n");
   init_machines();
   init_ui();
   init_floor_operations();
+  function completedOn(item, date3, now2) {
+    if (!item.done || !item.doneAt) return false;
+    const at = new Date(item.doneAt);
+    return Number.isFinite(+at) && +at <= +now2 && today(at) === date3;
+  }
+  var REPORT_NOTE = "Calendar-day totals in this device\u2019s timezone, not shift totals. Running timers are measured through report generation. Incident minutes may overlap. Zero means no recorded amount, not a confirmed loss-free day. Counts are reports, not defects or OEE. Historical production targets are not inferred from the current schedule.";
   function supervisorSummary(from, to, now2 = /* @__PURE__ */ new Date()) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) throw new Error("Choose a valid date range.");
+    if (!validCalendarDate(from) || !validCalendarDate(to) || from > to) throw new Error("Choose a valid date range.");
+    if (to > today(now2)) throw new Error("Report dates cannot be in the future.");
     const dates = [];
     for (let day = /* @__PURE__ */ new Date(from + "T00:00:00"); day <= /* @__PURE__ */ new Date(to + "T00:00:00"); day.setDate(day.getDate() + 1)) {
       dates.push(`${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`);
@@ -20704,11 +20881,11 @@ ${add2.join("\n")}` : add2.join("\n");
         Math.round(losses.filter((t) => t.operation.planned).reduce((n, t) => n + lossMinutesOn(t, date3, now2), 0)),
         losses.filter((t) => t.date === date3 && !t.operation.timer && t.operation.minutes == null).length,
         records.filter((t) => t.date === date3 && t.operation?.kind === "quality").length,
-        records.filter((t) => t.doneAt?.slice(0, 10) === date3).length
+        records.filter((t) => completedOn(t, date3, now2)).length
       ];
     });
     const incidents = records.filter((t) => t.operation?.kind === "downtime").map((t) => ({
-      machine: MACHINES.find((m) => m.key === t.operation.machine)?.label || t.operation.machine || "Department",
+      machine: machineConfig(MACHINES.find((m) => m.key === t.operation.machine) || { key: t.operation.machine, label: t.operation.machine || "Department" }).label,
       reason: t.operation.reason || "Other",
       minutes: dates.reduce((n, d) => n + lossMinutesOn(t, d, now2), 0)
     })).filter((t) => t.minutes > 0);
@@ -20717,10 +20894,12 @@ ${add2.join("\n")}` : add2.join("\n");
       const key2 = `${incident.machine} \xB7 ${incident.reason}`;
       totals.set(key2, (totals.get(key2) || 0) + incident.minutes);
     }
+    const recordCount = records.filter((t) => t.date >= from && t.date <= to || dates.some((date3) => completedOn(t, date3, now2) || t.operation?.kind === "downtime" && lossMinutesOn(t, date3, now2) > 0)).length;
     return {
       daily,
+      recordCount,
       causes: [...totals].sort((a, b) => b[1] - a[1]).map(([key2, minutes]) => [key2, Math.round(minutes)]),
-      open: records.filter((t) => !t.done && t.date <= today()).length
+      open: records.filter((t) => !t.done && t.date <= today(now2)).length
     };
   }
   function openSupervisorReport() {
@@ -20732,14 +20911,23 @@ ${add2.join("\n")}` : add2.join("\n");
     const to = el("input", { type: "date", value: end, max: end, "aria-label": "Report through" });
     const body = el("div.supervisor-report-body");
     const error = el("p", { role: "alert" });
-    const headers2 = ["Date", "Unplanned min", "Planned min", "Unmeasured reports", "Quality reports", "Follow-ups resolved"];
+    const headers2 = ["Date", "Unplanned min", "Planned min", "Unmeasured reports", "Quality reports", "Reports resolved"];
     const table = (titles, rows) => el("div.report-table-wrap", {}, el("table", {}, el("thead", {}, el("tr", {}, ...titles.map((t) => el("th", { scope: "col" }, t)))), el("tbody", {}, ...rows.map((row) => el("tr", {}, ...row.map((v) => el("td", {}, String(v))))))));
     let result;
     const refresh = () => {
       try {
         result = supervisorSummary(from.value, to.value);
         error.textContent = "";
-        body.replaceChildren(el("h3", {}, "Recorded shift activity"), table(headers2, result.daily), el("h3", {}, "Largest reported downtime causes"), table(["Machine / reason", "Minutes"], result.causes), el("p", {}, `${result.open} follow-ups remain open now.`), el("p.small.muted", {}, "Calendar-day totals in this device\u2019s timezone. Running timers are measured through report generation. Incident minutes may overlap. Counts are reports, not defects or OEE. Historical production targets are not inferred from the current schedule."));
+        body.replaceChildren(
+          el("h3", {}, "Recorded daily activity"),
+          el("p", {}, result.recordCount ? `${result.recordCount} report records contribute to this period. Entries may be incomplete.` : "No report records for this period. These zeros do not confirm there were no losses or quality issues."),
+          table(headers2, result.daily),
+          el("h3", {}, "Largest reported downtime causes"),
+          table(["Machine / reason", "Minutes"], result.causes),
+          ...!result.causes.length ? [el("p", {}, "No measured downtime recorded in this period.")] : [],
+          el("p", {}, `${result.open} reports remain open now (all dates, not just this range).`),
+          el("p.small.muted", {}, REPORT_NOTE)
+        );
       } catch (e) {
         result = null;
         body.replaceChildren();
@@ -20752,7 +20940,7 @@ ${add2.join("\n")}` : add2.join("\n");
     modal("Supervisor report", el("div", {}, el("div.command-form-grid", {}, el("label", {}, "From", from), el("label", {}, "Through", to)), error, body), { wide: true, actions: [
       { label: "Export CSV", onClick: () => {
         refresh();
-        if (result) download(`supervisor-report-${from.value}-${to.value}.csv`, reportCsv([headers2, ...result.daily, [], ["Machine / reason", "Minutes"], ...result.causes]), "text/csv;charset=utf-8");
+        if (result) download(`supervisor-report-${from.value}-${to.value}.csv`, reportCsv([headers2, ...result.daily, [], ["Machine / reason", "Minutes"], ...result.causes, [], ["Interpretation", REPORT_NOTE], ["Report records in period", result.recordCount], ["Open reports now (all dates)", result.open]]), "text/csv;charset=utf-8");
       } },
       { label: "Print / Save PDF", onClick: () => {
         refresh();
@@ -20905,7 +21093,8 @@ ${add2.join("\n")}` : add2.join("\n");
         field("Reason", reason),
         field("Maintenance status", maintenance),
         field("Planned downtime", planned),
-        el("p.small.muted", {}, "Leave minutes blank to use Start timer after saving. Maintenance status is a record only; no notification is sent.")
+        el("p.small.muted", {}, op.timer ? "Minutes come from the timer. Stopping it leaves the report open for follow-up; confirm machine recovery before resolving." : "For a past loss, enter measured minutes. For an ongoing loss, leave minutes blank, save, then select Start timer. The timer starts at that moment, not the report date."),
+        el("p.small.muted", {}, "Maintenance status is a record only; no notification is sent.")
       ) : null,
       kind === "quality" ? el(
         "fieldset",
@@ -20962,6 +21151,7 @@ ${add2.join("\n")}` : add2.join("\n");
           {},
           elapsedMinutes(op) == null ? "Lost time not measured" : `${elapsedMinutes(op)} min reported`,
           op.timer?.startedAt ? ` \xB7 Timer running since ${new Date(op.timer.startedAt).toLocaleTimeString()}` : "",
+          downtimeNeedsVerification(item) ? " \xB7 Verify machine status; follow-up still open" : "",
           ` \xB7 ${op.planned ? "Planned" : "Unplanned"} \xB7 ${op.reason || "Other"} \xB7 ${op.maintenance || "Not notified"}`
         ) : null,
         kind === "quality" ? el(
@@ -21009,6 +21199,27 @@ ${add2.join("\n")}` : add2.join("\n");
       focusShiftUpdate(data.context.date, data.context.key);
       go2("shift");
     };
+    const suggestions2 = commandSuggestions(data);
+    const suggestedSteps = panel(
+      "Suggested next steps",
+      "Based on saved records, not live machine signals. Review before acting.",
+      el(
+        "div.command-summary-body",
+        {},
+        suggestions2.length ? el("ol", {}, ...suggestions2.slice(0, 4).map((s) => el(
+          "li",
+          {},
+          el("strong", {}, s.title),
+          el("p", {}, s.reason),
+          button(s.report ? "Review report" : s.page === "setup" ? "Open Setup" : "Prepare handover", () => {
+            if (s.report) openOperationDialog(operationKind(s.report), rerender, s.report.operation?.machine || "", s.report);
+            else if (s.page === "shift") openHandover();
+            else go2(s.page);
+          }, "ghost")
+        ))) : el("p", {}, "No rule-based follow-ups found. Confirm conditions on the floor; missing entries can hide issues."),
+        suggestions2.length > 4 ? el("p.small.muted", {}, "Showing the first four checks. Other open reports remain below.") : null
+      )
+    );
     const machines = data.machines.filter((m) => (!filters.group || m.group === filters.group) && (!filters.attention || ["bad", "warn"].includes(m.tone)));
     machines.sort((a, b) => ["bad", "warn", "work", "mute"].indexOf(a.tone) - ["bad", "warn", "work", "mute"].indexOf(b.tone));
     const displayedMachines = filters.allMachines ? machines : machines.slice(0, 4);
@@ -21041,6 +21252,7 @@ ${add2.join("\n")}` : add2.join("\n");
           {},
           el("div.command-machine-top", {}, el("strong", {}, m.label), chip(m.status, m.tone)),
           el("p", {}, m.running.length ? `${m.running.length} active line${m.running.length === 1 ? "" : "s"} \xB7 W/O ${m.running[0].task.wo}` : "No line marked in progress"),
+          m.targetPlan && Number.isFinite(Number(m.targetPlan.target)) ? el("small", {}, `Target ${m.targetPlan.target} ${m.targetPlan.unit}`) : null,
           el("small", {}, m.incidents.length ? `${m.incidents.length} open downtime report${m.incidents.length === 1 ? "" : "s"}` : m.update ? `Shift update ${fmtDate(m.update.date)}${m.update.staleDown ? ` \xB7 down flag from ${fmtDate(m.update.staleDown)}` : ""}` : "No shift update recorded"),
           el(
             "div.command-machine-actions",
@@ -21063,6 +21275,7 @@ ${add2.join("\n")}` : add2.join("\n");
         {},
         el("div.command-big", {}, fmtNum(data.minutes), el("small", {}, " min reported")),
         el("p", {}, `${data.down.length} open report${data.down.length === 1 ? "" : "s"} \xB7 ${data.unknownMinutes} today without measured time`),
+        el("p.small.muted", {}, "Calendar-day minutes, not shift totals. Zero is not confirmation of no losses."),
         data.down.length ? el("p.command-emphasis", {}, data.down[0].text) : empty("No open downtime reports."),
         button("Report downtime", () => openOperationDialog("downtime", rerender), "ghost")
       )
@@ -21115,7 +21328,7 @@ ${add2.join("\n")}` : add2.join("\n");
         el("div.command-big", {}, `${data.documented}/${data.machines.length}`, el("small", {}, " machines documented")),
         el("progress.command-progress", { max: Math.max(1, data.machines.length), value: data.documented, "aria-label": "Machines with saved handover notes" }),
         el("p", {}, `${data.completed.length} line${data.completed.length === 1 ? "" : "s"} marked done during this shift`),
-        el("p", {}, `${data.open.length} open actions \xB7 ${data.board.backOrders.length} shortage lines to review`),
+        el("p", {}, `${data.open.length} open reports \xB7 ${data.board.backOrders.length} shortage lines to review`),
         el("p.small.muted", {}, data.log?.notes || "Review completed work, next jobs and unresolved issues with the incoming crew."),
         button("Prepare handover", openHandover, "primary")
       )
@@ -21129,6 +21342,7 @@ ${add2.join("\n")}` : add2.join("\n");
         el("div", {}, el("span.command-eyebrow", {}, "Floor control"), el("h2", {}, "Keep the next decision clear.")),
         el("div.command-toolbar-actions", {}, button("Supervisor report", openSupervisorReport), button("Add action", () => openOperationDialog("action", rerender)), button("Write handover", openHandover, "primary"))
       ),
+      suggestedSteps,
       machinePanel,
       el("div.command-insights", {}, losses, quality, handover),
       actions
@@ -21143,7 +21357,7 @@ ${add2.join("\n")}` : add2.join("\n");
   init_shifts();
   var GROUP_PAGE2 = { Rolling: "rolling", FOM: "fom", CNC: "cnc", Punch: "punch" };
   var PREVIOUS_SHIFT = {
-    DAY: { key: "AFT", day: -1, legacy: "NIGHT" },
+    DAY: { key: "NIGHT", day: -1, fallback: "AFT" },
     AFT: { key: "DAY", day: 0 },
     NIGHT: { key: "AFT", day: 0 }
   };
@@ -21159,10 +21373,13 @@ ${add2.join("\n")}` : add2.join("\n");
   function previousHandoff(date3, shiftKey) {
     const previous = PREVIOUS_SHIFT[shiftKey] || PREVIOUS_SHIFT.DAY;
     const previousDate = addDays(date3, previous.day);
-    const log = state.shiftLogs?.[`${previousDate}|${previous.key}`] || (previous.legacy ? state.shiftLogs?.[`${previousDate}|${previous.legacy}`] : null) || null;
+    const log = state.shiftLogs?.[`${previousDate}|${previous.key}`] || (previous.fallback ? state.shiftLogs?.[`${previousDate}|${previous.fallback}`] : null) || null;
     const source = log?.rows || {};
-    const usefulRow = Object.entries(source).find(([, row]) => String(row?.notes || row?.next || row?.done || "").trim());
-    const rowText = usefulRow ? String(usefulRow[1].notes || usefulRow[1].next || usefulRow[1].done || "").trim().split("\n")[0] : "";
+    const usefulRow = Object.entries(source).find(([, row]) => String(row?.notes || row?.next || row?.done || "").trim() || row?.targetPlan);
+    const note = usefulRow ? String(usefulRow[1].notes || usefulRow[1].next || usefulRow[1].done || "").trim().split("\n")[0] : "";
+    const plan = usefulRow?.[1]?.targetPlan;
+    const planText = plan && Number.isFinite(Number(plan.target)) ? `Target ${plan.target} ${plan.unit || ""}`.trim() : "";
+    const rowText = note || planText;
     return {
       key: previous.key,
       label: SHIFTS[previous.key].label,
@@ -21402,7 +21619,7 @@ ${add2.join("\n")}` : add2.join("\n");
     const shift2 = shiftContext.shift;
     const staffed = MACHINES.map(machineConfig).filter((m) => !m.queue && !m.hidden && !m.down);
     const heads = staffed.reduce((n, m) => n + (Number(m.ops) || 0), 0);
-    const crew = heads ? `${heads} operator${heads === 1 ? "" : "s"} across ${staffed.length} machines` : "Crew not set";
+    const crew = heads ? `Configured: ${heads} operator${heads === 1 ? "" : "s"} across ${staffed.length} machines \xB7 attendance not confirmed` : "Crew not set";
     const all = tasksInScope().map((task) => rowFor2(task, ref));
     const open = all.filter((row) => row.status.key !== "DONE").sort(urgency);
     const done = all.length - open.length;
@@ -21443,7 +21660,7 @@ ${add2.join("\n")}` : add2.join("\n");
       {
         "aria-label": "Current shift health"
       },
-      healthStat("check", all.length ? `${donePct}%` : "\u2014", "Schedule complete", "ok", `${fmtNum(done)} / ${fmtNum(all.length)} lines`),
+      healthStat("check", all.length ? `${donePct}%` : "\u2014", "Schedule complete", all.length ? "ok" : "mute", all.length ? `${fmtNum(done)} / ${fmtNum(all.length)} loaded lines \xB7 all dates` : "No schedule lines loaded"),
       healthStat("factory", String(runningMachines), "Machines with active work", "work", `${fmtNum(board.running.length)} active lines`),
       healthStat("calendar", String(board.dueToday.length), "Due today", "warn"),
       healthStat("alert", String(board.backOrders.length), "Blocked", "bad"),
@@ -21505,17 +21722,17 @@ ${add2.join("\n")}` : add2.join("\n");
           "div.overview-crew",
           {},
           icon("dot", { size: 12 }),
-          shiftContext.live ? crew : "Nobody on the floor right now",
+          shiftContext.live ? crew : "Outside configured shift hours \xB7 attendance not confirmed",
           me() ? ` \xB7 ${me()}` : ""
         )
       ),
       handoffCard,
       healthStrip,
-      el("progress.overview-meter.overview-schedule-progress", {
+      all.length ? el("progress.overview-meter.overview-schedule-progress", {
         value: donePct,
         max: 100,
         "aria-label": `Schedule ${donePct}% complete`
-      })
+      }) : null
     );
     const currentLog2 = state.shiftLogs?.[`${shiftContext.date}|${shiftContext.key}`] || null;
     const loggedMachines = currentLog2 ? Object.keys(currentLog2.rows || {}).length : 0;
@@ -22788,7 +23005,7 @@ create policy "tracker update" on public.tracker_state
           el("span.monitor-shift-label", {}, shiftText)
         )
       ),
-      el("time.monitor-clock", {}, clock2.time),
+      el("time.monitor-clock", { "data-keep-focus": "monitor-clock", tabindex: "-1" }, clock2.time),
       el(
         "div.monitor-health",
         {},
@@ -23469,12 +23686,40 @@ create policy "tracker update" on public.tracker_state
     }
   }
   var hdrObserver = null;
+  function focusAfterRender() {
+    const active = document.activeElement;
+    if (!active || !root.contains(active)) return () => {
+    };
+    const attrs = ["data-keep-focus", "id", "aria-label", "name", "href"];
+    const identity = attrs.map((key2) => [key2, active.getAttribute(key2)]).filter(([, value2]) => value2);
+    const text4 = active.tagName === "BUTTON" ? active.textContent : null;
+    const reportId = active.closest("[data-report-id]")?.getAttribute("data-report-id");
+    const selection = active.tagName === "TEXTAREA" || active.tagName === "INPUT" ? { start: active.selectionStart, end: active.selectionEnd } : null;
+    if (!identity.length && !text4) return () => {
+    };
+    return () => {
+      const focused = document.activeElement;
+      const focusLost = !focused || focused === document.body || focused === document.documentElement || !focused.isConnected;
+      if (!focusLost) return;
+      const matches2 = [...root.querySelectorAll(active.tagName)].filter((node) => identity.every(([key2, value2]) => node.getAttribute(key2) === value2) && (text4 == null || node.textContent === text4) && (!reportId || node.closest("[data-report-id]")?.getAttribute("data-report-id") === reportId) && !node.disabled && node.getClientRects().length);
+      if (matches2.length !== 1) return;
+      matches2[0].focus({ preventScroll: true });
+      if (selection && typeof matches2[0].setSelectionRange === "function" && Number.isInteger(selection.start) && Number.isInteger(selection.end)) {
+        try {
+          matches2[0].setSelectionRange(selection.start, selection.end);
+        } catch {
+        }
+      }
+    };
+  }
   function render() {
+    const restoreFocus = focusAfterRender();
     const tab = TABS.find((t) => t.key === current) || TABS[0];
     const storage = storageStatus();
     if (document.documentElement.dataset.display === "monitor" && current === "overview") {
       root.replaceChildren(renderMonitorDashboard(syncViewState()));
       pageMotion = false;
+      restoreFocus();
       return;
     }
     const next = el(
@@ -23501,6 +23746,7 @@ create policy "tracker update" on public.tracker_state
     pageMotion = false;
     measureHeader();
     settleNav();
+    restoreFocus();
   }
   function scheduleRender() {
     if (scheduled) return;

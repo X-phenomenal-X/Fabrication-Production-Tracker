@@ -5149,7 +5149,7 @@ button.sync-chip:active { transform: translateY(1px); }
   }
   .su-head-page .su-when {
     grid-column: 1 / -1; grid-row: 2; display: grid;
-    grid-template-columns: minmax(0, .9fr) minmax(0, 1.2fr);
+    grid-template-columns: 1fr;
     align-items: stretch; gap: var(--s2); margin-top: var(--s1);
   }
   .su-head-page .su-date {
@@ -5165,6 +5165,7 @@ button.sync-chip:active { transform: translateY(1px); }
     flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--s2);
     border: 0; border-radius: var(--r-pill); background: transparent; box-shadow: none;
     font-size: var(--t-sm); font-weight: 750;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .su-head-page .su-when .subtabs button[aria-current="true"] {
     background: var(--accent); color: var(--on-fill);

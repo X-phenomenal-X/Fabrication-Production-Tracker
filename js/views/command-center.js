@@ -166,6 +166,9 @@ export function renderCommandCenter(rerender, go) {
       machines.length ? el('div.command-machines', {}, ...displayedMachines.map(m => el('article.command-machine.' + m.tone, {},
         el('div.command-machine-top', {}, el('strong', {}, m.label), chip(m.status, m.tone)),
         el('p', {}, m.running.length ? `${m.running.length} active line${m.running.length === 1 ? '' : 's'} · W/O ${m.running[0].task.wo}` : 'No line marked in progress'),
+        m.targetPlan && Number.isFinite(Number(m.targetPlan.target))
+          ? el('small', {}, `Target ${m.targetPlan.target} ${m.targetPlan.unit}`)
+          : null,
         el('small', {}, m.incidents.length ? `${m.incidents.length} open downtime report${m.incidents.length === 1 ? '' : 's'}`
           : m.update ? `Shift update ${fmtDate(m.update.date)}${m.update.staleDown ? ` · down flag from ${fmtDate(m.update.staleDown)}` : ''}` : 'No shift update recorded'),
         el('div.command-machine-actions', {}, button('Open queue', () => go(GROUP_PAGE[m.group]), 'ghost'),

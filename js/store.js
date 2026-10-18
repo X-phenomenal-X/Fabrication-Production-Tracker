@@ -221,6 +221,7 @@ export function employeeNameKey(value) {
 export function employeeShift(value) {
   const shift = String(value || '').trim().toUpperCase();
   if (shift === 'AFT' || shift === 'AFTERNOON') return 'AFTERNOON';
+  if (shift === 'NIGHT' || shift === 'MIDNIGHT' || shift.includes('MIDNIGHT')) return 'MIDNIGHT';
   if (shift === 'DAY') return 'DAY';
   return '';
 }
@@ -769,7 +770,10 @@ export function saveShiftLog(date, shift, patch) {
     const ref = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
     const yesterday = new Date(current); yesterday.setDate(yesterday.getDate() - 1);
     const previousDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
-    const cutoff = date === previousDate && shift === 'AFT' && current.getHours() < 7 ? ref : date;
+    const minute = current.getHours() * 60 + current.getMinutes();
+    const midnightHandover = shift === 'NIGHT' && date === previousDate && minute < (7 * 60 + 15);
+    const afternoonAfterMidnight = date === previousDate && shift === 'AFT' && minute < 7 * 60;
+    const cutoff = midnightHandover || afternoonAfterMidnight ? ref : date;
     next.carryover = Object.values(state.todos || {}).filter(t => !t.done && t.date <= cutoff).map(t => ({ id: t.id, text: t.text }));
     if (JSON.stringify([cur.rows, cur.notes, cur.carryover]) !== JSON.stringify([next.rows, next.notes, next.carryover])) next.acknowledgement = null;
   }

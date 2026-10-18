@@ -18,12 +18,11 @@ import { SHIFTS, shiftContextAt } from '../shifts.js';
 import { focusCentreTask, setAnimatedStatus } from './centre.js';
 
 const GROUP_PAGE = { Rolling: 'rolling', FOM: 'fom', CNC: 'cnc', Punch: 'punch' };
-/* Which shift handed over to this one. Nights were retired, so the Day crew's
-   handoff now comes from yesterday's Afternoon — but shift logs written while
-   nights still ran are still on file, so a Midnight log for the same date is
-   read in preference when one exists. */
+/* The crew that just handed over. Day follows the Midnight shift that started
+   the evening before. If that log was never written, yesterday's Afternoon is
+   still there — including updates saved before Midnight was selectable again. */
 const PREVIOUS_SHIFT = {
-  DAY: { key: 'AFT', day: -1, legacy: 'NIGHT' },
+  DAY: { key: 'NIGHT', day: -1, fallback: 'AFT' },
   AFT: { key: 'DAY', day: 0 },
   NIGHT: { key: 'AFT', day: 0 },
 };
@@ -42,14 +41,19 @@ function previousHandoff(date, shiftKey) {
   const previous = PREVIOUS_SHIFT[shiftKey] || PREVIOUS_SHIFT.DAY;
   const previousDate = addDays(date, previous.day);
   const log = state.shiftLogs?.[`${previousDate}|${previous.key}`]
-    || (previous.legacy ? state.shiftLogs?.[`${previousDate}|${previous.legacy}`] : null)
+    || (previous.fallback ? state.shiftLogs?.[`${previousDate}|${previous.fallback}`] : null)
     || null;
   const source = log?.rows || {};
   const usefulRow = Object.entries(source).find(([, row]) =>
-    String(row?.notes || row?.next || row?.done || '').trim());
-  const rowText = usefulRow
+    String(row?.notes || row?.next || row?.done || '').trim() || row?.targetPlan);
+  const note = usefulRow
     ? String(usefulRow[1].notes || usefulRow[1].next || usefulRow[1].done || '').trim().split('\n')[0]
     : '';
+  const plan = usefulRow?.[1]?.targetPlan;
+  const planText = plan && Number.isFinite(Number(plan.target))
+    ? `Target ${plan.target} ${plan.unit || ''}`.trim()
+    : '';
+  const rowText = note || planText;
   return {
     key: previous.key,
     label: SHIFTS[previous.key].label,

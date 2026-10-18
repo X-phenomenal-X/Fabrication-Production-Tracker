@@ -31,13 +31,24 @@ export function machineTarget(machine, input) {
   return { version: 1, unit: machine === 'multipunch' ? 'windows' : 'pieces', rate, available, setup, bandsaw, productive, target, actual };
 }
 
+/** A shift-update row is worth keeping when it has notes or a target plan.
+    Ops-only and blank rows are still empty. A plan with no other text must
+    survive a save, a reload and a sync. */
+export function shiftRowHasContent(row) {
+  if (!row || typeof row !== 'object') return false;
+  if (row.done || row.next || row.notes || row.ops) return true;
+  const plan = row.targetPlan;
+  return !!plan && typeof plan === 'object' && Number.isFinite(Number(plan.target));
+}
+
 export function machineTargetText(plan) {
   if (!plan) return '';
   const attainment = plan.actual != null && plan.target > 0
     ? ` · ${Math.round(plan.actual / plan.target * 100)}% of plan` : '';
+  const bandsaw = Number(plan.bandsaw) > 0 ? `; planned bandsaw ${plan.bandsaw} min` : '';
   return `Target ${plan.target} ${plan.unit} · Good output ${plan.actual == null ? 'not recorded' : plan.actual + ' ' + plan.unit}${attainment}. `
     + `Standard ${plan.rate}/h × ${plan.productive} production min ÷ 60 (rounded down). `
-    + `Available after breaks ${plan.available} min; planned setup ${plan.setup} min; planned bandsaw ${plan.bandsaw} min. Actual downtime does not reduce this plan.`;
+    + `Available after breaks ${plan.available} min; planned setup ${plan.setup} min${bandsaw}. Actual downtime does not reduce this plan.`;
 }
 export function validCalendarDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
