@@ -498,7 +498,31 @@ function measureHeader() {
 }
 let hdrObserver = null;
 
+// A store or filter update rebuilds the root. Preserve a uniquely identifiable
+// control so keyboard users do not unexpectedly return to the document body.
+// Dialogs live outside the root and retain their own focus management.
+function focusAfterRender() {
+  const active = document.activeElement;
+  if (!active || !root.contains(active)) return () => {};
+  const attrs = ['id', 'aria-label', 'name', 'href'];
+  const identity = attrs.map(key => [key, active.getAttribute(key)]).filter(([, value]) => value);
+  const text = active.tagName === 'BUTTON' ? active.textContent : null;
+  const reportId = active.closest('[data-report-id]')?.getAttribute('data-report-id');
+  if (!identity.length && !text) return () => {};
+  return () => {
+    // Do not steal focus from a dialog or a control focused during rendering.
+    if (document.activeElement !== document.body && document.activeElement?.isConnected) return;
+    const matches = [...root.querySelectorAll(active.tagName)].filter(node =>
+      identity.every(([key, value]) => node.getAttribute(key) === value)
+      && (text == null || node.textContent === text)
+      && (!reportId || node.closest('[data-report-id]')?.getAttribute('data-report-id') === reportId)
+      && !node.disabled && node.getClientRects().length);
+    if (matches.length === 1) matches[0].focus({ preventScroll: true });
+  };
+}
+
 function render() {
+  const restoreFocus = focusAfterRender();
   const tab = TABS.find((t) => t.key === current) || TABS[0];
   const storage = storageStatus();
   /* Overview becomes a department broadcast board in monitor mode. Machine
@@ -524,6 +548,7 @@ function render() {
   pageMotion = false;
   measureHeader();
   settleNav();
+  restoreFocus();
 }
 
 function scheduleRender() {

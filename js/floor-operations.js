@@ -4,6 +4,19 @@ import { state, setTodo, saveShiftLog, me } from './store.js';
 export const LOSS_REASONS = ['Equipment', 'Material', 'Setup', 'Staffing', 'Other'];
 export const MAINTENANCE_STATES = ['Not notified', 'Notified', 'In progress', 'Waiting on parts', 'Repaired'];
 export const QUALITY_STATES = ['Open', 'Contained', 'Under review', 'Disposition complete'];
+export function validCalendarDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(value + 'T00:00:00Z');
+  return Number.isFinite(+parsed) && parsed.toISOString().slice(0, 10) === value;
+}
+
+// A stopped timer is not proof that production has resumed. Keep the report
+// visible for verification, without presenting it as a currently running loss.
+export function downtimeNeedsVerification(item) {
+  const op = item.operation;
+  return !item.done && op?.kind === 'downtime' && !op.timer?.startedAt
+    && (!!op.timer || op.maintenance === 'Repaired');
+}
 export function elapsedMinutes(op, now = new Date()) {
   const timer = op?.timer;
   if (!timer) return op?.minutes ?? null;

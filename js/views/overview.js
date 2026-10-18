@@ -247,14 +247,13 @@ export function renderOverview(rerender, go, sync = null) {
      removed, so it silently said "Full crew" for everybody forever. The real
      number is in the machine list: `ops` per machine, from the department's own
      Shift Assignment sheet and editable in Setup. Machines that are hidden or
-     down are left out, because the point of the line is how many people are
-     actually on the floor. */
+     down are left out. This is configured staffing, not live attendance. */
   const staffed = MACHINES
     .map(machineConfig)
     .filter((m) => !m.queue && !m.hidden && !m.down);
   const heads = staffed.reduce((n, m) => n + (Number(m.ops) || 0), 0);
   const crew = heads
-    ? `${heads} operator${heads === 1 ? '' : 's'} across ${staffed.length} machines`
+    ? `Configured: ${heads} operator${heads === 1 ? '' : 's'} across ${staffed.length} machines · attendance not confirmed`
     : 'Crew not set';
 
   const all = tasksInScope().map((task) => rowFor(task, ref));
@@ -294,7 +293,7 @@ export function renderOverview(rerender, go, sync = null) {
   const healthStrip = el('section.overview-health-strip', {
     'aria-label': 'Current shift health',
   },
-    healthStat('check', all.length ? `${donePct}%` : '—', 'Schedule complete', 'ok', `${fmtNum(done)} / ${fmtNum(all.length)} lines`),
+    healthStat('check', all.length ? `${donePct}%` : '—', 'Schedule complete', all.length ? 'ok' : 'mute', all.length ? `${fmtNum(done)} / ${fmtNum(all.length)} loaded lines · all dates` : 'No schedule lines loaded'),
     healthStat('factory', String(runningMachines), 'Machines with active work', 'work', `${fmtNum(board.running.length)} active lines`),
     healthStat('calendar', String(board.dueToday.length), 'Due today', 'warn'),
     healthStat('alert', String(board.backOrders.length), 'Blocked', 'bad'),
@@ -331,13 +330,13 @@ export function renderOverview(rerender, go, sync = null) {
         shift.range ? el('span', {}, `· ${shift.range}`) : null,
         shiftContext.live ? null : el('span.chip.mute.overview-ended', {}, 'ended')),
       el('div.overview-crew', {}, icon('dot', { size: 12 }),
-        shiftContext.live ? crew : 'Nobody on the floor right now',
+        shiftContext.live ? crew : 'Outside configured shift hours · attendance not confirmed',
         me() ? ` · ${me()}` : '')),
     handoffCard,
     healthStrip,
-    el('progress.overview-meter.overview-schedule-progress', {
+    all.length ? el('progress.overview-meter.overview-schedule-progress', {
       value: donePct, max: 100, 'aria-label': `Schedule ${donePct}% complete`,
-    }));
+    }) : null);
 
   const currentLog = state.shiftLogs?.[`${shiftContext.date}|${shiftContext.key}`] || null;
   const loggedMachines = currentLog ? Object.keys(currentLog.rows || {}).length : 0;

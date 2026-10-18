@@ -3,8 +3,8 @@ import { el, chip, icon, modal, toast, fmtDate, fmtNum } from '../ui.js';
 import { directoryPeople, me } from '../store.js';
 import { today, machineConfig } from '../model.js';
 import { MACHINES } from '../machines.js';
-import { commandSnapshot, createOperation, completeOperation, operationKind } from '../command-center.js';
-import { LOSS_REASONS, MAINTENANCE_STATES, QUALITY_STATES, elapsedMinutes, toggleDowntime, prepareEvidence } from '../floor-operations.js';
+import { commandSnapshot, commandSuggestions, createOperation, completeOperation, operationKind } from '../command-center.js';
+import { LOSS_REASONS, MAINTENANCE_STATES, QUALITY_STATES, elapsedMinutes, downtimeNeedsVerification, toggleDowntime, prepareEvidence } from '../floor-operations.js';
 import { openSupervisorReport } from './supervisor-report.js';
 
 const GROUP_PAGE = { Rolling: 'rolling', FOM: 'fom', CNC: 'cnc', Punch: 'punch' };
@@ -83,7 +83,8 @@ export function openOperationDialog(kind, rerender, machine = '', item = null) {
   field('Details', text), el('div.command-form-grid', {}, field('Machine', station), field('Owner', owner), field('Priority', priority), field('Report date', date), kind === 'action' ? field('Due date · optional', dueDate) : null,
     field('Work order · optional', wo), kind !== 'action' ? field(kind === 'quality' ? 'Affected pieces · optional' : 'Lost minutes · optional', amount) : null),
   kind === 'downtime' ? el('div.command-form-grid', {}, field('Reason', reason), field('Maintenance status', maintenance), field('Planned downtime', planned),
-    el('p.small.muted', {}, 'Leave minutes blank to use Start timer after saving. Maintenance status is a record only; no notification is sent.')) : null,
+    el('p.small.muted', {}, op.timer ? 'Minutes come from the timer. Stopping it leaves the report open for follow-up; confirm machine recovery before resolving.' : 'For a past loss, enter measured minutes. For an ongoing loss, leave minutes blank, save, then select Start timer. The timer starts at that moment, not the report date.'),
+    el('p.small.muted', {}, 'Maintenance status is a record only; no notification is sent.')) : null,
   kind === 'quality' ? el('fieldset', {}, el('legend', {}, 'Containment and disposition'),
     el('div.command-form-grid', {}, field('Stage', qualityState), ...Object.entries(qualityFields).map(([key, input]) => field({defect:'Defect type',source:'Suspected source · not confirmed',containment:'Containment action',resolution:'Disposition / resolution notes',rejected:'Rejected pieces',reworked:'Reworked pieces',replacement:'Replacement pieces'}[key], input))),
     field('Evidence · up to two photos', photoInput), el('p.small.muted', {}, 'Compressed photos are saved in this tracker and included in its configured sync and backups. Do not attach sensitive personal information.'), photoList) : null,
@@ -116,6 +117,7 @@ function reportRow(item, rerender) {
         op.machine ? ` · ${machineConfig(MACHINES.find(m => m.key === op.machine) || { label: op.machine }).label}` : ''),
       kind === 'downtime' ? el('small', {}, elapsedMinutes(op) == null ? 'Lost time not measured' : `${elapsedMinutes(op)} min reported`,
         op.timer?.startedAt ? ` · Timer running since ${new Date(op.timer.startedAt).toLocaleTimeString()}` : '',
+        downtimeNeedsVerification(item) ? ' · Verify machine status; follow-up still open' : '',
         ` · ${op.planned ? 'Planned' : 'Unplanned'} · ${op.reason || 'Other'} · ${op.maintenance || 'Not notified'}`) : null,
       kind === 'quality' ? el('div', {}, el('small', {}, op.quantity == null ? 'Affected quantity not recorded' : `${op.quantity} affected pcs`),
         el('p', {}, `${op.qualityState || 'Open'}${op.defect ? ' · ' + op.defect : ''}`),
@@ -142,6 +144,16 @@ export function renderCommandCenter(rerender, go) {
     timerRefresh = setTimeout(rerender, 60000 - (Date.now() % 60000));
   }
   const openHandover = () => { focusShiftUpdate(data.context.date, data.context.key); go('shift'); };
+  const suggestions = commandSuggestions(data);
+  const suggestedSteps = panel('Suggested next steps', 'Based on saved records, not live machine signals. Review before acting.',
+    el('div.command-summary-body', {}, suggestions.length ? el('ol', {}, ...suggestions.slice(0, 4).map(s => el('li', {},
+      el('strong', {}, s.title), el('p', {}, s.reason),
+      button(s.report ? 'Review report' : s.page === 'setup' ? 'Open Setup' : 'Prepare handover', () => {
+        if (s.report) openOperationDialog(operationKind(s.report), rerender, s.report.operation?.machine || '', s.report);
+        else if (s.page === 'shift') openHandover();
+        else go(s.page);
+      }, 'ghost')))) : el('p', {}, 'No rule-based follow-ups found. Confirm conditions on the floor; missing entries can hide issues.'),
+    suggestions.length > 4 ? el('p.small.muted', {}, 'Showing the first four checks. Other open reports remain below.') : null));
   const machines = data.machines.filter(m => (!filters.group || m.group === filters.group) && (!filters.attention || ['bad', 'warn'].includes(m.tone)));
   machines.sort((a, b) => ['bad', 'warn', 'work', 'mute'].indexOf(a.tone) - ['bad', 'warn', 'work', 'mute'].indexOf(b.tone));
   const displayedMachines = filters.allMachines ? machines : machines.slice(0, 4);
@@ -162,6 +174,7 @@ export function renderCommandCenter(rerender, go) {
   const losses = panel('Downtime', 'Reported losses today; unknown time stays unmeasured.',
     el('div.command-summary-body', {}, el('div.command-big', {}, fmtNum(data.minutes), el('small', {}, ' min reported')),
       el('p', {}, `${data.down.length} open report${data.down.length === 1 ? '' : 's'} · ${data.unknownMinutes} today without measured time`),
+      el('p.small.muted', {}, 'Calendar-day minutes, not shift totals. Zero is not confirmation of no losses.'),
       data.down.length ? el('p.command-emphasis', {}, data.down[0].text) : empty('No open downtime reports.'),
       button('Report downtime', () => openOperationDialog('downtime', rerender), 'ghost')));
   const quality = panel('Quality watch', 'Open issues requiring inspection, containment or follow-up.',
@@ -180,12 +193,12 @@ export function renderCommandCenter(rerender, go) {
     el('div.command-summary-body', {}, el('div.command-big', {}, `${data.documented}/${data.machines.length}`, el('small', {}, ' machines documented')),
       el('progress.command-progress', { max: Math.max(1, data.machines.length), value: data.documented, 'aria-label': 'Machines with saved handover notes' }),
       el('p', {}, `${data.completed.length} line${data.completed.length === 1 ? '' : 's'} marked done during this shift`),
-      el('p', {}, `${data.open.length} open actions · ${data.board.backOrders.length} shortage lines to review`),
+      el('p', {}, `${data.open.length} open reports · ${data.board.backOrders.length} shortage lines to review`),
       el('p.small.muted', {}, data.log?.notes || 'Review completed work, next jobs and unresolved issues with the incoming crew.'),
       button('Prepare handover', openHandover, 'primary')));
   return el('div.command-center', {},
     el('div.command-toolbar', {}, el('div', {}, el('span.command-eyebrow', {}, 'Floor control'), el('h2', {}, 'Keep the next decision clear.')),
       el('div.command-toolbar-actions', {}, button('Supervisor report', openSupervisorReport), button('Add action', () => openOperationDialog('action', rerender)), button('Write handover', openHandover, 'primary'))),
-    machinePanel,
+    suggestedSteps, machinePanel,
     el('div.command-insights', {}, losses, quality, handover), actions);
 }
