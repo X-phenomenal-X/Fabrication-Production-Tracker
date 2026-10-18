@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import { machineTarget, machineTargetText } from '../js/floor-operations.js';
+import { state, saveShiftLog } from '../js/store.js';
+const memory = new Map();
+globalThis.localStorage = { getItem:k=>memory.get(k)??null, setItem:(k,v)=>memory.set(k,v), removeItem:k=>memory.delete(k) };
+const input = { rate: '60', available: '420', setup: '30', bandsaw: '90', actual: '' };
+const saw = machineTarget('saw', input);
+assert.equal(saw.target, 300);
+assert.equal(saw.actual, null);
+assert.match(machineTargetText(saw), /not recorded/);
+assert.doesNotMatch(machineTargetText(saw), /% of plan/);
+assert.equal(machineTarget('multipunch', input).target, 390);
+assert.equal(machineTarget('multipunch', input).unit, 'windows');
+assert.equal(saw.unit, 'pieces');
+const zero = machineTarget('saw', {...input, actual: '0'});
+assert.match(machineTargetText(zero), /0% of plan/);
+assert.match(machineTargetText(machineTarget('saw', {...input, actual: '330'})), /110% of plan/);
+assert.doesNotMatch(machineTargetText(machineTarget('saw', {...input, available: '120', actual: '0'})), /% of plan/);
+assert.equal(machineTarget('saw', {...input, rate: '61', available:'421'}).target, 306);
+for (const patch of [{rate:''}, {rate:0}, {rate:-1}, {rate:'NaN'}, {available:1441}, {setup:421}, {bandsaw:-1}, {actual:1.5}, {actual:-1}]) {
+  assert.throws(()=>machineTarget('saw', {...input, ...patch}));
+}
+state.shiftLogs = {}; state.todos = {};
+saveShiftLog('2026-09-10','DAY',{rows:{saw:{targetPlan:saw}},notes:''});
+saveShiftLog('2026-09-11','DAY',{rows:{saw:{targetPlan:machineTarget('saw',{...input,rate:90})}},notes:''});
+assert.equal(state.shiftLogs['2026-09-10|DAY'].rows.saw.targetPlan.target,300,'later shifts cannot change saved standards');
+const persisted = JSON.parse(memory.get('bv.cutting.v1'));
+assert.deepEqual(persisted.shiftLogs['2026-09-10|DAY'].rows.saw.targetPlan,saw);
+state.shiftLogs['2026-09-10|DAY'].acknowledgement={by:'Test'};
+saveShiftLog('2026-09-10','DAY',{rows:{saw:{targetPlan:zero}}});
+assert.equal(state.shiftLogs['2026-09-10|DAY'].acknowledgement,null,'changed output requires a fresh handover acknowledgement');
+console.log('Machine targets: units, time allowances, unknown/zero output, rounding, validation and saved history OK');
