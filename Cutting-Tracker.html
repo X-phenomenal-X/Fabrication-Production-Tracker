@@ -6608,6 +6608,58 @@ a.resource-download:active, button.resource-download:active { transform: transla
   .overview-handoff button { grid-column: 2; grid-row: 1 / 4; align-self: center; margin: 0; }
 }
 
+/* Sign-in. 16px on the email field keeps iPhone from zooming the whole page
+   when the keyboard opens. The screen is the whole app only when sharing has
+   been locked; Setup uses the same form in a smaller block. */
+.signin-screen {
+  min-height: 100dvh;
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  width: min(440px, 100%);
+  margin: 0 auto;
+  padding: 28px 20px calc(28px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+.signin-kicker {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.signin-screen h1 {
+  margin: 0;
+  font-size: clamp(32px, 9vw, 44px);
+  line-height: 1.05;
+  letter-spacing: -.03em;
+}
+.signin-copy, .signin-note, .signin-status {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 16px;
+  line-height: 1.45;
+}
+.signin-form { display: grid; gap: 12px; margin: 4px 0 8px; }
+.signin-form input[type="email"] { font-size: 16px; min-height: 48px; }
+.signin-form .primary, .signin-actions .primary { min-height: 48px; font-size: 17px; }
+.signin-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.signin-actions button { min-height: 48px; }
+.signin-signed-in {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 4px 0 12px;
+}
+.signin-signed-in p { margin: 0; display: grid; gap: 2px; }
+.signin-role { color: var(--ink-3); font-size: 13px; font-weight: 650; }
+:root[data-display="monitor"] .signin-screen { width: min(760px, 100%); gap: 22px; }
+:root[data-display="monitor"] .signin-screen h1 { font-size: clamp(48px, 6vw, 72px); }
+:root[data-display="monitor"] .signin-copy,
+:root[data-display="monitor"] .signin-note { font-size: clamp(20px, 2vw, 28px); }
+:root[data-display="monitor"] .signin-form input[type="email"] { min-height: 64px; font-size: 28px; }
+:root[data-display="monitor"] .signin-form .primary,
+:root[data-display="monitor"] .signin-actions button { min-height: 64px; font-size: 24px; }
+
 </style>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231c2245'/%3E%3Crect x='8' y='8' width='9' height='7.5' fill='%2335bce1'/%3E%3Crect x='8' y='16.5' width='9' height='7.5' fill='%231e71ab'/%3E%3Cpath d='M17.5 8h6.25l-3.15 7.5h-3.1zM17.5 16.5h2.7l-2.7 6.5z' fill='%2372b843'/%3E%3C/svg%3E">
 </head>
@@ -7371,71 +7423,124 @@ a.resource-download:active, button.resource-download:active { transform: transla
       return c.site;
     }
   }
-  function headers(cfg, extra = {}) {
-    return {
-      apikey: cfg.key,
-      Authorization: `Bearer ${cfg.key}`,
-      "Content-Type": "application/json",
-      ...extra
-    };
+  function classify(status, detail, mode) {
+    const text4 = detail || "";
+    if (status === 401 && /invalid api key|no api key/i.test(text4)) return "key";
+    if (status === 409) return "conflict";
+    if (status === 401 || status === 403) {
+      if (mode === "none") return "not-a-member";
+      if (mode === "anon" || /row-level security|42501|permission denied|jwt/i.test(text4)) {
+        return "auth-required";
+      }
+      return "auth-required";
+    }
+    return "other";
   }
-  async function explain(res) {
+  function messageFor(code, status, detail) {
+    if (code === "key") {
+      return `The cloud rejected the key. Check the publishable key (the anon public key on an older project), the Data API grant and the policies from the setup SQL.${detail ? ` (${detail})` : ""}`;
+    }
+    if (code === "auth-required") {
+      return "Please sign in to keep sharing. Your work is still saved on this phone.";
+    }
+    if (code === "not-a-member") {
+      return "You are signed in, but this email is not on the Cutting list yet. Ask a supervisor to add you. Your work is still saved on this phone.";
+    }
+    if (status === 404) {
+      return `No "${TABLE}" table at that address. Run the setup SQL in the Supabase SQL editor, then try again.`;
+    }
+    return `Cloud error ${status}${detail ? `: ${detail}` : ""}`;
+  }
+  async function explain(res, mode) {
     let detail = "";
     try {
       const body = await res.json();
-      detail = body.message || body.hint || body.error || "";
+      detail = body.message || body.hint || body.error || body.code || "";
     } catch {
     }
-    if (res.status === 401 || res.status === 403) {
-      return new Error(
-        `The cloud rejected the key. Check the publishable key (the anon public key on an older project), the Data API grant and the three policies from the setup SQL.${detail ? ` (${detail})` : ""}`
-      );
-    }
-    if (res.status === 404) {
-      return new Error(
-        `No "${TABLE}" table at that address. Run the setup SQL in the Supabase SQL editor, then try again.`
-      );
-    }
-    return new Error(`Cloud error ${res.status}${detail ? `: ${detail}` : ""}`);
+    const code = classify(res.status, detail, mode);
+    if (code === "auth-required") setAuthGate("sign-in");
+    if (code === "not-a-member") setAuthGate("not-a-member");
+    return new CloudError(messageFor(code, res.status, detail), code === "other" && res.status === 404 ? "missing-table" : code);
   }
-  async function call(cfg, path, opts = {}) {
+  async function request(cfg, path, { method = "GET", bearer, prefer, body, allowConflict = false } = {}) {
+    const sent = bearer || await dataBearer();
+    const token = sent.mode === "editor" || sent.mode === "viewer" || sent.mode === "none" ? sent.token : cfg.key;
     let res;
     try {
-      res = await fetch(`${cfg.url}/rest/v1/${path}`, opts);
+      res = await fetch(`${cfg.url}/rest/v1/${path}`, {
+        method,
+        headers: {
+          apikey: cfg.key,
+          Authorization: `Bearer ${token}`,
+          ...body ? { "Content-Type": "application/json" } : {},
+          ...prefer ? { Prefer: prefer } : {}
+        },
+        ...body ? { body: JSON.stringify(body) } : {}
+      });
     } catch (e) {
-      throw new Error(
-        `Could not reach the cloud. Check the internet connection and the address.${e?.message ? ` (${e.message})` : ""}`
+      throw new CloudError(
+        `Could not reach the cloud. Check the internet connection and the address.${e?.message ? ` (${e.message})` : ""}`,
+        "network"
       );
     }
-    if (!res.ok) throw await explain(res);
-    return res;
+    if (allowConflict && res.status === 409) return { conflict: true, body: null, mode: sent.mode };
+    if (!res.ok) throw await explain(res, sent.mode);
+    if (res.status === 204) return { conflict: false, body: null, mode: sent.mode };
+    const text4 = await res.text();
+    return { conflict: false, body: text4 ? JSON.parse(text4) : null, mode: sent.mode };
   }
   async function cloudPull(parts = CLOUD_PARTS, cfg = cloudConfig()) {
     if (!cfg) return null;
     const list = parts.map((p) => `"${p}"`).join(",");
-    const res = await call(
+    const { body } = await request(
       cfg,
-      `${TABLE}?site=eq.${encodeURIComponent(cfg.site)}&part=in.(${list})&select=part,data,updated_at`,
-      { headers: headers(cfg) }
+      `${TABLE}?site=eq.${encodeURIComponent(cfg.site)}&part=in.(${list})&select=part,data,updated_at`
     );
-    const rows = await res.json();
     const out = { base: null, work: null, updatedAt: {} };
-    for (const r of rows) {
-      out[r.part] = r.data;
-      out.updatedAt[r.part] = r.updated_at;
+    for (const row of body || []) {
+      out[row.part] = row.data;
+      out.updatedAt[row.part] = row.updated_at;
     }
     return out;
   }
-  async function cloudPush(docs, cfg = cloudConfig()) {
-    if (!cfg) return false;
-    const rows = Object.entries(docs).filter(([, data]) => data != null).map(([part, data]) => ({ site: cfg.site, part, data, updated_at: (/* @__PURE__ */ new Date()).toISOString() }));
-    if (!rows.length) return false;
-    await call(cfg, `${TABLE}?on_conflict=site,part`, {
-      method: "POST",
-      headers: headers(cfg, { Prefer: "resolution=merge-duplicates,return=minimal" }),
-      body: JSON.stringify(rows)
+  async function cloudPush(docs, { expected = {}, cfg = cloudConfig() } = {}) {
+    if (!cfg) return { ok: false };
+    const updatedAt = {};
+    for (const [part, data] of Object.entries(docs)) {
+      if (data == null) continue;
+      const outcome = await pushPart(cfg, part, data, expected[part] || null);
+      if (outcome.conflict) return { ok: false, conflict: true, part };
+      updatedAt[part] = outcome.updatedAt;
+    }
+    return { ok: true, updatedAt };
+  }
+  async function pushPart(cfg, part, data, expectedAt) {
+    const stamp = (/* @__PURE__ */ new Date()).toISOString();
+    if (!expectedAt) {
+      const inserted = await request(cfg, TABLE, {
+        method: "POST",
+        prefer: "return=representation",
+        allowConflict: true,
+        body: { site: cfg.site, part, data, updated_at: stamp }
+      });
+      if (inserted.conflict) return { conflict: true };
+      const row = Array.isArray(inserted.body) ? inserted.body[0] : inserted.body;
+      return { updatedAt: row?.updated_at || stamp };
+    }
+    const filter = [
+      `site=eq.${encodeURIComponent(cfg.site)}`,
+      `part=eq.${encodeURIComponent(part)}`,
+      `updated_at=eq.${encodeURIComponent(expectedAt)}`
+    ].join("&");
+    const patched = await request(cfg, `${TABLE}?${filter}`, {
+      method: "PATCH",
+      prefer: "return=representation",
+      body: { data, updated_at: stamp }
     });
-    return true;
+    const rows = Array.isArray(patched.body) ? patched.body : [];
+    if (!rows.length) return { conflict: true };
+    return { updatedAt: rows[0].updated_at || stamp };
   }
   async function cloudTest(cfg) {
     if (!cfg?.url || !cfg?.key) {
@@ -7446,15 +7551,310 @@ a.resource-download:active, button.resource-download:active { transform: transla
     } catch {
       throw new Error("That project URL does not look like a web address.");
     }
-    await cloudPull(["work"], { site: "cutting", ...cfg });
+    await cloudPull(["work"], { site: "cutting", ...cfg, url: String(cfg.url).trim().replace(/\/+$/, ""), key: String(cfg.key).trim() });
     return true;
   }
-  var LS_CLOUD, TABLE, CLOUD_PARTS;
+  function emit() {
+    for (const fn of listeners) fn();
+  }
+  function onAuth(fn) {
+    listeners.add(fn);
+    return () => listeners.delete(fn);
+  }
+  function authGate() {
+    return gate;
+  }
+  function setAuthGate(next) {
+    const value2 = next || null;
+    if (value2 === gate) return;
+    gate = value2;
+    emit();
+  }
+  function project() {
+    try {
+      const raw = localStorage.getItem(LS_CLOUD);
+      if (!raw) return null;
+      const saved = JSON.parse(raw);
+      if (!saved?.url || !saved?.key) return null;
+      return {
+        url: String(saved.url).trim().replace(/\/+$/, ""),
+        key: String(saved.key).trim()
+      };
+    } catch {
+      return null;
+    }
+  }
+  function authSession() {
+    try {
+      const raw = localStorage.getItem(LS_SESSION);
+      if (!raw) return null;
+      const saved = JSON.parse(raw);
+      if (!saved?.accessToken) return null;
+      return saved;
+    } catch {
+      return null;
+    }
+  }
+  function writeSession(session) {
+    if (!session) localStorage.removeItem(LS_SESSION);
+    else localStorage.setItem(LS_SESSION, JSON.stringify(session));
+    emit();
+  }
+  function hasSession() {
+    return !!authSession()?.accessToken;
+  }
+  function membershipRole() {
+    return authSession()?.role || null;
+  }
+  function watchViewOnly(fn) {
+    viewOnlyHandler = fn;
+  }
+  function noteViewOnly() {
+    viewOnlyHandler?.();
+  }
+  function bytesToBase64Url(bytes) {
+    let text4 = "";
+    for (const byte of bytes) text4 += String.fromCharCode(byte);
+    return btoa(text4).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function randomVerifier() {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return bytesToBase64Url(bytes);
+  }
+  async function codeChallenge(verifier) {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+    return bytesToBase64Url(new Uint8Array(digest));
+  }
+  function jwtPayload(token) {
+    try {
+      const part = String(token || "").split(".")[1];
+      if (!part) return null;
+      const padded = part.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - part.length % 4) % 4);
+      return JSON.parse(atob(padded));
+    } catch {
+      return null;
+    }
+  }
+  function redirectUrl() {
+    const url = new URL(location.href);
+    url.hash = "";
+    url.searchParams.delete("code");
+    if (url.searchParams.get("type")) url.searchParams.delete("type");
+    return url.origin + url.pathname + url.search;
+  }
+  function sessionFromToken(body) {
+    const accessToken = body.access_token;
+    const payload = jwtPayload(accessToken);
+    const previous = authSession();
+    return {
+      accessToken,
+      refreshToken: body.refresh_token || previous?.refreshToken || null,
+      expiresAt: Date.now() + (Number(body.expires_in) || 3600) * 1e3,
+      email: body.user?.email || payload?.email || previous?.email || null,
+      userId: body.user?.id || payload?.sub || previous?.userId || null,
+      role: previous?.role || "pending"
+    };
+  }
+  async function authFetch(path, options = {}) {
+    const cfg = project();
+    if (!cfg) throw new Error("Connect Sync across devices in Setup first. Your work is still saved on this phone.");
+    let response;
+    try {
+      response = await fetch(`${cfg.url}${path}`, {
+        ...options,
+        headers: {
+          apikey: cfg.key,
+          "Content-Type": "application/json",
+          ...options.headers || {}
+        }
+      });
+    } catch {
+      throw new Error("Could not reach the sign-in service. Check the internet connection. Your work is still saved on this phone.");
+    }
+    return response;
+  }
+  async function requestMagicLink(email) {
+    const address = String(email || "").trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+      throw new Error("Enter the email address a supervisor invited.");
+    }
+    const verifier = randomVerifier();
+    localStorage.setItem(LS_VERIFIER, verifier);
+    const response = await authFetch(`/auth/v1/otp?redirect_to=${encodeURIComponent(redirectUrl())}`, {
+      method: "POST",
+      body: JSON.stringify({
+        email: address,
+        create_user: false,
+        code_challenge: await codeChallenge(verifier),
+        code_challenge_method: "s256"
+      })
+    });
+    if (response.status === 429) {
+      throw new Error("Too many sign-in emails. Wait a minute and try again.");
+    }
+    if (response.status >= 500) {
+      throw new Error("The sign-in service is busy. Try again in a minute.");
+    }
+    return "If that email was invited, a sign-in link is on its way. Open it in this same browser.";
+  }
+  async function exchangeCode(code) {
+    const verifier = localStorage.getItem(LS_VERIFIER);
+    if (!verifier) {
+      throw new Error("Open the sign-in link in the same browser that asked for it, or send yourself a new link from this phone.");
+    }
+    const response = await authFetch("/auth/v1/token?grant_type=pkce", {
+      method: "POST",
+      body: JSON.stringify({ auth_code: code, code_verifier: verifier })
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body.access_token) {
+      throw new Error("That sign-in link has expired. Send yourself a new one from this phone.");
+    }
+    localStorage.removeItem(LS_VERIFIER);
+    writeSession(sessionFromToken(body));
+  }
+  async function refresh(session) {
+    const response = await authFetch("/auth/v1/token?grant_type=refresh_token", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: session.refreshToken })
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body.access_token) {
+      writeSession(null);
+      setAuthGate("sign-in");
+      throw new Error("Please sign in again. Your work is still saved on this phone.");
+    }
+    const next = sessionFromToken(body);
+    writeSession(next);
+    return next;
+  }
+  async function freshSession() {
+    const session = authSession();
+    if (!session?.accessToken) return null;
+    if (!session.refreshToken || session.expiresAt - Date.now() > 6e4) return session;
+    if (!refreshing) refreshing = refresh(session).finally(() => {
+      refreshing = null;
+    });
+    return refreshing;
+  }
+  async function dataBearer() {
+    const cfg = project();
+    const session = await freshSession();
+    if (session?.role === "editor" || session?.role === "viewer" || session?.role === "none") {
+      return { token: session.accessToken, mode: session.role };
+    }
+    return { token: cfg?.key || "", mode: "anon" };
+  }
+  async function refreshMembership() {
+    const session = await freshSession();
+    if (!session?.accessToken || !session.userId) return null;
+    const cfg = project();
+    if (!cfg) return session.role || null;
+    let response;
+    try {
+      response = await fetch(
+        `${cfg.url}/rest/v1/tracker_members?user_id=eq.${encodeURIComponent(session.userId)}&select=role`,
+        { headers: { apikey: cfg.key, Authorization: `Bearer ${session.accessToken}` } }
+      );
+    } catch {
+      return session.role || null;
+    }
+    const current2 = authSession() || session;
+    if (response.status === 404) {
+      current2.role = "legacy";
+    } else if (!response.ok) {
+      return current2.role || null;
+    } else {
+      const rows = await response.json().catch(() => []);
+      const role = rows?.[0]?.role;
+      current2.role = role === "editor" || role === "viewer" ? role : "none";
+    }
+    writeSession(current2);
+    if (current2.role === "none") setAuthGate("not-a-member");
+    else if (gate === "not-a-member" || gate === "sign-in" || gate === "signing-in") setAuthGate(null);
+    return current2.role;
+  }
+  function takeImplicitSession() {
+    if (typeof location === "undefined") return false;
+    const hash = new URLSearchParams(location.hash.replace(/^#/, ""));
+    const accessToken = hash.get("access_token");
+    if (!accessToken) return false;
+    writeSession(sessionFromToken({
+      access_token: accessToken,
+      refresh_token: hash.get("refresh_token"),
+      expires_in: hash.get("expires_in")
+    }));
+    implicitNow = true;
+    const url = new URL(location.href);
+    url.hash = "";
+    history.replaceState(null, "", url.pathname + url.search);
+    return true;
+  }
+  async function bootAuth() {
+    if (typeof location === "undefined") return { signedInNow: false };
+    const url = new URL(location.href);
+    const code = url.searchParams.get("code");
+    let signedInNow = implicitNow;
+    implicitNow = false;
+    if (code) {
+      booting = true;
+      setAuthGate("signing-in");
+      try {
+        await exchangeCode(code);
+        signedInNow = true;
+      } catch (error) {
+        setAuthGate("sign-in");
+        return { signedInNow: false, error: error.message };
+      } finally {
+        booting = false;
+        url.searchParams.delete("code");
+        const type = url.searchParams.get("type");
+        if (type === "magiclink" || type === "signup" || type === "recovery" || type === "invite") {
+          url.searchParams.delete("type");
+        }
+        history.replaceState(null, "", url.pathname + url.search + url.hash);
+      }
+    }
+    if (hasSession()) {
+      try {
+        await refreshMembership();
+      } catch (error) {
+        return { signedInNow, error: error.message };
+      }
+    }
+    if (signedInNow && authGate() === "signing-in") setAuthGate(null);
+    return { signedInNow };
+  }
+  function signOut() {
+    writeSession(null);
+    localStorage.removeItem(LS_VERIFIER);
+    if (gate === "not-a-member" || gate === "signing-in") setAuthGate("sign-in");
+    else emit();
+  }
+  var LS_CLOUD, TABLE, CLOUD_PARTS, CloudError, LS_SESSION, LS_VERIFIER, gate, booting, implicitNow, refreshing, listeners, viewOnlyHandler;
   var init_cloud = __esm({
     "js/cloud.js"() {
       LS_CLOUD = "bv.cutting.cloud";
       TABLE = "tracker_state";
       CLOUD_PARTS = ["base", "work"];
+      CloudError = class extends Error {
+        constructor(message, code) {
+          super(message);
+          this.code = code;
+        }
+      };
+      LS_SESSION = "bv.cutting.auth";
+      LS_VERIFIER = "bv.cutting.auth.verifier";
+      gate = null;
+      booting = false;
+      implicitNow = false;
+      refreshing = null;
+      listeners = /* @__PURE__ */ new Set();
+      viewOnlyHandler = null;
+      if (typeof location !== "undefined" && new URL(location.href).searchParams.has("code")) {
+        booting = true;
+      }
     }
   });
 
@@ -7620,15 +8020,15 @@ a.resource-download:active, button.resource-download:active { transform: transla
     }
   }
   function onChange(fn) {
-    listeners.add(fn);
-    return () => listeners.delete(fn);
+    listeners2.add(fn);
+    return () => listeners2.delete(fn);
   }
   function stateRev() {
     return rev;
   }
-  function emit() {
+  function emit2() {
     rev++;
-    for (const fn of listeners) fn();
+    for (const fn of listeners2) fn();
   }
   function now() {
     lastNow = Math.max(Date.now(), lastNow + 1);
@@ -8233,10 +8633,20 @@ a.resource-download:active, button.resource-download:active { transform: transla
     }
   }
   function save() {
+    if (membershipRole() === "viewer") {
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (raw) apply(JSON.parse(raw));
+      } catch {
+      }
+      noteViewOnly();
+      emit2();
+      return;
+    }
     persistLocal();
     if (fileHandle) queueFileSave();
     queueCloudPush();
-    emit();
+    emit2();
   }
   function loadLocal() {
     try {
@@ -8270,7 +8680,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
   }
   function setFileState(patch) {
     fileState = { ...fileState, ...patch };
-    emit();
+    emit2();
   }
   function supportsSharedFile() {
     return typeof window !== "undefined" && "showOpenFilePicker" in window;
@@ -8500,7 +8910,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
   }
   function setCloudState(patch) {
     cloudState = { ...cloudState, ...patch };
-    emit();
+    emit2();
   }
   async function pullCloud({ parts = CLOUD_PARTS } = {}) {
     if (!cloudEnabled() || cloudBusy) return false;
@@ -8510,10 +8920,17 @@ a.resource-download:active, button.resource-download:active { transform: transla
       const remote = await cloudPull(parts);
       if (remote?.work) mergeSnapshot(remote.work);
       if (remote?.base) mergeSnapshot(remote.base);
+      if (remote?.base || remote?.work) setAuthGate(null);
       persistLocal();
-      setCloudState({ at: now(), error: null });
-      return true;
+      const blocked = authGate();
+      setCloudState({
+        at: now(),
+        error: blocked ? cloudState.error || "Please sign in to keep sharing. Your work is still saved on this phone." : null
+      });
+      return { ok: true, hadBase: !!remote?.base, hadWork: !!remote?.work };
     } catch (e) {
+      if (e?.code === "auth-required") setAuthGate("sign-in");
+      if (e?.code === "not-a-member") setAuthGate("not-a-member");
       setCloudState({ error: e.message });
       return false;
     } finally {
@@ -8523,6 +8940,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
   }
   async function pushCloud(withBase = false) {
     if (!cloudEnabled()) return false;
+    if (membershipRole() === "viewer") return false;
     if (withBase) cloudBaseDirty = true;
     if (cloudPushPromise) return cloudPushPromise;
     clearTimeout(cloudTimer);
@@ -8530,25 +8948,42 @@ a.resource-download:active, button.resource-download:active { transform: transla
       setCloudState({ pushing: true });
       let ok = true;
       let attemptedBase = false;
+      let attempts = 0;
       try {
         do {
           const sending = cloudChangeId;
           const includeBase = cloudBaseDirty;
           attemptedBase = includeBase;
           cloudBaseDirty = false;
+          attempts += 1;
           const remote = await cloudPull(includeBase ? CLOUD_PARTS : ["work"]);
           if (remote?.work) mergeSnapshot(remote.work);
           if (includeBase && remote?.base) mergeSnapshot(remote.base);
           const docs = { work: cloudDoc("work") };
-          if (includeBase) docs.base = cloudDoc("base");
-          await cloudPush(docs);
+          const expected = { work: remote?.updatedAt?.work || null };
+          if (includeBase) {
+            docs.base = cloudDoc("base");
+            expected.base = remote?.updatedAt?.base || null;
+          }
+          const result = await cloudPush(docs, { expected });
+          if (result?.conflict) {
+            persistLocal();
+            if (attemptedBase) cloudBaseDirty = true;
+            if (attempts >= 6) {
+              throw new Error("Someone else saved at the same time. Your work is still on this phone. Tap retry.");
+            }
+            continue;
+          }
           cloudAckId = Math.max(cloudAckId, sending);
           persistLocal();
+          if (remote?.base || remote?.work || result?.ok) setAuthGate(null);
           setCloudState({ at: now(), error: null });
         } while (cloudChangeId > cloudAckId || cloudBaseDirty);
       } catch (e) {
         ok = false;
         if (attemptedBase) cloudBaseDirty = true;
+        if (e?.code === "auth-required") setAuthGate("sign-in");
+        if (e?.code === "not-a-member") setAuthGate("not-a-member");
         setCloudState({ error: e.message });
       } finally {
         setCloudState({ pushing: false });
@@ -8573,12 +9008,18 @@ a.resource-download:active, button.resource-download:active { transform: transla
   }
   async function connectCloud(cfg) {
     if (cfg) {
-      await cloudTest(cfg);
+      try {
+        await cloudTest(cfg);
+      } catch (error) {
+        if (error?.code !== "auth-required" && error?.code !== "not-a-member") throw error;
+      }
       setCloudConfig(cfg);
     }
     if (!cloudEnabled()) return null;
     await pullCloud();
-    await pushCloud(true);
+    if (membershipRole() !== "viewer" && authGate() !== "sign-in" && authGate() !== "not-a-member") {
+      await pushCloud(true);
+    }
     startCloudPolling();
     setCloudState({ on: true });
     return cloudHost();
@@ -8600,11 +9041,22 @@ a.resource-download:active, button.resource-download:active { transform: transla
       if (document.visibilityState === "visible") retrySync();
     }, 3e4);
   }
-  async function initCloud() {
+  async function initCloud({ includeBase = false } = {}) {
     if (!cloudEnabled()) return null;
     setCloudState({ on: true });
-    await pullCloud();
-    await pushCloud();
+    if (hasSession()) {
+      try {
+        await refreshMembership();
+      } catch (error) {
+        setCloudState({ error: error.message });
+      }
+    }
+    const pulled = await pullCloud();
+    const role = membershipRole();
+    if (role !== "viewer" && authGate() !== "sign-in" && authGate() !== "not-a-member") {
+      const seedBase = includeBase || pulled?.hadBase === false && (state.tasks?.length || Object.keys(state.machineMeta || {}).length);
+      await pushCloud(!!seedBase);
+    }
     startCloudPolling();
     return cloudHost();
   }
@@ -8638,7 +9090,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
     fileChangeId = 0;
     fileAckId = 0;
     fileState = { at: null, error: null, writing: false };
-    emit();
+    emit2();
   }
   function exportJson() {
     return JSON.stringify(snapshot(), null, 2);
@@ -8652,7 +9104,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
   function resetAll() {
     localStorage.removeItem(LS_KEY);
   }
-  var LS_KEY, LS_DEVICE, IDB_NAME, IDB_STORE, RETIRED_KEYS, state, EMPLOYEE_ROLES, EMPLOYEE_ROLE_LABELS, APP_EMPLOYEE_ROLES, listeners, localSaveProblem, rev, lastNow, deviceClock, DELETABLE, HISTORY_CAP, EDITABLE_FIELDS, BACKORDER_FIELDS, RUSH_FIELDS, fileHandle, fileTimer, fileWritePromise, fileChangeId, fileAckId, fileState, CLOUD_BASE_KEYS, cloudTimer, cloudPoll, cloudBusy, cloudPushPromise, cloudChangeId, cloudAckId, cloudState, cloudBaseDirty;
+  var LS_KEY, LS_DEVICE, IDB_NAME, IDB_STORE, RETIRED_KEYS, state, EMPLOYEE_ROLES, EMPLOYEE_ROLE_LABELS, APP_EMPLOYEE_ROLES, listeners2, localSaveProblem, rev, lastNow, deviceClock, DELETABLE, HISTORY_CAP, EDITABLE_FIELDS, BACKORDER_FIELDS, RUSH_FIELDS, fileHandle, fileTimer, fileWritePromise, fileChangeId, fileAckId, fileState, CLOUD_BASE_KEYS, cloudTimer, cloudPoll, cloudBusy, cloudPushPromise, cloudChangeId, cloudAckId, cloudState, cloudBaseDirty;
   var init_store = __esm({
     "js/store.js"() {
       init_cloud();
@@ -8754,7 +9206,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
         MANAGER: "Manager"
       });
       APP_EMPLOYEE_ROLES = /* @__PURE__ */ new Set(["LEAD_HAND", "SUPERVISOR", "MANAGER"]);
-      listeners = /* @__PURE__ */ new Set();
+      listeners2 = /* @__PURE__ */ new Set();
       localSaveProblem = null;
       rev = 0;
       lastNow = 0;
@@ -9745,7 +10197,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
     if (/horiz/i.test(desc)) return "width";
     return null;
   }
-  function classify(task) {
+  function classify2(task) {
     const m = task.machine;
     const series = seriesOf(task.die);
     if (m === "fom1") return { track: null };
@@ -9802,7 +10254,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
   }
   function routeFor(task) {
     if (!task) return null;
-    const c = classify(task);
+    const c = classify2(task);
     if (!c.track) return null;
     let steps;
     let rule;
@@ -10145,8 +10597,8 @@ a.resource-download:active, button.resource-download:active { transform: transla
         job.shortPieces += bo.qty || 0;
       }
       if (row.note?.text) job.notes++;
-      const project = String(t.project || "").trim();
-      if (project && !job.projects.includes(project)) job.projects.push(project);
+      const project2 = String(t.project || "").trim();
+      if (project2 && !job.projects.includes(project2)) job.projects.push(project2);
       const floor = String(t.floor || "").trim();
       if (floor && !job.floors.includes(floor)) job.floors.push(floor);
       if (status.key !== "DONE" && !parked) {
@@ -12649,22 +13101,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
     openPhotoTodoDialog: () => openPhotoTodoDialog,
     preparePhoto: () => preparePhoto
   });
-  function accessKey() {
-    try {
-      return localStorage.getItem(LS_ACCESS) || "";
-    } catch {
-      return "";
-    }
-  }
-  function setAccessKey(value2) {
-    const key2 = String(value2 || "").trim();
-    try {
-      if (key2) localStorage.setItem(LS_ACCESS, key2);
-      else localStorage.removeItem(LS_ACCESS);
-    } catch {
-    }
-    return key2;
-  }
   function cleanText(value2, max = 240) {
     return String(value2 || "").replace(/\s+/g, " ").trim().slice(0, max);
   }
@@ -12733,7 +13169,13 @@ a.resource-download:active, button.resource-download:active { transform: transla
       URL.revokeObjectURL(url);
     }
   }
-  async function requestCandidates({ cfg, key: key2, image, guidance }) {
+  async function requestCandidates({ cfg, image, guidance }) {
+    const session = await freshSession();
+    if (!session?.accessToken || membershipRole() !== "editor") {
+      const error = new Error("Sign in as an editor to use photo analysis.");
+      error.status = 401;
+      throw error;
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 45e3);
     let response;
@@ -12742,7 +13184,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
         method: "POST",
         headers: {
           apikey: cfg.key,
-          "x-photo-todo-key": key2,
+          Authorization: `Bearer ${session.accessToken}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ image, guidance: cleanText(guidance, 500) }),
@@ -12777,9 +13219,9 @@ a.resource-download:active, button.resource-download:active { transform: transla
     origin = null
   } = {}) {
     const cfg = cloudConfig();
+    const role = membershipRole();
     const state2 = {
-      phase: !cfg ? "cloud" : accessKey() ? "choose" : "access",
-      key: accessKey(),
+      phase: !cfg ? "cloud" : role === "editor" ? "choose" : role === "viewer" ? "viewer" : "signin",
       photo: null,
       guidance: "",
       result: null,
@@ -12836,7 +13278,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
       try {
         const raw = await requestCandidates({
           cfg,
-          key: state2.key,
           image: state2.photo.dataUrl,
           guidance: state2.guidance
         });
@@ -12847,10 +13288,8 @@ a.resource-download:active, button.resource-download:active { transform: transla
         state2.phase = "review";
       } catch (error) {
         if (error.status === 401 || error.status === 403) {
-          setAccessKey("");
-          state2.key = "";
-          state2.phase = "access";
-          state2.error = "That department access code was not accepted. Enter it again.";
+          state2.phase = membershipRole() === "viewer" ? "viewer" : "signin";
+          state2.error = error.message;
         } else {
           state2.phase = "preview";
           state2.error = error.message;
@@ -12884,32 +13323,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
         )
       );
     }
-    function renderAccess() {
-      const input = el("input", {
-        type: "password",
-        autocomplete: "off",
-        value: state2.key,
-        placeholder: "Department access code",
-        "aria-label": "Photo to To-Do department access code",
-        oninput: (event) => {
-          state2.key = event.target.value;
-        },
-        onkeydown: (event) => {
-          if (event.key === "Enter") saveAccess();
-        }
-      });
-      const saveAccess = () => {
-        const key2 = setAccessKey(state2.key);
-        if (!key2) {
-          state2.error = "Enter the department access code.";
-          render2();
-          return;
-        }
-        state2.key = key2;
-        state2.phase = "choose";
-        state2.error = "";
-        render2();
-      };
+    function renderSignIn() {
       flow.replaceChildren(
         el(
           "div.photo-todo-intro",
@@ -12918,16 +13332,37 @@ a.resource-download:active, button.resource-download:active { transform: transla
           el(
             "div",
             {},
-            el("h2", {}, "Connect this device once"),
-            el("p", {}, "This code protects the department\u2019s AI allowance. It stays on this device and never joins the shared tracker data.")
+            el("h2", {}, "Sign in as an editor"),
+            el("p", {}, "Photo analysis is only for an invited editor. Sign in from Setup, then come back. The normal To-Do list still works.")
           )
         ),
         errorBanner(),
-        el("label.photo-todo-field", {}, el("span", {}, "Department access code"), input),
         privacyNote()
       );
-      footer.replaceChildren(action("Cancel", close), action("Continue", saveAccess, "primary"));
-      input.focus();
+      footer.replaceChildren(
+        action("Cancel", close),
+        action("Open Setup", () => {
+          close();
+          go2?.("setup");
+        }, "primary")
+      );
+    }
+    function renderViewer() {
+      flow.replaceChildren(
+        el(
+          "div.photo-todo-intro",
+          {},
+          el("div.photo-todo-mark", {}, icon("cloud", { size: 24 })),
+          el(
+            "div",
+            {},
+            el("h2", {}, "View only"),
+            el("p", {}, "This account can watch the board. Photo analysis stays with the editors.")
+          )
+        ),
+        errorBanner()
+      );
+      footer.replaceChildren(action("Close", close, "primary"));
     }
     function renderChoose() {
       flow.replaceChildren(
@@ -12961,15 +13396,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
         ),
         privacyNote()
       );
-      footer.replaceChildren(
-        action("Change access code", () => {
-          setAccessKey("");
-          state2.key = "";
-          state2.phase = "access";
-          render2();
-        }),
-        action("Cancel", close)
-      );
+      footer.replaceChildren(action("Cancel", close));
     }
     function renderBusy(label, copy) {
       flow.replaceChildren(el(
@@ -13118,7 +13545,8 @@ a.resource-download:active, button.resource-download:active { transform: transla
           close();
           go2?.("setup");
         }, "primary"));
-      } else if (state2.phase === "access") renderAccess();
+      } else if (state2.phase === "signin") renderSignIn();
+      else if (state2.phase === "viewer") renderViewer();
       else if (state2.phase === "choose") renderChoose();
       else if (state2.phase === "prepare") renderBusy("Preparing the photo\u2026", "Shrinking it on this device before anything is sent.");
       else if (state2.phase === "preview") renderPreview();
@@ -13134,12 +13562,12 @@ a.resource-download:active, button.resource-download:active { transform: transla
     render2();
     return dlg;
   }
-  var LS_ACCESS, MAX_FILE_BYTES, MAX_DATA_URL, ALLOWED_TYPES;
+  var MAX_FILE_BYTES, MAX_DATA_URL, ALLOWED_TYPES;
   var init_photo_todos = __esm({
     "js/photo-todos.js"() {
       init_ui();
       init_store();
-      LS_ACCESS = "bv.cutting.photo-todo.access.v1";
+      init_cloud();
       MAX_FILE_BYTES = 15 * 1024 * 1024;
       MAX_DATA_URL = 52e5;
       ALLOWED_TYPES = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -14739,14 +15167,14 @@ ${add2.join("\n")}` : add2.join("\n");
       let sheetCount = 0;
       for (const row of sheet.rows) {
         if (row.r <= 1 || row.empty) continue;
-        const project = projectColorKey(text(row.cells[cols.project]));
+        const project2 = projectColorKey(text(row.cells[cols.project]));
         const workOrder = projectWorkOrderKey(text(row.cells[cols.workOrder]));
         const finish = color(row.cells[cols.color]);
-        if (!finish || !project && !workOrder) {
+        if (!finish || !project2 && !workOrder) {
           skipped++;
           continue;
         }
-        if (project) increment(projects2, project, finish);
+        if (project2) increment(projects2, project2, finish);
         if (workOrder) increment(workOrders, workOrder, finish);
         finishes.add(finish);
         count++;
@@ -14918,9 +15346,9 @@ ${add2.join("\n")}` : add2.join("\n");
         if (wo) skipped++;
         continue;
       }
-      const project = text2(value(row.cells, columns3.project));
+      const project2 = text2(value(row.cells, columns3.project));
       const floor = text2(value(row.cells, columns3.floor));
-      const base = [wo, floor || "", project || ""].join("::");
+      const base = [wo, floor || "", project2 || ""].join("::");
       const occurrence = (seen.get(base) || 0) + 1;
       seen.set(base, occurrence);
       rows.push({
@@ -14928,7 +15356,7 @@ ${add2.join("\n")}` : add2.join("\n");
         row: row.r,
         wo,
         jobCode: text2(value(row.cells, columns3.jobCode)),
-        project,
+        project: project2,
         floor,
         qty: number(value(row.cells, columns3.qty)),
         notes: text2(value(row.cells, columns3.notes)),
@@ -14997,6 +15425,230 @@ ${add2.join("\n")}` : add2.join("\n");
         materialStatus: [/^(MTL|MAT(ERIA)?L)(\s*STATUS)?$/],
         color: [/\bCOLOU?R\b/, /\bFINISH\b/]
       };
+    }
+  });
+
+  // js/setup-sql.js
+  var setup_sql_exports = {};
+  __export(setup_sql_exports, {
+    SETUP_SQL: () => SETUP_SQL
+  });
+  var SETUP_SQL;
+  var init_setup_sql = __esm({
+    "js/setup-sql.js"() {
+      SETUP_SQL = `-- Cutting tracker sign-in lock.
+-- Run once in the Supabase SQL editor. Safe to run again.
+-- Invited people can read the board. Editors can change it.
+-- The public anon key can no longer read or write.
+--
+-- After this, invite each person, copy the user id from
+-- Authentication \u2192 Users, and add a row. Examples are at the bottom.
+-- Do not put a secret or service_role key in the tracker.
+
+create table if not exists public.tracker_state (
+  site text not null,
+  part text not null,
+  data jsonb not null,
+  updated_at timestamptz not null default now(),
+  primary key (site, part)
+);
+
+create table if not exists public.tracker_members (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  role text not null check (role in ('editor', 'viewer')),
+  email text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.tracker_state enable row level security;
+alter table public.tracker_members enable row level security;
+
+revoke all on table public.tracker_state from anon, authenticated;
+revoke all on table public.tracker_members from anon, authenticated;
+grant select, insert, update on table public.tracker_state to authenticated;
+grant select on table public.tracker_members to authenticated;
+
+-- One lookup the row rules can call. security definer so the lookup still
+-- works after members are hidden from the public, without letting the
+-- browser change who is on the list.
+create or replace function public.tracker_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $
+  select role from public.tracker_members where user_id = auth.uid()
+$;
+
+revoke all on function public.tracker_role() from public, anon;
+grant execute on function public.tracker_role() to authenticated;
+
+drop policy if exists "tracker read" on public.tracker_state;
+drop policy if exists "tracker insert" on public.tracker_state;
+drop policy if exists "tracker update" on public.tracker_state;
+drop policy if exists "members read tracker" on public.tracker_state;
+drop policy if exists "editors insert tracker" on public.tracker_state;
+drop policy if exists "editors update tracker" on public.tracker_state;
+drop policy if exists "member reads own row" on public.tracker_members;
+
+create policy "members read tracker"
+  on public.tracker_state
+  for select
+  to authenticated
+  using (public.tracker_role() in ('editor', 'viewer'));
+
+create policy "editors insert tracker"
+  on public.tracker_state
+  for insert
+  to authenticated
+  with check (public.tracker_role() = 'editor');
+
+create policy "editors update tracker"
+  on public.tracker_state
+  for update
+  to authenticated
+  using (public.tracker_role() = 'editor')
+  with check (public.tracker_role() = 'editor');
+
+create policy "member reads own row"
+  on public.tracker_members
+  for select
+  to authenticated
+  using (user_id = auth.uid());
+
+-- After you invite someone, open Authentication \u2192 Users, copy their user id,
+-- and run one of these with the real id and email:
+--
+-- insert into public.tracker_members (user_id, role, email)
+-- values ('00000000-0000-0000-0000-000000000000', 'editor', 'lead@example.com')
+-- on conflict (user_id) do update set role = excluded.role, email = excluded.email;
+--
+-- insert into public.tracker_members (user_id, role, email)
+-- values ('00000000-0000-0000-0000-000000000000', 'viewer', 'wall@example.com')
+-- on conflict (user_id) do update set role = excluded.role, email = excluded.email;`;
+    }
+  });
+
+  // js/views/signin.js
+  var signin_exports = {};
+  __export(signin_exports, {
+    emailForm: () => emailForm,
+    renderAuthGate: () => renderAuthGate
+  });
+  function renderAuthGate({ gate: gate2, onReady } = {}) {
+    const signingIn = gate2 === "signing-in";
+    const missing = gate2 === "not-a-member";
+    const session = authSession();
+    const title = signingIn ? "Signing you in" : missing ? "Not on the list yet" : "Please sign in";
+    const copy = signingIn ? "Opening your sign-in link. Your work stays on this phone either way." : missing ? "This email is signed in, but a supervisor still needs to add it as an editor or as the view-only wall screen. Nothing on this phone was deleted." : "The shared board is locked. Sign in with the email a supervisor invited. Everything you already did is still saved on this phone.";
+    const screen = el(
+      "main.signin-screen",
+      {},
+      el("p.signin-kicker", {}, "BV Cutting"),
+      el("h1", {}, title),
+      el("p.signin-copy", {}, copy)
+    );
+    if (!signingIn && !missing) screen.append(emailForm());
+    if (missing) {
+      screen.append(el("p.signin-copy", {}, session?.email || "Signed in"));
+      screen.append(el(
+        "div.signin-actions",
+        {},
+        el("button.primary", {
+          type: "button",
+          onclick: async (event) => {
+            const button2 = event.currentTarget;
+            button2.disabled = true;
+            try {
+              await refreshMembership();
+              await onReady?.();
+            } catch (error) {
+              toast(error.message);
+            } finally {
+              button2.disabled = false;
+            }
+          }
+        }, "Check again"),
+        el("button", { type: "button", onclick: () => signOut() }, "Use a different email")
+      ));
+    }
+    screen.append(el(
+      "div.signin-actions",
+      {},
+      el("button", {
+        type: "button",
+        onclick: () => {
+          download(`cutting-tracker-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`, exportJson());
+          toast("Backup saved");
+        }
+      }, icon("download", { size: 16 }), " Export a backup")
+    ));
+    if (membershipRole() === "viewer") {
+      screen.append(el("p.signin-note", {}, "This account can only view the board."));
+    }
+    return screen;
+  }
+  function emailForm({ compact: compact3 = false } = {}) {
+    const session = authSession();
+    if (session?.email && (session.role === "editor" || session.role === "viewer" || session.role === "legacy")) {
+      const label = session.role === "viewer" ? "View only" : session.role === "legacy" ? "Signed in" : "Editor";
+      return el(
+        "div.signin-signed-in",
+        {},
+        el("p", {}, el("strong", {}, session.email), el("span.signin-role", {}, label)),
+        el("button", {
+          type: "button",
+          onclick: () => signOut()
+        }, "Sign out")
+      );
+    }
+    let message = "";
+    const status = el("p.signin-status", { role: "status" });
+    const input = el("input", {
+      type: "email",
+      inputmode: "email",
+      autocomplete: "email",
+      autocapitalize: "none",
+      spellcheck: "false",
+      placeholder: "name@company.com",
+      "aria-label": "Email address"
+    });
+    const button2 = el("button.primary", { type: "button" }, "Email me a sign-in link");
+    button2.addEventListener("click", async () => {
+      button2.disabled = true;
+      message = "";
+      status.textContent = "";
+      try {
+        message = await requestMagicLink(input.value);
+        status.textContent = message;
+      } catch (error) {
+        message = error.message;
+        status.textContent = message;
+      } finally {
+        button2.disabled = false;
+      }
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") button2.click();
+    });
+    return el(
+      "form.signin-form",
+      {
+        onsubmit: (event) => event.preventDefault()
+      },
+      compact3 ? null : el("label.field", {}, el("span", {}, "Invited email"), input),
+      compact3 ? input : null,
+      button2,
+      status,
+      el("p.signin-note", {}, "There is no sign-up. A supervisor invites you, then the link in that email signs you in.")
+    );
+  }
+  var init_signin = __esm({
+    "js/views/signin.js"() {
+      init_ui();
+      init_store();
+      init_cloud();
     }
   });
 
@@ -15172,10 +15824,10 @@ ${add2.join("\n")}` : add2.join("\n");
     const body = el(
       "div.print-daily-schedule",
       {},
-      ...groups.map(([project, rows]) => el(
+      ...groups.map(([project2, rows]) => el(
         "section.print-table-group",
         {},
-        el("h2", {}, project || "Project not listed", el("span", {}, ` \xB7 ${rows.length} orders`)),
+        el("h2", {}, project2 || "Project not listed", el("span", {}, ` \xB7 ${rows.length} orders`)),
         el(
           "table.print-table",
           {},
@@ -15226,9 +15878,9 @@ ${add2.join("\n")}` : add2.join("\n");
     const rows = source.filter(matches).sort(sheetSort);
     const grouped = /* @__PURE__ */ new Map();
     for (const row of rows) {
-      const project = row.project || "";
-      if (!grouped.has(project)) grouped.set(project, []);
-      grouped.get(project).push(row);
+      const project2 = row.project || "";
+      if (!grouped.has(project2)) grouped.set(project2, []);
+      grouped.get(project2).push(row);
     }
     const groups = [...grouped.entries()].sort((a, b) => a[0].localeCompare(b[0]));
     const selectedIndex = dates.indexOf(date3);
@@ -15416,7 +16068,7 @@ ${add2.join("\n")}` : add2.join("\n");
         el(
           "div.schedule-grid.schedule-mobile",
           {},
-          ...groups.slice(0, view2.groupLimit).map(([project, projectRows]) => projectCard(project, projectRows, rerender)),
+          ...groups.slice(0, view2.groupLimit).map(([project2, projectRows]) => projectCard(project2, projectRows, rerender)),
           groups.length > view2.groupLimit ? el(
             "button.schedule-more",
             { onclick: () => {
@@ -15504,21 +16156,21 @@ ${add2.join("\n")}` : add2.join("\n");
         quantity: 0,
         referenceMatch: null
       });
-      const project = byName.get(name);
-      add(project.jobs, row.jobCode);
-      add(project.colors, row.color);
-      add(project.workOrders, row.wo);
-      add(project.series, row.series);
-      project.orders++;
+      const project2 = byName.get(name);
+      add(project2.jobs, row.jobCode);
+      add(project2.colors, row.color);
+      add(project2.workOrders, row.wo);
+      add(project2.series, row.series);
+      project2.orders++;
       const quantity = Number(row.qty);
-      if (Number.isFinite(quantity)) project.quantity += quantity;
+      if (Number.isFinite(quantity)) project2.quantity += quantity;
     }
     const reference = state.projectColorReference;
-    for (const project of byName.values()) {
+    for (const project2 of byName.values()) {
       if (!reference) continue;
       const orderFinishes = /* @__PURE__ */ new Map();
       let matchedOrders = 0;
-      for (const workOrder of project.workOrders) {
+      for (const workOrder of project2.workOrders) {
         const finishes = reference.workOrders?.[projectWorkOrderKey(workOrder)] || [];
         if (finishes.length) matchedOrders++;
         for (const finish of finishes) orderFinishes.set(finish, (orderFinishes.get(finish) || 0) + 1);
@@ -15526,26 +16178,26 @@ ${add2.join("\n")}` : add2.join("\n");
       if (orderFinishes.size) {
         const minimum = matchedOrders >= 3 ? 2 : 1;
         const ranked = [...orderFinishes].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-        for (const [finish, hits] of ranked) if (hits >= minimum) add(project.referenceColors, finish);
-        if (!project.referenceColors.size && ranked[0]) add(project.referenceColors, ranked[0][0]);
+        for (const [finish, hits] of ranked) if (hits >= minimum) add(project2.referenceColors, finish);
+        if (!project2.referenceColors.size && ranked[0]) add(project2.referenceColors, ranked[0][0]);
       }
-      if (project.referenceColors.size) project.referenceMatch = "work order";
+      if (project2.referenceColors.size) project2.referenceMatch = "work order";
       else {
-        for (const finish of reference.projects?.[projectColorKey(project.name)] || []) add(project.referenceColors, finish);
-        if (project.referenceColors.size) project.referenceMatch = "project";
+        for (const finish of reference.projects?.[projectColorKey(project2.name)] || []) add(project2.referenceColors, finish);
+        if (project2.referenceColors.size) project2.referenceMatch = "project";
       }
     }
     return [...byName.values()].sort((a, b) => b.quantity - a.quantity || b.orders - a.orders || a.name.localeCompare(b.name));
   }
-  function projectCard2(project) {
-    const scheduleColors = [...project.colors].sort();
-    const referenceColors = [...project.referenceColors].filter((finish) => !project.colors.has(finish));
+  function projectCard2(project2) {
+    const scheduleColors = [...project2.colors].sort();
+    const referenceColors = [...project2.referenceColors].filter((finish) => !project2.colors.has(finish));
     const colors = [...scheduleColors, ...referenceColors];
-    const jobs2 = [...project.jobs].sort((a, b) => a.localeCompare(b, void 0, { numeric: true }));
-    const series = [...project.series].sort((a, b) => a.localeCompare(b, void 0, { numeric: true }));
+    const jobs2 = [...project2.jobs].sort((a, b) => a.localeCompare(b, void 0, { numeric: true }));
+    const series = [...project2.series].sort((a, b) => a.localeCompare(b, void 0, { numeric: true }));
     const jobValues = jobs2.length ? jobs2.map((job) => chip(job, "work")) : [el("span.muted", {}, "Not listed")];
-    const colorValues = colors.length ? colors.map((color2) => el("span.project-color" + (project.referenceColors.has(color2) ? ".from-reference" : ""), {
-      title: project.referenceColors.has(color2) ? `From Material Requests \xB7 exact ${project.referenceMatch} match` : "From Daily Schedule"
+    const colorValues = colors.length ? colors.map((color2) => el("span.project-color" + (project2.referenceColors.has(color2) ? ".from-reference" : ""), {
+      title: project2.referenceColors.has(color2) ? `From Material Requests \xB7 exact ${project2.referenceMatch} match` : "From Daily Schedule"
     }, el("span.project-swatch", { style: { backgroundColor: swatchFor(color2) || "transparent" } }), color2)) : [el("span.muted", {}, "Not listed in workbook")];
     const seriesValues = series.length ? series.map((item) => chip(item, "mute")) : [el("span.muted", {}, "Not listed")];
     return el(
@@ -15554,11 +16206,11 @@ ${add2.join("\n")}` : add2.join("\n");
       el(
         "div.project-card-head",
         {},
-        el("span.project-mark", { "aria-hidden": "true" }, project.name.slice(0, 2).toUpperCase()),
-        el("div", {}, el("h2", {}, project.name), el(
+        el("span.project-mark", { "aria-hidden": "true" }, project2.name.slice(0, 2).toUpperCase()),
+        el("div", {}, el("h2", {}, project2.name), el(
           "span",
           {},
-          `${fmtNum(project.quantity)} pcs \xB7 ${fmtNum(project.orders)} schedule row${project.orders === 1 ? "" : "s"}`
+          `${fmtNum(project2.quantity)} pcs \xB7 ${fmtNum(project2.orders)} schedule row${project2.orders === 1 ? "" : "s"}`
         ))
       ),
       el(
@@ -15569,7 +16221,7 @@ ${add2.join("\n")}` : add2.join("\n");
           "dd",
           {},
           ...colorValues,
-          project.referenceColors.size ? el("span.project-source", {}, `Request history \xB7 ${project.referenceMatch}`) : null
+          project2.referenceColors.size ? el("span.project-source", {}, `Request history \xB7 ${project2.referenceMatch}`) : null
         )),
         el("div", {}, el("dt", {}, "Series"), el("dd", {}, ...seriesValues))
       )
@@ -15577,9 +16229,9 @@ ${add2.join("\n")}` : add2.join("\n");
   }
   function renderProjects(rerender, go2) {
     const all = projects();
-    const matched = all.filter((project) => project.referenceColors.size).length;
+    const matched = all.filter((project2) => project2.referenceColors.size).length;
     const query = view3.q.trim().toLowerCase();
-    const shown = query ? all.filter((project) => [project.name, ...project.jobs, ...project.colors, ...project.referenceColors, ...project.workOrders, ...project.series].some((value2) => String(value2).toLowerCase().includes(query))) : all;
+    const shown = query ? all.filter((project2) => [project2.name, ...project2.jobs, ...project2.colors, ...project2.referenceColors, ...project2.workOrders, ...project2.series].some((value2) => String(value2).toLowerCase().includes(query))) : all;
     const visible = shown.slice(0, view3.limit);
     const head = el(
       "div.centre-head",
@@ -20941,17 +21593,17 @@ ${add2.join("\n")}` : add2.join("\n");
     const to = el("input", { type: "date", value: end, max: end, "aria-label": "Report through" });
     const body = el("div.supervisor-report-body");
     const error = el("p", { role: "alert" });
-    const headers2 = ["Date", "Unplanned min", "Planned min", "Unmeasured reports", "Quality reports", "Reports resolved"];
+    const headers = ["Date", "Unplanned min", "Planned min", "Unmeasured reports", "Quality reports", "Reports resolved"];
     const table = (titles, rows) => el("div.report-table-wrap", {}, el("table", {}, el("thead", {}, el("tr", {}, ...titles.map((t) => el("th", { scope: "col" }, t)))), el("tbody", {}, ...rows.map((row) => el("tr", {}, ...row.map((v) => el("td", {}, String(v))))))));
     let result;
-    const refresh = () => {
+    const refresh2 = () => {
       try {
         result = supervisorSummary(from.value, to.value);
         error.textContent = "";
         body.replaceChildren(
           el("h3", {}, "Recorded daily activity"),
           el("p", {}, result.recordCount ? `${result.recordCount} report records contribute to this period. Entries may be incomplete.` : "No report records for this period. These zeros do not confirm there were no losses or quality issues."),
-          table(headers2, result.daily),
+          table(headers, result.daily),
           el("h3", {}, "Largest reported downtime causes"),
           table(["Machine / reason", "Minutes"], result.causes),
           ...!result.causes.length ? [el("p", {}, "No measured downtime recorded in this period.")] : [],
@@ -20964,16 +21616,16 @@ ${add2.join("\n")}` : add2.join("\n");
         error.textContent = e.message;
       }
     };
-    from.onchange = refresh;
-    to.onchange = refresh;
-    refresh();
+    from.onchange = refresh2;
+    to.onchange = refresh2;
+    refresh2();
     modal("Supervisor report", el("div", {}, el("div.command-form-grid", {}, el("label", {}, "From", from), el("label", {}, "Through", to)), error, body), { wide: true, actions: [
       { label: "Export CSV", onClick: () => {
-        refresh();
-        if (result) download(`supervisor-report-${from.value}-${to.value}.csv`, reportCsv([headers2, ...result.daily, [], ["Machine / reason", "Minutes"], ...result.causes, [], ["Interpretation", REPORT_NOTE], ["Report records in period", result.recordCount], ["Open reports now (all dates)", result.open]]), "text/csv;charset=utf-8");
+        refresh2();
+        if (result) download(`supervisor-report-${from.value}-${to.value}.csv`, reportCsv([headers, ...result.daily, [], ["Machine / reason", "Minutes"], ...result.causes, [], ["Interpretation", REPORT_NOTE], ["Report records in period", result.recordCount], ["Open reports now (all dates)", result.open]]), "text/csv;charset=utf-8");
       } },
       { label: "Print / Save PDF", onClick: () => {
-        refresh();
+        refresh2();
         if (result) printDocument({ title: "Supervisor report", subtitle: `${from.value} to ${to.value}`, body: body.cloneNode(true), landscape: true });
       } }
     ] });
@@ -22097,30 +22749,10 @@ ${add2.join("\n")}` : add2.join("\n");
     });
     return zone;
   }
-  var SETUP_SQL = `create table if not exists public.tracker_state (
-  site text not null,
-  part text not null,
-  data jsonb not null,
-  updated_at timestamptz not null default now(),
-  primary key (site, part)
-);
-alter table public.tracker_state enable row level security;
-
-revoke all on table public.tracker_state from anon, authenticated;
-grant select, insert, update on table public.tracker_state to anon;
-
-drop policy if exists "tracker read" on public.tracker_state;
-drop policy if exists "tracker insert" on public.tracker_state;
-drop policy if exists "tracker update" on public.tracker_state;
-create policy "tracker read" on public.tracker_state
-  for select to anon using (true);
-create policy "tracker insert" on public.tracker_state
-  for insert to anon with check (true);
-create policy "tracker update" on public.tracker_state
-  for update to anon using (true) with check (true);`;
-  function sqlDialog() {
+  async function sqlDialog() {
+    const { SETUP_SQL: SETUP_SQL2 } = await Promise.resolve().then(() => (init_setup_sql(), setup_sql_exports));
     const box = el("textarea", {
-      value: SETUP_SQL,
+      value: SETUP_SQL2,
       readonly: true,
       style: { minHeight: "260px", fontFamily: "var(--mono)", fontSize: "12px" }
     });
@@ -22141,8 +22773,8 @@ create policy "tracker update" on public.tracker_state
           el(
             "div",
             {},
-            el("strong", {}, "Anyone with the address and the key can read and write this data. "),
-            "There is no login. Keep the key to the department, the same way the network share is kept to the department. ",
+            el("strong", {}, "After this script, only invited people can open the board. "),
+            "Editors can change it. The wall-screen account can only look. ",
             el("strong", {}, "Never use a secret or service_role key here.")
           )
         )
@@ -22154,7 +22786,7 @@ create policy "tracker update" on public.tracker_state
           class: "primary",
           onClick: async () => {
             try {
-              await navigator.clipboard.writeText(SETUP_SQL);
+              await navigator.clipboard.writeText(SETUP_SQL2);
               toast("SQL copied");
             } catch {
               box.select();
@@ -22164,6 +22796,16 @@ create policy "tracker update" on public.tracker_state
         }]
       }
     );
+  }
+  var emailFormFn = null;
+  function cloudSignIn(rerender) {
+    if (emailFormFn) return emailFormFn({ compact: true });
+    Promise.resolve().then(() => (init_signin(), signin_exports)).then((module) => {
+      emailFormFn = module.emailForm;
+      rerender();
+    }).catch(() => {
+    });
+    return el("p.small.muted", {}, "Loading sign-in\u2026");
   }
   function cloudSection(rerender) {
     const st = cloudStatus();
@@ -22188,6 +22830,7 @@ create policy "tracker update" on public.tracker_state
             )
           )
         ),
+        cloudSignIn(rerender),
         el(
           "div.row",
           {},
@@ -22238,13 +22881,13 @@ create policy "tracker update" on public.tracker_state
       el(
         "ol.small.muted.cloud-steps",
         {},
-        el("li", {}, "Make a free project at supabase.com."),
+        el("li", {}, "Make a free project at supabase.com, turn on email sign-in, and turn off new sign-ups."),
         el(
           "li",
           {},
           "Run the setup SQL once \u2014 ",
           el("button.linkbtn", { onclick: sqlDialog }, "show it"),
-          "."
+          " \u2014 then invite people and mark editors and the view-only wall screen."
         ),
         el(
           "li",
@@ -22259,7 +22902,7 @@ create policy "tracker update" on public.tracker_state
           el("strong", {}, "Never paste a service_role or secret key here. "),
           "Those bypass every rule on the table, and anything typed into this box ends up in a browser where anyone using the tracker can read it."
         ),
-        el("li", {}, "Do the same on every phone and PC, with the same site name.")
+        el("li", {}, "Connect, then sign in with the invited email. Use the same site name on every device.")
       ),
       el(
         "div.grid",
@@ -23203,6 +23846,7 @@ create policy "tracker update" on public.tracker_state
 
   // js/app.js
   init_motion();
+  init_cloud();
   function lazyView(load, exportName, label) {
     let renderer = null;
     let pending2 = null;
@@ -23274,6 +23918,7 @@ create policy "tracker update" on public.tracker_state
     { key: "shift", label: "Shift Update", short: "Shift", kind: "tool", icon: "clipboard", render: renderShiftUpdate },
     { key: "setup", label: "Setup", kind: "tool", icon: "gear", render: renderData }
   ];
+  takeImplicitSession();
   var current = location.hash.slice(1) || "overview";
   if (current === "extrusions") {
     current = "dies";
@@ -23742,7 +24387,32 @@ create policy "tracker update" on public.tracker_state
       }
     };
   }
+  var renderAuthGate2 = null;
   function render() {
+    const gate2 = authGate();
+    if (gate2 === "sign-in" || gate2 === "not-a-member" || gate2 === "signing-in") {
+      if (!renderAuthGate2) {
+        Promise.resolve().then(() => (init_signin(), signin_exports)).then((module) => {
+          renderAuthGate2 = module.renderAuthGate;
+          scheduleRender();
+        }).catch(() => {
+        });
+        root.replaceChildren(el(
+          "section.signin-screen",
+          {},
+          el("h1", {}, "Please sign in"),
+          el("p", {}, "Loading the sign-in screen. Your work is still saved on this phone.")
+        ));
+        pageMotion = false;
+        return;
+      }
+      root.replaceChildren(renderAuthGate2({
+        gate: gate2,
+        onReady: () => initCloud({ includeBase: true })
+      }));
+      pageMotion = false;
+      return;
+    }
     const restoreFocus = focusAfterRender();
     const tab = TABS.find((t) => t.key === current) || TABS[0];
     const storage = storageStatus();
@@ -23831,7 +24501,9 @@ create policy "tracker update" on public.tracker_state
   registerServiceWorker();
   watchConnection(scheduleRender);
   initSharedFile(scheduleRender);
-  initCloud();
+  watchViewOnly(() => toast("This account can only view the board."));
+  onAuth(scheduleRender);
+  bootAuth().then((result) => initCloud({ includeBase: !!result?.signedInNow })).then(() => scheduleRender());
   window.addEventListener("beforeunload", (e) => {
     if (!hasUnsyncedChanges()) return;
     e.preventDefault();

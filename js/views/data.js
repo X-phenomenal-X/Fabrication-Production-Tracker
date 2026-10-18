@@ -13,6 +13,8 @@ import { importMachineWorkbook } from '../import-machines.js';
 import { staleImports } from '../model.js';
 import { MACHINE_BY_KEY } from '../machines.js';
 import { loadMaterialColorFile } from '../material-colors.js';
+/* The setup script and the sign-in form stay off the first visit. A phone
+   opening Rolling should not spend a request on SQL it has not asked to see. */
 
 let pendingHandle = null;
 
@@ -149,40 +151,12 @@ function dropZone({ title, hint, onFile }) {
    has. This is the same sync over HTTPS, so the tracker can be open on a phone
    on the floor and a PC in the office at the same time. */
 
-/* Row-level security decides *which rows* a caller may touch; the table grant
-   decides whether it may reach the table at all. Both are needed — a new
-   project can have working policies and still refuse every request, because
-   the Data API was never granted the table. Policies name their roles
-   explicitly for the same reason: a policy with no `to` clause applies to
-   `public`, which is broader than this needs to be.
+/* The script itself lives in js/setup-sql.js so it cannot drift from
+   supabase/migrations. No delete grant: a removal is a tombstone inside the
+   document, not a deleted row. The anon role is left with nothing. */
 
-   No `delete` grant. The app only ever GETs and POSTs upserts; a removal is
-   recorded as a tombstone row rather than by deleting anything, so DELETE is
-   privilege it would never use. There is no login, so only the anonymous role
-   receives access; the authenticated role remains closed. */
-const SETUP_SQL = `create table if not exists public.tracker_state (
-  site text not null,
-  part text not null,
-  data jsonb not null,
-  updated_at timestamptz not null default now(),
-  primary key (site, part)
-);
-alter table public.tracker_state enable row level security;
-
-revoke all on table public.tracker_state from anon, authenticated;
-grant select, insert, update on table public.tracker_state to anon;
-
-drop policy if exists "tracker read" on public.tracker_state;
-drop policy if exists "tracker insert" on public.tracker_state;
-drop policy if exists "tracker update" on public.tracker_state;
-create policy "tracker read" on public.tracker_state
-  for select to anon using (true);
-create policy "tracker insert" on public.tracker_state
-  for insert to anon with check (true);
-create policy "tracker update" on public.tracker_state
-  for update to anon using (true) with check (true);`;
-
-function sqlDialog() {
+async function sqlDialog() {
+  const { SETUP_SQL } = await import('../setup-sql.js');
   const box = el('textarea', {
     value: SETUP_SQL,
     readonly: true,
@@ -195,8 +169,8 @@ function sqlDialog() {
     box,
     el('div.banner.warn', { style: { marginTop: '12px' } },
       el('div', {},
-        el('strong', {}, 'Anyone with the address and the key can read and write this data. '),
-        'There is no login. Keep the key to the department, the same way the network share is kept to the department. ',
+        el('strong', {}, 'After this script, only invited people can open the board. '),
+        'Editors can change it. The wall-screen account can only look. ',
         el('strong', {}, 'Never use a secret or service_role key here.')))),
     {
       wide: true,
@@ -209,6 +183,16 @@ function sqlDialog() {
         },
       }],
     });
+}
+
+let emailFormFn = null;
+function cloudSignIn(rerender) {
+  if (emailFormFn) return emailFormFn({ compact: true });
+  import('./signin.js').then((module) => {
+    emailFormFn = module.emailForm;
+    rerender();
+  }).catch(() => {});
+  return el('p.small.muted', {}, 'Loading sign-in…');
 }
 
 function cloudSection(rerender) {
@@ -228,6 +212,7 @@ function cloudSection(rerender) {
             st.error
               ? 'Your work is still saved on this device and will go up once this is fixed.'
               : `${st.where}.${st.at ? ` Last successful sync ${fmtWhen(st.at)}.` : ' Connecting for the first time.'}`))),
+      cloudSignIn(rerender),
       el('div.row', {},
         el('button', {
           onclick: async () => {
@@ -265,9 +250,10 @@ function cloudSection(rerender) {
       + 'phones too — statuses, notes, rush, back orders and shift updates all '
       + 'merge line by line, exactly as they do through the shared file.'),
     el('ol.small.muted.cloud-steps', {},
-      el('li', {}, 'Make a free project at supabase.com.'),
+      el('li', {}, 'Make a free project at supabase.com, turn on email sign-in, and turn off new sign-ups.'),
       el('li', {}, 'Run the setup SQL once — ',
-        el('button.linkbtn', { onclick: sqlDialog }, 'show it'), '.'),
+        el('button.linkbtn', { onclick: sqlDialog }, 'show it'),
+        ' — then invite people and mark editors and the view-only wall screen.'),
       el('li', {}, 'Copy the Project URL and the ',
         el('strong', {}, 'publishable key'),
         ' from Settings → API Keys, and paste them here. On an older project the same '
@@ -275,7 +261,7 @@ function cloudSection(rerender) {
       el('li', {}, el('strong', {}, 'Never paste a service_role or secret key here. '),
         'Those bypass every rule on the table, and anything typed into this box '
         + 'ends up in a browser where anyone using the tracker can read it.'),
-      el('li', {}, 'Do the same on every phone and PC, with the same site name.')),
+      el('li', {}, 'Connect, then sign in with the invited email. Use the same site name on every device.')),
 
     el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: '12px', marginTop: '14px' } },
       el('label.field', {}, el('span', {}, 'Project URL'), url),

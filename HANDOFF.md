@@ -366,10 +366,11 @@ customer names — with deliberately awkward text to catch wrapping bugs.
 
 `test/cloud-check.mjs` is worth understanding: there is no Supabase to reach
 from a test, so it stands up a **mock speaking the same PostgREST shapes** —
-the `part=in.()` filter, the `on_conflict` upsert with
-`Prefer: resolution=merge-duplicates`, and the CORS preflight the `apikey` /
-`Prefer` headers force a browser to send. It then drives two browser contexts
-with separate localStorage as two people and asserts they converge.
+the `part=in.()` filter, an insert, a compare-and-swap `PATCH` on `updated_at`,
+and the CORS preflight the `apikey` / `Prefer` headers force a browser to send.
+It drives two browser contexts with separate localStorage as two people,
+asserts they converge, and asserts two saves that leave at the same moment
+both survive. It also checks the Setup script matches the migration file.
 
 ---
 
@@ -397,28 +398,26 @@ with separate localStorage as two people and asserts they converge.
   retires the previous cache. An open tab gets an update *toast with a button* —
   it never reloads out from under someone mid-task.
 
-The Supabase table (created once via the SQL in Setup → Show setup SQL):
+The lock script is `supabase/migrations/20261018120000_tracker_auth.sql`. Setup
+shows that same text. Do not paste the old open anon policies back in.
 
-```sql
-create table if not exists public.tracker_state (
-  site text not null, part text not null,
-  data jsonb not null, updated_at timestamptz not null default now(),
-  primary key (site, part));
-alter table public.tracker_state enable row level security;
-revoke all on table public.tracker_state from anon, authenticated;
-grant select, insert, update on table public.tracker_state to anon;
-drop policy if exists "tracker read" on public.tracker_state;
-drop policy if exists "tracker insert" on public.tracker_state;
-drop policy if exists "tracker update" on public.tracker_state;
-create policy "tracker read" on public.tracker_state for select to anon using (true);
-create policy "tracker insert" on public.tracker_state for insert to anon with check (true);
-create policy "tracker update" on public.tracker_state for update to anon using (true) with check (true);
-```
+Roles live in `public.tracker_members` (`editor` or `viewer`), keyed by the
+auth user id. The owner adds those rows in the SQL editor. The browser cannot
+write them. `tracker_role()` is what the row policies call. After the script,
+the anon role gets nothing, a signed-in member can read `tracker_state`, and
+only an editor can insert or update it. The wall login is a viewer, including
+on `?monitor`.
 
-That grant and those policies mean **anyone with the URL + publishable or
-legacy anon key can read and write the data. There is no login.** That is the
-accepted trade for not running accounts; it is documented in the README and
-surfaced in the SQL dialog.
+Until that script has been run, a device that is already syncing keeps using
+the publishable key, so deploying the new site does not stop the shift. After
+the script, a device that has not signed in shows "Please sign in" and keeps
+its local copy. The first successful sign-in on a phone that already had the
+board sends that local copy up.
+
+Photo to To-Do no longer uses a shared department code. Deploy
+`photo-to-todos` with JWT verification on. The function checks
+`tracker_members` with the caller's token and refuses a viewer before it
+calls OpenAI.
 
 ---
 

@@ -49,9 +49,16 @@ The report must also confirm:
 
 ## Owner actions before live use
 
-- Replace the legacy Supabase anon key that appeared in the setup transcript
-  with a publishable key. Verify the old key fails, then enter the replacement
-  on every approved device. Never use a secret or service_role key in the app.
+- Export a backup from a phone that already has the live board before changing
+  Supabase or merging this sign-in work.
+- Turn on email sign-in, turn off new sign-ups, invite the crew, run
+  `supabase/migrations/20261018120000_tracker_auth.sql`, and set editor or
+  viewer on each user. The ordered click-by-click list is in the pull request
+  so a mid-shift device is not locked out.
+- Sign in on every device before rotating the publishable key that appeared in
+  the setup transcript. After rotation, confirm the old key fails, then paste
+  the new publishable key in Setup on each device. Never use a secret or
+  service_role key in the app.
 - Import both live workbooks on one synced device. On a second device, confirm
   the base task count, latest import names, shift-update date/shift and a test
   work-status change all converge.
@@ -71,7 +78,7 @@ The report must also confirm:
 | Each release | Tracker owner | Run `npm test` with real workbook paths, keep the rollback HTML, then publish. |
 | After credential or device changes | Tracker owner | Remove obsolete device configuration and repeat two-device convergence checks. |
 
-The Supabase table intentionally has no user accounts. Anyone with the project
-URL and publishable (or legacy anon) key can read and write the site data;
-configuration control and regular backups are therefore operational
-requirements, not optional polish.
+After the lock script, the publishable key is only the gateway key. Reading
+the board requires a signed-in member, and changing it requires an editor.
+Regular JSON backups remain part of the operating routine. Do not put the
+old open anon policies back.

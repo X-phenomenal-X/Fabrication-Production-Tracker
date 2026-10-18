@@ -979,12 +979,22 @@ work there. **Setup → Sync across devices** connects the app to a free
 same board is open on a phone on the floor and a PC in the office at once.
 
 1. Make a free project at supabase.com.
-2. Run the setup SQL once (Setup shows it, with a copy button). It creates one
-   `tracker_state` table, an explicit Data API grant and three row policies.
-3. Paste the **Project URL** and **publishable key** from Settings → API Keys.
-   A legacy anon key also works. Never paste a secret or `service_role` key
-   into the browser app.
-4. Do the same on every phone and PC, with the same **site name**.
+2. In Authentication, turn on email sign-in, turn off new sign-ups, and set
+   the site URL and redirect to the Pages address. Invite each person. The
+   tracker has no Create account button.
+3. Run the setup SQL once (Setup shows the same text as
+   `supabase/migrations/20261018120000_tracker_auth.sql`, with a copy button).
+   It creates `tracker_state` and `tracker_members`, then locks both so the
+   public anon role can neither read nor write. Only a signed-in member can
+   read. Only an editor can change the board.
+4. In the SQL editor, add one `tracker_members` row per invited user id.
+   Supervisors and lead hands are `editor`. The wall screen is `viewer`.
+5. Paste the **Project URL** and **publishable key** from Settings → API Keys.
+   A legacy anon key still works as the gateway `apikey`. Never paste a secret
+   or `service_role` key into the browser app.
+6. Connect, then sign in with the invited email. Use the same **site name**
+   on every device. A phone that already has the board keeps its local copy
+   and sends that copy up after the first successful sign-in.
 
 ### Enabling Photo to To-Do
 
@@ -992,26 +1002,25 @@ Photo analysis uses the same Supabase project, but OpenAI credentials stay in a
 server-side Edge Function — never paste an OpenAI API key into the browser app.
 The source is in `supabase/functions/photo-to-todos/index.ts`.
 
-Create a long department access code and set the three required secrets:
+Set the OpenAI secret, allow this site, and deploy with JWT verification left on:
 
 ```powershell
 supabase secrets set OPENAI_API_KEY="..." `
-  PHOTO_TODO_ACCESS_KEY="a-long-random-department-code" `
   PHOTO_TODO_ALLOWED_ORIGINS="https://x-phenomenal-x.github.io"
-supabase functions deploy photo-to-todos --no-verify-jwt
+supabase functions deploy photo-to-todos
 ```
 
-For a custom Pages domain, use its exact origin (scheme plus host). Multiple
-origins are comma-separated. `OPENAI_VISION_MODEL` is optional and defaults to
-`gpt-5.6-luna`. The function rejects other browser origins, requires the
-department access code before spending model allowance, caps image/request
-size, returns `Cache-Control: no-store`, and never writes to the tracker table.
+Do not pass `--no-verify-jwt`. Supabase supplies `SUPABASE_URL` and
+`SUPABASE_ANON_KEY` to the function. For a custom Pages domain, use its exact
+origin (scheme plus host). Multiple origins are comma-separated.
+`OPENAI_VISION_MODEL` is optional and defaults to `gpt-5.6-luna`. The function
+rejects other browser origins, requires a signed-in editor before spending
+model allowance, caps image/request size, returns `Cache-Control: no-store`,
+and never writes to the tracker table. A view-only wall login is refused.
 
-On first use each device asks for the department access code. That code is kept
-in a separate device-only localStorage entry, `bv.cutting.photo-todo.access.v1`;
-it is not part of either synced cloud document. The public Supabase publishable
-key is still sent as the gateway `apikey`; secret and `service_role` keys never
-belong in the PWA.
+The public Supabase publishable key is still sent as the gateway `apikey`.
+The person's login rides in `Authorization`. Secret and `service_role` keys
+never belong in the PWA. There is no shared department access code.
 
 The snapshot is pushed as **two documents, not one**:
 
@@ -1029,12 +1038,17 @@ Pulls poll every 30 seconds while the tab is visible, and immediately when you
 come back to the app — which on a phone is exactly when its copy is most likely
 to be stale.
 
-**The trade-off, plainly:** the explicit Data API grant and policies let anyone
-holding the address and publishable (or legacy anon) key read and write the
-department's data. There is no login. Keep the configuration to the department,
-the same way the network share is kept to the department. If that is not
-acceptable, the shared file gives up phones and keeps everything inside the
-building.
+A save writes only when `updated_at` is still the value this phone just read.
+If another phone saved in that same moment, the write matches nothing, the
+two copies are merged, and this phone tries again. That is what stops one
+upload from replacing the other.
+
+**Who can open it:** after the setup SQL, the publishable key by itself cannot
+read or write. An invited editor can change the board. The wall account can
+only watch. Until that SQL has been run, a phone that is already syncing keeps
+using the publishable key, so the live shift is not stopped by the new site.
+Once the SQL is in place, a phone that has not signed in yet shows "Please
+sign in" and keeps the work already stored on that phone.
 
 Without either, the app still works fully, storing data in that browser.
 Export / Import moves it between machines.
@@ -1070,15 +1084,17 @@ a back order all survive a reload and a re-import.
 
 `test/cloud-check.mjs` is the one worth knowing about. There is no Supabase to
 reach from a test, so it stands up a mock that speaks the same PostgREST
-shapes the client uses — the `site=eq.` / `part=in.()` filters, the
-`on_conflict` upsert with `Prefer: resolution=merge-duplicates`, and the CORS
-preflight that the `apikey` and `Prefer` headers force a browser to send.
-Getting any of those wrong fails there rather than on the shop floor. It then
-drives two browser contexts with separate storage as two people: the PC imports
-the workbooks and sets a status, a rush and a note; the phone connects having
-never seen a workbook and must receive all of it; both then edit different
-lines and must converge without losing either. It also asserts a wrong key
-produces a sentence an operator can act on rather than a stack trace.
+shapes the client uses — the `site=eq.` / `part=in.()` filters, an insert, a
+compare-and-swap `PATCH` on `updated_at`, and the CORS preflight that the
+`apikey` and `Prefer` headers force a browser to send. Getting any of those
+wrong fails there rather than on the shop floor. It then drives two browser
+contexts with separate storage as two people: the PC imports the workbooks and
+sets a status, a rush and a note; the phone connects having never seen a
+workbook and must receive all of it; both then edit different lines and must
+converge without losing either. It also holds two saves in the air at once and
+checks that both notes survive, and it fails if the Setup SQL drifts from the
+migration file. A wrong key still produces a sentence an operator can act on
+rather than a stack trace.
 
 ### Visual QA
 

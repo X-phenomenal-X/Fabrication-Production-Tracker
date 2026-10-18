@@ -25,6 +25,7 @@ import {
 import { shiftStatusAt } from './shifts.js';
 import { registerServiceWorker, watchConnection, isOnline } from './offline.js';
 import { pulseSyncMerge, reducedMotion } from './motion.js';
+import { takeImplicitSession, bootAuth, authGate, onAuth, watchViewOnly } from './cloud.js';
 
 /* The engineering libraries contain thousands of records and drawings. They
    are useful, but they are not part of running a machine queue. Loading those
@@ -94,6 +95,10 @@ const TABS = [
   { key: 'shift', label: 'Shift Update', short: 'Shift', kind: 'tool', icon: 'clipboard', render: renderShiftUpdate },
   { key: 'setup', label: 'Setup', kind: 'tool', icon: 'gear', render: renderData },
 ];
+
+// A magic-link return puts the tokens in the hash. Take them out before this
+// line treats that hash as a page name.
+takeImplicitSession();
 
 let current = location.hash.slice(1) || 'overview';
 // Keep old bookmarks working after Die Lookup and Extrusions became one
@@ -531,7 +536,28 @@ function focusAfterRender() {
   };
 }
 
+let renderAuthGate = null;
 function render() {
+  const gate = authGate();
+  if (gate === 'sign-in' || gate === 'not-a-member' || gate === 'signing-in') {
+    if (!renderAuthGate) {
+      import('./views/signin.js').then((module) => {
+        renderAuthGate = module.renderAuthGate;
+        scheduleRender();
+      }).catch(() => {});
+      root.replaceChildren(el('section.signin-screen', {},
+        el('h1', {}, 'Please sign in'),
+        el('p', {}, 'Loading the sign-in screen. Your work is still saved on this phone.')));
+      pageMotion = false;
+      return;
+    }
+    root.replaceChildren(renderAuthGate({
+      gate,
+      onReady: () => initCloud({ includeBase: true }),
+    }));
+    pageMotion = false;
+    return;
+  }
   const restoreFocus = focusAfterRender();
   const tab = TABS.find((t) => t.key === current) || TABS[0];
   const storage = storageStatus();
@@ -630,7 +656,9 @@ if (document.documentElement.dataset.display === 'monitor') armMonitorRotation(s
 registerServiceWorker();
 watchConnection(scheduleRender);
 initSharedFile(scheduleRender);
-initCloud();
+watchViewOnly(() => toast('This account can only view the board.'));
+onAuth(scheduleRender);
+bootAuth().then((result) => initCloud({ includeBase: !!result?.signedInNow })).then(() => scheduleRender());
 
 // Browsers intentionally ignore custom before-close wording, but setting
 // returnValue still produces their standard warning while an outbound snapshot

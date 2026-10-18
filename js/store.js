@@ -12,6 +12,7 @@
 import {
   setCloudConfig, cloudEnabled, cloudHost,
   cloudPull, cloudPush, cloudTest, CLOUD_PARTS,
+  membershipRole, refreshMembership, hasSession, authGate, setAuthGate, noteViewOnly,
 } from './cloud.js';
 import { isSundayDate } from './shifts.js';
 
@@ -959,6 +960,18 @@ function persistLocal(data = snapshot()) {
 }
 
 export function save() {
+  // A view-only login, including the wall screen, must not grow a private
+  // copy of the board. Put the last saved snapshot back and leave the cloud
+  // alone. Editors and a phone that has not signed in yet save as before.
+  if (membershipRole() === 'viewer') {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) apply(JSON.parse(raw));
+    } catch { /* the in-memory copy remains if storage cannot be read */ }
+    noteViewOnly();
+    emit();
+    return;
+  }
   persistLocal();
   if (fileHandle) queueFileSave();
   queueCloudPush();
@@ -1321,10 +1334,19 @@ export async function pullCloud({ parts = CLOUD_PARTS } = {}) {
     // Each document is a partial snapshot; mergeSnapshot ignores absent keys.
     if (remote?.work) mergeSnapshot(remote.work);
     if (remote?.base) mergeSnapshot(remote.base);
+    // Rows coming back means this login can still see the board, so a previous
+    // "please sign in" from an empty locked read should not stick.
+    if (remote?.base || remote?.work) setAuthGate(null);
     persistLocal();
-    setCloudState({ at: now(), error: null });
-    return true;
+    const blocked = authGate();
+    setCloudState({
+      at: now(),
+      error: blocked ? (cloudState.error || 'Please sign in to keep sharing. Your work is still saved on this phone.') : null,
+    });
+    return { ok: true, hadBase: !!remote?.base, hadWork: !!remote?.work };
   } catch (e) {
+    if (e?.code === 'auth-required') setAuthGate('sign-in');
+    if (e?.code === 'not-a-member') setAuthGate('not-a-member');
     setCloudState({ error: e.message });
     return false;
   } finally {
@@ -1339,34 +1361,54 @@ let cloudBaseDirty = false;
 
 async function pushCloud(withBase = false) {
   if (!cloudEnabled()) return false;
+  if (membershipRole() === 'viewer') return false;
   if (withBase) cloudBaseDirty = true;
   if (cloudPushPromise) return cloudPushPromise;
   clearTimeout(cloudTimer);
 
   /* A completion acknowledges the edit generation it actually sent, not the
      current generation. This matters when a second tap lands during the fetch:
-     that tap stays pending and the loop sends a fresh snapshot immediately. */
+     that tap stays pending and the loop sends a fresh snapshot immediately.
+
+     The write is conditional on the updated_at we just read. When two phones
+     read the same copy and both try to write, the second write matches nothing.
+     This loop merges that newer copy and tries again, so neither tap is lost. */
   cloudPushPromise = (async () => {
     setCloudState({ pushing: true });
     let ok = true;
     let attemptedBase = false;
+    let attempts = 0;
     try {
       do {
         const sending = cloudChangeId;
         const includeBase = cloudBaseDirty;
         attemptedBase = includeBase;
         cloudBaseDirty = false;
+        attempts += 1;
 
         const remote = await cloudPull(includeBase ? CLOUD_PARTS : ['work']);
         if (remote?.work) mergeSnapshot(remote.work);
         if (includeBase && remote?.base) mergeSnapshot(remote.base);
 
         const docs = { work: cloudDoc('work') };
-        if (includeBase) docs.base = cloudDoc('base');
-        await cloudPush(docs);
+        const expected = { work: remote?.updatedAt?.work || null };
+        if (includeBase) {
+          docs.base = cloudDoc('base');
+          expected.base = remote?.updatedAt?.base || null;
+        }
+        const result = await cloudPush(docs, { expected });
+        if (result?.conflict) {
+          persistLocal();
+          if (attemptedBase) cloudBaseDirty = true;
+          if (attempts >= 6) {
+            throw new Error('Someone else saved at the same time. Your work is still on this phone. Tap retry.');
+          }
+          continue;
+        }
 
         cloudAckId = Math.max(cloudAckId, sending);
         persistLocal();
+        if (remote?.base || remote?.work || result?.ok) setAuthGate(null);
         setCloudState({ at: now(), error: null });
       } while (cloudChangeId > cloudAckId || cloudBaseDirty);
     } catch (e) {
@@ -1374,6 +1416,8 @@ async function pushCloud(withBase = false) {
       // If a base upload failed, the next retry still has to carry it. The
       // work half is always sent, so its pending generation remains unacked.
       if (attemptedBase) cloudBaseDirty = true;
+      if (e?.code === 'auth-required') setAuthGate('sign-in');
+      if (e?.code === 'not-a-member') setAuthGate('not-a-member');
       setCloudState({ error: e.message });
     } finally {
       setCloudState({ pushing: false });
@@ -1399,14 +1443,23 @@ function queueCloudPush({ base = false, change = true } = {}) {
 /** Connect (or reconnect) and start syncing. Returns where it connected to. */
 export async function connectCloud(cfg) {
   if (cfg) {
-    await cloudTest(cfg);
+    try {
+      await cloudTest(cfg);
+    } catch (error) {
+      // A locked project refuses the public key. Still remember the address
+      // so this phone can sign in; a typo or a dead address does not get saved.
+      if (error?.code !== 'auth-required' && error?.code !== 'not-a-member') throw error;
+    }
     setCloudConfig(cfg);
   }
   if (!cloudEnabled()) return null;
 
   await pullCloud();
-  // First device to connect seeds the cloud with whatever it already has.
-  await pushCloud(true);
+  // First device to connect, and a phone signing in with work already on it,
+  // seeds the cloud with the merged copy rather than only what was already there.
+  if (membershipRole() !== 'viewer' && authGate() !== 'sign-in' && authGate() !== 'not-a-member') {
+    await pushCloud(true);
+  }
   startCloudPolling();
   setCloudState({ on: true });
   return cloudHost();
@@ -1435,14 +1488,23 @@ function startCloudPolling() {
 }
 
 /** Called once at boot. Reconnects silently if this device is already set up. */
-export async function initCloud() {
+export async function initCloud({ includeBase = false } = {}) {
   if (!cloudEnabled()) return null;
   setCloudState({ on: true });
-  await pullCloud();
-  // The local copy may contain work recorded offline before a reload. A small
-  // merge-first work push on boot is the only reliable way to flush it without
-  // waiting for somebody to make another edit.
-  await pushCloud();
+  if (hasSession()) {
+    try { await refreshMembership(); }
+    catch (error) { setCloudState({ error: error.message }); }
+  }
+  const pulled = await pullCloud();
+  const role = membershipRole();
+  // A viewer only receives. An editor, and a phone still on the public key,
+  // sends the merged local copy up so a tap made offline is not stranded.
+  // Signing in also sends the imported schedules, in case this phone holds
+  // the only copy of them.
+  if (role !== 'viewer' && authGate() !== 'sign-in' && authGate() !== 'not-a-member') {
+    const seedBase = includeBase || pulled?.hadBase === false && (state.tasks?.length || Object.keys(state.machineMeta || {}).length);
+    await pushCloud(!!seedBase);
+  }
   startCloudPolling();
   return cloudHost();
 }

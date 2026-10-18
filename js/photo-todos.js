@@ -7,24 +7,11 @@
 
 import { el, icon, modal, toast } from './ui.js';
 import { addTodo, cloudConfig } from './store.js';
+import { freshSession, membershipRole } from './cloud.js';
 
-const LS_ACCESS = 'bv.cutting.photo-todo.access.v1';
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
 const MAX_DATA_URL = 5_200_000;
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-
-function accessKey() {
-  try { return localStorage.getItem(LS_ACCESS) || ''; } catch { return ''; }
-}
-
-function setAccessKey(value) {
-  const key = String(value || '').trim();
-  try {
-    if (key) localStorage.setItem(LS_ACCESS, key);
-    else localStorage.removeItem(LS_ACCESS);
-  } catch { /* The request can still use the in-memory value this session. */ }
-  return key;
-}
 
 function cleanText(value, max = 240) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -108,7 +95,13 @@ export async function preparePhoto(file) {
   }
 }
 
-async function requestCandidates({ cfg, key, image, guidance }) {
+async function requestCandidates({ cfg, image, guidance }) {
+  const session = await freshSession();
+  if (!session?.accessToken || membershipRole() !== 'editor') {
+    const error = new Error('Sign in as an editor to use photo analysis.');
+    error.status = 401;
+    throw error;
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 45_000);
   let response;
@@ -117,7 +110,7 @@ async function requestCandidates({ cfg, key, image, guidance }) {
       method: 'POST',
       headers: {
         apikey: cfg.key,
-        'x-photo-todo-key': key,
+        Authorization: `Bearer ${session.accessToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ image, guidance: cleanText(guidance, 500) }),
@@ -150,9 +143,10 @@ export function openPhotoTodoDialog({
   ref, people = [], defaultAssignee = null, rerender, go, origin = null,
 } = {}) {
   const cfg = cloudConfig();
+  const role = membershipRole();
   const state = {
-    phase: !cfg ? 'cloud' : (accessKey() ? 'choose' : 'access'),
-    key: accessKey(), photo: null, guidance: '', result: null, error: '',
+    phase: !cfg ? 'cloud' : role === 'editor' ? 'choose' : role === 'viewer' ? 'viewer' : 'signin',
+    photo: null, guidance: '', result: null, error: '',
   };
   const flow = el('div.photo-todo-flow', { 'aria-live': 'polite' });
   const dlg = modal('Photo to To-Do', flow, { wide: true, origin });
@@ -198,7 +192,7 @@ export function openPhotoTodoDialog({
     state.phase = 'analyse'; state.error = ''; render();
     try {
       const raw = await requestCandidates({
-        cfg, key: state.key, image: state.photo.dataUrl, guidance: state.guidance,
+        cfg, image: state.photo.dataUrl, guidance: state.guidance,
       });
       state.result = normalizePhotoTodoResult(raw, people);
       for (const task of state.result.tasks) {
@@ -207,8 +201,8 @@ export function openPhotoTodoDialog({
       state.phase = 'review';
     } catch (error) {
       if (error.status === 401 || error.status === 403) {
-        setAccessKey(''); state.key = ''; state.phase = 'access';
-        state.error = 'That department access code was not accepted. Enter it again.';
+        state.phase = membershipRole() === 'viewer' ? 'viewer' : 'signin';
+        state.error = error.message;
       } else {
         state.phase = 'preview'; state.error = error.message;
       }
@@ -238,28 +232,27 @@ export function openPhotoTodoDialog({
         'The photo is not saved; only To-Dos you approve are synced.'));
   }
 
-  function renderAccess() {
-    const input = el('input', {
-      type: 'password', autocomplete: 'off', value: state.key,
-      placeholder: 'Department access code', 'aria-label': 'Photo to To-Do department access code',
-      oninput: (event) => { state.key = event.target.value; },
-      onkeydown: (event) => { if (event.key === 'Enter') saveAccess(); },
-    });
-    const saveAccess = () => {
-      const key = setAccessKey(state.key);
-      if (!key) { state.error = 'Enter the department access code.'; render(); return; }
-      state.key = key; state.phase = 'choose'; state.error = ''; render();
-    };
+  function renderSignIn() {
     flow.replaceChildren(
       el('div.photo-todo-intro', {},
         el('div.photo-todo-mark', {}, icon('sparkles', { size: 24 })),
-        el('div', {}, el('h2', {}, 'Connect this device once'),
-          el('p', {}, 'This code protects the department’s AI allowance. It stays on this device and never joins the shared tracker data.'))),
+        el('div', {}, el('h2', {}, 'Sign in as an editor'),
+          el('p', {}, 'Photo analysis is only for an invited editor. Sign in from Setup, then come back. The normal To-Do list still works.'))),
       errorBanner(),
-      el('label.photo-todo-field', {}, el('span', {}, 'Department access code'), input),
       privacyNote());
-    footer.replaceChildren(action('Cancel', close), action('Continue', saveAccess, 'primary'));
-    input.focus();
+    footer.replaceChildren(
+      action('Cancel', close),
+      action('Open Setup', () => { close(); go?.('setup'); }, 'primary'));
+  }
+
+  function renderViewer() {
+    flow.replaceChildren(
+      el('div.photo-todo-intro', {},
+        el('div.photo-todo-mark', {}, icon('cloud', { size: 24 })),
+        el('div', {}, el('h2', {}, 'View only'),
+          el('p', {}, 'This account can watch the board. Photo analysis stays with the editors.'))),
+      errorBanner());
+    footer.replaceChildren(action('Close', close, 'primary'));
   }
 
   function renderChoose() {
@@ -275,9 +268,7 @@ export function openPhotoTodoDialog({
         el('button.photo-todo-pick', { onclick: () => uploadInput.click() },
           icon('upload', { size: 21 }), el('span', {}, el('strong', {}, 'Choose image'), el('small', {}, 'JPEG, PNG or WebP')))),
       privacyNote());
-    footer.replaceChildren(
-      action('Change access code', () => { setAccessKey(''); state.key = ''; state.phase = 'access'; render(); }),
-      action('Cancel', close));
+    footer.replaceChildren(action('Cancel', close));
   }
 
   function renderBusy(label, copy) {
@@ -359,7 +350,8 @@ export function openPhotoTodoDialog({
         el('div', {}, el('h2', {}, 'Connect Sync across devices first'),
           el('p', {}, 'Photo analysis runs through the department’s protected cloud function. The normal To-Do list remains available without it.'))));
       footer.replaceChildren(action('Cancel', close), action('Open Setup', () => { close(); go?.('setup'); }, 'primary'));
-    } else if (state.phase === 'access') renderAccess();
+    } else if (state.phase === 'signin') renderSignIn();
+    else if (state.phase === 'viewer') renderViewer();
     else if (state.phase === 'choose') renderChoose();
     else if (state.phase === 'prepare') renderBusy('Preparing the photo…', 'Shrinking it on this device before anything is sent.');
     else if (state.phase === 'preview') renderPreview();

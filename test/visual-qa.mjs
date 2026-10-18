@@ -1494,7 +1494,14 @@ for (const theme of ['light', 'dark']) {
     localStorage.setItem('bv.cutting.cloud', JSON.stringify({
       url: 'https://photo-visual.supabase.co', key: 'sb_publishable_visual', site: 'cutting',
     }));
-    localStorage.setItem('bv.cutting.photo-todo.access.v1', 'visual-code');
+    localStorage.setItem('bv.cutting.auth', JSON.stringify({
+      accessToken: 'editor-visual-token',
+      refreshToken: 'editor-visual-refresh',
+      expiresAt: Date.now() + 3600000,
+      email: 'lead@example.com',
+      userId: '11111111-1111-1111-1111-111111111111',
+      role: 'editor',
+    }));
   }, fixture);
   await page.route('https://photo-visual.supabase.co/functions/v1/photo-to-todos', (route) => route.fulfill({
     status: 200, contentType: 'application/json',
