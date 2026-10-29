@@ -59,7 +59,7 @@ function date(value) {
 // Normalize department headers only. Exact tokens prevent WIDTH matching
 // FRAME WIDTH, and CUT from colliding with CUTTING DATE or CUT STATUS.
 function departmentHeader(value) {
-  return String(value || '').toUpperCase().replace(/[\\s.\\-_/]+/g, '');
+  return String(value || '').toUpperCase().replace(/[^A-Z0-9]+/g, '');
 }
 const DEPARTMENT_NAMES = Object.freeze({
   assembly: ['ASSEMBLY', 'ASSY'], vents: ['VENT', 'VENTS'],

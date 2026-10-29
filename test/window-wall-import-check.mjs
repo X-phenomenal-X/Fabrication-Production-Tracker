@@ -1,4 +1,5 @@
 /* Separate Window Wall import regression: awkward headers, collisions, legacy blanks. */
+import '../scripts/node-dom.mjs';
 import assert from 'node:assert/strict';
 import { importDailySchedule } from '../js/import-daily.js';
 import { makeWorkbook } from './workbook-fixture.mjs';
