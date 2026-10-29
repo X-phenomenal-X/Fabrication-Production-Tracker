@@ -157,22 +157,24 @@ function printSchedule(date, groups) {
 function printWindowWall() {
   const groups = windowWallSheet(state.dailyOrders || []);
   const count = groups.reduce((sum, group) => sum + group.rows.length, 0);
-  const body = el('div.print-window-wall', {},
-    ...groups.map((group) => el('section.print-table-group', {},
+  const sections = groups.map((group) => {
+    const header = el('thead', {},
+      el('tr', {}, ...WINDOW_WALL_FIELDS.map(([, label]) => el('th', {}, label))));
+    const entries = group.rows.map((row) => el('tr', {},
+      ...WINDOW_WALL_FIELDS.map(([key]) => el('td', {},
+        key === 'qty' ? fmtNum(row.qty) : (row[key] ?? '')))));
+    const subtotal = el('tr.subtotal', {},
+      ...WINDOW_WALL_FIELDS.map(([key], index) => el('td', {},
+        index === 0 ? `${group.label} subtotal` : key === 'qty' ? fmtNum(group.qty) : '')));
+    return el('section.print-table-group', {},
       el('h2', {}, group.label),
-      el('table.print-table', {},
-        el('thead', {}, el('tr', {}, ...WINDOW_WALL_FIELDS.map(([, label]) => el('th', {}, label)))),
-        el('tbody', {},
-          ...group.rows.map((row) => el('tr', {}, ...WINDOW_WALL_FIELDS.map(([key]) => el('td', {},
-            key === 'qty' ? fmtNum(row.qty) : (row[key] ?? ''))))),
-          el('tr.subtotal', {},
-            ...WINDOW_WALL_FIELDS.map(([key], index) => el('td', {},
-              index === 0 ? `${group.label} subtotal` : key === 'qty' ? fmtNum(group.qty) : '')))))));
+      el('table.print-table', {}, header, el('tbody', {}, ...entries, subtotal)));
+  });
   printDocument({
     title: 'Window Wall',
     subtitle: 'Daily Schedule · grouped by ship week',
     meta: [`${count} orders`, 'Landscape'],
-    body,
+    body: el('div.print-window-wall', {}, ...sections),
     landscape: true,
   });
 }
