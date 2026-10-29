@@ -86,7 +86,7 @@ function headerMap(sheet) {
       patterns.some((pattern) => pattern.test(String(heading).toUpperCase())) ? [index] : []);
     if (!indexes.length) continue;
     const preferred = key === 'cutStatus'
-      ? indexes.find((index) => /^CUT(?:TING)?\\s*STATUS$/.test(String(headings[index]).toUpperCase()))
+      ? indexes.find((index) => /^CUT(?:TING)?\s*STATUS$/.test(String(headings[index]).toUpperCase()))
       : undefined;
     found[key] = (preferred ?? indexes[0]) + 1;
   }
