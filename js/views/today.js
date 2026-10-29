@@ -200,9 +200,7 @@ export function renderToday(rerender, go) {
           el('div.centre-sub', {},
             fmtDate(ref, { withDay: true }),
             el('span.dot-sep', {}, '·'),
-            `${shift.label} shift`,
-            el('span.dot-sep', {}, '·'),
-            me()))),
+            `${shift.label} shift`))),
       el('span.spacer')));
 
   // The list works with no schedule loaded — chasing material does not depend

@@ -24,7 +24,20 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 950 } });
 await installShopClock(page);
 
 const errors = [];
-page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+// The file build would otherwise connect to the live board. A saved site
+// other than "cutting" is left alone, so this check stays on a dead host.
+await page.addInitScript(() => {
+  localStorage.setItem('bv.cutting.cloud', JSON.stringify({
+    url: 'https://example.invalid',
+    key: 'standalone-check',
+    site: 'standalone-check',
+  }));
+});
+page.on('console', (m) => {
+  if (m.type() === 'error' && !/example\.invalid|ERR_NAME_NOT_RESOLVED|Failed to load resource/i.test(m.text())) {
+    errors.push('console: ' + m.text());
+  }
+});
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 
 const step = (s) => console.log('  •', s);

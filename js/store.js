@@ -10,7 +10,7 @@
    computer clocks and two people updating different lines keep their work. */
 
 import {
-  setCloudConfig, cloudEnabled, cloudHost,
+  setCloudConfig, cloudEnabled, cloudHost, applyDepartmentCloud,
   cloudPull, cloudPush, cloudTest, CLOUD_PARTS,
   membershipRole, refreshMembership, hasSession, authGate, setAuthGate, noteViewOnly,
 } from './cloud.js';
@@ -149,10 +149,14 @@ export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+/** Author stamped on a new status, note, handover or to-do.
+
+    The tracker is one board for the whole department. The name picker is
+    gone, so a fresh write says Team rather than whoever last touched this
+    device. `settings.me` is left as it was: older history keeps the name it
+    was saved under, and reading the author must not wipe that. */
 export function me() {
-  const selected = cleanEmployeeName(state.settings.me);
-  if (!selected) return 'Unassigned';
-  return appPeople().find((name) => employeeNameKey(name) === employeeNameKey(selected)) || 'Unassigned';
+  return 'Team';
 }
 
 /* ---------- ordering edits across devices ---------- */
@@ -1550,14 +1554,9 @@ export async function pullCloud({ parts = CLOUD_PARTS } = {}) {
     // "please sign in" from an empty locked read should not stick.
     if (remote?.base || remote?.work) setAuthGate(null);
     persistLocal();
-    const blocked = authGate();
-    setCloudState({
-      at: now(),
-      error: blocked ? (cloudState.error || 'Please sign in to keep sharing. Your work is still saved on this phone.') : null,
-    });
+    setCloudState({ at: now(), error: null });
     return { ok: true, hadBase: !!remote?.base, hadWork: !!remote?.work };
   } catch (e) {
-    if (e?.code === 'auth-required') setAuthGate('sign-in');
     if (e?.code === 'not-a-member') setAuthGate('not-a-member');
     setCloudState({ error: e.message });
     return false;
@@ -1628,7 +1627,6 @@ async function pushCloud(withBase = false) {
       // If a base upload failed, the next retry still has to carry it. The
       // work half is always sent, so its pending generation remains unacked.
       if (attemptedBase) cloudBaseDirty = true;
-      if (e?.code === 'auth-required') setAuthGate('sign-in');
       if (e?.code === 'not-a-member') setAuthGate('not-a-member');
       setCloudState({ error: e.message });
     } finally {
@@ -1699,8 +1697,9 @@ function startCloudPolling() {
   }, 30000);
 }
 
-/** Called once at boot. Reconnects silently if this device is already set up. */
+/** Called once at boot. A published link or shared-drive file connects itself. */
 export async function initCloud({ includeBase = false } = {}) {
+  applyDepartmentCloud();
   if (!cloudEnabled()) return null;
   setCloudState({ on: true });
   if (hasSession()) {

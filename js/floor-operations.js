@@ -103,7 +103,7 @@ export function handoverAcknowledged(log) {
 export function acknowledgeHandover(date, shift) {
   const log = state.shiftLogs[`${date}|${shift}`];
   if (!log) throw new Error('Save the handover first.');
-  if (!me() || me() === 'Unassigned') throw new Error('Select your app user before acknowledging.');
+  if (!me()) throw new Error('Could not record the acknowledgement.');
   saveShiftLog(date, shift, { acknowledgement: { by: me(), at: new Date().toISOString(), signature: handoverSignature(log) } });
 }
 export function csvCell(value) {

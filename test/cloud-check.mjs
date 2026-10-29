@@ -309,7 +309,7 @@ if (!onPhone.tasks) throw new Error('the phone did not receive the imported sche
 if (onPhone.status !== 'IN_PROGRESS') throw new Error('status did not reach the phone');
 if (!onPhone.rush) throw new Error('rush did not reach the phone');
 if (!onPhone.note) throw new Error('note did not reach the phone');
-if (onPhone.who !== 'Abhay') throw new Error('the update lost who made it');
+if (onPhone.who !== 'Team') throw new Error('the update lost who made it');
 if (onPhone.employee?.role !== 'LEAD_HAND' || !onPhone.employee?.appAccess
     || !onPhone.appUsers.includes('Jordan Lead')) {
   throw new Error('the employee directory or app-user status did not reach the phone');

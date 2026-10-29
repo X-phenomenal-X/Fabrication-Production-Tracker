@@ -6,9 +6,8 @@
 
 import { el, icon, toast, modal, fmtNum, confirmDialog } from '../ui.js';
 import {
-  me, employeeDirectory, employeeCanUseApp,
+  employeeDirectory, employeeCanUseApp,
   EMPLOYEE_ROLES, EMPLOYEE_ROLE_LABELS,
-  setCurrentAppUser,
 } from '../store.js';
 import { upsertEmployee, importEmployees, archiveEmployee } from '../employees.js';
 
@@ -46,7 +45,7 @@ async function loadCrewFile(file, rerender) {
         el('div.stat', {}, el('div.n', {}, fmtNum(saved.added)), el('div.k', {}, 'New records')),
         el('div.stat', {}, el('div.n', {}, fmtNum(saved.updated)), el('div.k', {}, 'Records updated'))),
       el('div.banner.info.employee-import-note', {}, icon('users', { size: 17 }),
-        el('span', {}, 'Imported employees are directory-only. They do not appear in the tracker user picker unless you change their role and turn on tracker access.')),
+        el('span', {}, 'Imported employees are directory-only. They stay on assignment lists. Change a role only when the directory itself should say so.')),
       el('p.small.muted', {}, 'Name, department and shift were saved. Employee IDs, clothing sizes and source rows were discarded.')));
     toast(`${fmtNum(saved.total)} employee record${saved.total === 1 ? '' : 's'} checked`);
     rerender();
@@ -91,20 +90,20 @@ function openEmployeeEditor(record, rerender, origin = null) {
     }, EMPLOYEE_ROLE_LABELS[key])));
   const active = el('input.employee-active-input', { type: 'checkbox', checked: record?.active !== false });
   const access = el('input.employee-access-input', { type: 'checkbox', checked: !legacy && !!record?.appAccess });
-  const accessTitle = el('strong', {}, 'Show in app user picker');
-  const accessHelp = el('span', {}, 'Only lead hands, supervisors and managers can be enabled.');
+  const accessTitle = el('strong', {}, 'Management flag');
+  const accessHelp = el('span', {}, 'Stored with the directory. Opening the tracker does not depend on it.');
   const error = el('div.banner.bad.employee-form-error', { role: 'alert', hidden: true });
 
   const syncAccess = () => {
     const eligible = active.checked && ['LEAD_HAND', 'SUPERVISOR', 'MANAGER'].includes(role.value);
     access.disabled = !eligible;
     if (!eligible) access.checked = false;
-    accessTitle.textContent = eligible ? 'Show in app user picker' : 'Directory only';
+    accessTitle.textContent = eligible ? 'Management flag' : 'Directory only';
     accessHelp.textContent = !active.checked
-      ? 'Inactive employees cannot use the tracker.'
+      ? 'Inactive employees stay out of current assignment lists.'
       : role.value === 'EMPLOYEE' || !role.value
-        ? 'Employees stay in the directory and assignment lists, but not the tracker user picker.'
-        : 'Enabled people appear in the “Who are you?” picker on every synced device.';
+        ? 'Employees stay in the directory and on assignment lists.'
+        : 'Lead hands, supervisors and managers can carry this flag. The tracker is the same for everyone.';
   };
   role.addEventListener('change', syncAccess);
   active.addEventListener('change', syncAccess);
@@ -131,7 +130,7 @@ function openEmployeeEditor(record, rerender, origin = null) {
     label: 'Archive employee', class: 'danger', onClick: async (dlg) => {
       const confirmed = await confirmDialog(
         `Archive ${record.name}?`,
-        'The employee will leave the directory, assignment lists and tracker user picker. Existing production history will remain unchanged.',
+        'The employee will leave the directory and assignment lists. Existing production history will remain unchanged.',
         { confirmLabel: 'Archive', danger: true });
       if (!confirmed) return;
       archiveEmployee(record);
@@ -179,10 +178,8 @@ function openEmployeeEditor(record, rerender, origin = null) {
 }
 
 function employeeCard(record, rerender) {
-  const access = employeeCanUseApp(record);
-  const current = me() === record.name;
   const meta = [record.department || 'Department not set', shiftLabel(record.shift)].join(' · ');
-  return el('article.employee-card' + (current ? '.current' : '') + (!record.active ? '.inactive' : ''), {},
+  return el('article.employee-card' + (!record.active ? '.inactive' : ''), {},
     el('span.employee-avatar', { 'aria-hidden': 'true' }, initials(record.name)),
     el('div.employee-name', {},
       el('strong', {}, record.name),
@@ -191,27 +188,14 @@ function employeeCard(record, rerender) {
         el('span.chip.' + (record.legacy ? 'warn' : 'mute'), {}, roleLabel(record)),
         !record.active
           ? el('span.chip.bad', {}, 'Inactive')
-          : access
-            ? el('span.chip.ok', {}, 'App user')
+          : employeeCanUseApp(record)
+            ? el('span.chip.ok', {}, 'Management')
             : el('span.chip.mute', {}, 'Directory only'))),
     el('div.employee-actions', {},
       el('button.employee-edit', {
         type: 'button', 'aria-label': `Edit ${record.name}`,
         onclick: (event) => openEmployeeEditor(record, rerender, event.currentTarget),
-      }, icon('pencil', { size: 16 }), 'Edit'),
-      access
-        ? current
-          ? el('span.employee-current', {}, icon('check', { size: 15 }), 'Current app user')
-          : el('button.employee-use', {
-              type: 'button',
-              'aria-label': `Use tracker as ${record.name}`,
-              onclick: () => {
-                setCurrentAppUser(record.name);
-                toast(`Tracker is now set to ${record.name}`);
-                rerender();
-              },
-            }, 'Use as this person')
-        : null));
+      }, icon('pencil', { size: 16 }), 'Edit')));
 }
 
 function scopeButton(key, label, count, rerender) {
@@ -240,11 +224,11 @@ export function renderEmployees(rerender) {
           el('span.centre-rail', { 'aria-hidden': 'true' }),
           el('div', {},
             el('h1.centre-title', {}, 'Employees'),
-            el('div.centre-sub', {}, `${records.length} in directory · ${appUsers.length} tracker user${appUsers.length === 1 ? '' : 's'} · this device: ${me()}`))))),
+            el('div.centre-sub', {}, `${records.length} in the directory`))))),
 
     el('section.employee-summary', { 'aria-label': 'Employee directory summary' },
       el('div', {}, el('strong', {}, fmtNum(records.length)), el('span', {}, 'Employees')),
-      el('div', {}, el('strong', {}, fmtNum(appUsers.length)), el('span', {}, 'Tracker users')),
+      el('div', {}, el('strong', {}, fmtNum(appUsers.length)), el('span', {}, 'Management')),
       el('div', {}, el('strong', {}, fmtNum(inactive.length)), el('span', {}, 'Inactive'))),
 
     el('section.panel.employee-tools', {},
@@ -265,7 +249,7 @@ export function renderEmployees(rerender) {
             icon('upload', { size: 17 }), 'Import Abhay’s crew'))),
       el('div.employee-scopes', { role: 'group', 'aria-label': 'Filter employees' },
         scopeButton('all', 'All', records.length, rerender),
-        scopeButton('access', 'Tracker users', appUsers.length, rerender),
+        scopeButton('access', 'Management', appUsers.length, rerender),
         scopeButton('inactive', 'Inactive', inactive.length, rerender))),
 
     records.length
@@ -281,5 +265,5 @@ export function renderEmployees(rerender) {
 
     el('div.employee-privacy', {},
       icon('cloud', { size: 16 }),
-      el('span', {}, 'The directory syncs name, department, shift, role and app-user status. The picker is not a login. Roster files, employee IDs and HR details are never uploaded or built into the public website.')));
+      el('span', {}, 'The directory syncs name, department, shift, role and the management flag. There is no sign-in and no name to pick. Roster files, employee IDs and HR details are never uploaded or built into the public website.')));
 }

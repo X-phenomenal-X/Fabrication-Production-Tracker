@@ -1,20 +1,21 @@
-/* Setup: load the Rolling and CNC schedules, manage the shared file everyone
-   syncs through, and keep the list of who is using it. */
+/* Setup: load the Rolling and CNC schedules and manage sharing.
+   The board itself does not ask who is holding the device. */
 
 import { el, chip, icon, fmtNum, fmtWhen, toast, modal, download, confirmDialog } from '../ui.js';
 import {
   state, setMachineImport, setDailyImport, save, exportJson, importJson, resetAll,
   connectSharedFile, reconnectSharedFile, grantSharedFile, pullSharedFile,
-  supportsSharedFile, sharedFileName, disconnectSharedFile, me,
+  supportsSharedFile, sharedFileName, disconnectSharedFile,
   connectCloud, disconnectCloud, cloudStatus, cloudConfig, retrySync,
-  sharedFileStatus, storageStatus, applyTheme, appPeople, employeeDirectory,
+  sharedFileStatus, storageStatus, applyTheme, employeeDirectory,
 } from '../store.js';
+import { DEPARTMENT_CLOUD } from '../cloud.js';
 import { importMachineWorkbook } from '../import-machines.js';
 import { staleImports } from '../model.js';
 import { MACHINE_BY_KEY } from '../machines.js';
 import { loadMaterialColorFile } from '../material-colors.js';
-/* The setup script and the sign-in form stay off the first visit. A phone
-   opening Rolling should not spend a request on SQL it has not asked to see. */
+/* The setup script stays off the first visit. A phone opening Rolling
+   should not spend a request on SQL it has not asked to see. */
 
 let pendingHandle = null;
 
@@ -185,16 +186,6 @@ async function sqlDialog() {
     });
 }
 
-let emailFormFn = null;
-function cloudSignIn(rerender) {
-  if (emailFormFn) return emailFormFn({ compact: true });
-  import('./signin.js').then((module) => {
-    emailFormFn = module.emailForm;
-    rerender();
-  }).catch(() => {});
-  return el('p.small.muted', {}, 'Loading sign-in…');
-}
-
 function cloudSection(rerender) {
   const st = cloudStatus();
   const cfg = cloudConfig();
@@ -212,7 +203,6 @@ function cloudSection(rerender) {
             st.error
               ? 'Your work is still saved on this device and will go up once this is fixed.'
               : `${st.where}.${st.at ? ` Last successful sync ${fmtWhen(st.at)}.` : ' Connecting for the first time.'}`))),
-      cloudSignIn(rerender),
       el('div.row', {},
         el('button', {
           onclick: async () => {
@@ -225,7 +215,7 @@ function cloudSection(rerender) {
         el('button.ghost', {
           onclick: async () => {
             const ok = await confirmDialog('Stop syncing this device?',
-              'Work already sent stays in the cloud. This device keeps its own copy and stops sending updates.',
+              'Work already sent stays in the cloud. This device keeps its own copy and stops sending updates until the link is opened again.',
               { confirmLabel: 'Stop syncing' });
             if (!ok) return;
             disconnectCloud(); toast('Sync off'); rerender();
@@ -235,33 +225,26 @@ function cloudSection(rerender) {
   }
 
   const url = el('input', {
-    value: cfg?.url || '', placeholder: 'https://xxxxxxxx.supabase.co',
+    value: cfg?.url || DEPARTMENT_CLOUD.url, placeholder: DEPARTMENT_CLOUD.url,
     autocapitalize: 'off', spellcheck: false,
   });
   const key = el('input', {
-    value: cfg?.key || '', placeholder: 'sb_publishable_… or legacy anon key',
+    value: cfg?.key || DEPARTMENT_CLOUD.key, placeholder: 'sb_publishable_…',
     autocapitalize: 'off', spellcheck: false,
   });
-  const site = el('input', { value: cfg?.site || 'cutting', placeholder: 'cutting' });
+  const site = el('input', { value: cfg?.site || DEPARTMENT_CLOUD.site, placeholder: DEPARTMENT_CLOUD.site });
 
   body.append(
     el('p.small.muted', { style: { marginTop: 0 } },
-      'Connect this device to a free Supabase project and the tracker works on '
-      + 'phones too — statuses, notes, rush, back orders and shift updates all '
-      + 'merge line by line, exactly as they do through the shared file.'),
+      'Opening the shared link connects this device to the Cutting department '
+      + 'board. Statuses, notes, rush, back orders and shift updates merge line '
+      + 'by line. No sign-in and no name to pick.'),
     el('ol.small.muted.cloud-steps', {},
-      el('li', {}, 'Make a free project at supabase.com, turn on email sign-in, and turn off new sign-ups.'),
-      el('li', {}, 'Run the setup SQL once — ',
-        el('button.linkbtn', { onclick: sqlDialog }, 'show it'),
-        ' — then invite people and mark editors and the view-only wall screen.'),
-      el('li', {}, 'Copy the Project URL and the ',
-        el('strong', {}, 'publishable key'),
-        ' from Settings → API Keys, and paste them here. On an older project the same '
-        + 'field is called the anon public key — either works.'),
+      el('li', {}, 'The project, publishable key and site name are already filled in.'),
+      el('li', {}, 'Use Connect only if sync was turned off. The same site name has to be used on every device that should share this board.'),
       el('li', {}, el('strong', {}, 'Never paste a service_role or secret key here. '),
         'Those bypass every rule on the table, and anything typed into this box '
-        + 'ends up in a browser where anyone using the tracker can read it.'),
-      el('li', {}, 'Connect, then sign in with the invited email. Use the same site name on every device.')),
+        + 'ends up in a browser where anyone using the tracker can read it.')),
 
     el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: '12px', marginTop: '14px' } },
       el('label.field', {}, el('span', {}, 'Project URL'), url),
@@ -297,13 +280,12 @@ function cloudSection(rerender) {
 
 /* ---------- view ---------- */
 
-/* Getting a fresh install usable is four things in order, and until they are
+/* Getting a fresh install usable is three things in order, and until they are
    done the page is a to-do list rather than a settings screen. Once they are,
    it collapses to a single line of confirmation instead of nagging. */
 function firstRun(rerender) {
   const mm = state.machineMeta || {};
   const sharing = cloudStatus().on || !!sharedFileName();
-  const users = appPeople();
 
   const steps = [
     { n: 1, label: 'Import the Rolling schedule', done: !!mm.rolling,
@@ -311,9 +293,7 @@ function firstRun(rerender) {
     { n: 2, label: 'Import the CNC schedule', done: !!mm.cnc,
       hint: 'FOM 1–3, Multi Punch, CNC & FMC, and the shift update' },
     { n: 3, label: 'Set up sharing', done: sharing,
-      hint: 'Cloud sync for phones, or one file on the shared drive' },
-    { n: 4, label: 'Add an app user', done: users.length > 0,
-      hint: 'A lead hand, supervisor or manager who uses the tracker' },
+      hint: 'The shared link connects itself. A shop PC can still use one file on the drive.' },
   ];
   const left = steps.filter((s) => !s.done);
 
@@ -324,8 +304,7 @@ function firstRun(rerender) {
         el('strong', {}, 'Set up and ready'),
         el('span.small.muted', {},
           `${fmtNum((state.tasks || []).length)} lines loaded · `
-          + `${cloudStatus().on ? 'syncing to the cloud' : sharedFileName() ? 'sharing a file' : ''}`
-          + ` · ${users.length} app user${users.length === 1 ? '' : 's'}`)));
+          + `${cloudStatus().on ? 'syncing to the cloud' : sharedFileName() ? 'sharing a file' : ''}`)));
   }
 
   return el('div.panel.setup-steps', {},
@@ -545,20 +524,17 @@ export function renderData(rerender, go) {
           },
         }, 'Clear this device'))));
 
-  /* Tracker identities are managed from the employee directory so a floor
-     employee cannot accidentally be granted access by typing a name here. */
-  const users = appPeople();
   const employeeCount = employeeDirectory().length;
   const peoplePanel = el('div.panel', {},
-    el('header', {}, 'Tracker users'),
+    el('header', {}, 'Directory'),
     el('div.body', {},
       el('p.small.muted', { style: { marginTop: 0 } },
-        'Only enabled lead hands, supervisors and managers appear in the app header.'),
-      users.length
-        ? el('div.tag-row', { style: { marginBottom: '12px' } },
-            ...users.map((person) => el('span.chip' + (person === me() ? '.ok' : ''), {}, person)))
-        : el('div.small.muted', { style: { marginBottom: '12px' } }, 'No tracker users are enabled yet.'),
-      el('button', { onclick: () => go?.('employees') }, icon('users', { size: 16 }), 'Manage employees and access')));
+        'Work is assigned to people in this directory. The tracker does not ask who is using the device.'),
+      el('div.small.muted', { style: { marginBottom: '12px' } },
+        employeeCount
+          ? `${fmtNum(employeeCount)} employee${employeeCount === 1 ? '' : 's'} listed`
+          : 'No employees listed yet.'),
+      el('button', { onclick: () => go?.('employees') }, icon('users', { size: 16 }), 'Manage employees')));
 
   const health = [
     {
@@ -578,10 +554,10 @@ export function renderData(rerender, go) {
       value: storage.ok ? 'Saving normally' : storage.error,
     },
     {
-      label: 'Tracker access', ok: users.length > 0, icon: 'dot',
-      value: users.length
-        ? `${users.length} user${users.length === 1 ? '' : 's'} · ${employeeCount} employees · ${me()}`
-        : 'Enable a lead hand, supervisor or manager',
+      label: 'Directory', ok: employeeCount > 0, icon: 'dot',
+      value: employeeCount
+        ? `${fmtNum(employeeCount)} employee${employeeCount === 1 ? '' : 's'}`
+        : 'Add people before assigning work',
     },
     {
       label: 'Latest backup', ok: !!state.settings.lastBackupAt, icon: 'clock',

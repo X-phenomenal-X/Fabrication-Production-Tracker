@@ -11,7 +11,7 @@
 import {
   el, chip, icon, fmtDate, fmtNum, fmtWhen, toast, modal,
 } from '../ui.js';
-import { setRush, clearRush, me, directoryPeople } from '../store.js';
+import { setRush, clearRush, directoryPeople } from '../store.js';
 import {
   allRush, resolveRush, rushFor, taskStatusKey, hasTasks, today, addDays,
   machineConfig,
@@ -150,8 +150,6 @@ function bucketOf(rush, ref) {
   return rush.needBy <= addDays(ref, 2) ? 'SOON' : 'LATER';
 }
 
-let mineOnly = false;
-
 /* The desk page stays a complete schedule for scanning and print. On a phone,
    urgency is the navigation: each date bucket starts bounded, then expands in
    small batches when the operator asks. */
@@ -256,7 +254,7 @@ export function renderRush(rerender, go) {
 
   const ref = today();
   const all = allRush(ref);
-  const rows = mineOnly ? all.filter((r) => r.rush.assignee === me()) : all;
+  const rows = all;
 
   const late = all.filter((r) => bucketOf(r.rush, ref) === 'LATE').length;
   const todayN = all.filter((r) => bucketOf(r.rush, ref) === 'TODAY').length;
@@ -277,23 +275,14 @@ export function renderRush(rerender, go) {
           el('b', {}, fmtNum(late)), el('i', {}, 'past date')),
         el('div.cstat' + (todayN ? '.bad' : ''), {},
           el('b', {}, fmtNum(todayN)), el('i', {}, 'today')),
-        el('div.cstat', {}, el('b', {}, fmtNum(pieces)), el('i', {}, 'pcs')))),
-    el('div.centre-filters', {},
-      el('label.row.small.donetoggle', {},
-        el('input', {
-          type: 'checkbox', checked: mineOnly,
-          onchange: (e) => { mineOnly = e.target.checked; rerender(); },
-        }),
-        `Only mine (${me()})`)));
+        el('div.cstat', {}, el('b', {}, fmtNum(pieces)), el('i', {}, 'pcs')))));
 
   if (!rows.length) {
     return el('div.centre', {}, head,
       el('div.panel', {}, el('div.empty', {},
         el('div.empty-icon', {}, icon('check', { size: 28 })),
-        el('h3', {}, mineOnly ? 'Nothing rushed to you' : 'Nothing is rushed'),
-        el('div', {}, mineOnly
-          ? 'Nobody has put a rush line on you.'
-          : 'Open any line and use the rush button to put it at the top of its queue.'))));
+        el('h3', {}, 'Nothing is rushed'),
+        el('div', {}, 'Open any line and use the rush button to put it at the top of its queue.'))));
   }
 
   const byBucket = new Map(BUCKETS.map((b) => [b.key, []]));

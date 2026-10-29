@@ -1,13 +1,13 @@
-/* Shell: tabs, the identity picker, and the render loop. */
+/* Shell: tabs and the render loop. */
 
 import { el, chip, icon, fmtWhen, modal, toast } from './ui.js';
 import { allRush, allBackOrders, hasTasks, openTodos, openCountFor } from './model.js';
 import { machinesByGroup } from './machines.js';
 import { brandLockup } from './brand.js';
 import {
-  state, loadLocal, onChange, me, sharedFileName, cloudEnabled,
+  state, loadLocal, onChange, sharedFileName, cloudEnabled,
   initCloud, storageStatus, cloudStatus, sharedFileStatus, retrySync,
-  hasUnsyncedChanges, applyTheme, appPeople, setCurrentAppUser,
+  hasUnsyncedChanges, applyTheme,
 } from './store.js';
 import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
@@ -25,7 +25,7 @@ import {
 import { shiftStatusAt } from './shifts.js';
 import { registerServiceWorker, watchConnection, isOnline } from './offline.js';
 import { pulseSyncMerge, reducedMotion } from './motion.js';
-import { takeImplicitSession, bootAuth, authGate, onAuth, watchViewOnly } from './cloud.js';
+import { takeImplicitSession, bootAuth, onAuth, watchViewOnly } from './cloud.js';
 
 /* The engineering libraries contain thousands of records and drawings. They
    are useful, but they are not part of running a machine queue. Loading those
@@ -124,22 +124,6 @@ function go(key) {
   location.hash = key;
   scheduleRender();
   window.scrollTo({ top: 0 });
-}
-
-function whoAmI() {
-  const people = appPeople();
-  // Width is a layout decision and belongs in the stylesheet — as an inline
-  // style it beat the phone rules and squeezed the centre scroller to nothing.
-  const sel = el('select.whopick', {
-    'aria-label': 'Who are you?',
-    onchange: (e) => {
-      setCurrentAppUser(e.target.value);
-      scheduleRender();
-    },
-  },
-    el('option', { value: '', selected: me() === 'Unassigned' }, 'Select app user'),
-    ...people.map((p) => el('option', { value: p, selected: me() === p }, p)));
-  return sel;
 }
 
 /* Counts that belong on the nav rather than only inside the page: an operator
@@ -396,11 +380,10 @@ function header() {
 
     mobileRouteButton(),
 
-    // Setup is configuration, not a page anyone works on, so it sits with the
-    // name picker as a gear rather than taking another slot in a nav row that
-    // had already run out of width.
+    // Setup is configuration, not a page anyone works on, so it sits as a
+    // gear rather than taking another slot in a nav row that had already
+    // run out of width.
     el('div.hdr-right', {},
-      whoAmI(),
       el('div.hdr-tools', {},
         // The section book, one tap from anywhere. Staging and rolling both ask
         // "what goes into this" all shift.
@@ -536,28 +519,7 @@ function focusAfterRender() {
   };
 }
 
-let renderAuthGate = null;
 function render() {
-  const gate = authGate();
-  if (gate === 'sign-in' || gate === 'not-a-member' || gate === 'signing-in') {
-    if (!renderAuthGate) {
-      import('./views/signin.js').then((module) => {
-        renderAuthGate = module.renderAuthGate;
-        scheduleRender();
-      }).catch(() => {});
-      root.replaceChildren(el('section.signin-screen', {},
-        el('h1', {}, 'Please sign in'),
-        el('p', {}, 'Loading the sign-in screen. Your work is still saved on this phone.')));
-      pageMotion = false;
-      return;
-    }
-    root.replaceChildren(renderAuthGate({
-      gate,
-      onReady: () => initCloud({ includeBase: true }),
-    }));
-    pageMotion = false;
-    return;
-  }
   const restoreFocus = focusAfterRender();
   const tab = TABS.find((t) => t.key === current) || TABS[0];
   const storage = storageStatus();

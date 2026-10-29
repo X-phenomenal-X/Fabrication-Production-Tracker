@@ -339,14 +339,14 @@ const employeeEdit = await page.evaluate(async () => {
     department: niaRecord?.department,
     access: niaRecord?.appAccess,
     appUsers: store.appPeople(),
-    picker: [...document.querySelectorAll('.whopick option')].map((option) => option.textContent),
+    picker: document.querySelectorAll('.whopick, [aria-label="Who are you?"]').length,
   };
 });
 step('employee edit and access: ' + JSON.stringify(employeeEdit));
 if (employeeEdit.role !== 'LEAD_HAND' || employeeEdit.department !== 'FOM' || !employeeEdit.access
     || employeeEdit.appUsers.join(',') !== 'Abhay,Nia Harper'
-    || employeeEdit.picker.join(',') !== 'Select app user,Abhay,Nia Harper') {
-  throw new Error('employee editing or tracker access is wrong: ' + JSON.stringify(employeeEdit));
+    || employeeEdit.picker) {
+  throw new Error('employee editing or the identity picker is wrong: ' + JSON.stringify(employeeEdit));
 }
 
 const crewRefreshChooser = page.waitForEvent('filechooser');
@@ -1159,7 +1159,7 @@ const suSaved = await page.evaluate(() => import('/js/store.js').then((m) => {
 }));
 step('saved: ' + JSON.stringify(suSaved));
 if (suSaved.ops !== '2') throw new Error('#Ops not saved against FOM 1');
-if (suSaved.by !== 'Abhay' || !suSaved.at) throw new Error('shift update missing who/when');
+if (suSaved.by !== 'Team' || !suSaved.at) throw new Error('shift update missing who/when');
 if (!suSaved.notes.startsWith('Afternoon crew confirmed')) throw new Error('general notes not saved');
 
 const readNames = await page.$$eval('.suread-name strong', (ns) => ns.map((n) => n.textContent.trim()));

@@ -346,7 +346,7 @@ header.top {
 .hdr-id { display: flex; align-items: center; gap: var(--s2); min-width: 0; flex-shrink: 0; }
 
 /* The header's width-dependent rules are at the end of this sheet, with the
-   phone and focus blocks, for the same reason: `.whopick` and `nav.tabs button`
+   phone and focus blocks, for the same reason: `nav.tabs button`
    are declared below this point, and an equal-specificity rule that comes
    first simply loses. */
 
@@ -407,13 +407,13 @@ header.top {
    the four department tools sit past a divider, quieter, because they are
    visited rather than lived in. */
 /* The nav scrolls sideways whenever it has to, at every width — not below a
-   breakpoint. Eight pages plus a brand plus a name picker do not fit a
-   1024px tablet either, and a header that silently pushes the whole page
-   sideways is worse than one that scrolls on purpose. */
+   breakpoint. The page list does not fit a 1024px tablet either, and a
+   header that silently pushes the whole page sideways is worse than one
+   that scrolls on purpose. */
 nav.tabs {
   display: flex; align-items: center; gap: var(--s3); flex-wrap: nowrap;
   /* basis 0, not auto: with auto the nav asks for its full content width and
-     pushes the name picker onto a second row on a desk monitor. */
+     drops the header tools onto a second row on a desk monitor. */
   flex: 1 1 0%; min-width: 0; overflow-x: auto;
   scrollbar-width: none; -ms-overflow-style: none;
   padding: 2px 0;
@@ -504,7 +504,6 @@ nav.tabs button:hover:not([aria-current="true"]) { background: var(--panel); col
 .tabsep { width: 1px; align-self: stretch; margin: 4px 0; background: var(--line); flex-shrink: 0; }
 
 .hdr-right { display: flex; align-items: center; gap: var(--s2); flex-shrink: 0; }
-.whopick { width: auto; min-width: 140px; max-width: 190px; }
 
 main { flex: 1; padding: var(--s5) var(--s5) var(--s5); max-width: 1500px; width: 100%; margin: 0 auto; }
 
@@ -726,8 +725,7 @@ dialog footer button { min-height: var(--ctl-lg); }
      Row 1 is identity only — brand, shift, sync — and deliberately carries no
      tap target, because a third 44px control here is what put the old header
      at 121px. Row 2 is where the fingers go: the centre scroller takes the
-     width it needs and the name picker stays pinned beside it, so who-you-are
-     never scrolls out of reach. */
+     width it needs and the header tools stay pinned beside it. */
   header.top { padding: 6px var(--s3) 7px; gap: 6px; row-gap: 6px; }
   .hdr-id { flex-basis: 100%; gap: 6px; }
   .brand small { display: none; }
@@ -2265,14 +2263,6 @@ button.photo-todo-pick {
   .line-iconbtn, .iconbtn { width: var(--tap); height: var(--tap); }
   .pill { padding-left: var(--s4); padding-right: var(--s4); }
 
-  /* Narrow enough to hand the width back to the nav, wide enough to still
-     read a first name — which is all this has to do, since its job is
-     noticing you are signed in as somebody else, not reading your own name. */
-  .whopick {
-    min-width: 0; width: 88px; max-width: 88px;
-    padding: 6px var(--s2); font-size: var(--t-sm);
-  }
-
   /* Machines and filters each keep to one line and scroll sideways, rather
      than wrapping to two rows apiece. Wrapped, they pushed the first actual
      job — the thing the page is for — most of a screen down. */
@@ -2451,7 +2441,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .shift-chip { display: none; }
   nav.tabs { gap: var(--s2); }
   nav.tabs button { padding: 6px 11px; }
-  .whopick { min-width: 110px; max-width: 150px; }
   .has-short .tab-label { display: none; }
   .has-short .tab-short { display: inline; }
 }
@@ -2511,8 +2500,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .stage-pick select, .stage-pick button { flex: 1; min-width: 140px; }
 }
 
-/* Setup lives with the name picker rather than in the nav — configuration, not
-   a page anyone works on. Still shows which page you are on. */
+/* Setup is a gear in the header — configuration, not a page anyone works
+   on. Still shows which page you are on. */
 .hdr-setup { flex-shrink: 0; }
 .hdr-setup.on, .hdr-dies.on {
   background: var(--accent-soft); color: var(--accent);
@@ -3379,7 +3368,6 @@ nav.tabs button[aria-current="true"] .nav-icon {
     order: 2; display: flex; flex-direction: column; align-items: stretch; gap: var(--s2);
     padding-top: var(--s3); border-top: 1px solid var(--line-soft);
   }
-  .whopick { order: 0; width: 100%; min-width: 0; max-width: none; }
   .hdr-tools { order: 1; }
   .hdr-tools .iconbtn {
     flex: 1; width: auto; border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
@@ -3523,7 +3511,7 @@ nav.tabs button[aria-current="true"] .nav-icon {
 
 @media (max-width: 720px) {
   .hdr-tools { gap: var(--s1); }
-  /* Die lookup and Setup live on the same 44px action row as the name picker.
+  /* Die lookup and Setup live on the same 44px action row.
      Hiding them saved width but left both features unreachable on a phone;
      the navigation already scrolls deliberately, so it gives up the width. */
   .hdr-tools .hdr-dies, .hdr-tools .hdr-setup { display: inline-flex; }
@@ -4698,8 +4686,8 @@ button.sync-chip:active { transform: translateY(1px); }
 /* ---------- compact phone shell ----------
 
    One current-page control replaces the twelve-button horizontal rail on a
-   phone. The full map opens as a bottom sheet, while identity and the two
-   global tools remain one tap away. This keeps the same 96px shell budget but
+   phone. The full map opens as a bottom sheet, while the two global tools
+   remain one tap away. This keeps the same 96px shell budget but
    removes the clipped, half-labelled controls visible in the old header. */
 .mobile-route { display: none; }
 

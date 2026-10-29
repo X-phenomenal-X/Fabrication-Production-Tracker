@@ -7,7 +7,7 @@
 import { focusShiftUpdate } from './shiftupdate.js';
 import { renderCommandCenter } from './command-center.js';
 import { el, chip, icon, fmtDate, fmtNum, fmtWhen } from '../ui.js';
-import { state, me } from '../store.js';
+import { state } from '../store.js';
 import {
   addDays, assignedMachine, effectiveTaskStatus, hasTasks, machineConfig,
   resolveBackOrder, resolveRush, resolveTask, shiftUpdateFor, taskNoteFor,
@@ -334,8 +334,7 @@ export function renderOverview(rerender, go, sync = null) {
         shift.range ? el('span', {}, `· ${shift.range}`) : null,
         shiftContext.live ? null : el('span.chip.mute.overview-ended', {}, 'ended')),
       el('div.overview-crew', {}, icon('dot', { size: 12 }),
-        shiftContext.live ? crew : 'Outside configured shift hours · attendance not confirmed',
-        me() ? ` · ${me()}` : '')),
+        shiftContext.live ? crew : 'Outside configured shift hours · attendance not confirmed')),
     handoffCard,
     healthStrip,
     all.length ? el('progress.overview-meter.overview-schedule-progress', {

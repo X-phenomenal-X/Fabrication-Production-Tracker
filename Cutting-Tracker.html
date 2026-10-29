@@ -361,7 +361,7 @@ header.top {
 .hdr-id { display: flex; align-items: center; gap: var(--s2); min-width: 0; flex-shrink: 0; }
 
 /* The header's width-dependent rules are at the end of this sheet, with the
-   phone and focus blocks, for the same reason: `.whopick` and `nav.tabs button`
+   phone and focus blocks, for the same reason: `nav.tabs button`
    are declared below this point, and an equal-specificity rule that comes
    first simply loses. */
 
@@ -422,13 +422,13 @@ header.top {
    the four department tools sit past a divider, quieter, because they are
    visited rather than lived in. */
 /* The nav scrolls sideways whenever it has to, at every width — not below a
-   breakpoint. Eight pages plus a brand plus a name picker do not fit a
-   1024px tablet either, and a header that silently pushes the whole page
-   sideways is worse than one that scrolls on purpose. */
+   breakpoint. The page list does not fit a 1024px tablet either, and a
+   header that silently pushes the whole page sideways is worse than one
+   that scrolls on purpose. */
 nav.tabs {
   display: flex; align-items: center; gap: var(--s3); flex-wrap: nowrap;
   /* basis 0, not auto: with auto the nav asks for its full content width and
-     pushes the name picker onto a second row on a desk monitor. */
+     drops the header tools onto a second row on a desk monitor. */
   flex: 1 1 0%; min-width: 0; overflow-x: auto;
   scrollbar-width: none; -ms-overflow-style: none;
   padding: 2px 0;
@@ -519,7 +519,6 @@ nav.tabs button:hover:not([aria-current="true"]) { background: var(--panel); col
 .tabsep { width: 1px; align-self: stretch; margin: 4px 0; background: var(--line); flex-shrink: 0; }
 
 .hdr-right { display: flex; align-items: center; gap: var(--s2); flex-shrink: 0; }
-.whopick { width: auto; min-width: 140px; max-width: 190px; }
 
 main { flex: 1; padding: var(--s5) var(--s5) var(--s5); max-width: 1500px; width: 100%; margin: 0 auto; }
 
@@ -741,8 +740,7 @@ dialog footer button { min-height: var(--ctl-lg); }
      Row 1 is identity only — brand, shift, sync — and deliberately carries no
      tap target, because a third 44px control here is what put the old header
      at 121px. Row 2 is where the fingers go: the centre scroller takes the
-     width it needs and the name picker stays pinned beside it, so who-you-are
-     never scrolls out of reach. */
+     width it needs and the header tools stay pinned beside it. */
   header.top { padding: 6px var(--s3) 7px; gap: 6px; row-gap: 6px; }
   .hdr-id { flex-basis: 100%; gap: 6px; }
   .brand small { display: none; }
@@ -2280,14 +2278,6 @@ button.photo-todo-pick {
   .line-iconbtn, .iconbtn { width: var(--tap); height: var(--tap); }
   .pill { padding-left: var(--s4); padding-right: var(--s4); }
 
-  /* Narrow enough to hand the width back to the nav, wide enough to still
-     read a first name — which is all this has to do, since its job is
-     noticing you are signed in as somebody else, not reading your own name. */
-  .whopick {
-    min-width: 0; width: 88px; max-width: 88px;
-    padding: 6px var(--s2); font-size: var(--t-sm);
-  }
-
   /* Machines and filters each keep to one line and scroll sideways, rather
      than wrapping to two rows apiece. Wrapped, they pushed the first actual
      job — the thing the page is for — most of a screen down. */
@@ -2466,7 +2456,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .shift-chip { display: none; }
   nav.tabs { gap: var(--s2); }
   nav.tabs button { padding: 6px 11px; }
-  .whopick { min-width: 110px; max-width: 150px; }
   .has-short .tab-label { display: none; }
   .has-short .tab-short { display: inline; }
 }
@@ -2526,8 +2515,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .stage-pick select, .stage-pick button { flex: 1; min-width: 140px; }
 }
 
-/* Setup lives with the name picker rather than in the nav — configuration, not
-   a page anyone works on. Still shows which page you are on. */
+/* Setup is a gear in the header — configuration, not a page anyone works
+   on. Still shows which page you are on. */
 .hdr-setup { flex-shrink: 0; }
 .hdr-setup.on, .hdr-dies.on {
   background: var(--accent-soft); color: var(--accent);
@@ -3394,7 +3383,6 @@ nav.tabs button[aria-current="true"] .nav-icon {
     order: 2; display: flex; flex-direction: column; align-items: stretch; gap: var(--s2);
     padding-top: var(--s3); border-top: 1px solid var(--line-soft);
   }
-  .whopick { order: 0; width: 100%; min-width: 0; max-width: none; }
   .hdr-tools { order: 1; }
   .hdr-tools .iconbtn {
     flex: 1; width: auto; border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
@@ -3538,7 +3526,7 @@ nav.tabs button[aria-current="true"] .nav-icon {
 
 @media (max-width: 720px) {
   .hdr-tools { gap: var(--s1); }
-  /* Die lookup and Setup live on the same 44px action row as the name picker.
+  /* Die lookup and Setup live on the same 44px action row.
      Hiding them saved width but left both features unreachable on a phone;
      the navigation already scrolls deliberately, so it gives up the width. */
   .hdr-tools .hdr-dies, .hdr-tools .hdr-setup { display: inline-flex; }
@@ -4713,8 +4701,8 @@ button.sync-chip:active { transform: translateY(1px); }
 /* ---------- compact phone shell ----------
 
    One current-page control replaces the twelve-button horizontal rail on a
-   phone. The full map opens as a bottom sheet, while identity and the two
-   global tools remain one tap away. This keeps the same 96px shell budget but
+   phone. The full map opens as a bottom sheet, while the two global tools
+   remain one tap away. This keeps the same 96px shell budget but
    removes the clipped, half-labelled controls visible in the old header. */
 .mobile-route { display: none; }
 
@@ -7391,6 +7379,18 @@ a.resource-download:active, button.resource-download:active { transform: transla
   });
 
   // js/cloud.js
+  function departmentCloudAppliesHere() {
+    if (typeof location === "undefined") return true;
+    const host = String(location.hostname || "").replace(/^\[|\]$/g, "").toLowerCase();
+    return host !== "localhost" && host !== "127.0.0.1" && host !== "app.local" && !host.endsWith(".localhost");
+  }
+  function applyDepartmentCloud() {
+    if (!departmentCloudAppliesHere()) return cloudConfig();
+    const saved = cloudConfig();
+    const site = String(saved?.site || "").trim().toLowerCase();
+    if (!saved || site === "" || site === "cutting") setCloudConfig(DEPARTMENT_CLOUD);
+    return cloudConfig();
+  }
   function cloudConfig() {
     try {
       const raw = localStorage.getItem(LS_CLOUD);
@@ -7441,7 +7441,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
       return `The cloud rejected the key. Check the publishable key (the anon public key on an older project), the Data API grant and the policies from the setup SQL.${detail ? ` (${detail})` : ""}`;
     }
     if (code === "auth-required") {
-      return "Please sign in to keep sharing. Your work is still saved on this phone.";
+      return "The cloud did not accept this update. Your work is still saved on this phone.";
     }
     if (code === "not-a-member") {
       return "You are signed in, but this email is not on the Cutting list yet. Ask a supervisor to add you. Your work is still saved on this phone.";
@@ -7459,7 +7459,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
     } catch {
     }
     const code = classify(res.status, detail, mode);
-    if (code === "auth-required") setAuthGate("sign-in");
     if (code === "not-a-member") setAuthGate("not-a-member");
     return new CloudError(messageFor(code, res.status, detail), code === "other" && res.status === 404 ? "missing-table" : code);
   }
@@ -7612,20 +7611,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
   function noteViewOnly() {
     viewOnlyHandler?.();
   }
-  function bytesToBase64Url(bytes) {
-    let text4 = "";
-    for (const byte of bytes) text4 += String.fromCharCode(byte);
-    return btoa(text4).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  }
-  function randomVerifier() {
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    return bytesToBase64Url(bytes);
-  }
-  async function codeChallenge(verifier) {
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
-    return bytesToBase64Url(new Uint8Array(digest));
-  }
   function jwtPayload(token) {
     try {
       const part = String(token || "").split(".")[1];
@@ -7635,13 +7620,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
     } catch {
       return null;
     }
-  }
-  function redirectUrl() {
-    const url = new URL(location.href);
-    url.hash = "";
-    url.searchParams.delete("code");
-    if (url.searchParams.get("type")) url.searchParams.delete("type");
-    return url.origin + url.pathname + url.search;
   }
   function sessionFromToken(body) {
     const accessToken = body.access_token;
@@ -7673,30 +7651,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
       throw new Error("Could not reach the sign-in service. Check the internet connection. Your work is still saved on this phone.");
     }
     return response;
-  }
-  async function requestMagicLink(email) {
-    const address = String(email || "").trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
-      throw new Error("Enter the email address a supervisor invited.");
-    }
-    const verifier = randomVerifier();
-    localStorage.setItem(LS_VERIFIER, verifier);
-    const response = await authFetch(`/auth/v1/otp?redirect_to=${encodeURIComponent(redirectUrl())}`, {
-      method: "POST",
-      body: JSON.stringify({
-        email: address,
-        create_user: false,
-        code_challenge: await codeChallenge(verifier),
-        code_challenge_method: "s256"
-      })
-    });
-    if (response.status === 429) {
-      throw new Error("Too many sign-in emails. Wait a minute and try again.");
-    }
-    if (response.status >= 500) {
-      throw new Error("The sign-in service is busy. Try again in a minute.");
-    }
-    return "If that email was invited, a sign-in link is on its way. Open it in this same browser.";
   }
   async function exchangeCode(code) {
     const verifier = localStorage.getItem(LS_VERIFIER);
@@ -7826,18 +7780,17 @@ a.resource-download:active, button.resource-download:active { transform: transla
     if (signedInNow && authGate() === "signing-in") setAuthGate(null);
     return { signedInNow };
   }
-  function signOut() {
-    writeSession(null);
-    localStorage.removeItem(LS_VERIFIER);
-    if (gate === "not-a-member" || gate === "signing-in") setAuthGate("sign-in");
-    else emit();
-  }
-  var LS_CLOUD, TABLE, CLOUD_PARTS, CloudError, LS_SESSION, LS_VERIFIER, gate, booting, implicitNow, refreshing, listeners, viewOnlyHandler;
+  var LS_CLOUD, TABLE, CLOUD_PARTS, DEPARTMENT_CLOUD, CloudError, LS_SESSION, LS_VERIFIER, gate, booting, implicitNow, refreshing, listeners, viewOnlyHandler;
   var init_cloud = __esm({
     "js/cloud.js"() {
       LS_CLOUD = "bv.cutting.cloud";
       TABLE = "tracker_state";
       CLOUD_PARTS = ["base", "work"];
+      DEPARTMENT_CLOUD = Object.freeze({
+        url: "https://irzuiemjveyjyongotij.supabase.co",
+        key: "sb_publishable_ZKBk7dgna0bZ4jFKu6GHpQ_eu2-DYE8",
+        site: "Cutting Dept."
+      });
       CloudError = class extends Error {
         constructor(message, code) {
           super(message);
@@ -8038,9 +7991,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
   function me() {
-    const selected = cleanEmployeeName(state.settings.me);
-    if (!selected) return "Unassigned";
-    return appPeople().find((name) => employeeNameKey(name) === employeeNameKey(selected)) || "Unassigned";
+    return "Team";
   }
   function newDeviceId() {
     if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
@@ -8142,26 +8093,8 @@ a.resource-download:active, button.resource-download:active { transform: transla
     if (!record || record.archived || record.active === false) return false;
     return record.legacy || !!record.appAccess && APP_EMPLOYEE_ROLES.has(record.role);
   }
-  function appPeople() {
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (const record of employeeDirectory()) {
-      if (!employeeCanUseApp(record)) continue;
-      const key2 = employeeNameKey(record.name);
-      if (!seen.has(key2)) {
-        seen.add(key2);
-        out.push(record.name);
-      }
-    }
-    return out;
-  }
   function directoryPeople() {
     return employeeDirectory().filter((record) => record.active !== false).map((record) => record.name);
-  }
-  function setCurrentAppUser(name) {
-    const wanted = employeeNameKey(name);
-    state.settings.me = appPeople().find((person) => employeeNameKey(person) === wanted) || null;
-    save();
   }
   function forget(map, key2) {
     if (!DELETABLE.includes(map)) throw new Error(`forget(): ${map} is not a synced record map`);
@@ -8946,14 +8879,9 @@ a.resource-download:active, button.resource-download:active { transform: transla
       if (remote?.base) mergeSnapshot(remote.base);
       if (remote?.base || remote?.work) setAuthGate(null);
       persistLocal();
-      const blocked = authGate();
-      setCloudState({
-        at: now(),
-        error: blocked ? cloudState.error || "Please sign in to keep sharing. Your work is still saved on this phone." : null
-      });
+      setCloudState({ at: now(), error: null });
       return { ok: true, hadBase: !!remote?.base, hadWork: !!remote?.work };
     } catch (e) {
-      if (e?.code === "auth-required") setAuthGate("sign-in");
       if (e?.code === "not-a-member") setAuthGate("not-a-member");
       setCloudState({ error: e.message });
       return false;
@@ -9006,7 +8934,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
       } catch (e) {
         ok = false;
         if (attemptedBase) cloudBaseDirty = true;
-        if (e?.code === "auth-required") setAuthGate("sign-in");
         if (e?.code === "not-a-member") setAuthGate("not-a-member");
         setCloudState({ error: e.message });
       } finally {
@@ -9066,6 +8993,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
     }, 3e4);
   }
   async function initCloud({ includeBase = false } = {}) {
+    applyDepartmentCloud();
     if (!cloudEnabled()) return null;
     setCloudState({ on: true });
     if (hasSession()) {
@@ -13230,7 +13158,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
   async function requestCandidates({ cfg, image, guidance }) {
     const session = await freshSession();
     if (!session?.accessToken || membershipRole() !== "editor") {
-      const error = new Error("Sign in as an editor to use photo analysis.");
+      const error = new Error("Photo analysis is unavailable on this shared link.");
       error.status = 401;
       throw error;
     }
@@ -13390,8 +13318,8 @@ a.resource-download:active, button.resource-download:active { transform: transla
           el(
             "div",
             {},
-            el("h2", {}, "Sign in as an editor"),
-            el("p", {}, "Photo analysis is only for an invited editor. Sign in from Setup, then come back. The normal To-Do list still works.")
+            el("h2", {}, "Photo analysis is unavailable"),
+            el("p", {}, "This shared link does not ask anyone to sign in. Add the To-Do by hand. The normal list still works.")
           )
         ),
         errorBanner(),
@@ -13720,7 +13648,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
   function acknowledgeHandover(date3, shift2) {
     const log = state.shiftLogs[`${date3}|${shift2}`];
     if (!log) throw new Error("Save the handover first.");
-    if (!me() || me() === "Unassigned") throw new Error("Select your app user before acknowledging.");
+    if (!me()) throw new Error("Could not record the acknowledgement.");
     saveShiftLog(date3, shift2, { acknowledgement: { by: me(), at: (/* @__PURE__ */ new Date()).toISOString(), signature: handoverSignature(log) } });
   }
   function csvCell(value2) {
@@ -15606,128 +15534,6 @@ create policy "member reads own row"
     }
   });
 
-  // js/views/signin.js
-  var signin_exports = {};
-  __export(signin_exports, {
-    emailForm: () => emailForm,
-    renderAuthGate: () => renderAuthGate
-  });
-  function renderAuthGate({ gate: gate2, onReady } = {}) {
-    const signingIn = gate2 === "signing-in";
-    const missing = gate2 === "not-a-member";
-    const session = authSession();
-    const title = signingIn ? "Signing you in" : missing ? "Not on the list yet" : "Please sign in";
-    const copy = signingIn ? "Opening your sign-in link. Your work stays on this phone either way." : missing ? "This email is signed in, but a supervisor still needs to add it as an editor or as the view-only wall screen. Nothing on this phone was deleted." : "The shared board is locked. Sign in with the email a supervisor invited. Everything you already did is still saved on this phone.";
-    const screen = el(
-      "main.signin-screen",
-      {},
-      el("p.signin-kicker", {}, "BV Cutting"),
-      el("h1", {}, title),
-      el("p.signin-copy", {}, copy)
-    );
-    if (!signingIn && !missing) screen.append(emailForm());
-    if (missing) {
-      screen.append(el("p.signin-copy", {}, session?.email || "Signed in"));
-      screen.append(el(
-        "div.signin-actions",
-        {},
-        el("button.primary", {
-          type: "button",
-          onclick: async (event) => {
-            const button2 = event.currentTarget;
-            button2.disabled = true;
-            try {
-              await refreshMembership();
-              await onReady?.();
-            } catch (error) {
-              toast(error.message);
-            } finally {
-              button2.disabled = false;
-            }
-          }
-        }, "Check again"),
-        el("button", { type: "button", onclick: () => signOut() }, "Use a different email")
-      ));
-    }
-    screen.append(el(
-      "div.signin-actions",
-      {},
-      el("button", {
-        type: "button",
-        onclick: () => {
-          download(`cutting-tracker-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`, exportJson());
-          toast("Backup saved");
-        }
-      }, icon("download", { size: 16 }), " Export a backup")
-    ));
-    if (membershipRole() === "viewer") {
-      screen.append(el("p.signin-note", {}, "This account can only view the board."));
-    }
-    return screen;
-  }
-  function emailForm({ compact: compact3 = false } = {}) {
-    const session = authSession();
-    if (session?.email && (session.role === "editor" || session.role === "viewer" || session.role === "legacy")) {
-      const label = session.role === "viewer" ? "View only" : session.role === "legacy" ? "Signed in" : "Editor";
-      return el(
-        "div.signin-signed-in",
-        {},
-        el("p", {}, el("strong", {}, session.email), el("span.signin-role", {}, label)),
-        el("button", {
-          type: "button",
-          onclick: () => signOut()
-        }, "Sign out")
-      );
-    }
-    let message = "";
-    const status = el("p.signin-status", { role: "status" });
-    const input = el("input", {
-      type: "email",
-      inputmode: "email",
-      autocomplete: "email",
-      autocapitalize: "none",
-      spellcheck: "false",
-      placeholder: "name@company.com",
-      "aria-label": "Email address"
-    });
-    const button2 = el("button.primary", { type: "button" }, "Email me a sign-in link");
-    button2.addEventListener("click", async () => {
-      button2.disabled = true;
-      message = "";
-      status.textContent = "";
-      try {
-        message = await requestMagicLink(input.value);
-        status.textContent = message;
-      } catch (error) {
-        message = error.message;
-        status.textContent = message;
-      } finally {
-        button2.disabled = false;
-      }
-    });
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") button2.click();
-    });
-    return el(
-      "form.signin-form",
-      {
-        onsubmit: (event) => event.preventDefault()
-      },
-      compact3 ? null : el("label.field", {}, el("span", {}, "Invited email"), input),
-      compact3 ? input : null,
-      button2,
-      status,
-      el("p.signin-note", {}, "There is no sign-up. A supervisor invites you, then the link in that email signs you in.")
-    );
-  }
-  var init_signin = __esm({
-    "js/views/signin.js"() {
-      init_ui();
-      init_store();
-      init_cloud();
-    }
-  });
-
   // js/views/schedule.js
   var schedule_exports = {};
   __export(schedule_exports, {
@@ -17129,7 +16935,7 @@ create policy "member reads own row"
           "div.banner.info.employee-import-note",
           {},
           icon("users", { size: 17 }),
-          el("span", {}, "Imported employees are directory-only. They do not appear in the tracker user picker unless you change their role and turn on tracker access.")
+          el("span", {}, "Imported employees are directory-only. They stay on assignment lists. Change a role only when the directory itself should say so.")
         ),
         el("p.small.muted", {}, "Name, department and shift were saved. Employee IDs, clothing sizes and source rows were discarded.")
       ));
@@ -17188,15 +16994,15 @@ create policy "member reads own row"
     );
     const active = el("input.employee-active-input", { type: "checkbox", checked: record?.active !== false });
     const access = el("input.employee-access-input", { type: "checkbox", checked: !legacy && !!record?.appAccess });
-    const accessTitle = el("strong", {}, "Show in app user picker");
-    const accessHelp = el("span", {}, "Only lead hands, supervisors and managers can be enabled.");
+    const accessTitle = el("strong", {}, "Management flag");
+    const accessHelp = el("span", {}, "Stored with the directory. Opening the tracker does not depend on it.");
     const error = el("div.banner.bad.employee-form-error", { role: "alert", hidden: true });
     const syncAccess = () => {
       const eligible = active.checked && ["LEAD_HAND", "SUPERVISOR", "MANAGER"].includes(role.value);
       access.disabled = !eligible;
       if (!eligible) access.checked = false;
-      accessTitle.textContent = eligible ? "Show in app user picker" : "Directory only";
-      accessHelp.textContent = !active.checked ? "Inactive employees cannot use the tracker." : role.value === "EMPLOYEE" || !role.value ? "Employees stay in the directory and assignment lists, but not the tracker user picker." : "Enabled people appear in the \u201CWho are you?\u201D picker on every synced device.";
+      accessTitle.textContent = eligible ? "Management flag" : "Directory only";
+      accessHelp.textContent = !active.checked ? "Inactive employees stay out of current assignment lists." : role.value === "EMPLOYEE" || !role.value ? "Employees stay in the directory and on assignment lists." : "Lead hands, supervisors and managers can carry this flag. The tracker is the same for everyone.";
     };
     role.addEventListener("change", syncAccess);
     active.addEventListener("change", syncAccess);
@@ -17248,7 +17054,7 @@ create policy "member reads own row"
       onClick: async (dlg2) => {
         const confirmed = await confirmDialog(
           `Archive ${record.name}?`,
-          "The employee will leave the directory, assignment lists and tracker user picker. Existing production history will remain unchanged.",
+          "The employee will leave the directory and assignment lists. Existing production history will remain unchanged.",
           { confirmLabel: "Archive", danger: true }
         );
         if (!confirmed) return;
@@ -17295,11 +17101,9 @@ create policy "member reads own row"
     return dlg;
   }
   function employeeCard(record, rerender) {
-    const access = employeeCanUseApp(record);
-    const current2 = me() === record.name;
     const meta = [record.department || "Department not set", shiftLabel2(record.shift)].join(" \xB7 ");
     return el(
-      "article.employee-card" + (current2 ? ".current" : "") + (!record.active ? ".inactive" : ""),
+      "article.employee-card" + (!record.active ? ".inactive" : ""),
       {},
       el("span.employee-avatar", { "aria-hidden": "true" }, initials(record.name)),
       el(
@@ -17311,7 +17115,7 @@ create policy "member reads own row"
           "div.employee-badges",
           {},
           el("span.chip." + (record.legacy ? "warn" : "mute"), {}, roleLabel(record)),
-          !record.active ? el("span.chip.bad", {}, "Inactive") : access ? el("span.chip.ok", {}, "App user") : el("span.chip.mute", {}, "Directory only")
+          !record.active ? el("span.chip.bad", {}, "Inactive") : employeeCanUseApp(record) ? el("span.chip.ok", {}, "Management") : el("span.chip.mute", {}, "Directory only")
         )
       ),
       el(
@@ -17321,16 +17125,7 @@ create policy "member reads own row"
           type: "button",
           "aria-label": `Edit ${record.name}`,
           onclick: (event) => openEmployeeEditor(record, rerender, event.currentTarget)
-        }, icon("pencil", { size: 16 }), "Edit"),
-        access ? current2 ? el("span.employee-current", {}, icon("check", { size: 15 }), "Current app user") : el("button.employee-use", {
-          type: "button",
-          "aria-label": `Use tracker as ${record.name}`,
-          onclick: () => {
-            setCurrentAppUser(record.name);
-            toast(`Tracker is now set to ${record.name}`);
-            rerender();
-          }
-        }, "Use as this person") : null
+        }, icon("pencil", { size: 16 }), "Edit")
       )
     );
   }
@@ -17373,7 +17168,7 @@ create policy "member reads own row"
               "div",
               {},
               el("h1.centre-title", {}, "Employees"),
-              el("div.centre-sub", {}, `${records.length} in directory \xB7 ${appUsers.length} tracker user${appUsers.length === 1 ? "" : "s"} \xB7 this device: ${me()}`)
+              el("div.centre-sub", {}, `${records.length} in the directory`)
             )
           )
         )
@@ -17382,7 +17177,7 @@ create policy "member reads own row"
         "section.employee-summary",
         { "aria-label": "Employee directory summary" },
         el("div", {}, el("strong", {}, fmtNum(records.length)), el("span", {}, "Employees")),
-        el("div", {}, el("strong", {}, fmtNum(appUsers.length)), el("span", {}, "Tracker users")),
+        el("div", {}, el("strong", {}, fmtNum(appUsers.length)), el("span", {}, "Management")),
         el("div", {}, el("strong", {}, fmtNum(inactive.length)), el("span", {}, "Inactive"))
       ),
       el(
@@ -17430,7 +17225,7 @@ create policy "member reads own row"
           "div.employee-scopes",
           { role: "group", "aria-label": "Filter employees" },
           scopeButton("all", "All", records.length, rerender),
-          scopeButton("access", "Tracker users", appUsers.length, rerender),
+          scopeButton("access", "Management", appUsers.length, rerender),
           scopeButton("inactive", "Inactive", inactive.length, rerender)
         )
       ),
@@ -17455,7 +17250,7 @@ create policy "member reads own row"
         "div.employee-privacy",
         {},
         icon("cloud", { size: 16 }),
-        el("span", {}, "The directory syncs name, department, shift, role and app-user status. The picker is not a login. Roster files, employee IDs and HR details are never uploaded or built into the public website.")
+        el("span", {}, "The directory syncs name, department, shift, role and the management flag. There is no sign-in and no name to pick. Roster files, employee IDs and HR details are never uploaded or built into the public website.")
       )
     );
   }
@@ -17660,7 +17455,6 @@ create policy "member reads own row"
       ].filter(Boolean)
     });
   }
-  var mineOnly = false;
   var bm = { open: {} };
   var BO_PAGE = 8;
   function mobileBoRow(row, rerender) {
@@ -17768,8 +17562,7 @@ create policy "member reads own row"
         )
       );
     }
-    let groups = allBackOrders();
-    if (mineOnly) groups = groups.filter((g) => g.assignee === me());
+    const groups = allBackOrders();
     const total = groups.reduce((a, g) => a + g.rows.length, 0);
     const pieces = groups.reduce((a, g) => a + g.rows.reduce((b, r) => b + (r.bo.qty || 0), 0), 0);
     const unassigned = allBackOrders().find((g) => !g.assignee)?.rows.length || 0;
@@ -17798,23 +17591,6 @@ create policy "member reads own row"
           el("div.cstat", {}, el("b", {}, fmtNum(pieces)), el("i", {}, "pcs short")),
           el("div.cstat" + (unassigned ? ".warn" : ""), {}, el("b", {}, fmtNum(unassigned)), el("i", {}, "unassigned"))
         )
-      ),
-      el(
-        "div.centre-filters",
-        {},
-        el(
-          "label.row.small.donetoggle",
-          {},
-          el("input", {
-            type: "checkbox",
-            checked: mineOnly,
-            onchange: (e) => {
-              mineOnly = e.target.checked;
-              rerender();
-            }
-          }),
-          `Only mine (${me()})`
-        )
       )
     );
     if (!groups.length) {
@@ -17826,8 +17602,8 @@ create policy "member reads own row"
           "div.empty",
           {},
           el("div.empty-icon", {}, icon("check", { size: 28 })),
-          el("h3", {}, mineOnly ? "Nothing assigned to you" : "No back orders"),
-          el("div", {}, mineOnly ? "Nothing is waiting on you right now." : "Nothing is flagged short of material.")
+          el("h3", {}, "No back orders"),
+          el("div", {}, "Nothing is flagged short of material.")
         ))
       );
     }
@@ -18669,7 +18445,6 @@ create policy "member reads own row"
     if (rush.needBy === ref) return "TODAY";
     return rush.needBy <= addDays(ref, 2) ? "SOON" : "LATER";
   }
-  var mineOnly2 = false;
   var rushMobileState = { open: {} };
   var RUSH_PAGE = 4;
   function rushRowName({ task, rush, machine }) {
@@ -18820,7 +18595,7 @@ create policy "member reads own row"
     }
     const ref = today();
     const all = allRush(ref);
-    const rows = mineOnly2 ? all.filter((r) => r.rush.assignee === me()) : all;
+    const rows = all;
     const late = all.filter((r) => bucketOf(r.rush, ref) === "LATE").length;
     const todayN = all.filter((r) => bucketOf(r.rush, ref) === "TODAY").length;
     const pieces = rows.reduce((a, r) => a + (r.task.qty || 0), 0);
@@ -18865,23 +18640,6 @@ create policy "member reads own row"
           ),
           el("div.cstat", {}, el("b", {}, fmtNum(pieces)), el("i", {}, "pcs"))
         )
-      ),
-      el(
-        "div.centre-filters",
-        {},
-        el(
-          "label.row.small.donetoggle",
-          {},
-          el("input", {
-            type: "checkbox",
-            checked: mineOnly2,
-            onchange: (e) => {
-              mineOnly2 = e.target.checked;
-              rerender();
-            }
-          }),
-          `Only mine (${me()})`
-        )
       )
     );
     if (!rows.length) {
@@ -18893,8 +18651,8 @@ create policy "member reads own row"
           "div.empty",
           {},
           el("div.empty-icon", {}, icon("check", { size: 28 })),
-          el("h3", {}, mineOnly2 ? "Nothing rushed to you" : "Nothing is rushed"),
-          el("div", {}, mineOnly2 ? "Nobody has put a rush line on you." : "Open any line and use the rush button to put it at the top of its queue.")
+          el("h3", {}, "Nothing is rushed"),
+          el("div", {}, "Open any line and use the rush button to put it at the top of its queue.")
         ))
       );
     }
@@ -21060,9 +20818,7 @@ create policy "member reads own row"
               {},
               fmtDate(ref, { withDay: true }),
               el("span.dot-sep", {}, "\xB7"),
-              `${shift2.label} shift`,
-              el("span.dot-sep", {}, "\xB7"),
-              me()
+              `${shift2.label} shift`
             )
           )
         ),
@@ -22480,8 +22236,7 @@ create policy "member reads own row"
           "div.overview-crew",
           {},
           icon("dot", { size: 12 }),
-          shiftContext.live ? crew : "Outside configured shift hours \xB7 attendance not confirmed",
-          me() ? ` \xB7 ${me()}` : ""
+          shiftContext.live ? crew : "Outside configured shift hours \xB7 attendance not confirmed"
         )
       ),
       handoffCard,
@@ -22632,6 +22387,7 @@ create policy "member reads own row"
   // js/views/data.js
   init_ui();
   init_store();
+  init_cloud();
   init_import_machines();
   init_model();
   init_machines();
@@ -22873,16 +22629,6 @@ create policy "member reads own row"
       }
     );
   }
-  var emailFormFn = null;
-  function cloudSignIn(rerender) {
-    if (emailFormFn) return emailFormFn({ compact: true });
-    Promise.resolve().then(() => (init_signin(), signin_exports)).then((module) => {
-      emailFormFn = module.emailForm;
-      rerender();
-    }).catch(() => {
-    });
-    return el("p.small.muted", {}, "Loading sign-in\u2026");
-  }
   function cloudSection(rerender) {
     const st = cloudStatus();
     const cfg = cloudConfig();
@@ -22906,7 +22652,6 @@ create policy "member reads own row"
             )
           )
         ),
-        cloudSignIn(rerender),
         el(
           "div.row",
           {},
@@ -22922,7 +22667,7 @@ create policy "member reads own row"
             onclick: async () => {
               const ok = await confirmDialog(
                 "Stop syncing this device?",
-                "Work already sent stays in the cloud. This device keeps its own copy and stops sending updates.",
+                "Work already sent stays in the cloud. This device keeps its own copy and stops sending updates until the link is opened again.",
                 { confirmLabel: "Stop syncing" }
               );
               if (!ok) return;
@@ -22936,49 +22681,35 @@ create policy "member reads own row"
       return el("div.panel", {}, el("header", {}, "Sync across devices"), body);
     }
     const url = el("input", {
-      value: cfg?.url || "",
-      placeholder: "https://xxxxxxxx.supabase.co",
+      value: cfg?.url || DEPARTMENT_CLOUD.url,
+      placeholder: DEPARTMENT_CLOUD.url,
       autocapitalize: "off",
       spellcheck: false
     });
     const key2 = el("input", {
-      value: cfg?.key || "",
-      placeholder: "sb_publishable_\u2026 or legacy anon key",
+      value: cfg?.key || DEPARTMENT_CLOUD.key,
+      placeholder: "sb_publishable_\u2026",
       autocapitalize: "off",
       spellcheck: false
     });
-    const site = el("input", { value: cfg?.site || "cutting", placeholder: "cutting" });
+    const site = el("input", { value: cfg?.site || DEPARTMENT_CLOUD.site, placeholder: DEPARTMENT_CLOUD.site });
     body.append(
       el(
         "p.small.muted",
         { style: { marginTop: 0 } },
-        "Connect this device to a free Supabase project and the tracker works on phones too \u2014 statuses, notes, rush, back orders and shift updates all merge line by line, exactly as they do through the shared file."
+        "Opening the shared link connects this device to the Cutting department board. Statuses, notes, rush, back orders and shift updates merge line by line. No sign-in and no name to pick."
       ),
       el(
         "ol.small.muted.cloud-steps",
         {},
-        el("li", {}, "Make a free project at supabase.com, turn on email sign-in, and turn off new sign-ups."),
-        el(
-          "li",
-          {},
-          "Run the setup SQL once \u2014 ",
-          el("button.linkbtn", { onclick: sqlDialog }, "show it"),
-          " \u2014 then invite people and mark editors and the view-only wall screen."
-        ),
-        el(
-          "li",
-          {},
-          "Copy the Project URL and the ",
-          el("strong", {}, "publishable key"),
-          " from Settings \u2192 API Keys, and paste them here. On an older project the same field is called the anon public key \u2014 either works."
-        ),
+        el("li", {}, "The project, publishable key and site name are already filled in."),
+        el("li", {}, "Use Connect only if sync was turned off. The same site name has to be used on every device that should share this board."),
         el(
           "li",
           {},
           el("strong", {}, "Never paste a service_role or secret key here. "),
           "Those bypass every rule on the table, and anything typed into this box ends up in a browser where anyone using the tracker can read it."
-        ),
-        el("li", {}, "Connect, then sign in with the invited email. Use the same site name on every device.")
+        )
       ),
       el(
         "div.grid",
@@ -23031,7 +22762,6 @@ create policy "member reads own row"
   function firstRun(rerender) {
     const mm = state.machineMeta || {};
     const sharing = cloudStatus().on || !!sharedFileName();
-    const users = appPeople();
     const steps = [
       {
         n: 1,
@@ -23049,13 +22779,7 @@ create policy "member reads own row"
         n: 3,
         label: "Set up sharing",
         done: sharing,
-        hint: "Cloud sync for phones, or one file on the shared drive"
-      },
-      {
-        n: 4,
-        label: "Add an app user",
-        done: users.length > 0,
-        hint: "A lead hand, supervisor or manager who uses the tracker"
+        hint: "The shared link connects itself. A shop PC can still use one file on the drive."
       }
     ];
     const left = steps.filter((s) => !s.done);
@@ -23071,7 +22795,7 @@ create policy "member reads own row"
           el(
             "span.small.muted",
             {},
-            `${fmtNum((state.tasks || []).length)} lines loaded \xB7 ${cloudStatus().on ? "syncing to the cloud" : sharedFileName() ? "sharing a file" : ""} \xB7 ${users.length} app user${users.length === 1 ? "" : "s"}`
+            `${fmtNum((state.tasks || []).length)} lines loaded \xB7 ${cloudStatus().on ? "syncing to the cloud" : sharedFileName() ? "sharing a file" : ""}`
           )
         )
       );
@@ -23391,26 +23115,25 @@ create policy "member reads own row"
         )
       )
     );
-    const users = appPeople();
     const employeeCount = employeeDirectory().length;
     const peoplePanel = el(
       "div.panel",
       {},
-      el("header", {}, "Tracker users"),
+      el("header", {}, "Directory"),
       el(
         "div.body",
         {},
         el(
           "p.small.muted",
           { style: { marginTop: 0 } },
-          "Only enabled lead hands, supervisors and managers appear in the app header."
+          "Work is assigned to people in this directory. The tracker does not ask who is using the device."
         ),
-        users.length ? el(
-          "div.tag-row",
+        el(
+          "div.small.muted",
           { style: { marginBottom: "12px" } },
-          ...users.map((person) => el("span.chip" + (person === me() ? ".ok" : ""), {}, person))
-        ) : el("div.small.muted", { style: { marginBottom: "12px" } }, "No tracker users are enabled yet."),
-        el("button", { onclick: () => go2?.("employees") }, icon("users", { size: 16 }), "Manage employees and access")
+          employeeCount ? `${fmtNum(employeeCount)} employee${employeeCount === 1 ? "" : "s"} listed` : "No employees listed yet."
+        ),
+        el("button", { onclick: () => go2?.("employees") }, icon("users", { size: 16 }), "Manage employees")
       )
     );
     const health = [
@@ -23433,10 +23156,10 @@ create policy "member reads own row"
         value: storage.ok ? "Saving normally" : storage.error
       },
       {
-        label: "Tracker access",
-        ok: users.length > 0,
+        label: "Directory",
+        ok: employeeCount > 0,
         icon: "dot",
-        value: users.length ? `${users.length} user${users.length === 1 ? "" : "s"} \xB7 ${employeeCount} employees \xB7 ${me()}` : "Enable a lead hand, supervisor or manager"
+        value: employeeCount ? `${fmtNum(employeeCount)} employee${employeeCount === 1 ? "" : "s"}` : "Add people before assigning work"
       },
       {
         label: "Latest backup",
@@ -24012,22 +23735,6 @@ create policy "member reads own row"
     scheduleRender();
     window.scrollTo({ top: 0 });
   }
-  function whoAmI() {
-    const people = appPeople();
-    const sel = el(
-      "select.whopick",
-      {
-        "aria-label": "Who are you?",
-        onchange: (e) => {
-          setCurrentAppUser(e.target.value);
-          scheduleRender();
-        }
-      },
-      el("option", { value: "", selected: me() === "Unassigned" }, "Select app user"),
-      ...people.map((p) => el("option", { value: p, selected: me() === p }, p))
-    );
-    return sel;
-  }
   var TAB_GROUP = { rolling: "Rolling", fom: "FOM", cnc: "CNC", punch: "Punch" };
   function tabBadge(tab) {
     const { key: key2 } = tab;
@@ -24360,13 +24067,12 @@ create policy "member reads own row"
         )
       ),
       mobileRouteButton(),
-      // Setup is configuration, not a page anyone works on, so it sits with the
-      // name picker as a gear rather than taking another slot in a nav row that
-      // had already run out of width.
+      // Setup is configuration, not a page anyone works on, so it sits as a
+      // gear rather than taking another slot in a nav row that had already
+      // run out of width.
       el(
         "div.hdr-right",
         {},
-        whoAmI(),
         el(
           "div.hdr-tools",
           {},
@@ -24463,32 +24169,7 @@ create policy "member reads own row"
       }
     };
   }
-  var renderAuthGate2 = null;
   function render() {
-    const gate2 = authGate();
-    if (gate2 === "sign-in" || gate2 === "not-a-member" || gate2 === "signing-in") {
-      if (!renderAuthGate2) {
-        Promise.resolve().then(() => (init_signin(), signin_exports)).then((module) => {
-          renderAuthGate2 = module.renderAuthGate;
-          scheduleRender();
-        }).catch(() => {
-        });
-        root.replaceChildren(el(
-          "section.signin-screen",
-          {},
-          el("h1", {}, "Please sign in"),
-          el("p", {}, "Loading the sign-in screen. Your work is still saved on this phone.")
-        ));
-        pageMotion = false;
-        return;
-      }
-      root.replaceChildren(renderAuthGate2({
-        gate: gate2,
-        onReady: () => initCloud({ includeBase: true })
-      }));
-      pageMotion = false;
-      return;
-    }
     const restoreFocus = focusAfterRender();
     const tab = TABS.find((t) => t.key === current) || TABS[0];
     const storage = storageStatus();
