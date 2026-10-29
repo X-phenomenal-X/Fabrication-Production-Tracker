@@ -7,7 +7,7 @@
 
 import { readXlsx } from './xlsx.js';
 
-export const DAILY_PARSER_VERSION = 2;
+export const DAILY_PARSER_VERSION = 3;
 const SHEET = 'Daily Sched';
 export const DAILY_SHEET = SHEET;
 const PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
@@ -32,10 +32,6 @@ const ALIASES = {
   cutStatus: [/^CUT(TING)?(\s*STATUS)?$/],
   materialStatus: [/^(MTL|MAT(ERIA)?L)(\s*STATUS)?$/],
   color: [/\bCOLOU?R\b/, /\bFINISH\b/],
-  assembly: [/^ASSEMBLY$/], vents: [/^VENTS$/], deframes: [/^DEFRAMES$/],
-  warehouse: [/^WAREHOUSE$/], hts: [/^HTS$/], widths: [/^WIDTHS$/],
-  punch: [/^PUNCH$/], vtml: [/^VTML$/], sfs: [/^SFS$/],
-  lvrsTcPan: [/^LVRS\s*\/\s*TC\s*PAN$/],
 };
 
 function text(value) {
@@ -60,6 +56,19 @@ function date(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
 }
 
+// Normalize department headers only. Exact tokens prevent WIDTH matching
+// FRAME WIDTH, and CUT from colliding with CUTTING DATE or CUT STATUS.
+function departmentHeader(value) {
+  return String(value || '').toUpperCase().replace(/[\\s.\\-_/]+/g, '');
+}
+const DEPARTMENT_NAMES = Object.freeze({
+  assembly: ['ASSEMBLY', 'ASSY'], vents: ['VENT', 'VENTS'],
+  deframes: ['DEFRAME', 'DEFRAMES'], warehouse: ['WAREHOUSE'],
+  hts: ['HTS'], widths: ['WIDTH', 'WIDTHS'], punch: ['PUNCH'],
+  vtml: ['VTML'], sfs: ['SFS'],
+  lvrsTcPan: ['LVRSTCPAN', 'LVRSTCPANEL', 'LVRSTCPANELS'],
+});
+
 function headerMap(sheet) {
   const headings = [];
   for (const row of sheet.rows.filter((row) => row.r <= 6)) {
@@ -73,7 +82,23 @@ function headerMap(sheet) {
     const index = headings.findIndex((heading) => patterns.some((pattern) => pattern.test(String(heading).toUpperCase())));
     if (index >= 0) found[key] = index + 1;
   }
-  // New department columns are optional, never assigned positional fallbacks.
+  // Match individual cells, not titles accumulated across multiple header rows.
+  // Prefer the row containing W/O when available; otherwise inspect top rows.
+  const top = sheet.rows.filter((row) => row.r <= 6);
+  const headers = top.filter((row) => (row.cells || []).some((cell) =>
+    ALIASES.wo.some((pattern) => pattern.test(String(cell || '').trim().toUpperCase()))));
+  const candidates = headers.length ? headers : top;
+  const reserved = new Set(Object.entries(found).filter(([key]) =>
+    !Object.hasOwn(DEPARTMENT_NAMES, key)).map(([, index]) => index));
+  for (const [key, names] of Object.entries(DEPARTMENT_NAMES)) {
+    const matches = [];
+    for (const row of candidates) row.cells.forEach((cell, index) => {
+      if (names.includes(departmentHeader(cell)) && !reserved.has(index + 1)) matches.push(index + 1);
+    });
+    const unique = [...new Set(matches)];
+    // Ambiguity must not silently bind the wrong manufacturing operation.
+    if (unique.length === 1) { found[key] = unique[0]; reserved.add(unique[0]); }
+  }
   return { ...FALLBACK, ...found, color: found.color || null };
 }
 

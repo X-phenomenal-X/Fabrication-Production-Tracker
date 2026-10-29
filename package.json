@@ -14,7 +14,7 @@
     "test:midnight": "node test/midnight-shift-check.mjs",
     "test:schedule": "node test/schedule-check.mjs",
     "test:import": "node test/import-schedules-check.mjs",
-    "test:rules": "node test/importer-rules-check.mjs && node test/store-rules-check.mjs && node test/cloud-defaults-check.mjs && node test/supervisor-board-check.mjs",
+    "test:rules": "node test/importer-rules-check.mjs && node test/store-rules-check.mjs && node test/cloud-defaults-check.mjs && node test/supervisor-board-check.mjs && node test/window-wall-import-check.mjs",
     "test:machines": "node test/machines-check.mjs",
     "test:app": "node test/app-check.mjs",
     "test:cloud": "node test/cloud-check.mjs",
