@@ -17,15 +17,14 @@ try {
   const fixture=makeFixture();fixture.todos={};
   await page.addInitScript(data=>{if(!localStorage.getItem('bv.cutting.v1'))localStorage.setItem('bv.cutting.v1',JSON.stringify(data));},fixture);
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
-  await page.getByRole('button',{name:'Quick entry',exact:true}).click();
-  await page.getByRole('button',{name:'Downtime',exact:true}).click();
+  await page.getByRole('button',{name:'Report downtime',exact:true}).click();
   await page.getByLabel('Report details').fill('V22 timed stoppage');await page.getByLabel('Affected machine').selectOption('fom2');
   await page.getByLabel('Downtime reason').selectOption('Equipment');await page.getByLabel('Maintenance status').selectOption('Notified');
   await page.getByRole('button',{name:'Save report',exact:true}).click();
   const report=page.locator('.command-report').filter({hasText:'V22 timed stoppage'});
   await report.getByRole('button',{name:'Start timer',exact:true}).click();await page.reload();
   await report.getByRole('button',{name:'Stop timer',exact:true}).click();assert.match(await report.textContent(),/Notified/);
-  await page.getByRole('button',{name:'Quick entry',exact:true}).click();await page.getByRole('button',{name:'Quality',exact:true}).click();
+  await page.getByRole('button',{name:'Report a quality issue',exact:true}).click();
   await page.getByLabel('Report details').fill('V22 quality hold');await page.getByLabel('containment',{exact:true}).fill('Quarantine labelled bundle');
   await page.getByLabel('rejected',{exact:true}).fill('3');await page.getByLabel('Quality stage').selectOption('Contained');
   const pixel=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=','base64');

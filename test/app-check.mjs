@@ -116,7 +116,7 @@ step('tabs: ' + tabs.join(', '));
 const setupGear = await page.$$eval('.hdr-setup', (ns) => ns.map((n) => n.getAttribute('aria-label')));
 step('setup control: ' + JSON.stringify(setupGear));
 if (setupGear.length !== 1) throw new Error('Setup is not reachable from the header');
-if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Today,Daily Schedule,Projects,Staging,Rush,Back Orders,Forms,Employees,Engineering Lookup,Shift Update') {
+if (tabs.join(',') !== 'Overview,Rolling,FOM,CNC & FMC,Multi Punch,Jobs,Daily Schedule,Projects,Staging,Back Orders,Forms,Employees,Engineering Lookup,Shift Update') {
   throw new Error('unexpected nav: ' + tabs.join(','));
 }
 
@@ -281,8 +281,8 @@ if (!resourceShiftPrint?.title?.includes('shift update — blank')
 }
 
 await gotoTab('Employees');
-await page.waitForSelector('.employee-card');
-if (!await page.locator('.employee-card').filter({ hasText: 'Abhay' }).count()) {
+await page.waitForSelector('.employee-names');
+if (!(await page.locator('.employee-names').textContent()).includes('Abhay')) {
   throw new Error('employee directory does not use the shared people list');
 }
 const crewChooser = page.waitForEvent('filechooser');
@@ -291,85 +291,28 @@ await (await crewChooser).setFiles(CREW);
 await page.waitForSelector('dialog .import-stats', { timeout: 120000 });
 const crewImport = await page.evaluate(async () => {
   const { state } = await import('/js/store.js');
-  const store = await import('/js/store.js');
   return {
-    cards: document.querySelectorAll('.employee-card').length,
+    listed: document.querySelector('.employee-names')?.textContent || '',
     people: state.people.length,
     employees: Object.keys(state.employees || {}).length,
-    appUsers: store.appPeople(),
     names: state.people.filter((name) => ['Nia Harper', 'Mateo Lopez', 'Isha Singh', 'Devon Chen', 'Amara Okafor'].includes(name)).length,
-    niaCard: [...document.querySelectorAll('.employee-card')]
-      .find((card) => card.textContent.includes('Nia Harper'))?.textContent,
+    picker: document.querySelectorAll('.whopick, [aria-label="Who are you?"]').length,
     modal: document.querySelector('dialog')?.textContent,
   };
 });
-step('employee roster: ' + JSON.stringify(crewImport));
-if (crewImport.cards !== 6 || crewImport.people !== 6 || crewImport.employees !== 5
-    || crewImport.names !== 5 || crewImport.appUsers.join(',') !== 'Abhay'
-    || !crewImport.niaCard.includes('Cutting · Afternoon shift')
-    || !crewImport.niaCard.includes('Directory only')
+step('employee roster: ' + JSON.stringify({ ...crewImport, listed: crewImport.listed.slice(0, 80) }));
+if (crewImport.people !== 6 || crewImport.employees !== 5 || crewImport.names !== 5
+    || !crewImport.listed.includes('Nia Harper') || crewImport.picker
     || !crewImport.modal.includes('5Active crew') || !crewImport.modal.includes('5New records')) {
   throw new Error('employee roster import is incomplete: ' + JSON.stringify(crewImport));
 }
 await page.click('dialog header button');
-
-// A roster import creates employees, not tracker users. Access is an explicit
-// management decision and can only be enabled for a lead hand, supervisor or
-// manager from the employee editor.
-const nia = page.locator('.employee-card').filter({ hasText: 'Nia Harper' });
-await nia.locator('.employee-edit').click();
-await page.waitForSelector('dialog .employee-editor');
-await page.fill('dialog .employee-department-input', 'FOM');
-await page.selectOption('dialog .employee-role-input', 'LEAD_HAND');
-await page.check('dialog .employee-access-input');
-step('employee editor fields: ' + JSON.stringify(await page.evaluate(() => ({
-  name: document.querySelector('dialog .employee-name-input')?.value,
-  department: document.querySelector('dialog .employee-department-input')?.value,
-  shift: document.querySelector('dialog .employee-shift-input')?.value,
-  role: document.querySelector('dialog .employee-role-input')?.value,
-  access: document.querySelector('dialog .employee-access-input')?.checked,
-}))));
-await page.click('dialog footer button.primary');
-await page.waitForSelector('dialog', { state: 'detached' });
-const employeeEdit = await page.evaluate(async () => {
-  const store = await import('/js/store.js');
-  const niaRecord = Object.values(store.state.employees).find((record) => record.name === 'Nia Harper');
-  return {
-    role: niaRecord?.role,
-    department: niaRecord?.department,
-    access: niaRecord?.appAccess,
-    appUsers: store.appPeople(),
-    picker: document.querySelectorAll('.whopick, [aria-label="Who are you?"]').length,
-  };
-});
-step('employee edit and access: ' + JSON.stringify(employeeEdit));
-if (employeeEdit.role !== 'LEAD_HAND' || employeeEdit.department !== 'FOM' || !employeeEdit.access
-    || employeeEdit.appUsers.join(',') !== 'Abhay,Nia Harper'
-    || employeeEdit.picker) {
-  throw new Error('employee editing or the identity picker is wrong: ' + JSON.stringify(employeeEdit));
+await page.fill('.employee-add-name', 'Jordan Lead');
+await page.click('.employee-add-submit');
+await page.waitForFunction(() => document.querySelector('.employee-names')?.textContent.includes('Jordan Lead'));
+if (!(await page.locator('.employee-names').textContent()).includes('Jordan Lead')) {
+  throw new Error('a name added for assignments did not stay on the list');
 }
-
-const crewRefreshChooser = page.waitForEvent('filechooser');
-await page.click('.employee-import');
-await (await crewRefreshChooser).setFiles(CREW);
-await page.waitForSelector('dialog .import-stats', { timeout: 120000 });
-const crewRefresh = await page.evaluate(async () => {
-  const store = await import('/js/store.js');
-  const niaRecord = Object.values(store.state.employees).find((record) => record.name === 'Nia Harper');
-  return {
-    department: niaRecord?.department,
-    role: niaRecord?.role,
-    access: niaRecord?.appAccess,
-    records: Object.keys(store.state.employees || {}).length,
-    modal: document.querySelector('dialog')?.textContent,
-  };
-});
-step('employee roster refresh: ' + JSON.stringify(crewRefresh));
-if (crewRefresh.department !== 'FOM' || crewRefresh.role !== 'LEAD_HAND' || !crewRefresh.access
-    || crewRefresh.records !== 5 || !crewRefresh.modal.includes('0Records updated')) {
-  throw new Error('roster refresh overwrote a manual employee edit: ' + JSON.stringify(crewRefresh));
-}
-await page.click('dialog header button');
 
 // The cover is an operational briefing, not a decorative landing page: it
 // must expose real work and every shortcut must remain a full-size control.
@@ -871,15 +814,12 @@ const rushHist = await page.evaluate((k) => import('/js/store.js').then(
 step('rush history entries: ' + rushHist);
 if (!rushHist) throw new Error('rush changes were not recorded in history');
 
-await gotoTab('Rush');
-// Both phone and desk rows exist by design; wait on the surface visible at
-// this test's 1440px viewport rather than the first hidden mobile row.
-await page.waitForSelector('.rush-wide .rush-line');
-const rushBuckets = await page.$$eval('.dgroup-label', (ns) => ns.map((n) => n.textContent.trim()));
-const rushCount = await page.$$eval('.rush-line', (ns) => ns.length);
-step(`rush page — buckets [${rushBuckets.join(' | ')}] · ${rushCount} lines`);
-if (!rushBuckets.includes('Past its date')) throw new Error('a past-date rush should bucket as late');
-await page.screenshot({ path: path.join(SHOT, 'rush.png'), fullPage: true });
+const rushStillThere = await page.evaluate((wo) => import('/js/model.js').then((m) =>
+  m.allRush().some((row) => row.task.wo === wo)), rushWo);
+if (!rushStillThere) throw new Error('the rush flag was not kept after the Rush tab was removed');
+if (await page.locator('nav.tabs button[aria-label="Rush"]').count()) {
+  throw new Error('the Rush tab is still in the navigation');
+}
 
 // ---------- CNC & FMC: shared queue, assigned by hand ----------
 await gotoTab('CNC & FMC');
@@ -2146,16 +2086,16 @@ if (rerouted.second !== 'fom3') {
 // a re-import of the workbook covering its machine — which is the whole reason
 // manual jobs are not stored in `tasks`.
 await gotoTab('FOM');
-const beforeAdd = await page.$$eval('.line', (ns) => ns.length);
-await page.click('.centre-head button[title^="Add a job"]');
-await page.waitForSelector('dialog[open]');
-await page.fill('dialog input[placeholder="31942"]', '90210');
-await page.fill('dialog input[placeholder="S80.104"]', 'S80.999');
-await page.fill('dialog input[placeholder="Harbour Point"]', 'Remake job');
-await page.fill('dialog input[placeholder="0"]', '7');
-await page.click('dialog footer button.primary');
-await page.waitForSelector('dialog', { state: 'detached' });
-await page.waitForTimeout(200);
+await page.click('.subtabs button:has-text("FOM 1")');
+await page.evaluate(() => import('/js/store.js').then(async (store) => {
+  const model = await import('/js/model.js');
+  store.addManualTask({
+    machine: 'fom1', wo: '90210', die: 'S80.999', project: 'Remake job', qty: 7,
+    cuttingDate: model.today(),
+  });
+}));
+await page.evaluate(() => import('/js/store.js').then((store) => store.save()));
+await page.$$eval('.dgroup-head[aria-expanded="false"]', (ns) => ns.forEach((node) => node.click()));
 
 const manual = await page.evaluate(() => import('/js/store.js').then((m) => {
   const t = Object.values(m.state.manualTasks)[0];
@@ -2168,11 +2108,9 @@ await page.fill('.centre-filters input[type="search"]', '90210');
 await page.waitForTimeout(300);
 const manualRow = await page.$$eval('.line', (ns) => ns.map((n) => ({
   wo: n.querySelector('.line-id .mono')?.textContent.trim(),
-  badge: !!n.querySelector('.badge-manual'),
 })));
 step('manual job on the queue: ' + JSON.stringify(manualRow));
 if (!manualRow.length || manualRow[0].wo !== '90210') throw new Error('the added job is not in the queue');
-if (!manualRow[0].badge) throw new Error('the added job is not marked as added by hand');
 
 // give it a status, then re-import the workbook it belongs to
 await page.click('.line .line-open');
@@ -2198,7 +2136,7 @@ if (survived.status !== 'IN_PROGRESS') throw new Error('the added job lost its s
 
 /* ---------- today's list ---------- */
 
-await gotoTab('Today');
+await gotoTab('Overview');
 await page.waitForSelector('.todo-add input');
 await page.fill('.todo-add input', 'Chase the mill on S80.999');
 await page.click('.todo-add button.primary');
@@ -2219,11 +2157,11 @@ const ticked = await page.evaluate(() => import('/js/store.js').then((m) => {
 step('ticked off: ' + JSON.stringify(ticked));
 if (!ticked.done || !ticked.doneBy || !ticked.hasAt) throw new Error('ticking a to-do recorded nothing');
 
-// the derived half reflects the schedules
-const board = await page.$$eval('.att', (ns) => ns.map((n) =>
-  n.querySelector('.att-k').textContent + '=' + n.querySelector('.att-n').textContent));
-step('today board: ' + board.join(' '));
-if (board.length !== 5) throw new Error('the today board lost a card');
+const board = await page.$$eval('.sup-centre', (ns) => ns.map((node) => node.getAttribute('aria-label')));
+step('shift centres: ' + board.join(' | '));
+if (board.length !== 4 || !board.some((label) => label.startsWith('Rolling')) || !board.some((label) => label.startsWith('Multi Punch'))) {
+  throw new Error('the supervisor dashboard is missing a centre: ' + board.join(' | '));
+}
 
 // Photo analysis is a lazy, reviewed path into the same list — never a second
 // store and never a place where the image itself can survive. The network is

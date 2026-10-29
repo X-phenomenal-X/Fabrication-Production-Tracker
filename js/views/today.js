@@ -185,6 +185,10 @@ function pileList(title, rows, tone, cap = 5) {
 
 /* ---------- page ---------- */
 
+export function todoPanel(rerender, go) {
+  return listPanel(today(), rerender, go);
+}
+
 export function renderToday(rerender, go) {
   const ref = today();
   /* Never null. After midnight the Midnight shift still belongs to the date

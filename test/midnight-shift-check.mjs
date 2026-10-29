@@ -223,15 +223,11 @@ try {
   await sunday.waitForFunction(() => document.querySelector('.centre-sub')?.textContent.includes('23:45–07:15'));
 
   await page.goto(`http://127.0.0.1:${server.address().port}/?monitor#overview`);
-  await page.locator('.monitor-clock').waitFor();
-  await page.locator('.monitor-clock').focus();
-  await page.evaluate(async () => {
-    const { save } = await import('/js/store.js');
-    save();
-  });
-  await page.waitForFunction(() => document.activeElement?.getAttribute('data-keep-focus') === 'monitor-clock');
+  await page.locator('.sup-centres').waitFor();
+  assert.equal(await page.locator('.monitor-clock').count(), 0);
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.display || ''), '');
   assert.deepEqual(errors, []);
-  console.log('Midnight shift: creation, start-date rollover, saved history, phone focus and monitor clock OK');
+  console.log('Midnight shift: creation, start-date rollover, saved history, phone focus; wall screen stays off OK');
 } finally {
   await browser.close();
   await new Promise((resolve) => server.close(resolve));

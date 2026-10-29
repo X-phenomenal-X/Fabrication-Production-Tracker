@@ -1,7 +1,7 @@
 /* Shell: tabs and the render loop. */
 
 import { el, chip, icon, fmtWhen, modal, toast } from './ui.js';
-import { allRush, allBackOrders, hasTasks, openTodos, openCountFor } from './model.js';
+import { allBackOrders, hasTasks, openCountFor } from './model.js';
 import { machinesByGroup } from './machines.js';
 import { brandLockup } from './brand.js';
 import {
@@ -12,16 +12,10 @@ import {
 import { makeCentreView } from './views/centre.js';
 import { renderBackOrders } from './views/backorders.js';
 import { renderJobs } from './views/job.js';
-import { renderToday } from './views/today.js';
 import { renderStaging } from './views/staging.js';
 import { renderOverview } from './views/overview.js';
-import { quickEntry } from './views/quick-entry.js';
 import { renderShiftUpdate } from './views/shiftupdate.js';
-import { renderRush } from './views/rush.js';
 import { renderData, initSharedFile } from './views/data.js';
-import {
-  armMonitorRotation, refreshMonitorClock, renderMonitorDashboard,
-} from './views/monitor.js';
 import { shiftStatusAt } from './shifts.js';
 import { registerServiceWorker, watchConnection, isOnline } from './offline.js';
 import { pulseSyncMerge, reducedMotion } from './motion.js';
@@ -83,11 +77,9 @@ const TABS = [
      about a work order rather than about a machine, which is most of the
      time — 201 of the 272 live work orders touch more than one centre. */
   { key: 'jobs', label: 'Jobs', kind: 'tool', icon: 'job', render: renderJobs },
-  { key: 'today', label: 'Today', kind: 'tool', icon: 'calendar', render: renderToday },
   { key: 'schedule', label: 'Daily Schedule', short: 'Schedule', kind: 'tool', icon: 'calendar', render: renderSchedule },
   { key: 'projects', label: 'Projects', kind: 'tool', icon: 'job', render: renderProjects },
   { key: 'staging', label: 'Staging', short: 'Stage', kind: 'tool', icon: 'staging', render: renderStaging },
-  { key: 'rush', label: 'Rush', kind: 'tool', icon: 'bolt', render: renderRush },
   { key: 'backorders', label: 'Back Orders', short: 'B/O', kind: 'tool', icon: 'alert', render: renderBackOrders },
   { key: 'resources', label: 'Forms', kind: 'tool', icon: 'file', render: renderResources },
   { key: 'employees', label: 'Employees', kind: 'tool', icon: 'users', render: renderEmployees },
@@ -101,6 +93,11 @@ const TABS = [
 takeImplicitSession();
 
 let current = location.hash.slice(1) || 'overview';
+// Today and Rush are no longer pages. Old bookmarks open the supervisor overview.
+if (current === 'today' || current === 'rush') {
+  current = 'overview';
+  history.replaceState(null, '', '#overview');
+}
 // Keep old bookmarks working after Die Lookup and Extrusions became one
 // engineering workspace.
 if (current === 'extrusions') {
@@ -140,15 +137,7 @@ function tabBadge(tab) {
   }
   // The day's list works with no schedule loaded, so its count is not gated
   // on an import the way the schedule-derived ones are.
-  if (key === 'today') {
-    const n = openTodos().open.length;
-    return n ? el('span.tab-badge.warn', {}, String(n)) : null;
-  }
   if (!hasTasks()) return null;
-  if (key === 'rush') {
-    const n = allRush().length;
-    return n ? el('span.tab-badge.warn', {}, String(n)) : null;
-  }
   if (key === 'backorders') {
     // allBackOrders() returns one entry per assignee, not per line — the badge
     // has to count the shortages, not the people chasing them.
@@ -523,15 +512,6 @@ function render() {
   const restoreFocus = focusAfterRender();
   const tab = TABS.find((t) => t.key === current) || TABS[0];
   const storage = storageStatus();
-  /* Overview becomes a department broadcast board in monitor mode. Machine
-     hashes keep the existing queue display, so old bay bookmarks remain
-     valid while ?monitor#overview gains the across-department dashboard. */
-  if (document.documentElement.dataset.display === 'monitor' && current === 'overview') {
-    root.replaceChildren(renderMonitorDashboard(syncViewState()));
-    pageMotion = false;
-    restoreFocus();
-    return;
-  }
   // Views are handed scheduleRender, never render, so a redraw requested from
   // inside a click or change handler lands after the browser has finished
   // moving focus — tearing the DOM down mid-event throws.
@@ -543,7 +523,7 @@ function render() {
         el('div.small', { style: { marginTop: '4px' } },
           `${storage.detail} Open Setup → Backup, transfer and reset to export the current copy.`))) : null,
     tab.render(scheduleRender, go, syncViewState()));
-  root.replaceChildren(header(), next, quickEntry(scheduleRender, go));
+  root.replaceChildren(header(), next);
   pageMotion = false;
   measureHeader();
   settleNav();
@@ -569,7 +549,6 @@ function scheduleRender() {
    whole page every minute would replace a textarea while somebody is writing
    the shift handoff. */
 function refreshShiftChip() {
-  refreshMonitorClock();
   const node = root.querySelector('.shift-chip');
   if (!node) return;
   const shift = shiftStatusAt();
@@ -601,28 +580,11 @@ window.addEventListener('hashchange', () => {
   }
 });
 
-/* Monitor mode — the wall display in the bay.
-
-   A shop-floor screen is read from across an aisle by people walking past, and
-   the one thing it must never be is operable: a display within reach of a
-   walkway gets pressed by accident, and a status set by a shoulder is worse
-   than no status at all. So this is the ordinary centre page with its controls
-   removed and its type ladder shifted up, not a second view to keep in step.
-
-   Turned on with `?monitor` in the address, so a wall PC is just a bookmark —
-   nothing to configure on a machine nobody logs into. The flag sits in the
-   query rather than the hash because the hash is the page, and somebody
-   walking the display between centres must not switch it off by doing so. */
-if (/(^|[?&])(monitor|display=monitor)(&|$)/.test(location.search.slice(1))) {
-  document.documentElement.dataset.display = 'monitor';
-}
-
 loadLocal();
 applyTheme();
 onChange(() => { applyTheme(); scheduleRender(); });
 render();
 armShiftClock();
-if (document.documentElement.dataset.display === 'monitor') armMonitorRotation(scheduleRender);
 registerServiceWorker();
 watchConnection(scheduleRender);
 initSharedFile(scheduleRender);

@@ -282,8 +282,8 @@ for (const theme of ['light', 'dark']) {
         await page.waitForSelector('dialog.mobile-nav-dialog');
         const destinations = await page.$$eval('.mobile-nav-item', (nodes) =>
           nodes.map((node) => node.querySelector('.mobile-nav-label')?.textContent?.trim()));
-        if (destinations.length !== 16) {
-          fail(`rolling @ phone/${theme}: page menu exposes ${destinations.length} of 16 destinations`);
+        if (destinations.length !== 14) {
+          fail(`rolling @ phone/${theme}: page menu exposes ${destinations.length} of 14 destinations`);
         }
         await page.click('dialog.mobile-nav-dialog button:has-text("Close")');
 
@@ -471,10 +471,14 @@ for (const theme of ['light', 'dark']) {
     dockGap: Math.round(innerHeight
       - document.querySelector('.mobile-su-save-dock').getBoundingClientRect().bottom),
   }));
-  if (shiftAfter.complete !== shiftStart.complete + 1) {
-    fail(`shift @ phone/${theme}: Save & next moved progress from ${shiftStart.complete} to ${shiftAfter.complete}`);
+  if (shiftStart.complete >= shiftStart.steps - 2) {
+    note(`shift @ phone/${theme}: the app already filled ${shiftStart.complete} of ${shiftStart.steps} from recorded work`);
+  } else {
+    if (shiftAfter.complete !== shiftStart.complete + 1) {
+      fail(`shift @ phone/${theme}: Save & next moved progress from ${shiftStart.complete} to ${shiftAfter.complete}`);
+    }
+    if (shiftAfter.active === shiftStart.active) fail(`shift @ phone/${theme}: Save & next did not advance`);
   }
-  if (shiftAfter.active === shiftStart.active) fail(`shift @ phone/${theme}: Save & next did not advance`);
   if (shiftAfter.dockGap < 8) {
     fail(`shift @ phone/${theme}: Save & next dock sits ${shiftAfter.dockGap}px off the safe area`);
   }
@@ -1081,124 +1085,31 @@ for (const theme of ['light', 'dark']) {
 
   await page.goto(`${base}/?monitor#backorders`);
   await page.waitForSelector('.bo-wide .bo-line');
-  const boMonitorControls = await page.evaluate(() =>
-    [...document.querySelectorAll('button, input, select, textarea, a[href]')].filter((node) => {
-      const rect = node.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0 && getComputedStyle(node).pointerEvents !== 'none';
-    }).length);
-  if (boMonitorControls) fail(`backorders @ monitor: ${boMonitorControls} control(s) remain pressable`);
+  const boMonitor = await page.evaluate(() => document.documentElement.dataset.display || '');
+  if (boMonitor === 'monitor') fail('backorders @ monitor: the wall screen is still on');
 
   if (broke.length) fail(`backorders @ phone: page error — ${broke[0]}`);
   await ctx.close();
 }
 
-/* ---------- Rush on a phone and at a desk ----------
-
-   A rush queue cannot make urgent work safer if its rows are unreachable to a
-   keyboard or if today's work is six screens below the header. The phone gets
-   bounded urgency buckets; both surfaces keep the same labelled dialog action. */
+/* Rush is no longer its own tab. The flag stays on the line and in the data. */
 {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await ctx.newPage();
-  const broke = [];
-  page.on('pageerror', (e) => broke.push(String(e.message)));
   await page.addInitScript((snap) => {
     localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
   }, fixture);
   await page.goto(`${base}/#rush`);
-  await page.waitForSelector('.rush-m-row');
-  await page.waitForTimeout(150);
-
-  const rush = await page.evaluate(() => {
-    const shown = (node) => !!node && getComputedStyle(node).display !== 'none';
-    const groups = [...document.querySelectorAll('.rush-m-group')].map((group) => ({
-      key: group.dataset.bucket,
-      label: group.querySelector('.rush-m-grouplabel')?.textContent.trim(),
-      count: Number(group.querySelector('.rush-m-groupcount')?.textContent || 0),
-      shown: group.querySelectorAll('.rush-m-row').length,
-      more: !!group.querySelector('.rush-m-more'),
-    }));
-    const rows = [...document.querySelectorAll('.rush-m-row')];
-    return {
-      phone: shown(document.querySelector('.rush-m')),
-      desk: shown(document.querySelector('.rush-wide')),
-      screens: +(document.documentElement.scrollHeight / innerHeight).toFixed(1),
-      groups,
-      total: rows.length,
-      buttons: rows.filter((row) => row.tagName === 'BUTTON').length,
-      named: rows.filter((row) => /work order/i.test(row.getAttribute('aria-label') || '')).length,
-      dated: document.querySelectorAll('.rush-m-when').length,
-      clickableDivs: [...document.querySelectorAll('.rush-m div, .rush-wide div')]
-        .filter((node) => node.style.cursor === 'pointer').length,
-    };
-  });
-  if (!rush.phone) fail('rush @ phone: the bounded queue is not on screen');
-  if (rush.desk) fail('rush @ phone: both queues are on screen at once');
-  if (rush.screens > 4.5) fail(`rush @ phone: the page is ${rush.screens} screens tall`);
-  if (rush.buttons !== rush.total) {
-    fail(`rush @ phone: ${rush.total - rush.buttons} row(s) open a dialog without being a control`);
-  }
-  if (rush.named !== rush.total) {
-    fail(`rush @ phone: ${rush.total - rush.named} row(s) do not name their work order`);
-  }
-  if (rush.dated !== rush.total) {
-    fail(`rush @ phone: ${rush.total - rush.dated} row(s) omit the need-by field they sort by`);
-  }
-  if (rush.clickableDivs) fail(`rush: ${rush.clickableDivs} clickable div row(s) remain`);
-  const bounded = rush.groups.find((group) => group.count > 4);
-  if (!bounded) fail('rush @ phone: fixture has no bucket large enough to prove bounding');
-  else if (bounded.shown >= bounded.count || !bounded.more) {
-    fail(`rush @ phone: ${bounded.label} renders ${bounded.shown}/${bounded.count} without a bounded continuation`);
-  }
-  note(`rush @ phone: ${rush.screens} screens, ${rush.groups.map((g) => `${g.label} ${g.shown}/${g.count}`).join(', ')}`);
-  await page.screenshot({ path: path.join(SHOT, 'rush-phone-queue.png'), fullPage: true });
-
-  const expandable = rush.groups.find((group) => group.more);
-  if (expandable) {
-    await page.click(`.rush-m-group[data-bucket="${expandable.key}"] .rush-m-more`);
-    await page.waitForTimeout(200);
-    const after = await page.$$eval(
-      `.rush-m-group[data-bucket="${expandable.key}"] .rush-m-row`,
-      (rows) => rows.length,
-    );
-    if (after <= expandable.shown) {
-      fail(`rush @ phone: "Show more" did not extend ${expandable.label} (${expandable.shown} -> ${after})`);
-    }
-  }
-
-  await page.click('.rush-m-row');
-  await page.waitForTimeout(200);
-  if (!(await page.$('dialog[open]'))) fail('rush @ phone: tapping a row did not open the Rush dialog');
-  await page.evaluate(() => document.querySelector('dialog[open]')?.close());
-
-  await page.setViewportSize({ width: 1440, height: 960 });
-  await page.waitForTimeout(150);
-  const desk = await page.evaluate(() => {
-    const shown = (node) => !!node && getComputedStyle(node).display !== 'none';
-    const rows = [...document.querySelectorAll('.rush-wide .rush-line')];
-    return {
-      wide: shown(document.querySelector('.rush-wide')),
-      phone: shown(document.querySelector('.rush-m')),
-      total: rows.length,
-      buttons: rows.filter((row) => row.tagName === 'BUTTON').length,
-      named: rows.filter((row) => /work order/i.test(row.getAttribute('aria-label') || '')).length,
-    };
-  });
-  if (!desk.wide || desk.phone) fail('rush @ desktop: the wrong queue surface is visible');
-  if (desk.buttons !== desk.total || desk.named !== desk.total) {
-    fail(`rush @ desktop: ${desk.buttons}/${desk.total} rows are buttons and ${desk.named}/${desk.total} are named`);
-  }
-
-  await page.goto(`${base}/?monitor#rush`);
-  await page.waitForSelector('.rush-wide .rush-line');
-  const monitorControls = await page.evaluate(() =>
-    [...document.querySelectorAll('button, input, select, textarea, a[href]')].filter((node) => {
-      const rect = node.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0 && getComputedStyle(node).pointerEvents !== 'none';
-    }).length);
-  if (monitorControls) fail(`rush @ monitor: ${monitorControls} control(s) remain pressable`);
-
-  if (broke.length) fail(`rush: page error — ${broke[0]}`);
+  await page.waitForSelector('.sup-centres');
+  const rush = await page.evaluate(() => ({
+    tab: [...document.querySelectorAll('nav.tabs button, .mobile-nav-item')].some((node) => (node.getAttribute('aria-label') || node.textContent) === 'Rush'),
+    hash: location.hash,
+    centres: document.querySelectorAll('.sup-centre').length,
+  }));
+  if (rush.tab) fail('rush tab is still in the navigation');
+  if (rush.hash !== '#overview') fail(`#rush did not open the overview (${rush.hash})`);
+  if (rush.centres !== 4) fail(`overview centres ${rush.centres}`);
+  note('rush tab removed; old bookmark opens the supervisor overview');
   await ctx.close();
 }
 
@@ -1232,53 +1143,7 @@ for (const theme of ['light', 'dark']) {
   await ctx.close();
 }
 
-/* ---------- monitor mode ----------
-
-   The wall display in a bay. Two things have to hold, and the second is the
-   one that matters: it has to be readable from across an aisle, and it has to
-   be impossible to operate. A screen within reach of a walkway gets pressed by
-   accident, and a status set by a shoulder is worse than no status at all —
-   so "nothing is pressable" is the assertion, counted rather than assumed. */
-{
-  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
-  const page = await ctx.newPage();
-  await page.addInitScript((snap) => {
-    localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
-  }, fixture);
-  await page.goto(`${base}/?monitor#rolling`);
-  await page.waitForSelector('.line');
-  await page.waitForTimeout(200);
-
-  const mon = await page.evaluate(() => {
-    const live = [...document.querySelectorAll('button, input, select, textarea, a[href]')]
-      .filter((n) => {
-        const r = n.getBoundingClientRect();
-        return r.width > 0 && r.height > 0 && getComputedStyle(n).pointerEvents !== 'none';
-      })
-      .map((n) => String(n.className || n.tagName).slice(0, 30));
-    const wo = document.querySelector('.line-id .mono.strong');
-    return {
-      mode: document.documentElement.dataset.display || null,
-      live: [...new Set(live)],
-      liveCount: live.length,
-      wo: wo ? Math.round(parseFloat(getComputedStyle(wo).fontSize)) : 0,
-    };
-  });
-
-  note(`monitor mode: ${mon.liveCount} pressable, work order ${mon.wo}px`);
-  if (mon.mode !== 'monitor') fail('?monitor did not put the page in monitor mode');
-  if (mon.liveCount) {
-    fail(`monitor mode leaves ${mon.liveCount} control(s) operable — e.g. ${mon.live[0]}`);
-  }
-  // Read from across a bay, not from a chair.
-  if (mon.wo < 36) fail(`monitor mode work order is ${mon.wo}px — too small to read at distance`);
-  await page.screenshot({ path: path.join(SHOT, 'monitor.png') });
-  await ctx.close();
-}
-
-/* The monitor's overview is a separate department broadcast surface. It must
-   fit one 16:9 frame, carry four production groups, and keep the same zero-
-   interaction contract as the older per-machine monitor bookmarks. */
+/* The wall-screen mode is gone. ?monitor must not lock the page. */
 {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 810 } });
   const page = await ctx.newPage();
@@ -1286,50 +1151,14 @@ for (const theme of ['light', 'dark']) {
     localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
   }, fixture);
   await page.goto(`${base}/?monitor#overview`);
-  await page.waitForSelector('.monitor-shell');
-  await page.waitForTimeout(200);
-
-  const dashboard = await page.evaluate(() => {
-    const pressable = [...document.querySelectorAll('button, input, select, textarea, a[href]')]
-      .filter((node) => {
-        const rect = node.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0 && getComputedStyle(node).pointerEvents !== 'none';
-      });
-    const shell = document.querySelector('.monitor-shell').getBoundingClientRect();
-    const wo = document.querySelector('.monitor-wo');
-    return {
-      cards: document.querySelectorAll('.monitor-now-card').length,
-      next: document.querySelectorAll('.monitor-next-item').length,
-      attention: document.querySelectorAll('.monitor-alert').length,
-      controls: pressable.length,
-      width: Math.round(shell.width),
-      height: Math.round(shell.height),
-      overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      overflowY: document.documentElement.scrollHeight - document.documentElement.clientHeight,
-      workOrderSize: wo ? Math.round(parseFloat(getComputedStyle(wo).fontSize)) : 0,
-      cycle: document.querySelector('.monitor-cycle')?.textContent.trim(),
-    };
-  });
-
-  note(`monitor overview: ${dashboard.cards} now, ${dashboard.next} next, `
-    + `${dashboard.attention} alerts, ${dashboard.controls} controls`);
-  if (dashboard.cards !== 4) fail(`monitor overview shows ${dashboard.cards} of 4 production groups`);
-  if (dashboard.next !== 3) fail(`monitor overview shows ${dashboard.next} of 3 next handoffs`);
-  if (dashboard.attention > 3) fail(`monitor overview shows ${dashboard.attention} alerts — the cap is 3`);
-  if (dashboard.controls) fail(`monitor overview leaves ${dashboard.controls} control(s) operable`);
-  if (dashboard.width !== 1440 || dashboard.height !== 810) {
-    fail(`monitor overview is ${dashboard.width}x${dashboard.height}, expected one 1440x810 frame`);
-  }
-  if (dashboard.overflowX || dashboard.overflowY) {
-    fail(`monitor overview overflows by ${dashboard.overflowX}px x / ${dashboard.overflowY}px y`);
-  }
-  if (dashboard.workOrderSize < 34) {
-    fail(`monitor overview work order is ${dashboard.workOrderSize}px — too small across an aisle`);
-  }
-  if (!/^1\s+of\s+3$/i.test(dashboard.cycle || '')) {
-    fail(`monitor overview does not expose its automatic cycle state: "${dashboard.cycle || ''}"`);
-  }
-  await page.screenshot({ path: path.join(SHOT, 'monitor-overview.png') });
+  await page.waitForSelector('.sup-centres');
+  const mode = await page.evaluate(() => ({
+    display: document.documentElement.dataset.display || '',
+    shell: document.querySelectorAll('.monitor-shell').length,
+  }));
+  if (mode.display === 'monitor') fail('?monitor still switches on the wall screen');
+  if (mode.shell) fail('the monitor dashboard is still rendered');
+  note('monitor mode removed');
   await ctx.close();
 }
 

@@ -5,6 +5,7 @@
 import { el, icon, chip, fmtDate, fmtNum, printDocument, modal } from '../ui.js';
 import { state } from '../store.js';
 import { today } from '../model.js';
+import { WINDOW_WALL_FIELDS, WINDOW_WALL_MISSING, windowWallSheet } from '../supervisor-board.js';
 
 const PAGE = 6;
 const view = { date: null, expanded: {}, scope: 'day', query: '', project: '', section: '', status: '', sort: 'row', direction: 1, limit: 60, groupLimit: 6 };
@@ -153,6 +154,33 @@ function printSchedule(date, groups) {
   });
 }
 
+function printWindowWall() {
+  const groups = windowWallSheet(state.dailyOrders || []);
+  const count = groups.reduce((sum, group) => sum + group.rows.length, 0);
+  const body = el('div.print-window-wall', {},
+    el('p.print-window-missing', {},
+      WINDOW_WALL_MISSING.length
+        ? `Not in the imported Daily Schedule, so these columns are omitted: ${WINDOW_WALL_MISSING.join(', ')}.`
+        : ''),
+    ...groups.map((group) => el('section.print-table-group', {},
+      el('h2', {}, group.label),
+      el('table.print-table', {},
+        el('thead', {}, el('tr', {}, ...WINDOW_WALL_FIELDS.map(([, label]) => el('th', {}, label)))),
+        el('tbody', {},
+          ...group.rows.map((row) => el('tr', {}, ...WINDOW_WALL_FIELDS.map(([key]) => el('td', {},
+            key === 'qty' ? fmtNum(row.qty) : (row[key] || '—'))))),
+          el('tr.subtotal', {},
+            el('td', { colspan: String(WINDOW_WALL_FIELDS.length - 1) }, `${group.label} subtotal`),
+            el('td', {}, fmtNum(group.qty))))))));
+  printDocument({
+    title: 'Window Wall',
+    subtitle: 'Daily Schedule · grouped by ship week',
+    meta: [`${count} orders`, 'Landscape · two pages'],
+    body,
+    landscape: true,
+  });
+}
+
 export function renderSchedule(rerender, go) {
   const source = state.dailyOrders || [];
   const dates = [...new Set(source.map((row) => row.cuttingDate).filter(Boolean))].sort();
@@ -188,7 +216,13 @@ export function renderSchedule(rerender, go) {
       el('button.print-action', {
         type: 'button', disabled: !rows.length,
         onclick: () => printSchedule(date, groups),
-      }, icon('print', { size: 17 }), 'Print results')));
+      }, icon('print', { size: 17 }), 'Print results'),
+      el('button.print-action.print-window-wall-open', {
+        type: 'button',
+        disabled: !windowWallSheet(source).length,
+        title: `Omits ${WINDOW_WALL_MISSING.join(', ')} — those columns are not in the imported file`,
+        onclick: () => printWindowWall(),
+      }, icon('print', { size: 17 }), 'Print Window Wall')));
 
   if (!source.length) {
     return el('div.centre.daily-schedule', {}, head,

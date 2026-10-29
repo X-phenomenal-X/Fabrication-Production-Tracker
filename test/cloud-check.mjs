@@ -316,13 +316,9 @@ if (onPhone.employee?.role !== 'LEAD_HAND' || !onPhone.employee?.appAccess
 }
 
 // The phone should be able to work without importing anything itself.
-await phone.click('.mobile-route');
-await phone.waitForSelector('dialog.mobile-nav-dialog');
-await phone.click('.mobile-nav-item:has-text("Rush")');
-await phone.waitForSelector('.rush-line');
-const phoneRush = await phone.$eval('.rush-line .mono.strong', (n) => n.textContent.trim());
-step('phone Rush page shows: ' + phoneRush);
-if (phoneRush !== pcWork.wo) throw new Error('the rushed line is not on the phone Rush page');
+const phoneRush = await phone.evaluate(() => import('/js/model.js').then((m) => m.allRush().map((row) => row.task.wo)));
+step('phone still has the rush flag: ' + phoneRush.join(','));
+if (!phoneRush.includes(pcWork.wo)) throw new Error('the rushed line did not stay in the shared data');
 
 /* ---------- the phone loses signal mid-shift ----------
 

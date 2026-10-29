@@ -6,7 +6,7 @@
 
 import { el, icon, toast, modal, fmtNum, confirmDialog } from '../ui.js';
 import {
-  employeeDirectory, employeeCanUseApp,
+  employeeDirectory, employeeCanUseApp, directoryPeople,
   EMPLOYEE_ROLES, EMPLOYEE_ROLE_LABELS,
 } from '../store.js';
 import { upsertEmployee, importEmployees, archiveEmployee } from '../employees.js';
@@ -206,7 +206,7 @@ function scopeButton(key, label, count, rerender) {
   }, label, el('span', {}, String(count)));
 }
 
-export function renderEmployees(rerender) {
+function retiredEmployeePage(rerender) {
   const records = employeeDirectory();
   const appUsers = records.filter(employeeCanUseApp);
   const inactive = records.filter((record) => !record.active);
@@ -266,4 +266,33 @@ export function renderEmployees(rerender) {
     el('div.employee-privacy', {},
       icon('cloud', { size: 16 }),
       el('span', {}, 'The directory syncs name, department, shift, role and the management flag. There is no sign-in and no name to pick. Roster files, employee IDs and HR details are never uploaded or built into the public website.')));
+}
+
+export function renderEmployees(rerender) {
+  const names = directoryPeople();
+  const input = el('input.employee-add-name', {
+    type: 'text',
+    'aria-label': 'Employee name',
+    placeholder: 'Full name',
+  });
+  const add = (event) => {
+    event?.preventDefault();
+    const name = input.value.trim();
+    if (!name) return;
+    upsertEmployee({ name, role: 'EMPLOYEE', active: true, appAccess: false });
+    input.value = '';
+    toast(`${name} added`);
+    rerender();
+  };
+  return el('div.centre.employees-page', {},
+    el('div.centre-head', {},
+      el('h1.centre-title', {}, 'Employees'),
+      el('div.centre-sub', {}, 'Names for assigning work. This list is not a sign-in.')),
+    el('form.employee-add', { onsubmit: add },
+      input,
+      el('button.primary.employee-add-submit', { type: 'submit' }, 'Add name'),
+      el('button.employee-import', { type: 'button', onclick: () => chooseCrewFile(rerender) }, 'Import names')),
+    names.length
+      ? el('ul.employee-names', {}, ...names.map((name) => el('li', {}, name)))
+      : el('p', {}, 'No names yet. Add one, or import the crew list.'));
 }

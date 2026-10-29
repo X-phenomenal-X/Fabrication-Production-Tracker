@@ -16,6 +16,8 @@ import {
 import { MACHINES, MACHINE_BY_KEY } from '../machines.js';
 import { SHIFTS, shiftContextAt } from '../shifts.js';
 import { focusCentreTask, setAnimatedStatus } from './centre.js';
+import { todoPanel } from './today.js';
+import { supervisorBoard } from '../supervisor-board.js';
 
 const GROUP_PAGE = { Rolling: 'rolling', FOM: 'fom', CNC: 'cnc', Punch: 'punch' };
 /* The crew that just handed over. Day follows the Midnight shift that started
@@ -232,6 +234,38 @@ function healthStat(iconName, value, label, tone = 'work', detail = '') {
       detail ? el('small', {}, detail) : null));
 }
 
+function supervisorStrip(go) {
+  const board = supervisorBoard();
+  const pile = (title, rows, empty) => el('section.sup-list', {},
+    el('h2', {}, title, el('span', {}, String(rows.length))),
+    rows.length
+      ? el('ul', {}, ...rows.slice(0, 6).map((row) => el('li', {},
+        el('b.mono', {}, row.wo || '—'),
+        row.project ? el('span', {}, ` ${row.project}`) : null)))
+      : el('p', {}, empty));
+  return el('section.sup-board', { 'aria-label': 'This shift at a glance' },
+    el('div.sup-shift', {},
+      el('strong', {}, `${board.shift.shift.label} shift`),
+      board.shift.shift.range ? el('span', {}, board.shift.shift.range) : null),
+    el('div.sup-centres', {}, ...board.centres.map((centre) => el('button.sup-centre', {
+      type: 'button',
+      onclick: () => go(centre.page),
+      'aria-label': `${centre.label}: ${centre.done} done of ${centre.plan} planned this shift`,
+    },
+      el('span.sup-centre-label', {}, centre.label),
+      el('span.sup-centre-score', {},
+        el('b', {}, String(centre.done)),
+        el('small', {}, ` / ${centre.plan}`)),
+      el('span.sup-centre-hint', {}, centre.plan ? 'done / planned' : 'none dated for this shift')))),
+    el('div.sup-counts', {},
+      el('div', {}, el('b', {}, String(board.late.length)), el('span', {}, 'Late')),
+      el('div', {}, el('b', {}, String(board.backOrders.length)), el('span', {}, 'Back orders')),
+      el('div', {}, el('b', {}, String(board.stagingTodo)), el('span', {}, 'To stage'))),
+    pile('Late', board.late, 'Nothing is past its cutting date.'),
+    pile('Back orders', board.backOrders, 'No open shortages.'),
+    pile('Still to stage', board.stagingLines, 'Rolling material for this shift is staged or already running.'));
+}
+
 function quickStart(label, detail, iconName, page, go, on) {
   return el('button.overview-quick' + (on ? '.on' : ''), {
     onclick: () => go(page),
@@ -358,7 +392,7 @@ export function renderOverview(rerender, go, sync = null) {
 
   const quick = el('aside.overview-quickstarts', {},
     el('h2', {}, 'Quick starts'),
-    quickStart('Today', 'View today’s plan', 'calendar', 'today', go),
+    quickStart('Back orders', 'Shortages across the floor', 'alert', 'backorders', go),
     quickStart('Stage material', 'Prepare upcoming work', 'staging', 'staging', go),
     quickStart('Die lookup', 'Search dies and components', 'search', 'dies', go),
     quickStart('Write shift update', 'Share notes for the next crew', 'pencil', 'shift', go,
@@ -366,6 +400,8 @@ export function renderOverview(rerender, go, sync = null) {
 
   if (!hasTasks()) {
     return el('div.overview', {},
+      supervisorStrip(go),
+      todoPanel(rerender, go),
       brief,
       renderCommandCenter(rerender, go),
       el('div.overview-layout', {},
@@ -387,6 +423,8 @@ export function renderOverview(rerender, go, sync = null) {
   ].filter(Boolean);
 
   return el('div.overview', {},
+    supervisorStrip(go),
+    todoPanel(rerender, go),
     brief,
     renderCommandCenter(rerender, go),
     el('div.overview-layout', {},
