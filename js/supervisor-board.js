@@ -18,22 +18,15 @@ export const SUPERVISOR_CENTRES = Object.freeze([
   { group: 'Punch', label: 'Multi Punch', page: 'punch' },
 ]);
 
-/** Columns the Daily Schedule import actually keeps. The paper window-wall
-    sheet asks for more; those names are listed and left blank rather than
-    invented. */
+/** The complete Window Wall paper order. Older daily orders may lack these keys. */
 export const WINDOW_WALL_FIELDS = Object.freeze([
-  ['wo', 'W/O'],
-  ['jobCode', 'Job #'],
-  ['project', 'Project'],
-  ['floor', 'Floor'],
-  ['qty', 'Qty'],
-  ['shipDate', 'Ship Date'],
-  ['cuttingDate', 'Cutting'],
-  ['cutStatus', 'Cut'],
-]);
-
-export const WINDOW_WALL_MISSING = Object.freeze([
-  'Assembly', 'Vents', 'Deframes', 'Warehouse', 'HTS', 'Widths', 'Punch', 'VTML', 'SFS', 'LVRS/TC PAN',
+  ['wo', 'W/O'], ['jobCode', 'Job #'], ['project', 'Project'],
+  ['floor', 'Floor'], ['qty', 'Qty'], ['assembly', 'Assembly'],
+  ['vents', 'Vents'], ['deframes', 'Deframes'], ['shipDate', 'Ship Date'],
+  ['cuttingDate', 'Cutting'], ['warehouse', 'Warehouse'],
+  ['cutStatus', 'Cut'], ['hts', 'HTS'], ['widths', 'Widths'],
+  ['punch', 'Punch'], ['vtml', 'VTML'], ['sfs', 'SFS'],
+  ['lvrsTcPan', 'LVRS/TC PAN'],
 ]);
 
 export function centreShiftProgress(lines, shiftDate) {

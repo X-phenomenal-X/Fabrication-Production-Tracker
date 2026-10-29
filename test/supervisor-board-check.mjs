@@ -5,7 +5,7 @@ import { state } from '../js/store.js';
 import { addManualTask } from '../js/store.js';
 import {
   applyShiftWindow, buildShiftDraft, centreShiftProgress, machineShiftNotes,
-  shipWeekStart, windowWallSheet, WINDOW_WALL_FIELDS, WINDOW_WALL_MISSING,
+  shipWeekStart, windowWallSheet, WINDOW_WALL_FIELDS,
   supervisorBoard,
 } from '../js/supervisor-board.js';
 import { shiftContextAt } from '../js/shifts.js';
@@ -63,11 +63,12 @@ if (sheet.length !== 2 || sheet[0].label !== 'Week of 2026-08-10' || sheet[0].qt
   throw new Error('window wall rows were not grouped by ship week: ' + JSON.stringify(sheet));
 }
 if (sheet[1].label !== 'No ship date' || sheet[1].qty !== 1) throw new Error('an undated window wall row was dropped');
-if (WINDOW_WALL_FIELDS.map(([, label]) => label).join(',') !== 'W/O,Job #,Project,Floor,Qty,Ship Date,Cutting,Cut') {
-  throw new Error('the print used a column the import does not have');
+const expectedColumns = 'W/O,Job #,Project,Floor,Qty,Assembly,Vents,Deframes,Ship Date,Cutting,Warehouse,Cut,HTS,Widths,Punch,VTML,SFS,LVRS/TC PAN';
+if (WINDOW_WALL_FIELDS.map(([, label]) => label).join(',') !== expectedColumns) {
+  throw new Error('Window Wall print columns are missing or out of order');
 }
-if (!WINDOW_WALL_MISSING.includes('Assembly') || !WINDOW_WALL_MISSING.includes('Vents') || !WINDOW_WALL_MISSING.includes('LVRS/TC PAN')) {
-  throw new Error('a missing window-wall column was not reported');
+if (WINDOW_WALL_FIELDS.length !== 18 || WINDOW_WALL_FIELDS.some(([key]) => !key)) {
+  throw new Error('Window Wall print fields are incomplete');
 }
 
 state.tasks = [{

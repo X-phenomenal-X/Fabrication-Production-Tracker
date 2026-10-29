@@ -7,7 +7,7 @@
 
 import { readXlsx } from './xlsx.js';
 
-export const DAILY_PARSER_VERSION = 1;
+export const DAILY_PARSER_VERSION = 2;
 const SHEET = 'Daily Sched';
 export const DAILY_SHEET = SHEET;
 const PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
@@ -32,6 +32,10 @@ const ALIASES = {
   cutStatus: [/^CUT(TING)?(\s*STATUS)?$/],
   materialStatus: [/^(MTL|MAT(ERIA)?L)(\s*STATUS)?$/],
   color: [/\bCOLOU?R\b/, /\bFINISH\b/],
+  assembly: [/^ASSEMBLY$/], vents: [/^VENTS$/], deframes: [/^DEFRAMES$/],
+  warehouse: [/^WAREHOUSE$/], hts: [/^HTS$/], widths: [/^WIDTHS$/],
+  punch: [/^PUNCH$/], vtml: [/^VTML$/], sfs: [/^SFS$/],
+  lvrsTcPan: [/^LVRS\s*\/\s*TC\s*PAN$/],
 };
 
 function text(value) {
@@ -69,6 +73,7 @@ function headerMap(sheet) {
     const index = headings.findIndex((heading) => patterns.some((pattern) => pattern.test(String(heading).toUpperCase())));
     if (index >= 0) found[key] = index + 1;
   }
+  // New department columns are optional, never assigned positional fallbacks.
   return { ...FALLBACK, ...found, color: found.color || null };
 }
 
@@ -150,6 +155,16 @@ export async function importDailySchedule(arrayBuffer, { fileName = 'Daily Sched
       cutStatus: text(value(row.cells, columns.cutStatus)),
       materialStatus: text(value(row.cells, columns.materialStatus)),
       color: text(value(row.cells, columns.color)),
+      assembly: text(value(row.cells, columns.assembly)),
+      vents: text(value(row.cells, columns.vents)),
+      deframes: text(value(row.cells, columns.deframes)),
+      warehouse: text(value(row.cells, columns.warehouse)),
+      hts: text(value(row.cells, columns.hts)),
+      widths: text(value(row.cells, columns.widths)),
+      punch: text(value(row.cells, columns.punch)),
+      vtml: text(value(row.cells, columns.vtml)),
+      sfs: text(value(row.cells, columns.sfs)),
+      lvrsTcPan: text(value(row.cells, columns.lvrsTcPan)),
       section,
     });
   }
