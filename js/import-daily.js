@@ -79,8 +79,16 @@ function headerMap(sheet) {
   }
   const found = {};
   for (const [key, patterns] of Object.entries(ALIASES)) {
-    const index = headings.findIndex((heading) => patterns.some((pattern) => pattern.test(String(heading).toUpperCase())));
-    if (index >= 0) found[key] = index + 1;
+    // A bare CUT is a legacy status heading, but it must never outrank
+    // CUT STATUS / CUTTING STATUS when both occur in the same workbook.
+    // Keep all other legacy column aliases and fallback positions unchanged.
+    const indexes = headings.flatMap((heading, index) =>
+      patterns.some((pattern) => pattern.test(String(heading).toUpperCase())) ? [index] : []);
+    if (!indexes.length) continue;
+    const preferred = key === 'cutStatus'
+      ? indexes.find((index) => /^CUT(?:TING)?\\s*STATUS$/.test(String(headings[index]).toUpperCase()))
+      : undefined;
+    found[key] = (preferred ?? indexes[0]) + 1;
   }
   // Match individual cells, not titles accumulated across multiple header rows.
   // Prefer the row containing W/O when available; otherwise inspect top rows.
