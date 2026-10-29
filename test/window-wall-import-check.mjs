@@ -19,7 +19,7 @@ const values = {
   11: 'W', 12: 'READY', 13: 'H', 14: 'WD', 15: 'P',
   16: 'VT', 17: 'SF', 18: 'LV', 19: 'NOT WIDTHS', 20: 'IGNORE', 21: 'IGNORE CUT',
 };
-const sheet = [heads, { 1: 'Fixture' }, { 1: 'WINDOW WALL' }, values];
+const sheet = [heads, { 1: 'Fixture' }, { 1: 'WINDOW WALL' }, {}, {}, {}, values];
 // The parser deliberately skips rows with five or fewer populated cells.
 const parsed = await importDailySchedule(makeWorkbook({ 'Daily Sched': sheet }));
 assert.equal(parsed.rows.length, 1);
