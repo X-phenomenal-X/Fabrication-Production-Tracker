@@ -29,6 +29,37 @@ const TABLE = 'tracker_state';
 
 export const CLOUD_PARTS = ['base', 'work'];
 
+/** The one board behind the shared link. The key is the public publishable
+    key; a secret or service_role key must never be added here. */
+export const DEPARTMENT_CLOUD = Object.freeze({
+  url: 'https://irzuiemjveyjyongotij.supabase.co',
+  key: 'sb_publishable_ZKBk7dgna0bZ4jFKu6GHpQ_eu2-DYE8',
+  site: 'Cutting Dept.',
+});
+
+function departmentCloudAppliesHere() {
+  // A local preview and the automated suite boot this same file. Either one
+  // writing the live project would replace the department's board with
+  // fixture data. The published link and the shared-drive file still connect.
+  if (typeof location === 'undefined') return true;
+  const host = String(location.hostname || '').replace(/^\[|\]$/g, '').toLowerCase();
+  return host !== 'localhost' && host !== '127.0.0.1' && host !== 'app.local'
+    && !host.endsWith('.localhost');
+}
+
+/** Point this device at the shared Cutting board.
+
+    A phone that still has the old placeholder site name, or no site name,
+    is moved onto that board — including its project and publishable key.
+    Any other site name is a different board and is left alone. */
+export function applyDepartmentCloud() {
+  if (!departmentCloudAppliesHere()) return cloudConfig();
+  const saved = cloudConfig();
+  const site = String(saved?.site || '').trim().toLowerCase();
+  if (!saved || site === '' || site === 'cutting') setCloudConfig(DEPARTMENT_CLOUD);
+  return cloudConfig();
+}
+
 export function cloudConfig() {
   try {
     const raw = localStorage.getItem(LS_CLOUD);
@@ -94,7 +125,7 @@ function messageFor(code, status, detail) {
       + `from the setup SQL.${detail ? ` (${detail})` : ''}`;
   }
   if (code === 'auth-required') {
-    return 'Please sign in to keep sharing. Your work is still saved on this phone.';
+    return 'The cloud did not accept this update. Your work is still saved on this phone.';
   }
   if (code === 'not-a-member') {
     return 'You are signed in, but this email is not on the Cutting list yet. '
@@ -115,7 +146,8 @@ async function explain(res, mode) {
     detail = body.message || body.hint || body.error || body.code || '';
   } catch { /* not JSON */ }
   const code = classify(res.status, detail, mode);
-  if (code === 'auth-required') setAuthGate('sign-in');
+  // The department link is anonymous on purpose. A refusal stays a sync
+  // error on the chip; it must not replace the board with a sign-in screen.
   if (code === 'not-a-member') setAuthGate('not-a-member');
   return new CloudError(messageFor(code, res.status, detail), code === 'other' && res.status === 404 ? 'missing-table' : code);
 }

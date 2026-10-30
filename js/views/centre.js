@@ -264,17 +264,13 @@ function taskLine(row, vs, rerender, group) {
         /* Only ever seen through the Parked filter, since a parked line is out
            of every other view — but seen there it has to say what it is, or
            the filter looks like an ordinary queue. */
-        isParked(t) ? el('span.badge-parked', {
-          title: parkedFor(taskStatusKey(t))?.reason || 'Parked — not going to run',
-        }, icon('square', { size: 11 }), 'PARKED') : null,
+        null,
         t.editedAt ? el('span.badge-edited', {
           title: `Edited by ${t.editedBy} · ${fmtWhen(t.editedAt)}`,
         }, 'edited') : null,
         // Not in either workbook. Worth saying on the row, because it changes
         // what a re-import will and will not bring up to date.
-        t.manual ? el('span.badge-manual', {
-          title: `Added by hand by ${t.by} · ${fmtWhen(t.at)} — not in the workbook`,
-        }, icon('pencil', { size: 10 }), 'added here') : null,
+        null,
         // Prepped and waiting. The roller wants to know this before starting,
         // and the stager wants to see that it registered.
         isStaged(t) ? el('span.badge-staged', {
@@ -622,9 +618,7 @@ function lineInspector(row, vs, rerender, group) {
           el('p', {}, 'No rush, shortage or note on this line.')),
 
     el('div.inspector-actions', {},
-      action(t.manual ? 'Edit job' : 'Edit', 'pencil', () => (t.manual
-        ? manualJobDialog({ machine: t.machine, task: t, rerender })
-        : editLine(row, rerender))),
+      t.manual ? null : action('Edit', 'pencil', () => editLine(row, rerender)),
       action(note ? 'Edit note' : 'Note', 'note', () => noteEditor(row, rerender), note ? 'on' : ''),
       canMove ? action(hasQueue(group) ? 'Assign' : 'Move', 'arrow', () => moveDialog([key], group, rerender)) : null,
       /* Where the rest of this work order has got to. Next to Route on
@@ -633,7 +627,6 @@ function lineInspector(row, vs, rerender, group) {
       action('Route', 'list', () => routeDialog(t)),
       action('Rush', 'bolt', () => rushDialog(t, rerender), rush.on ? 'warn' : ''),
       action('Back order', 'alert', () => backOrderDialog(t, rerender), bo.on ? 'bad' : ''),
-      action(parked ? 'Parked' : 'Park', 'square', () => parkDialog(t, rerender), parked ? 'on' : ''),
       action('History', 'clock', () => historyDialog(t))),
   );
 }
@@ -855,9 +848,6 @@ function mobileMachineMenu(machine, groups, sum, vs, rerender) {
 
   modal(`${machine.label} actions`, el('div.mobile-machine-actions', {},
     action('Machine setup', 'gear', () => machineSettings(machine, rerender)),
-    action(`Add a job to ${machine.label}`, 'plus', () => manualJobDialog({
-      machine: machine.key, rerender,
-    })),
     action('Print schedule', 'print', () => printMachineSchedule(machine, groups, sum, vs))), {});
 }
 
@@ -1190,16 +1180,6 @@ function bulkBar(vs, rerender, group) {
     canMove ? el('button.bulk-btn', {
       onclick: () => moveDialog(keys, group, () => { vs.selected.clear(); rerender(); }),
     }, icon('arrow', { size: 14 }), 'Move to') : null,
-    /* Reviewing a stale pile is the case this exists for: select the group,
-       give one reason, done. On the Parked filter the same button is the way
-       back out, because a one-way door is one nobody uses. */
-    el('button.bulk-btn', {
-      onclick: () => {
-        const done = () => { vs.selected.clear(); rerender(); };
-        if (vs.filter === 'PARKED') bulkUnpark(keys, done);
-        else bulkParkDialog(keys, done);
-      },
-    }, icon('square', { size: 14 }), vs.filter === 'PARKED' ? 'Put back' : 'Park'),
     el('button.bulk-x', {
       title: 'Clear selection',
       onclick: () => { vs.selected.clear(); rerender(); },
@@ -1214,9 +1194,6 @@ const FILTERS = [
   { key: 'IN_PROGRESS', label: 'Running' },
   { key: 'RUSH', label: 'Rush' },
   { key: 'BO', label: 'Back order' },
-  // Last, and named for what it holds rather than for a state a line is in:
-  // this is the review list, not another way to work the queue.
-  { key: 'PARKED', label: 'Parked' },
 ];
 
 /** A paper schedule is generated from the queue model, not from the collapsed
@@ -1366,13 +1343,7 @@ export function makeCentreView(group) {
               el('button.iconbtn', {
                 title: 'Set up this machine',
                 onclick: () => machineSettings(machine, rerender),
-              }, icon('gear', { size: 16 })),
-              // Work the schedules do not have yet — a remake, a service
-              // order, anything phoned in — goes on the machine it will run on.
-              el('button.iconbtn', {
-                title: `Add a job to ${machine.label}`,
-                onclick: () => manualJobDialog({ machine: machine.key, rerender }),
-              }, icon('plus', { size: 17 }))),
+              }, icon('gear', { size: 16 }))),
             el('div.centre-sub', {},
               machine.note || '',
               machine.ops != null ? `${machine.note ? ' · ' : ''}${machine.ops} operator${machine.ops === 1 ? '' : 's'}` : ''))),
@@ -1389,7 +1360,6 @@ export function makeCentreView(group) {
         stat(sum.inProgress, 'running', 'work', 'play'),
         stat(sum.open, 'open', '', 'list'),
         stat(sum.overdue, 'overdue', 'bad', 'clock'),
-        sum.parked ? stat(sum.parked, 'parked', 'mute', 'square') : null,
         stat(sum.rush + sum.backOrder, 'B/O & rush', 'bad', 'alert')),
       el('div.progress-cap', {}, `${donePct}% complete · ${fmtNum(sum.done)} of ${fmtNum(sum.total)} lines done`));
 

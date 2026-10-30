@@ -23,6 +23,7 @@ import {
   today, hasTasks, machineConfig, shiftUpdateFor, workInShift, shiftUpdateAge,
   inProgressLines,
 } from '../model.js';
+import { buildShiftDraft } from '../supervisor-board.js';
 import { machinesByGroup, STANDING_ROWS } from '../machines.js';
 import {
   SHIFTS, SHIFT_ORDER, breakRanges, normalizeShift, shiftContextAt, shiftFor, shiftLabel,
@@ -82,11 +83,41 @@ function loadDraft() {
   if (draftKey === key && draft) return draft;
   const saved = currentLog();
   draftKey = key;
-  draft = {
-    rows: JSON.parse(JSON.stringify(saved?.rows || {})),
-    notes: saved?.notes || '',
-  };
+  const hasSaved = saved && (Object.keys(saved.rows || {}).length || String(saved.notes || '').trim());
+  if (hasSaved) {
+    draft = {
+      rows: JSON.parse(JSON.stringify(saved.rows || {})),
+      notes: saved.notes || '',
+    };
+  } else {
+    const filled = buildShiftDraft(view.date, view.shift);
+    draft = { rows: filled.rows, notes: filled.notes };
+  }
   return draft;
+}
+
+function fillBlankFromApp() {
+  const d = loadDraft();
+  const filled = buildShiftDraft(view.date, view.shift);
+  for (const [key, row] of Object.entries(filled.rows)) {
+    if (!hasContent(d.rows[key])) d.rows[key] = { ops: row.ops || '', done: row.done || '', next: '', notes: row.notes || '' };
+  }
+  if (!String(d.notes || '').trim()) d.notes = filled.notes;
+}
+
+async function copyShiftText(log) {
+  const text = asText(log);
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Copied — paste it wherever you need');
+  } catch {
+    const ta = el('textarea', {
+      value: text,
+      style: { width: '100%', minHeight: '340px', fontFamily: 'inherit' },
+    });
+    modal('Shift update text', ta, { wide: true });
+    ta.select();
+  }
 }
 
 function dropDraft() {
@@ -386,6 +417,14 @@ function mobileShiftActions(rerender) {
     view.mode === 'write' && operationalShift() ? el('button.primary', {
       onclick: event => closeThen(event, () => saveDraft(rerender)),
     }, 'Save shift update') : null,
+    view.mode === 'write' ? el('button', {
+      onclick: event => closeThen(event, () => { fillBlankFromApp(); rerender(); toast('Filled the empty boxes from this shift'); }),
+    }, 'Fill from the app') : null,
+    el('button', {
+      onclick: event => closeThen(event, () => copyShiftText({
+        date: view.date, shift: view.shift, rows: loadDraft().rows, notes: loadDraft().notes, by: me(),
+      })),
+    }, 'Copy summary'),
     el('button', {
       onclick: (event) => closeThen(event, () => {
         view.mode = view.mode === 'write' ? 'read' : 'write';
@@ -694,6 +733,16 @@ function writeView(rerender) {
           rerender();
         },
       }, 'Delete') : null,
+      el('button', {
+        type: 'button',
+        onclick: () => { fillBlankFromApp(); rerender(); toast('Filled the empty boxes from this shift'); },
+      }, 'Fill from the app'),
+      el('button', {
+        type: 'button',
+        onclick: () => copyShiftText({
+          date: view.date, shift: view.shift, rows: loadDraft().rows, notes: loadDraft().notes, by: me(),
+        }),
+      }, icon('note', { size: 14 }), 'Copy summary'),
       el('button.primary', {
         onclick: () => saveDraft(rerender),
       }, icon('check', { size: 14 }), 'Save shift update')));
@@ -868,23 +917,7 @@ function readView(rerender) {
       el('span.small.muted', {}, `Written by ${log.by} · ${fmtWhen(log.at)}`),
       el('span.spacer'),
       el('button', {
-        onclick: async () => {
-          const text = asText(log);
-          try {
-            await navigator.clipboard.writeText(text);
-            toast('Copied — paste it wherever you need');
-          } catch {
-            // Clipboard is blocked over file:// in some browsers; fall back to
-            // a selectable box the reader can copy by hand.
-            const ta = el('textarea', {
-              value: text,
-              style: { width: '100%', minHeight: '340px', fontFamily: 'inherit' },
-            });
-            const { modal } = await import('../ui.js');
-            modal('Shift update text', ta, { wide: true });
-            ta.select();
-          }
-        },
+        onclick: () => copyShiftText(log),
       }, icon('note', { size: 14 }), 'Copy as text'),
       canWrite ? el('button.primary', {
         onclick: () => { view.mode = 'write'; rerender(); },

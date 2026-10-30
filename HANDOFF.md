@@ -378,14 +378,14 @@ both survive. It also checks the Setup script matches the migration file.
 
 - **Pages is enabled and deploying.** The workflow triggers on any push and
   publishes only when the ref is the repo's default branch.
-- **Cloud sync is configured and confirmed working** on the user's phone,
-  against a Supabase project, site name `Cutting Dept.`
-- **Credentials are NOT in this repo and must not be.** The repo is **public**.
-  The Supabase URL + publishable (or legacy anon) key lives in each device's
-  `localStorage` under `bv.cutting.cloud`, entered via Setup → Sync across devices.
-  ⚠️ The legacy anon key was pasted into a chat transcript during setup — it is
-  worth replacing with a publishable key in Supabase (Settings → API Keys) and
-  re-entering it on each device. Never use a secret or service_role key.
+- **Cloud sync is built into the shared link.** Opening the published site
+  or the shared-drive file connects to the Cutting department project, site
+  name `Cutting Dept.`. A saved config whose site is `cutting` or blank is
+  migrated to that project. The publishable key is in `js/cloud.js` on
+  purpose. Never add a secret or service_role key.
+- **There is no "Who are you?" picker and no email sign-in nag.** New
+  history is stamped `Team`. Older records keep the name they were saved
+  with. Assignment lists still use the employee directory.
 - **Real work orders and customer names must never be committed.** The test
   fixture is sanitized for exactly this reason; sample workbooks stay outside
   the repo.
@@ -408,11 +408,10 @@ the anon role gets nothing, a signed-in member can read `tracker_state`, and
 only an editor can insert or update it. The wall login is a viewer, including
 on `?monitor`.
 
-Until that script has been run, a device that is already syncing keeps using
-the publishable key, so deploying the new site does not stop the shift. After
-the script, a device that has not signed in shows "Please sign in" and keeps
-its local copy. The first successful sign-in on a phone that already had the
-board sends that local copy up.
+Do not run that lock on the Cutting department project. The shared link
+depends on the publishable key being allowed to read and write. A device
+that has not signed in must keep working, and the board must not ask anyone
+to sign in.
 
 Photo to To-Do no longer uses a shared department code. Deploy
 `photo-to-todos` with JWT verification on. The function checks

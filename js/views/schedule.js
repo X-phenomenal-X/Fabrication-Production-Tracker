@@ -5,6 +5,7 @@
 import { el, icon, chip, fmtDate, fmtNum, printDocument, modal } from '../ui.js';
 import { state } from '../store.js';
 import { today } from '../model.js';
+import { WINDOW_WALL_FIELDS, windowWallSheet } from '../supervisor-board.js';
 
 const PAGE = 6;
 const view = { date: null, expanded: {}, scope: 'day', query: '', project: '', section: '', status: '', sort: 'row', direction: 1, limit: 60, groupLimit: 6 };
@@ -153,6 +154,31 @@ function printSchedule(date, groups) {
   });
 }
 
+function printWindowWall() {
+  const groups = windowWallSheet(state.dailyOrders || []);
+  const count = groups.reduce((sum, group) => sum + group.rows.length, 0);
+  const sections = groups.map((group) => {
+    const header = el('thead', {},
+      el('tr', {}, ...WINDOW_WALL_FIELDS.map(([, label]) => el('th', {}, label))));
+    const entries = group.rows.map((row) => el('tr', {},
+      ...WINDOW_WALL_FIELDS.map(([key]) => el('td', {},
+        key === 'qty' ? fmtNum(row.qty) : (row[key] ?? '')))));
+    const subtotal = el('tr.subtotal', {},
+      ...WINDOW_WALL_FIELDS.map(([key], index) => el('td', {},
+        index === 0 ? `${group.label} subtotal` : key === 'qty' ? fmtNum(group.qty) : '')));
+    return el('section.print-table-group', {},
+      el('h2', {}, group.label),
+      el('table.print-table', {}, header, el('tbody', {}, ...entries, subtotal)));
+  });
+  printDocument({
+    title: 'Window Wall',
+    subtitle: 'Daily Schedule · grouped by ship week',
+    meta: [`${count} orders`, 'Landscape'],
+    body: el('div.print-window-wall', {}, ...sections),
+    landscape: true,
+  });
+}
+
 export function renderSchedule(rerender, go) {
   const source = state.dailyOrders || [];
   const dates = [...new Set(source.map((row) => row.cuttingDate).filter(Boolean))].sort();
@@ -188,7 +214,12 @@ export function renderSchedule(rerender, go) {
       el('button.print-action', {
         type: 'button', disabled: !rows.length,
         onclick: () => printSchedule(date, groups),
-      }, icon('print', { size: 17 }), 'Print results')));
+      }, icon('print', { size: 17 }), 'Print results'),
+      el('button.print-action.print-window-wall-open', {
+        type: 'button',
+        disabled: !windowWallSheet(source).length,
+        onclick: () => printWindowWall(),
+      }, icon('print', { size: 17 }), 'Print Window Wall')));
 
   if (!source.length) {
     return el('div.centre.daily-schedule', {}, head,

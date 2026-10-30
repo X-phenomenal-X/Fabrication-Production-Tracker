@@ -6,7 +6,7 @@
    by the centre view, so there is exactly one place a shortage is recorded. */
 
 import { el, chip, icon, fmtDate, fmtNum, fmtWhen, toast, modal } from '../ui.js';
-import { setBackOrder, clearBackOrder, me, directoryPeople } from '../store.js';
+import { setBackOrder, clearBackOrder, directoryPeople } from '../store.js';
 import {
   allBackOrders, resolveBackOrder, backOrderFor, taskStatusKey, hasTasks,
   machineConfig,
@@ -139,8 +139,6 @@ export function backOrderDialog(task, rerender) {
 
 /* ---------- the page ---------- */
 
-let mineOnly = false;
-
 /* ---------- back orders on a phone ----------
 
    Seventy-eight lines across seven chase lists, twelve screens deep, and two
@@ -237,8 +235,7 @@ export function renderBackOrders(rerender, go) {
         el('button.primary', { onclick: () => go('setup') }, 'Go to Setup')));
   }
 
-  let groups = allBackOrders();
-  if (mineOnly) groups = groups.filter((g) => g.assignee === me());
+  const groups = allBackOrders();
 
   const total = groups.reduce((a, g) => a + g.rows.length, 0);
   const pieces = groups.reduce((a, g) =>
@@ -256,23 +253,14 @@ export function renderBackOrders(rerender, go) {
       el('div.centre-stats', {},
         el('div.cstat' + (total ? '.bad' : ''), {}, el('b', {}, fmtNum(total)), el('i', {}, 'lines')),
         el('div.cstat', {}, el('b', {}, fmtNum(pieces)), el('i', {}, 'pcs short')),
-        el('div.cstat' + (unassigned ? '.warn' : ''), {}, el('b', {}, fmtNum(unassigned)), el('i', {}, 'unassigned')))),
-    el('div.centre-filters', {},
-      el('label.row.small.donetoggle', {},
-        el('input', {
-          type: 'checkbox', checked: mineOnly,
-          onchange: (e) => { mineOnly = e.target.checked; rerender(); },
-        }),
-        `Only mine (${me()})`)));
+        el('div.cstat' + (unassigned ? '.warn' : ''), {}, el('b', {}, fmtNum(unassigned)), el('i', {}, 'unassigned')))));
 
   if (!groups.length) {
     return el('div.centre', {}, head,
       el('div.panel', {}, el('div.empty', {},
         el('div.empty-icon', {}, icon('check', { size: 28 })),
-        el('h3', {}, mineOnly ? 'Nothing assigned to you' : 'No back orders'),
-        el('div', {}, mineOnly
-          ? 'Nothing is waiting on you right now.'
-          : 'Nothing is flagged short of material.'))));
+        el('h3', {}, 'No back orders'),
+        el('div', {}, 'Nothing is flagged short of material.'))));
   }
 
   const sections = groups.map((g) => {

@@ -271,7 +271,8 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.apikey !== ANON) return json(401, { message: 'invalid api key' });
   if (url.pathname.startsWith('/rest/v1/tracker_members')) return json(200, [{ role: memberRole }]);
   if (!url.pathname.startsWith('/rest/v1/tracker_state')) return json(404, { message: 'missing' });
-  if (req.headers.authorization !== `Bearer ${TOKEN}`) return json(401, { message: 'jwt' });
+  const bearer = req.headers.authorization || '';
+  if (bearer !== `Bearer ${TOKEN}` && bearer !== `Bearer ${ANON}`) return json(401, { message: 'jwt' });
 
   if (req.method === 'GET') {
     const site = (url.searchParams.get('site') || '').replace(/^eq\./, '');
@@ -425,6 +426,18 @@ step('bad password wrote nothing');
 const serviceKey = `aaa.${Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64url')}.sig`;
 await fails(() => runImport(argv('--rolling', books.rolling), { env: { ...env, SUPABASE_ANON_KEY: serviceKey } }), /service role/i);
 step('service role key is refused');
+
+resetCloud();
+const authBefore = seen.auth;
+const anonEnv = {
+  SUPABASE_URL: cloud,
+  SUPABASE_ANON_KEY: ANON,
+};
+const anon = await runImport(argv('--rolling', books.rolling), { env: anonEnv });
+must(anon.saved, 'publishable key alone did not save');
+must(table.get('Cutting Dept.|base')?.site === 'Cutting Dept.', 'default site was not Cutting Dept.');
+must(seen.auth === authBefore, 'anonymous import tried to sign in');
+step('publishable key imports into Cutting Dept. without email');
 
 /* ---------- wrong files ---------- */
 

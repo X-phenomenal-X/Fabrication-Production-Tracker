@@ -309,20 +309,16 @@ if (!onPhone.tasks) throw new Error('the phone did not receive the imported sche
 if (onPhone.status !== 'IN_PROGRESS') throw new Error('status did not reach the phone');
 if (!onPhone.rush) throw new Error('rush did not reach the phone');
 if (!onPhone.note) throw new Error('note did not reach the phone');
-if (onPhone.who !== 'Abhay') throw new Error('the update lost who made it');
+if (onPhone.who !== 'Team') throw new Error('the update lost who made it');
 if (onPhone.employee?.role !== 'LEAD_HAND' || !onPhone.employee?.appAccess
     || !onPhone.appUsers.includes('Jordan Lead')) {
   throw new Error('the employee directory or app-user status did not reach the phone');
 }
 
 // The phone should be able to work without importing anything itself.
-await phone.click('.mobile-route');
-await phone.waitForSelector('dialog.mobile-nav-dialog');
-await phone.click('.mobile-nav-item:has-text("Rush")');
-await phone.waitForSelector('.rush-line');
-const phoneRush = await phone.$eval('.rush-line .mono.strong', (n) => n.textContent.trim());
-step('phone Rush page shows: ' + phoneRush);
-if (phoneRush !== pcWork.wo) throw new Error('the rushed line is not on the phone Rush page');
+const phoneRush = await phone.evaluate(() => import('/js/model.js').then((m) => m.allRush().map((row) => row.task.wo)));
+step('phone still has the rush flag: ' + phoneRush.join(','));
+if (!phoneRush.includes(pcWork.wo)) throw new Error('the rushed line did not stay in the shared data');
 
 /* ---------- the phone loses signal mid-shift ----------
 

@@ -361,7 +361,7 @@ header.top {
 .hdr-id { display: flex; align-items: center; gap: var(--s2); min-width: 0; flex-shrink: 0; }
 
 /* The header's width-dependent rules are at the end of this sheet, with the
-   phone and focus blocks, for the same reason: `.whopick` and `nav.tabs button`
+   phone and focus blocks, for the same reason: `nav.tabs button`
    are declared below this point, and an equal-specificity rule that comes
    first simply loses. */
 
@@ -422,13 +422,13 @@ header.top {
    the four department tools sit past a divider, quieter, because they are
    visited rather than lived in. */
 /* The nav scrolls sideways whenever it has to, at every width — not below a
-   breakpoint. Eight pages plus a brand plus a name picker do not fit a
-   1024px tablet either, and a header that silently pushes the whole page
-   sideways is worse than one that scrolls on purpose. */
+   breakpoint. The page list does not fit a 1024px tablet either, and a
+   header that silently pushes the whole page sideways is worse than one
+   that scrolls on purpose. */
 nav.tabs {
   display: flex; align-items: center; gap: var(--s3); flex-wrap: nowrap;
   /* basis 0, not auto: with auto the nav asks for its full content width and
-     pushes the name picker onto a second row on a desk monitor. */
+     drops the header tools onto a second row on a desk monitor. */
   flex: 1 1 0%; min-width: 0; overflow-x: auto;
   scrollbar-width: none; -ms-overflow-style: none;
   padding: 2px 0;
@@ -519,7 +519,6 @@ nav.tabs button:hover:not([aria-current="true"]) { background: var(--panel); col
 .tabsep { width: 1px; align-self: stretch; margin: 4px 0; background: var(--line); flex-shrink: 0; }
 
 .hdr-right { display: flex; align-items: center; gap: var(--s2); flex-shrink: 0; }
-.whopick { width: auto; min-width: 140px; max-width: 190px; }
 
 main { flex: 1; padding: var(--s5) var(--s5) var(--s5); max-width: 1500px; width: 100%; margin: 0 auto; }
 
@@ -741,8 +740,7 @@ dialog footer button { min-height: var(--ctl-lg); }
      Row 1 is identity only — brand, shift, sync — and deliberately carries no
      tap target, because a third 44px control here is what put the old header
      at 121px. Row 2 is where the fingers go: the centre scroller takes the
-     width it needs and the name picker stays pinned beside it, so who-you-are
-     never scrolls out of reach. */
+     width it needs and the header tools stay pinned beside it. */
   header.top { padding: 6px var(--s3) 7px; gap: 6px; row-gap: 6px; }
   .hdr-id { flex-basis: 100%; gap: 6px; }
   .brand small { display: none; }
@@ -2280,14 +2278,6 @@ button.photo-todo-pick {
   .line-iconbtn, .iconbtn { width: var(--tap); height: var(--tap); }
   .pill { padding-left: var(--s4); padding-right: var(--s4); }
 
-  /* Narrow enough to hand the width back to the nav, wide enough to still
-     read a first name — which is all this has to do, since its job is
-     noticing you are signed in as somebody else, not reading your own name. */
-  .whopick {
-    min-width: 0; width: 88px; max-width: 88px;
-    padding: 6px var(--s2); font-size: var(--t-sm);
-  }
-
   /* Machines and filters each keep to one line and scroll sideways, rather
      than wrapping to two rows apiece. Wrapped, they pushed the first actual
      job — the thing the page is for — most of a screen down. */
@@ -2466,7 +2456,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .shift-chip { display: none; }
   nav.tabs { gap: var(--s2); }
   nav.tabs button { padding: 6px 11px; }
-  .whopick { min-width: 110px; max-width: 150px; }
   .has-short .tab-label { display: none; }
   .has-short .tab-short { display: inline; }
 }
@@ -2526,8 +2515,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .stage-pick select, .stage-pick button { flex: 1; min-width: 140px; }
 }
 
-/* Setup lives with the name picker rather than in the nav — configuration, not
-   a page anyone works on. Still shows which page you are on. */
+/* Setup is a gear in the header — configuration, not a page anyone works
+   on. Still shows which page you are on. */
 .hdr-setup { flex-shrink: 0; }
 .hdr-setup.on, .hdr-dies.on {
   background: var(--accent-soft); color: var(--accent);
@@ -3394,7 +3383,6 @@ nav.tabs button[aria-current="true"] .nav-icon {
     order: 2; display: flex; flex-direction: column; align-items: stretch; gap: var(--s2);
     padding-top: var(--s3); border-top: 1px solid var(--line-soft);
   }
-  .whopick { order: 0; width: 100%; min-width: 0; max-width: none; }
   .hdr-tools { order: 1; }
   .hdr-tools .iconbtn {
     flex: 1; width: auto; border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
@@ -3538,7 +3526,7 @@ nav.tabs button[aria-current="true"] .nav-icon {
 
 @media (max-width: 720px) {
   .hdr-tools { gap: var(--s1); }
-  /* Die lookup and Setup live on the same 44px action row as the name picker.
+  /* Die lookup and Setup live on the same 44px action row.
      Hiding them saved width but left both features unreachable on a phone;
      the navigation already scrolls deliberately, so it gives up the width. */
   .hdr-tools .hdr-dies, .hdr-tools .hdr-setup { display: inline-flex; }
@@ -4713,8 +4701,8 @@ button.sync-chip:active { transform: translateY(1px); }
 /* ---------- compact phone shell ----------
 
    One current-page control replaces the twelve-button horizontal rail on a
-   phone. The full map opens as a bottom sheet, while identity and the two
-   global tools remain one tap away. This keeps the same 96px shell budget but
+   phone. The full map opens as a bottom sheet, while the two global tools
+   remain one tap away. This keeps the same 96px shell budget but
    removes the clipped, half-labelled controls visible in the old header. */
 .mobile-route { display: none; }
 
@@ -6660,6 +6648,40 @@ a.resource-download:active, button.resource-download:active { transform: transla
 :root[data-display="monitor"] .signin-form .primary,
 :root[data-display="monitor"] .signin-actions button { min-height: 64px; font-size: 24px; }
 
+/* Supervisor overview: four centres, readable on a phone without scrolling sideways. */
+.sup-board { display: grid; gap: var(--s3); margin-bottom: var(--s4); }
+.sup-shift { display: flex; gap: var(--s2); align-items: baseline; font-size: var(--t-sm); color: var(--ink-2); }
+.sup-centres { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
+@media (min-width: 800px) { .sup-centres { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.sup-centre {
+  display: grid; gap: 2px; min-height: 76px; padding: var(--s3); text-align: left;
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel);
+}
+.sup-centre-label { font-size: var(--t-xs); font-weight: 750; color: var(--ink-2); }
+.sup-centre-score { display: flex; align-items: baseline; gap: 4px; }
+.sup-centre-score b { font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; }
+.sup-centre-score small, .sup-centre-hint { color: var(--ink-3); font-size: var(--t-xs); }
+.sup-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
+.sup-counts div { display: grid; padding: var(--s2); border-radius: var(--r-sm); background: var(--panel-2); }
+.sup-counts b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.sup-counts span, .sup-list h2 span { color: var(--ink-3); font-size: var(--t-xs); font-weight: 650; }
+.sup-list h2 { display: flex; justify-content: space-between; margin: 0 0 var(--s2); font-size: var(--t-sm); }
+.sup-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.sup-list li { min-height: 32px; }
+.employee-names { list-style: none; margin: var(--s4) 0 0; padding: 0; display: grid; gap: var(--s2); }
+.employee-names li { padding: var(--s3); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel); }
+.employee-add { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+.employee-add input { flex: 1 1 180px; min-height: 44px; }
+.print-window-wall { font-size: 11pt; }
+.print-window-wall table { width: 100%; border-collapse: collapse; }
+.print-window-wall th, .print-window-wall td { padding: 4px 5px; font-size: 11pt; }
+.print-window-wall tr.subtotal td { font-weight: 750; border-top: 2px solid currentColor; }
+.print-window-missing { font-size: 10pt; margin: 0 0 8px; }
+@media print {
+  .print-window-wall { font-size: 11pt; }
+  .print-window-wall .print-table-group { break-inside: avoid; }
+}
+
 </style>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231c2245'/%3E%3Crect x='8' y='8' width='9' height='7.5' fill='%2335bce1'/%3E%3Crect x='8' y='16.5' width='9' height='7.5' fill='%231e71ab'/%3E%3Cpath d='M17.5 8h6.25l-3.15 7.5h-3.1zM17.5 16.5h2.7l-2.7 6.5z' fill='%2372b843'/%3E%3C/svg%3E">
 </head>
@@ -6928,27 +6950,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
   });
 
   // js/ui.js
-  var ui_exports = {};
-  __export(ui_exports, {
-    animateHeight: () => animateHeight,
-    bar: () => bar,
-    chip: () => chip,
-    clear: () => clear,
-    confirmDialog: () => confirmDialog,
-    download: () => download,
-    el: () => el,
-    flash: () => flash,
-    fmtDate: () => fmtDate,
-    fmtNum: () => fmtNum,
-    fmtWhen: () => fmtWhen,
-    icon: () => icon,
-    modal: () => modal,
-    panZoomImage: () => panZoomImage,
-    printDocument: () => printDocument,
-    renderDoc: () => renderDoc,
-    toast: () => toast,
-    toastAction: () => toastAction
-  });
   function el(tag, props = {}, ...kids) {
     const [name, ...classes] = tag.split(".");
     const node = document.createElement(name || "div");
@@ -6967,10 +6968,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
       if (kid == null || kid === false) continue;
       node.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
     }
-    return node;
-  }
-  function clear(node) {
-    node.replaceChildren();
     return node;
   }
   function chip(text4, tone = "mute", title) {
@@ -7072,53 +7069,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
       });
     }
     return dlg;
-  }
-  function renderDoc(text4) {
-    const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
-    const lines2 = String(text4 || "").split("\n");
-    let out = "";
-    let list = null;
-    const closeList = () => {
-      if (list) {
-        out += `</${list}>`;
-        list = null;
-      }
-    };
-    for (const raw of lines2) {
-      const line = raw.trimEnd();
-      let m;
-      if (m = line.match(/^###\s+(.*)/)) {
-        closeList();
-        out += `<h4>${esc(m[1])}</h4>`;
-      } else if (m = line.match(/^##\s+(.*)/)) {
-        closeList();
-        out += `<h3>${esc(m[1])}</h3>`;
-      } else if (m = line.match(/^\s*[-*]\s+(.*)/)) {
-        if (list !== "ul") {
-          closeList();
-          out += "<ul>";
-          list = "ul";
-        }
-        out += `<li>${inline(esc(m[1]))}</li>`;
-      } else if (m = line.match(/^\s*\d+[.)]\s+(.*)/)) {
-        if (list !== "ol") {
-          closeList();
-          out += "<ol>";
-          list = "ol";
-        }
-        out += `<li>${inline(esc(m[1]))}</li>`;
-      } else if (!line.trim()) {
-        closeList();
-      } else {
-        closeList();
-        out += `<p>${inline(esc(line))}</p>`;
-      }
-    }
-    closeList();
-    return out;
-    function inline(s) {
-      return s.replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    }
   }
   function download(filename, text4, type = "application/json") {
     const blob = new Blob([text4], { type });
@@ -7313,25 +7263,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
     t.addEventListener("remove", () => clearTimeout(timer));
     return t;
   }
-  function animateHeight(node, expand) {
-    if (typeof node.animate !== "function") return;
-    if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const h = node.scrollHeight;
-    const from = expand ? 0 : h;
-    const to = expand ? h : 0;
-    node.style.overflow = "hidden";
-    const anim = node.animate(
-      [
-        { height: from + "px", opacity: expand ? 0 : 1 },
-        { height: to + "px", opacity: expand ? 1 : 0 }
-      ],
-      { duration: 180, easing: "cubic-bezier(.4,0,.2,1)" }
-    );
-    anim.onfinish = () => {
-      node.style.overflow = "";
-      node.style.height = "";
-    };
-  }
   function flash(node) {
     if (!node || typeof node.animate !== "function") return;
     if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -7391,6 +7322,18 @@ a.resource-download:active, button.resource-download:active { transform: transla
   });
 
   // js/cloud.js
+  function departmentCloudAppliesHere() {
+    if (typeof location === "undefined") return true;
+    const host = String(location.hostname || "").replace(/^\[|\]$/g, "").toLowerCase();
+    return host !== "localhost" && host !== "127.0.0.1" && host !== "app.local" && !host.endsWith(".localhost");
+  }
+  function applyDepartmentCloud() {
+    if (!departmentCloudAppliesHere()) return cloudConfig();
+    const saved = cloudConfig();
+    const site = String(saved?.site || "").trim().toLowerCase();
+    if (!saved || site === "" || site === "cutting") setCloudConfig(DEPARTMENT_CLOUD);
+    return cloudConfig();
+  }
   function cloudConfig() {
     try {
       const raw = localStorage.getItem(LS_CLOUD);
@@ -7441,7 +7384,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
       return `The cloud rejected the key. Check the publishable key (the anon public key on an older project), the Data API grant and the policies from the setup SQL.${detail ? ` (${detail})` : ""}`;
     }
     if (code === "auth-required") {
-      return "Please sign in to keep sharing. Your work is still saved on this phone.";
+      return "The cloud did not accept this update. Your work is still saved on this phone.";
     }
     if (code === "not-a-member") {
       return "You are signed in, but this email is not on the Cutting list yet. Ask a supervisor to add you. Your work is still saved on this phone.";
@@ -7459,7 +7402,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
     } catch {
     }
     const code = classify(res.status, detail, mode);
-    if (code === "auth-required") setAuthGate("sign-in");
     if (code === "not-a-member") setAuthGate("not-a-member");
     return new CloudError(messageFor(code, res.status, detail), code === "other" && res.status === 404 ? "missing-table" : code);
   }
@@ -7612,20 +7554,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
   function noteViewOnly() {
     viewOnlyHandler?.();
   }
-  function bytesToBase64Url(bytes) {
-    let text4 = "";
-    for (const byte of bytes) text4 += String.fromCharCode(byte);
-    return btoa(text4).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  }
-  function randomVerifier() {
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    return bytesToBase64Url(bytes);
-  }
-  async function codeChallenge(verifier) {
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
-    return bytesToBase64Url(new Uint8Array(digest));
-  }
   function jwtPayload(token) {
     try {
       const part = String(token || "").split(".")[1];
@@ -7635,13 +7563,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
     } catch {
       return null;
     }
-  }
-  function redirectUrl() {
-    const url = new URL(location.href);
-    url.hash = "";
-    url.searchParams.delete("code");
-    if (url.searchParams.get("type")) url.searchParams.delete("type");
-    return url.origin + url.pathname + url.search;
   }
   function sessionFromToken(body) {
     const accessToken = body.access_token;
@@ -7673,30 +7594,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
       throw new Error("Could not reach the sign-in service. Check the internet connection. Your work is still saved on this phone.");
     }
     return response;
-  }
-  async function requestMagicLink(email) {
-    const address = String(email || "").trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
-      throw new Error("Enter the email address a supervisor invited.");
-    }
-    const verifier = randomVerifier();
-    localStorage.setItem(LS_VERIFIER, verifier);
-    const response = await authFetch(`/auth/v1/otp?redirect_to=${encodeURIComponent(redirectUrl())}`, {
-      method: "POST",
-      body: JSON.stringify({
-        email: address,
-        create_user: false,
-        code_challenge: await codeChallenge(verifier),
-        code_challenge_method: "s256"
-      })
-    });
-    if (response.status === 429) {
-      throw new Error("Too many sign-in emails. Wait a minute and try again.");
-    }
-    if (response.status >= 500) {
-      throw new Error("The sign-in service is busy. Try again in a minute.");
-    }
-    return "If that email was invited, a sign-in link is on its way. Open it in this same browser.";
   }
   async function exchangeCode(code) {
     const verifier = localStorage.getItem(LS_VERIFIER);
@@ -7826,18 +7723,17 @@ a.resource-download:active, button.resource-download:active { transform: transla
     if (signedInNow && authGate() === "signing-in") setAuthGate(null);
     return { signedInNow };
   }
-  function signOut() {
-    writeSession(null);
-    localStorage.removeItem(LS_VERIFIER);
-    if (gate === "not-a-member" || gate === "signing-in") setAuthGate("sign-in");
-    else emit();
-  }
-  var LS_CLOUD, TABLE, CLOUD_PARTS, CloudError, LS_SESSION, LS_VERIFIER, gate, booting, implicitNow, refreshing, listeners, viewOnlyHandler;
+  var LS_CLOUD, TABLE, CLOUD_PARTS, DEPARTMENT_CLOUD, CloudError, LS_SESSION, LS_VERIFIER, gate, booting, implicitNow, refreshing, listeners, viewOnlyHandler;
   var init_cloud = __esm({
     "js/cloud.js"() {
       LS_CLOUD = "bv.cutting.cloud";
       TABLE = "tracker_state";
       CLOUD_PARTS = ["base", "work"];
+      DEPARTMENT_CLOUD = Object.freeze({
+        url: "https://irzuiemjveyjyongotij.supabase.co",
+        key: "sb_publishable_ZKBk7dgna0bZ4jFKu6GHpQ_eu2-DYE8",
+        site: "Cutting Dept."
+      });
       CloudError = class extends Error {
         constructor(message, code) {
           super(message);
@@ -8038,9 +7934,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
   function me() {
-    const selected = cleanEmployeeName(state.settings.me);
-    if (!selected) return "Unassigned";
-    return appPeople().find((name) => employeeNameKey(name) === employeeNameKey(selected)) || "Unassigned";
+    return "Team";
   }
   function newDeviceId() {
     if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
@@ -8142,26 +8036,8 @@ a.resource-download:active, button.resource-download:active { transform: transla
     if (!record || record.archived || record.active === false) return false;
     return record.legacy || !!record.appAccess && APP_EMPLOYEE_ROLES.has(record.role);
   }
-  function appPeople() {
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (const record of employeeDirectory()) {
-      if (!employeeCanUseApp(record)) continue;
-      const key2 = employeeNameKey(record.name);
-      if (!seen.has(key2)) {
-        seen.add(key2);
-        out.push(record.name);
-      }
-    }
-    return out;
-  }
   function directoryPeople() {
     return employeeDirectory().filter((record) => record.active !== false).map((record) => record.name);
-  }
-  function setCurrentAppUser(name) {
-    const wanted = employeeNameKey(name);
-    state.settings.me = appPeople().find((person) => employeeNameKey(person) === wanted) || null;
-    save();
   }
   function forget(map, key2) {
     if (!DELETABLE.includes(map)) throw new Error(`forget(): ${map} is not a synced record map`);
@@ -8289,46 +8165,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
     }
     if (!next.on) forget("rush", key2);
     else state.rush[key2] = changed(next);
-    save();
-  }
-  function setParked(key2, on, reason = null) {
-    const cur = state.parked[key2] || {};
-    const next = !!on;
-    const text4 = String(reason ?? "").trim() || null;
-    if (!!cur.on === next && (cur.reason ?? null) === text4) return;
-    if (!!cur.on !== next) logChange(key2, "parked", "on", !!cur.on, next);
-    if ((cur.reason ?? null) !== text4) logChange(key2, "parked", "reason", cur.reason ?? null, text4);
-    if (!next) forget("parked", key2);
-    else state.parked[key2] = changed({ on: true, reason: text4 });
-    save();
-  }
-  function setParkedMany(keys, on, reason = null) {
-    const before = keys.map((k) => ({
-      key: k,
-      prev: state.parked[k]?.on ? { on: true, reason: state.parked[k].reason ?? null } : null
-    }));
-    const at = now();
-    const by = me();
-    const text4 = String(reason ?? "").trim() || null;
-    for (const { key: key2, prev } of before) {
-      if (!!prev === !!on && (prev?.reason ?? null) === text4) continue;
-      if (!!prev !== !!on) logChange(key2, "parked", "on", !!prev, !!on);
-      if (on && (prev?.reason ?? null) !== text4) logChange(key2, "parked", "reason", prev?.reason ?? null, text4);
-      if (!on) forget("parked", key2);
-      else state.parked[key2] = changed({ on: true, reason: text4 }, { at, by });
-    }
-    save();
-    return before;
-  }
-  function restoreParked(before) {
-    const at = now();
-    const by = me();
-    for (const { key: key2, prev } of before) {
-      const cur = state.parked[key2]?.on ? { on: true, reason: state.parked[key2].reason ?? null } : null;
-      if (!prev) forget("parked", key2);
-      else state.parked[key2] = changed({ on: true, reason: prev.reason }, { at, by });
-      if (!!cur !== !!prev) logChange(key2, "undo", "parked", !!cur, !!prev);
-    }
     save();
   }
   function clearRush(key2) {
@@ -8946,14 +8782,9 @@ a.resource-download:active, button.resource-download:active { transform: transla
       if (remote?.base) mergeSnapshot(remote.base);
       if (remote?.base || remote?.work) setAuthGate(null);
       persistLocal();
-      const blocked = authGate();
-      setCloudState({
-        at: now(),
-        error: blocked ? cloudState.error || "Please sign in to keep sharing. Your work is still saved on this phone." : null
-      });
+      setCloudState({ at: now(), error: null });
       return { ok: true, hadBase: !!remote?.base, hadWork: !!remote?.work };
     } catch (e) {
-      if (e?.code === "auth-required") setAuthGate("sign-in");
       if (e?.code === "not-a-member") setAuthGate("not-a-member");
       setCloudState({ error: e.message });
       return false;
@@ -9006,7 +8837,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
       } catch (e) {
         ok = false;
         if (attemptedBase) cloudBaseDirty = true;
-        if (e?.code === "auth-required") setAuthGate("sign-in");
         if (e?.code === "not-a-member") setAuthGate("not-a-member");
         setCloudState({ error: e.message });
       } finally {
@@ -9066,6 +8896,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
     }, 3e4);
   }
   async function initCloud({ includeBase = false } = {}) {
+    applyDepartmentCloud();
     if (!cloudEnabled()) return null;
     setCloudState({ on: true });
     if (hasSession()) {
@@ -9278,43 +9109,43 @@ a.resource-download:active, button.resource-download:active { transform: transla
   });
 
   // js/xlsx.js
-  function findEOCD(view6, bytes) {
+  function findEOCD(view5, bytes) {
     const min = Math.max(0, bytes.length - 65557);
     for (let i = bytes.length - 22; i >= min; i--) {
-      if (view6.getUint32(i, true) === SIG_EOCD) return i;
+      if (view5.getUint32(i, true) === SIG_EOCD) return i;
     }
     throw new Error("Not a valid .xlsx file (no ZIP end-of-directory record found).");
   }
   function readDirectory(bytes) {
-    const view6 = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const eocd = findEOCD(view6, bytes);
-    let count = view6.getUint16(eocd + 10, true);
-    let dirOffset = view6.getUint32(eocd + 16, true);
+    const view5 = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const eocd = findEOCD(view5, bytes);
+    let count = view5.getUint16(eocd + 10, true);
+    let dirOffset = view5.getUint32(eocd + 16, true);
     if (dirOffset === 4294967295 || count === 65535) {
       const locatorOff = eocd - 20;
-      if (locatorOff >= 0 && view6.getUint32(locatorOff, true) === SIG_EOCD64_LOC) {
-        const z64 = Number(view6.getBigUint64(locatorOff + 8, true));
-        if (view6.getUint32(z64, true) === SIG_EOCD64) {
-          count = Number(view6.getBigUint64(z64 + 32, true));
-          dirOffset = Number(view6.getBigUint64(z64 + 48, true));
+      if (locatorOff >= 0 && view5.getUint32(locatorOff, true) === SIG_EOCD64_LOC) {
+        const z64 = Number(view5.getBigUint64(locatorOff + 8, true));
+        if (view5.getUint32(z64, true) === SIG_EOCD64) {
+          count = Number(view5.getBigUint64(z64 + 32, true));
+          dirOffset = Number(view5.getBigUint64(z64 + 48, true));
         }
       }
     }
     const entries = /* @__PURE__ */ new Map();
     let p = dirOffset;
     for (let i = 0; i < count; i++) {
-      if (view6.getUint32(p, true) !== SIG_CENTRAL) break;
-      const method = view6.getUint16(p + 10, true);
-      const compSize = view6.getUint32(p + 20, true);
-      const nameLen = view6.getUint16(p + 28, true);
-      const extraLen = view6.getUint16(p + 30, true);
-      const commentLen = view6.getUint16(p + 32, true);
-      const localOffset = view6.getUint32(p + 42, true);
+      if (view5.getUint32(p, true) !== SIG_CENTRAL) break;
+      const method = view5.getUint16(p + 10, true);
+      const compSize = view5.getUint32(p + 20, true);
+      const nameLen = view5.getUint16(p + 28, true);
+      const extraLen = view5.getUint16(p + 30, true);
+      const commentLen = view5.getUint16(p + 32, true);
+      const localOffset = view5.getUint32(p + 42, true);
       const name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nameLen));
       entries.set(name, { method, compSize, localOffset });
       p += 46 + nameLen + extraLen + commentLen;
     }
-    return { entries, bytes, view: view6 };
+    return { entries, bytes, view: view5 };
   }
   async function inflate(raw) {
     const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
@@ -10827,17 +10658,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
       by: rec.by || null
     };
   }
-  function allRush(ref = today()) {
-    const rows = [];
-    for (const t of tasksInScope()) {
-      const task = resolveTask(t);
-      const rush = resolveRush(task, ref);
-      if (!rush.on) continue;
-      if (effectiveTaskStatus(task).key === "DONE") continue;
-      rows.push({ task, rush, machine: assignedMachine(task) });
-    }
-    return rows.sort((a, b) => (a.rush.needBy || a.task.cuttingDate || "9999") < (b.rush.needBy || b.task.cuttingDate || "9999") ? -1 : 1);
-  }
   function backOrderFor(key2) {
     return state.backOrder?.[key2] || null;
   }
@@ -11031,10 +10851,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
       backOrders: open.filter((r) => r.bo.on),
       finishedToday: rows.filter((r) => r.status.key === "DONE" && String(r.status.at || "").slice(0, 10) === ref)
     };
-  }
-  function shiftWritten(date3, shift2) {
-    const log = state.shiftLogs?.[`${date3}|${shift2}`];
-    return !!(log && (Object.keys(log.rows || {}).length || (log.notes || "").trim()));
   }
   function routeTable() {
     const byDie = /* @__PURE__ */ new Map();
@@ -12333,7 +12149,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
     const drawing = drawingFor(assembly.sa);
     const { reference, record: referenceRecord } = assemblyReferenceProfile(assembly);
     const referenceImage = referenceRecord ? imageMap?.[referenceRecord.key] : null;
-    const roleLabel2 = {
+    const roleLabel = {
       exterior: "Exterior",
       upperTB: "Upper T-break",
       lowerTB: "Lower T-break",
@@ -12375,7 +12191,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
         reference ? el("span", {}, "The source row names one profile; it does not define a four-part rolled assembly.") : coverage.missingRoles.length ? el(
           "span",
           {},
-          `Unverified: ${coverage.missingRoles.map((role) => roleLabel2[role]).join(", ")}`
+          `Unverified: ${coverage.missingRoles.map((role) => roleLabel[role]).join(", ")}`
         ) : null
       ),
       el(
@@ -12504,13 +12320,13 @@ a.resource-download:active, button.resource-download:active { transform: transla
     const { reference, record: referenceRecord } = assemblyReferenceProfile(assembly);
     const referenceImage = referenceRecord ? imageMap?.[referenceRecord.key] : null;
     if (referenceRecord && !imageMap) ensureExtrusionImages(rerender);
-    const roleLabel2 = {
+    const roleLabel = {
       exterior: "Exterior",
       upperTB: "Upper T-break",
       lowerTB: "Lower T-break",
       interior: "Interior"
     };
-    const missing = coverage.missingRoles.map((part) => roleLabel2[part]);
+    const missing = coverage.missingRoles.map((part) => roleLabel[part]);
     const forms = dieForms(assembly.sa);
     const related = lookupDie(forms.part).usedIn.filter((row) => row.sa !== assembly.sa);
     const componentCount = verified.length + recovered.length + references.length;
@@ -13152,486 +12968,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
     }
   });
 
-  // js/photo-todos.js
-  var photo_todos_exports = {};
-  __export(photo_todos_exports, {
-    normalizePhotoTodoResult: () => normalizePhotoTodoResult,
-    openPhotoTodoDialog: () => openPhotoTodoDialog,
-    preparePhoto: () => preparePhoto
-  });
-  function cleanText(value2, max = 240) {
-    return String(value2 || "").replace(/\s+/g, " ").trim().slice(0, max);
-  }
-  function normalizePhotoTodoResult(value2, people = []) {
-    const source = value2 && typeof value2 === "object" ? value2 : {};
-    const known = new Map(people.map((name) => [String(name).trim().toLowerCase(), name]));
-    const tasks = (Array.isArray(source.tasks) ? source.tasks : []).slice(0, 12).map((task) => {
-      const text4 = cleanText(task?.text);
-      const proposed = cleanText(task?.assignee, 80);
-      const assignee = proposed ? known.get(proposed.toLowerCase()) || null : null;
-      const confidence = Math.max(0, Math.min(1, Number(task?.confidence) || 0));
-      return {
-        text: text4,
-        assignee,
-        unmatchedAssignee: proposed && !assignee ? proposed : null,
-        evidence: cleanText(task?.evidence, 180),
-        confidence,
-        needsReview: !!task?.needsReview || confidence < 0.75 || !!proposed && !assignee,
-        selected: !!text4
-      };
-    }).filter((task) => task.text);
-    return {
-      summary: cleanText(source.summary, 300) || (tasks.length ? `I found ${tasks.length} possible To-Do${tasks.length === 1 ? "" : "s"}.` : "I could not find a clear action."),
-      tasks
-    };
-  }
-  function imageElement(url) {
-    return new Promise((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = () => reject(new Error("That image could not be read. Try a JPEG, PNG or WebP photo."));
-      image.src = url;
-    });
-  }
-  async function preparePhoto(file) {
-    if (!file || !ALLOWED_TYPES.has(String(file.type).toLowerCase())) {
-      throw new Error("Choose a JPEG, PNG or WebP photo.");
-    }
-    if (file.size > MAX_FILE_BYTES) {
-      throw new Error("That photo is over 15 MB. Choose a smaller image.");
-    }
-    const url = URL.createObjectURL(file);
-    try {
-      const image = await imageElement(url);
-      const sourceWidth = image.naturalWidth || image.width;
-      const sourceHeight = image.naturalHeight || image.height;
-      if (!sourceWidth || !sourceHeight) throw new Error("That image has no readable dimensions.");
-      const scale = Math.min(1, 1600 / Math.max(sourceWidth, sourceHeight));
-      const width = Math.max(1, Math.round(sourceWidth * scale));
-      const height = Math.max(1, Math.round(sourceHeight * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext("2d", { alpha: false });
-      if (!context) throw new Error("This browser could not prepare the photo.");
-      context.fillStyle = "#ffffff";
-      context.fillRect(0, 0, width, height);
-      context.drawImage(image, 0, 0, width, height);
-      let dataUrl = canvas.toDataURL("image/jpeg", 0.82);
-      if (dataUrl.length > MAX_DATA_URL) dataUrl = canvas.toDataURL("image/jpeg", 0.68);
-      if (dataUrl.length > MAX_DATA_URL) {
-        throw new Error("That photo is still too detailed to send. Crop it closer and try again.");
-      }
-      return { dataUrl, width, height, name: cleanText(file.name, 120) || "Photo" };
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  }
-  async function requestCandidates({ cfg, image, guidance }) {
-    const session = await freshSession();
-    if (!session?.accessToken || membershipRole() !== "editor") {
-      const error = new Error("Sign in as an editor to use photo analysis.");
-      error.status = 401;
-      throw error;
-    }
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 45e3);
-    let response;
-    try {
-      response = await fetch(`${cfg.url}/functions/v1/photo-to-todos`, {
-        method: "POST",
-        headers: {
-          apikey: cfg.key,
-          Authorization: `Bearer ${session.accessToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ image, guidance: cleanText(guidance, 500) }),
-        signal: controller.signal
-      });
-    } catch (error) {
-      if (error?.name === "AbortError") throw new Error("The photo took too long to read. Try again.");
-      throw new Error("Photo analysis needs an internet connection. Your regular To-Do list still works offline.");
-    } finally {
-      clearTimeout(timer);
-    }
-    let body = {};
-    try {
-      body = await response.json();
-    } catch {
-    }
-    if (!response.ok) {
-      const message = cleanText(body?.error || body?.message, 220);
-      const fallback = response.status === 404 || response.status === 503 ? "Photo to To-Do is not switched on for this site yet. Ask a supervisor to finish cloud setup." : response.status === 429 ? "Photo analysis is busy right now. Wait a moment and try again." : `Photo analysis failed (${response.status}).`;
-      const error = new Error(message || fallback);
-      error.status = response.status;
-      throw error;
-    }
-    return body;
-  }
-  function openPhotoTodoDialog({
-    ref,
-    people = [],
-    defaultAssignee = null,
-    rerender,
-    go: go2,
-    origin = null
-  } = {}) {
-    const cfg = cloudConfig();
-    const role = membershipRole();
-    const state2 = {
-      phase: !cfg ? "cloud" : role === "editor" ? "choose" : role === "viewer" ? "viewer" : "signin",
-      photo: null,
-      guidance: "",
-      result: null,
-      error: ""
-    };
-    const flow = el("div.photo-todo-flow", { "aria-live": "polite" });
-    const dlg = modal("Photo to To-Do", flow, { wide: true, origin });
-    dlg.classList.add("photo-todo-dialog");
-    const footer = el("footer.photo-todo-footer");
-    const cameraInput = el("input.photo-todo-file", {
-      type: "file",
-      accept: "image/jpeg,image/png,image/webp",
-      capture: "environment",
-      "aria-label": "Take a photo for To-Do conversion",
-      style: { display: "none" }
-    });
-    const uploadInput = el("input.photo-todo-file", {
-      type: "file",
-      accept: "image/jpeg,image/png,image/webp",
-      "aria-label": "Choose a photo for To-Do conversion",
-      style: { display: "none" }
-    });
-    dlg.append(cameraInput, uploadInput, footer);
-    const action = (label, onClick, className = "", props = {}) => el("button", { class: className, onclick: onClick, ...props }, label);
-    const close = () => dlg.close();
-    const selectedCount = () => state2.result?.tasks.filter((task) => task.selected && task.text.trim()).length || 0;
-    async function takeFile(file) {
-      if (!file) return;
-      state2.phase = "prepare";
-      state2.error = "";
-      render2();
-      try {
-        state2.photo = await preparePhoto(file);
-        state2.phase = "preview";
-      } catch (error) {
-        state2.error = error.message;
-        state2.phase = "choose";
-      }
-      cameraInput.value = "";
-      uploadInput.value = "";
-      render2();
-    }
-    cameraInput.addEventListener("change", () => takeFile(cameraInput.files?.[0]));
-    uploadInput.addEventListener("change", () => takeFile(uploadInput.files?.[0]));
-    async function analyse() {
-      if (!navigator.onLine) {
-        state2.error = "Photo analysis needs an internet connection. Your regular To-Do list still works offline.";
-        render2();
-        return;
-      }
-      state2.phase = "analyse";
-      state2.error = "";
-      render2();
-      try {
-        const raw = await requestCandidates({
-          cfg,
-          image: state2.photo.dataUrl,
-          guidance: state2.guidance
-        });
-        state2.result = normalizePhotoTodoResult(raw, people);
-        for (const task of state2.result.tasks) {
-          if (!task.assignee && !task.unmatchedAssignee) task.assignee = defaultAssignee || null;
-        }
-        state2.phase = "review";
-      } catch (error) {
-        if (error.status === 401 || error.status === 403) {
-          state2.phase = membershipRole() === "viewer" ? "viewer" : "signin";
-          state2.error = error.message;
-        } else {
-          state2.phase = "preview";
-          state2.error = error.message;
-        }
-      }
-      render2();
-    }
-    function addSelected() {
-      const chosen = state2.result.tasks.filter((task) => task.selected && task.text.trim());
-      for (const task of chosen) {
-        addTodo(task.text, { date: ref, assignee: task.assignee || null });
-      }
-      if (!chosen.length) return;
-      toast(`${chosen.length} To-Do${chosen.length === 1 ? "" : "s"} added from the photo`);
-      close();
-      rerender?.();
-    }
-    function errorBanner() {
-      return state2.error ? el("div.photo-todo-error", { role: "alert" }, icon("alert", { size: 17 }), state2.error) : null;
-    }
-    function privacyNote() {
-      return el(
-        "div.photo-todo-privacy",
-        {},
-        icon("cloud", { size: 15 }),
-        el(
-          "span",
-          {},
-          el("strong", {}, "Online review only. "),
-          "The photo is not saved; only To-Dos you approve are synced."
-        )
-      );
-    }
-    function renderSignIn() {
-      flow.replaceChildren(
-        el(
-          "div.photo-todo-intro",
-          {},
-          el("div.photo-todo-mark", {}, icon("sparkles", { size: 24 })),
-          el(
-            "div",
-            {},
-            el("h2", {}, "Sign in as an editor"),
-            el("p", {}, "Photo analysis is only for an invited editor. Sign in from Setup, then come back. The normal To-Do list still works.")
-          )
-        ),
-        errorBanner(),
-        privacyNote()
-      );
-      footer.replaceChildren(
-        action("Cancel", close),
-        action("Open Setup", () => {
-          close();
-          go2?.("setup");
-        }, "primary")
-      );
-    }
-    function renderViewer() {
-      flow.replaceChildren(
-        el(
-          "div.photo-todo-intro",
-          {},
-          el("div.photo-todo-mark", {}, icon("cloud", { size: 24 })),
-          el(
-            "div",
-            {},
-            el("h2", {}, "View only"),
-            el("p", {}, "This account can watch the board. Photo analysis stays with the editors.")
-          )
-        ),
-        errorBanner()
-      );
-      footer.replaceChildren(action("Close", close, "primary"));
-    }
-    function renderChoose() {
-      flow.replaceChildren(
-        el(
-          "div.photo-todo-intro",
-          {},
-          el("div.photo-todo-mark", {}, icon("camera", { size: 24 })),
-          el(
-            "div",
-            {},
-            el("h2", {}, "Turn floor notes into a clean list"),
-            el("p", {}, "Photograph a handwritten list, whiteboard or printed note. You will review every item before anything is added.")
-          )
-        ),
-        errorBanner(),
-        el(
-          "div.photo-todo-picks",
-          {},
-          el(
-            "button.photo-todo-pick.primary",
-            { onclick: () => cameraInput.click() },
-            icon("camera", { size: 21 }),
-            el("span", {}, el("strong", {}, "Take photo"), el("small", {}, "Use the rear camera"))
-          ),
-          el(
-            "button.photo-todo-pick",
-            { onclick: () => uploadInput.click() },
-            icon("upload", { size: 21 }),
-            el("span", {}, el("strong", {}, "Choose image"), el("small", {}, "JPEG, PNG or WebP"))
-          )
-        ),
-        privacyNote()
-      );
-      footer.replaceChildren(action("Cancel", close));
-    }
-    function renderBusy(label, copy) {
-      flow.replaceChildren(el(
-        "div.photo-todo-busy",
-        {},
-        el("span.spinner", { "aria-hidden": "true" }),
-        el("strong", {}, label),
-        el("p", {}, copy)
-      ));
-      footer.replaceChildren(action("Cancel", close));
-    }
-    function renderPreview() {
-      const guidance = el("textarea", {
-        rows: 2,
-        maxlength: 500,
-        value: state2.guidance,
-        placeholder: "Optional: \u201COnly actions for afternoon shift\u201D",
-        "aria-label": "Optional guidance for the photo",
-        oninput: (event) => {
-          state2.guidance = event.target.value;
-        }
-      });
-      flow.replaceChildren(
-        errorBanner(),
-        el(
-          "div.photo-todo-preview",
-          {},
-          el("img", { src: state2.photo.dataUrl, alt: "Photo selected for To-Do review" }),
-          el(
-            "div",
-            {},
-            el("strong", {}, state2.photo.name),
-            el("span.small.muted", {}, `${state2.photo.width} \xD7 ${state2.photo.height} prepared for review`)
-          )
-        ),
-        el("label.photo-todo-field", {}, el("span", {}, "Anything I should focus on?"), guidance),
-        privacyNote()
-      );
-      footer.replaceChildren(
-        action("Choose another", () => {
-          state2.phase = "choose";
-          state2.error = "";
-          render2();
-        }),
-        action("Find To-Dos", analyse, "primary")
-      );
-    }
-    function renderReview() {
-      const list = el("div.photo-todo-candidates");
-      state2.result.tasks.forEach((task, index) => {
-        const checkbox = el("input", {
-          type: "checkbox",
-          checked: task.selected,
-          "aria-label": `Include To-Do ${index + 1}`,
-          onchange: (event) => {
-            task.selected = event.target.checked;
-            renderFooter();
-          }
-        });
-        const text4 = el("textarea", {
-          rows: 2,
-          value: task.text,
-          maxlength: 240,
-          "aria-label": `To-Do ${index + 1} text`,
-          oninput: (event) => {
-            task.text = event.target.value;
-            renderFooter();
-          }
-        });
-        const who = el(
-          "select",
-          {
-            "aria-label": `Assign To-Do ${index + 1}`,
-            onchange: (event) => {
-              task.assignee = event.target.value || null;
-            }
-          },
-          el(
-            "option",
-            { value: "", selected: !task.assignee },
-            task.unmatchedAssignee ? `Unassigned \xB7 \u201C${task.unmatchedAssignee}\u201D not recognized` : "Anyone"
-          ),
-          ...people.map((person) => el("option", { value: person, selected: task.assignee === person }, person))
-        );
-        list.append(el(
-          "article.photo-todo-candidate" + (task.needsReview ? ".review" : ""),
-          {},
-          el(
-            "label.photo-todo-select",
-            {},
-            checkbox,
-            el("span", {}, `To-Do ${index + 1}`),
-            task.needsReview ? el("span.photo-todo-review-flag", {}, "Check wording") : null
-          ),
-          text4,
-          el(
-            "div.photo-todo-candidate-meta",
-            {},
-            who,
-            task.evidence ? el("span", {}, `Read from photo: ${task.evidence}`) : null
-          )
-        ));
-      });
-      flow.replaceChildren(
-        el(
-          "div.photo-todo-answer",
-          {},
-          icon("sparkles", { size: 20 }),
-          el("div", {}, el("strong", {}, "Photo assistant"), el("p", {}, state2.result.summary))
-        ),
-        list,
-        state2.result.tasks.length ? privacyNote() : el(
-          "div.empty",
-          {},
-          el("h3", {}, "No clear actions found"),
-          el("p", {}, "Try a closer photo or tell me what part of the note matters.")
-        )
-      );
-      renderFooter();
-    }
-    function renderFooter() {
-      if (state2.phase !== "review") return;
-      const count = selectedCount();
-      footer.replaceChildren(
-        action("Back to photo", () => {
-          state2.phase = "preview";
-          render2();
-        }),
-        action(`Add selected (${count})`, addSelected, "primary", { disabled: !count })
-      );
-    }
-    function render2() {
-      if (state2.phase === "cloud") {
-        flow.replaceChildren(el(
-          "div.photo-todo-intro",
-          {},
-          el("div.photo-todo-mark", {}, icon("cloud", { size: 24 })),
-          el(
-            "div",
-            {},
-            el("h2", {}, "Connect Sync across devices first"),
-            el("p", {}, "Photo analysis runs through the department\u2019s protected cloud function. The normal To-Do list remains available without it.")
-          )
-        ));
-        footer.replaceChildren(action("Cancel", close), action("Open Setup", () => {
-          close();
-          go2?.("setup");
-        }, "primary"));
-      } else if (state2.phase === "signin") renderSignIn();
-      else if (state2.phase === "viewer") renderViewer();
-      else if (state2.phase === "choose") renderChoose();
-      else if (state2.phase === "prepare") renderBusy("Preparing the photo\u2026", "Shrinking it on this device before anything is sent.");
-      else if (state2.phase === "preview") renderPreview();
-      else if (state2.phase === "analyse") renderBusy("Reading the photo\u2026", "Looking only for explicit, actionable work.");
-      else if (state2.phase === "review") renderReview();
-    }
-    dlg.addEventListener("close", () => {
-      state2.photo = null;
-      state2.result = null;
-      cameraInput.value = "";
-      uploadInput.value = "";
-    }, { once: true });
-    render2();
-    return dlg;
-  }
-  var MAX_FILE_BYTES, MAX_DATA_URL, ALLOWED_TYPES;
-  var init_photo_todos = __esm({
-    "js/photo-todos.js"() {
-      init_ui();
-      init_store();
-      init_cloud();
-      MAX_FILE_BYTES = 15 * 1024 * 1024;
-      MAX_DATA_URL = 52e5;
-      ALLOWED_TYPES = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "image/webp"]);
-    }
-  });
-
   // js/floor-operations.js
   function machineTarget(machine, input) {
     const number2 = (key2, label, { optional = false, whole = false } = {}) => {
@@ -13720,7 +13056,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
   function acknowledgeHandover(date3, shift2) {
     const log = state.shiftLogs[`${date3}|${shift2}`];
     if (!log) throw new Error("Save the handover first.");
-    if (!me() || me() === "Unassigned") throw new Error("Select your app user before acknowledging.");
+    if (!me()) throw new Error("Could not record the acknowledgement.");
     saveShiftLog(date3, shift2, { acknowledgement: { by: me(), at: (/* @__PURE__ */ new Date()).toISOString(), signature: handoverSignature(log) } });
   }
   function csvCell(value2) {
@@ -13896,6 +13232,161 @@ a.resource-download:active, button.resource-download:active { transform: transla
     }
   });
 
+  // js/supervisor-board.js
+  function centreShiftProgress(lines2, shiftDate) {
+    return SUPERVISOR_CENTRES.map((centre) => {
+      const planned = lines2.filter((line) => line.group === centre.group && !line.parked && line.cuttingDate === shiftDate);
+      const done = planned.filter((line) => line.status === "DONE");
+      const qty = (rows) => rows.reduce((sum, line) => sum + (Number(line.qty) || 0), 0);
+      return { ...centre, plan: planned.length, done: done.length, planQty: qty(planned), doneQty: qty(done) };
+    });
+  }
+  function shipWeekStart(iso) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
+    const date3 = /* @__PURE__ */ new Date(`${iso}T00:00:00Z`);
+    if (Number.isNaN(date3.getTime())) return "";
+    const day = date3.getUTCDay() || 7;
+    date3.setUTCDate(date3.getUTCDate() - day + 1);
+    return date3.toISOString().slice(0, 10);
+  }
+  function windowWallSheet(orders = []) {
+    const rows = orders.filter((order) => /WINDOW WALL/i.test(String(order?.section || "")));
+    const groups = /* @__PURE__ */ new Map();
+    for (const row of rows) {
+      const start = shipWeekStart(row.shipDate);
+      const label = start ? `Week of ${start}` : "No ship date";
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push(row);
+    }
+    return [...groups.entries()].sort((a, b) => {
+      if (a[0] === "No ship date") return 1;
+      if (b[0] === "No ship date") return -1;
+      return a[0] < b[0] ? -1 : 1;
+    }).map(([label, items]) => ({
+      label,
+      rows: items,
+      qty: items.reduce((sum, row) => sum + (Number(row.qty) || 0), 0)
+    }));
+  }
+  function machineShiftNotes({ done = [], running = [], backOrders = [] } = {}) {
+    const doneLines = done.map((line) => [line.wo, line.project].filter(Boolean).join(" "));
+    const runningLines = running.map((line) => `${[line.wo, line.project].filter(Boolean).join(" ")} I.P`);
+    const shortages = backOrders.map((line) => {
+      const qty = line.qty != null && line.qty !== "" ? ` ${line.qty} short` : "";
+      return `B/O ${[line.wo, line.project].filter(Boolean).join(" ")}${qty}`.trim();
+    });
+    return {
+      ops: done.length ? String(done.length) : "",
+      done: [...doneLines, ...runningLines].join("\n"),
+      next: "",
+      notes: shortages.join("\n")
+    };
+  }
+  function lineLabel(task) {
+    return { wo: task.wo, project: task.project || "" };
+  }
+  function buildShiftDraft(date3, shiftKey) {
+    const rows = {};
+    const shortages = [];
+    for (const group of allBackOrders()) {
+      for (const row of group.rows) {
+        shortages.push({
+          machine: row.machine,
+          wo: row.task.wo,
+          project: row.task.project || "",
+          qty: row.bo.qty
+        });
+      }
+    }
+    for (const machine of MACHINES) {
+      if (machine.queue) continue;
+      const moved = workInShift(machine.key, date3, shiftKey);
+      const done = moved.filter((item) => item.to === "DONE").map((item) => lineLabel(item.task));
+      const running = moved.filter((item) => item.to === "IN_PROGRESS").map((item) => lineLabel(item.task));
+      const backOrders = shortages.filter((item) => item.machine === machine.key);
+      const notes = machineShiftNotes({ done, running, backOrders });
+      if (notes.ops || notes.done || notes.notes) rows[machine.key] = notes;
+    }
+    if (shortages.length) {
+      rows.backorder = machineShiftNotes({
+        backOrders: shortages.map((item) => ({ ...item, project: MACHINE_BY_KEY[item.machine]?.label || item.project }))
+      });
+    }
+    const issues = openTodos(date3).open.map((item) => item.text).filter(Boolean);
+    return { rows, notes: issues.join("\n") };
+  }
+  function supervisorBoard(ref = today(), now2 = /* @__PURE__ */ new Date()) {
+    const shift2 = shiftContextAt(ref, now2);
+    const lines2 = tasksInScope().map((task) => {
+      const resolved = resolveTask(task);
+      const machine = assignedMachine(resolved);
+      return {
+        group: MACHINE_BY_KEY[machine]?.group || "",
+        cuttingDate: resolved.cuttingDate || "",
+        status: effectiveTaskStatus(resolved).key,
+        parked: isParked(resolved),
+        qty: resolved.qty,
+        wo: resolved.wo,
+        project: resolved.project || "",
+        machine
+      };
+    });
+    const late = lines2.filter((line) => !line.parked && line.status !== "DONE" && line.cuttingDate && line.cuttingDate < shift2.date);
+    const backOrders = allBackOrders().flatMap((group) => group.rows.map((row) => ({
+      wo: row.task.wo,
+      project: row.task.project || "",
+      machine: row.machine,
+      qty: row.bo.qty
+    })));
+    const staging = stagingQueue({ ref: shift2.date });
+    return {
+      shift: shift2,
+      centres: centreShiftProgress(lines2, shift2.date),
+      late,
+      backOrders,
+      stagingLines: staging.todo.slice(0, 8).map((row) => ({ wo: row.task.wo, project: row.task.project || "" })),
+      stagingTodo: staging.todo.length,
+      stagingReady: staging.staged.length,
+      todos: openTodos(shift2.date)
+    };
+  }
+  var SUPERVISOR_CENTRES, WINDOW_WALL_FIELDS, WINDOW_WALL_MISSING;
+  var init_supervisor_board = __esm({
+    "js/supervisor-board.js"() {
+      init_machines();
+      init_model();
+      init_shifts();
+      SUPERVISOR_CENTRES = Object.freeze([
+        { group: "Rolling", label: "Rolling", page: "rolling" },
+        { group: "FOM", label: "FOM", page: "fom" },
+        { group: "CNC", label: "CNC & FMC", page: "cnc" },
+        { group: "Punch", label: "Multi Punch", page: "punch" }
+      ]);
+      WINDOW_WALL_FIELDS = Object.freeze([
+        ["wo", "W/O"],
+        ["jobCode", "Job #"],
+        ["project", "Project"],
+        ["floor", "Floor"],
+        ["qty", "Qty"],
+        ["shipDate", "Ship Date"],
+        ["cuttingDate", "Cutting"],
+        ["cutStatus", "Cut"]
+      ]);
+      WINDOW_WALL_MISSING = Object.freeze([
+        "Assembly",
+        "Vents",
+        "Deframes",
+        "Warehouse",
+        "HTS",
+        "Widths",
+        "Punch",
+        "VTML",
+        "SFS",
+        "LVRS/TC PAN"
+      ]);
+    }
+  });
+
   // js/views/shiftupdate.js
   function shiftDef(value2 = view.shift, date3 = view.date) {
     return shiftFor(value2, date3) || {
@@ -13924,11 +13415,39 @@ a.resource-download:active, button.resource-download:active { transform: transla
     if (draftKey === key2 && draft) return draft;
     const saved = currentLog();
     draftKey = key2;
-    draft = {
-      rows: JSON.parse(JSON.stringify(saved?.rows || {})),
-      notes: saved?.notes || ""
-    };
+    const hasSaved = saved && (Object.keys(saved.rows || {}).length || String(saved.notes || "").trim());
+    if (hasSaved) {
+      draft = {
+        rows: JSON.parse(JSON.stringify(saved.rows || {})),
+        notes: saved.notes || ""
+      };
+    } else {
+      const filled = buildShiftDraft(view.date, view.shift);
+      draft = { rows: filled.rows, notes: filled.notes };
+    }
     return draft;
+  }
+  function fillBlankFromApp() {
+    const d = loadDraft();
+    const filled = buildShiftDraft(view.date, view.shift);
+    for (const [key2, row] of Object.entries(filled.rows)) {
+      if (!hasContent(d.rows[key2])) d.rows[key2] = { ops: row.ops || "", done: row.done || "", next: "", notes: row.notes || "" };
+    }
+    if (!String(d.notes || "").trim()) d.notes = filled.notes;
+  }
+  async function copyShiftText(log) {
+    const text4 = asText(log);
+    try {
+      await navigator.clipboard.writeText(text4);
+      toast("Copied \u2014 paste it wherever you need");
+    } catch {
+      const ta = el("textarea", {
+        value: text4,
+        style: { width: "100%", minHeight: "340px", fontFamily: "inherit" }
+      });
+      modal("Shift update text", ta, { wide: true });
+      ta.select();
+    }
   }
   function dropDraft() {
     draft = null;
@@ -14231,6 +13750,22 @@ ${add2.join("\n")}` : add2.join("\n");
       view.mode === "write" && operationalShift() ? el("button.primary", {
         onclick: (event) => closeThen(event, () => saveDraft(rerender))
       }, "Save shift update") : null,
+      view.mode === "write" ? el("button", {
+        onclick: (event) => closeThen(event, () => {
+          fillBlankFromApp();
+          rerender();
+          toast("Filled the empty boxes from this shift");
+        })
+      }, "Fill from the app") : null,
+      el("button", {
+        onclick: (event) => closeThen(event, () => copyShiftText({
+          date: view.date,
+          shift: view.shift,
+          rows: loadDraft().rows,
+          notes: loadDraft().notes,
+          by: me()
+        }))
+      }, "Copy summary"),
       el(
         "button",
         {
@@ -14636,6 +14171,24 @@ ${add2.join("\n")}` : add2.join("\n");
             rerender();
           }
         }, "Delete") : null,
+        el("button", {
+          type: "button",
+          onclick: () => {
+            fillBlankFromApp();
+            rerender();
+            toast("Filled the empty boxes from this shift");
+          }
+        }, "Fill from the app"),
+        el("button", {
+          type: "button",
+          onclick: () => copyShiftText({
+            date: view.date,
+            shift: view.shift,
+            rows: loadDraft().rows,
+            notes: loadDraft().notes,
+            by: me()
+          })
+        }, icon("note", { size: 14 }), "Copy summary"),
         el("button.primary", {
           onclick: () => saveDraft(rerender)
         }, icon("check", { size: 14 }), "Save shift update")
@@ -14847,21 +14400,7 @@ ${add2.join("\n")}` : add2.join("\n");
         el("span.small.muted", {}, `Written by ${log.by} \xB7 ${fmtWhen(log.at)}`),
         el("span.spacer"),
         el("button", {
-          onclick: async () => {
-            const text4 = asText(log);
-            try {
-              await navigator.clipboard.writeText(text4);
-              toast("Copied \u2014 paste it wherever you need");
-            } catch {
-              const ta = el("textarea", {
-                value: text4,
-                style: { width: "100%", minHeight: "340px", fontFamily: "inherit" }
-              });
-              const { modal: modal2 } = await Promise.resolve().then(() => (init_ui(), ui_exports));
-              modal2("Shift update text", ta, { wide: true });
-              ta.select();
-            }
-          }
+          onclick: () => copyShiftText(log)
         }, icon("note", { size: 14 }), "Copy as text"),
         canWrite ? el("button.primary", {
           onclick: () => {
@@ -15115,6 +14654,7 @@ ${add2.join("\n")}` : add2.join("\n");
       init_ui();
       init_store();
       init_model();
+      init_supervisor_board();
       init_machines();
       init_shifts();
       CENTRES = [
@@ -15142,6 +14682,486 @@ ${add2.join("\n")}` : add2.join("\n");
       draftKey = null;
       PRIMARY_STANDING = /* @__PURE__ */ new Set(["backorder"]);
       showExtraStanding = false;
+    }
+  });
+
+  // js/photo-todos.js
+  var photo_todos_exports = {};
+  __export(photo_todos_exports, {
+    normalizePhotoTodoResult: () => normalizePhotoTodoResult,
+    openPhotoTodoDialog: () => openPhotoTodoDialog,
+    preparePhoto: () => preparePhoto
+  });
+  function cleanText(value2, max = 240) {
+    return String(value2 || "").replace(/\s+/g, " ").trim().slice(0, max);
+  }
+  function normalizePhotoTodoResult(value2, people = []) {
+    const source = value2 && typeof value2 === "object" ? value2 : {};
+    const known = new Map(people.map((name) => [String(name).trim().toLowerCase(), name]));
+    const tasks = (Array.isArray(source.tasks) ? source.tasks : []).slice(0, 12).map((task) => {
+      const text4 = cleanText(task?.text);
+      const proposed = cleanText(task?.assignee, 80);
+      const assignee = proposed ? known.get(proposed.toLowerCase()) || null : null;
+      const confidence = Math.max(0, Math.min(1, Number(task?.confidence) || 0));
+      return {
+        text: text4,
+        assignee,
+        unmatchedAssignee: proposed && !assignee ? proposed : null,
+        evidence: cleanText(task?.evidence, 180),
+        confidence,
+        needsReview: !!task?.needsReview || confidence < 0.75 || !!proposed && !assignee,
+        selected: !!text4
+      };
+    }).filter((task) => task.text);
+    return {
+      summary: cleanText(source.summary, 300) || (tasks.length ? `I found ${tasks.length} possible To-Do${tasks.length === 1 ? "" : "s"}.` : "I could not find a clear action."),
+      tasks
+    };
+  }
+  function imageElement(url) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("That image could not be read. Try a JPEG, PNG or WebP photo."));
+      image.src = url;
+    });
+  }
+  async function preparePhoto(file) {
+    if (!file || !ALLOWED_TYPES.has(String(file.type).toLowerCase())) {
+      throw new Error("Choose a JPEG, PNG or WebP photo.");
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      throw new Error("That photo is over 15 MB. Choose a smaller image.");
+    }
+    const url = URL.createObjectURL(file);
+    try {
+      const image = await imageElement(url);
+      const sourceWidth = image.naturalWidth || image.width;
+      const sourceHeight = image.naturalHeight || image.height;
+      if (!sourceWidth || !sourceHeight) throw new Error("That image has no readable dimensions.");
+      const scale = Math.min(1, 1600 / Math.max(sourceWidth, sourceHeight));
+      const width = Math.max(1, Math.round(sourceWidth * scale));
+      const height = Math.max(1, Math.round(sourceHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d", { alpha: false });
+      if (!context) throw new Error("This browser could not prepare the photo.");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+      let dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+      if (dataUrl.length > MAX_DATA_URL) dataUrl = canvas.toDataURL("image/jpeg", 0.68);
+      if (dataUrl.length > MAX_DATA_URL) {
+        throw new Error("That photo is still too detailed to send. Crop it closer and try again.");
+      }
+      return { dataUrl, width, height, name: cleanText(file.name, 120) || "Photo" };
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+  async function requestCandidates({ cfg, image, guidance }) {
+    const session = await freshSession();
+    if (!session?.accessToken || membershipRole() !== "editor") {
+      const error = new Error("Photo analysis is unavailable on this shared link.");
+      error.status = 401;
+      throw error;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 45e3);
+    let response;
+    try {
+      response = await fetch(`${cfg.url}/functions/v1/photo-to-todos`, {
+        method: "POST",
+        headers: {
+          apikey: cfg.key,
+          Authorization: `Bearer ${session.accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ image, guidance: cleanText(guidance, 500) }),
+        signal: controller.signal
+      });
+    } catch (error) {
+      if (error?.name === "AbortError") throw new Error("The photo took too long to read. Try again.");
+      throw new Error("Photo analysis needs an internet connection. Your regular To-Do list still works offline.");
+    } finally {
+      clearTimeout(timer);
+    }
+    let body = {};
+    try {
+      body = await response.json();
+    } catch {
+    }
+    if (!response.ok) {
+      const message = cleanText(body?.error || body?.message, 220);
+      const fallback = response.status === 404 || response.status === 503 ? "Photo to To-Do is not switched on for this site yet. Ask a supervisor to finish cloud setup." : response.status === 429 ? "Photo analysis is busy right now. Wait a moment and try again." : `Photo analysis failed (${response.status}).`;
+      const error = new Error(message || fallback);
+      error.status = response.status;
+      throw error;
+    }
+    return body;
+  }
+  function openPhotoTodoDialog({
+    ref,
+    people = [],
+    defaultAssignee = null,
+    rerender,
+    go: go2,
+    origin = null
+  } = {}) {
+    const cfg = cloudConfig();
+    const role = membershipRole();
+    const state2 = {
+      phase: !cfg ? "cloud" : role === "editor" ? "choose" : role === "viewer" ? "viewer" : "signin",
+      photo: null,
+      guidance: "",
+      result: null,
+      error: ""
+    };
+    const flow = el("div.photo-todo-flow", { "aria-live": "polite" });
+    const dlg = modal("Photo to To-Do", flow, { wide: true, origin });
+    dlg.classList.add("photo-todo-dialog");
+    const footer = el("footer.photo-todo-footer");
+    const cameraInput = el("input.photo-todo-file", {
+      type: "file",
+      accept: "image/jpeg,image/png,image/webp",
+      capture: "environment",
+      "aria-label": "Take a photo for To-Do conversion",
+      style: { display: "none" }
+    });
+    const uploadInput = el("input.photo-todo-file", {
+      type: "file",
+      accept: "image/jpeg,image/png,image/webp",
+      "aria-label": "Choose a photo for To-Do conversion",
+      style: { display: "none" }
+    });
+    dlg.append(cameraInput, uploadInput, footer);
+    const action = (label, onClick, className = "", props = {}) => el("button", { class: className, onclick: onClick, ...props }, label);
+    const close = () => dlg.close();
+    const selectedCount = () => state2.result?.tasks.filter((task) => task.selected && task.text.trim()).length || 0;
+    async function takeFile(file) {
+      if (!file) return;
+      state2.phase = "prepare";
+      state2.error = "";
+      render2();
+      try {
+        state2.photo = await preparePhoto(file);
+        state2.phase = "preview";
+      } catch (error) {
+        state2.error = error.message;
+        state2.phase = "choose";
+      }
+      cameraInput.value = "";
+      uploadInput.value = "";
+      render2();
+    }
+    cameraInput.addEventListener("change", () => takeFile(cameraInput.files?.[0]));
+    uploadInput.addEventListener("change", () => takeFile(uploadInput.files?.[0]));
+    async function analyse() {
+      if (!navigator.onLine) {
+        state2.error = "Photo analysis needs an internet connection. Your regular To-Do list still works offline.";
+        render2();
+        return;
+      }
+      state2.phase = "analyse";
+      state2.error = "";
+      render2();
+      try {
+        const raw = await requestCandidates({
+          cfg,
+          image: state2.photo.dataUrl,
+          guidance: state2.guidance
+        });
+        state2.result = normalizePhotoTodoResult(raw, people);
+        for (const task of state2.result.tasks) {
+          if (!task.assignee && !task.unmatchedAssignee) task.assignee = defaultAssignee || null;
+        }
+        state2.phase = "review";
+      } catch (error) {
+        if (error.status === 401 || error.status === 403) {
+          state2.phase = membershipRole() === "viewer" ? "viewer" : "signin";
+          state2.error = error.message;
+        } else {
+          state2.phase = "preview";
+          state2.error = error.message;
+        }
+      }
+      render2();
+    }
+    function addSelected() {
+      const chosen = state2.result.tasks.filter((task) => task.selected && task.text.trim());
+      for (const task of chosen) {
+        addTodo(task.text, { date: ref, assignee: task.assignee || null });
+      }
+      if (!chosen.length) return;
+      toast(`${chosen.length} To-Do${chosen.length === 1 ? "" : "s"} added from the photo`);
+      close();
+      rerender?.();
+    }
+    function errorBanner() {
+      return state2.error ? el("div.photo-todo-error", { role: "alert" }, icon("alert", { size: 17 }), state2.error) : null;
+    }
+    function privacyNote() {
+      return el(
+        "div.photo-todo-privacy",
+        {},
+        icon("cloud", { size: 15 }),
+        el(
+          "span",
+          {},
+          el("strong", {}, "Online review only. "),
+          "The photo is not saved; only To-Dos you approve are synced."
+        )
+      );
+    }
+    function renderSignIn() {
+      flow.replaceChildren(
+        el(
+          "div.photo-todo-intro",
+          {},
+          el("div.photo-todo-mark", {}, icon("sparkles", { size: 24 })),
+          el(
+            "div",
+            {},
+            el("h2", {}, "Photo analysis is unavailable"),
+            el("p", {}, "This shared link does not ask anyone to sign in. Add the To-Do by hand. The normal list still works.")
+          )
+        ),
+        errorBanner(),
+        privacyNote()
+      );
+      footer.replaceChildren(
+        action("Cancel", close),
+        action("Open Setup", () => {
+          close();
+          go2?.("setup");
+        }, "primary")
+      );
+    }
+    function renderViewer() {
+      flow.replaceChildren(
+        el(
+          "div.photo-todo-intro",
+          {},
+          el("div.photo-todo-mark", {}, icon("cloud", { size: 24 })),
+          el(
+            "div",
+            {},
+            el("h2", {}, "View only"),
+            el("p", {}, "This account can watch the board. Photo analysis stays with the editors.")
+          )
+        ),
+        errorBanner()
+      );
+      footer.replaceChildren(action("Close", close, "primary"));
+    }
+    function renderChoose() {
+      flow.replaceChildren(
+        el(
+          "div.photo-todo-intro",
+          {},
+          el("div.photo-todo-mark", {}, icon("camera", { size: 24 })),
+          el(
+            "div",
+            {},
+            el("h2", {}, "Turn floor notes into a clean list"),
+            el("p", {}, "Photograph a handwritten list, whiteboard or printed note. You will review every item before anything is added.")
+          )
+        ),
+        errorBanner(),
+        el(
+          "div.photo-todo-picks",
+          {},
+          el(
+            "button.photo-todo-pick.primary",
+            { onclick: () => cameraInput.click() },
+            icon("camera", { size: 21 }),
+            el("span", {}, el("strong", {}, "Take photo"), el("small", {}, "Use the rear camera"))
+          ),
+          el(
+            "button.photo-todo-pick",
+            { onclick: () => uploadInput.click() },
+            icon("upload", { size: 21 }),
+            el("span", {}, el("strong", {}, "Choose image"), el("small", {}, "JPEG, PNG or WebP"))
+          )
+        ),
+        privacyNote()
+      );
+      footer.replaceChildren(action("Cancel", close));
+    }
+    function renderBusy(label, copy) {
+      flow.replaceChildren(el(
+        "div.photo-todo-busy",
+        {},
+        el("span.spinner", { "aria-hidden": "true" }),
+        el("strong", {}, label),
+        el("p", {}, copy)
+      ));
+      footer.replaceChildren(action("Cancel", close));
+    }
+    function renderPreview() {
+      const guidance = el("textarea", {
+        rows: 2,
+        maxlength: 500,
+        value: state2.guidance,
+        placeholder: "Optional: \u201COnly actions for afternoon shift\u201D",
+        "aria-label": "Optional guidance for the photo",
+        oninput: (event) => {
+          state2.guidance = event.target.value;
+        }
+      });
+      flow.replaceChildren(
+        errorBanner(),
+        el(
+          "div.photo-todo-preview",
+          {},
+          el("img", { src: state2.photo.dataUrl, alt: "Photo selected for To-Do review" }),
+          el(
+            "div",
+            {},
+            el("strong", {}, state2.photo.name),
+            el("span.small.muted", {}, `${state2.photo.width} \xD7 ${state2.photo.height} prepared for review`)
+          )
+        ),
+        el("label.photo-todo-field", {}, el("span", {}, "Anything I should focus on?"), guidance),
+        privacyNote()
+      );
+      footer.replaceChildren(
+        action("Choose another", () => {
+          state2.phase = "choose";
+          state2.error = "";
+          render2();
+        }),
+        action("Find To-Dos", analyse, "primary")
+      );
+    }
+    function renderReview() {
+      const list = el("div.photo-todo-candidates");
+      state2.result.tasks.forEach((task, index) => {
+        const checkbox = el("input", {
+          type: "checkbox",
+          checked: task.selected,
+          "aria-label": `Include To-Do ${index + 1}`,
+          onchange: (event) => {
+            task.selected = event.target.checked;
+            renderFooter();
+          }
+        });
+        const text4 = el("textarea", {
+          rows: 2,
+          value: task.text,
+          maxlength: 240,
+          "aria-label": `To-Do ${index + 1} text`,
+          oninput: (event) => {
+            task.text = event.target.value;
+            renderFooter();
+          }
+        });
+        const who = el(
+          "select",
+          {
+            "aria-label": `Assign To-Do ${index + 1}`,
+            onchange: (event) => {
+              task.assignee = event.target.value || null;
+            }
+          },
+          el(
+            "option",
+            { value: "", selected: !task.assignee },
+            task.unmatchedAssignee ? `Unassigned \xB7 \u201C${task.unmatchedAssignee}\u201D not recognized` : "Anyone"
+          ),
+          ...people.map((person) => el("option", { value: person, selected: task.assignee === person }, person))
+        );
+        list.append(el(
+          "article.photo-todo-candidate" + (task.needsReview ? ".review" : ""),
+          {},
+          el(
+            "label.photo-todo-select",
+            {},
+            checkbox,
+            el("span", {}, `To-Do ${index + 1}`),
+            task.needsReview ? el("span.photo-todo-review-flag", {}, "Check wording") : null
+          ),
+          text4,
+          el(
+            "div.photo-todo-candidate-meta",
+            {},
+            who,
+            task.evidence ? el("span", {}, `Read from photo: ${task.evidence}`) : null
+          )
+        ));
+      });
+      flow.replaceChildren(
+        el(
+          "div.photo-todo-answer",
+          {},
+          icon("sparkles", { size: 20 }),
+          el("div", {}, el("strong", {}, "Photo assistant"), el("p", {}, state2.result.summary))
+        ),
+        list,
+        state2.result.tasks.length ? privacyNote() : el(
+          "div.empty",
+          {},
+          el("h3", {}, "No clear actions found"),
+          el("p", {}, "Try a closer photo or tell me what part of the note matters.")
+        )
+      );
+      renderFooter();
+    }
+    function renderFooter() {
+      if (state2.phase !== "review") return;
+      const count = selectedCount();
+      footer.replaceChildren(
+        action("Back to photo", () => {
+          state2.phase = "preview";
+          render2();
+        }),
+        action(`Add selected (${count})`, addSelected, "primary", { disabled: !count })
+      );
+    }
+    function render2() {
+      if (state2.phase === "cloud") {
+        flow.replaceChildren(el(
+          "div.photo-todo-intro",
+          {},
+          el("div.photo-todo-mark", {}, icon("cloud", { size: 24 })),
+          el(
+            "div",
+            {},
+            el("h2", {}, "Connect Sync across devices first"),
+            el("p", {}, "Photo analysis runs through the department\u2019s protected cloud function. The normal To-Do list remains available without it.")
+          )
+        ));
+        footer.replaceChildren(action("Cancel", close), action("Open Setup", () => {
+          close();
+          go2?.("setup");
+        }, "primary"));
+      } else if (state2.phase === "signin") renderSignIn();
+      else if (state2.phase === "viewer") renderViewer();
+      else if (state2.phase === "choose") renderChoose();
+      else if (state2.phase === "prepare") renderBusy("Preparing the photo\u2026", "Shrinking it on this device before anything is sent.");
+      else if (state2.phase === "preview") renderPreview();
+      else if (state2.phase === "analyse") renderBusy("Reading the photo\u2026", "Looking only for explicit, actionable work.");
+      else if (state2.phase === "review") renderReview();
+    }
+    dlg.addEventListener("close", () => {
+      state2.photo = null;
+      state2.result = null;
+      cameraInput.value = "";
+      uploadInput.value = "";
+    }, { once: true });
+    render2();
+    return dlg;
+  }
+  var MAX_FILE_BYTES, MAX_DATA_URL, ALLOWED_TYPES;
+  var init_photo_todos = __esm({
+    "js/photo-todos.js"() {
+      init_ui();
+      init_store();
+      init_cloud();
+      MAX_FILE_BYTES = 15 * 1024 * 1024;
+      MAX_DATA_URL = 52e5;
+      ALLOWED_TYPES = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "image/webp"]);
     }
   });
 
@@ -15606,128 +15626,6 @@ create policy "member reads own row"
     }
   });
 
-  // js/views/signin.js
-  var signin_exports = {};
-  __export(signin_exports, {
-    emailForm: () => emailForm,
-    renderAuthGate: () => renderAuthGate
-  });
-  function renderAuthGate({ gate: gate2, onReady } = {}) {
-    const signingIn = gate2 === "signing-in";
-    const missing = gate2 === "not-a-member";
-    const session = authSession();
-    const title = signingIn ? "Signing you in" : missing ? "Not on the list yet" : "Please sign in";
-    const copy = signingIn ? "Opening your sign-in link. Your work stays on this phone either way." : missing ? "This email is signed in, but a supervisor still needs to add it as an editor or as the view-only wall screen. Nothing on this phone was deleted." : "The shared board is locked. Sign in with the email a supervisor invited. Everything you already did is still saved on this phone.";
-    const screen = el(
-      "main.signin-screen",
-      {},
-      el("p.signin-kicker", {}, "BV Cutting"),
-      el("h1", {}, title),
-      el("p.signin-copy", {}, copy)
-    );
-    if (!signingIn && !missing) screen.append(emailForm());
-    if (missing) {
-      screen.append(el("p.signin-copy", {}, session?.email || "Signed in"));
-      screen.append(el(
-        "div.signin-actions",
-        {},
-        el("button.primary", {
-          type: "button",
-          onclick: async (event) => {
-            const button2 = event.currentTarget;
-            button2.disabled = true;
-            try {
-              await refreshMembership();
-              await onReady?.();
-            } catch (error) {
-              toast(error.message);
-            } finally {
-              button2.disabled = false;
-            }
-          }
-        }, "Check again"),
-        el("button", { type: "button", onclick: () => signOut() }, "Use a different email")
-      ));
-    }
-    screen.append(el(
-      "div.signin-actions",
-      {},
-      el("button", {
-        type: "button",
-        onclick: () => {
-          download(`cutting-tracker-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`, exportJson());
-          toast("Backup saved");
-        }
-      }, icon("download", { size: 16 }), " Export a backup")
-    ));
-    if (membershipRole() === "viewer") {
-      screen.append(el("p.signin-note", {}, "This account can only view the board."));
-    }
-    return screen;
-  }
-  function emailForm({ compact: compact3 = false } = {}) {
-    const session = authSession();
-    if (session?.email && (session.role === "editor" || session.role === "viewer" || session.role === "legacy")) {
-      const label = session.role === "viewer" ? "View only" : session.role === "legacy" ? "Signed in" : "Editor";
-      return el(
-        "div.signin-signed-in",
-        {},
-        el("p", {}, el("strong", {}, session.email), el("span.signin-role", {}, label)),
-        el("button", {
-          type: "button",
-          onclick: () => signOut()
-        }, "Sign out")
-      );
-    }
-    let message = "";
-    const status = el("p.signin-status", { role: "status" });
-    const input = el("input", {
-      type: "email",
-      inputmode: "email",
-      autocomplete: "email",
-      autocapitalize: "none",
-      spellcheck: "false",
-      placeholder: "name@company.com",
-      "aria-label": "Email address"
-    });
-    const button2 = el("button.primary", { type: "button" }, "Email me a sign-in link");
-    button2.addEventListener("click", async () => {
-      button2.disabled = true;
-      message = "";
-      status.textContent = "";
-      try {
-        message = await requestMagicLink(input.value);
-        status.textContent = message;
-      } catch (error) {
-        message = error.message;
-        status.textContent = message;
-      } finally {
-        button2.disabled = false;
-      }
-    });
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") button2.click();
-    });
-    return el(
-      "form.signin-form",
-      {
-        onsubmit: (event) => event.preventDefault()
-      },
-      compact3 ? null : el("label.field", {}, el("span", {}, "Invited email"), input),
-      compact3 ? input : null,
-      button2,
-      status,
-      el("p.signin-note", {}, "There is no sign-up. A supervisor invites you, then the link in that email signs you in.")
-    );
-  }
-  var init_signin = __esm({
-    "js/views/signin.js"() {
-      init_ui();
-      init_store();
-      init_cloud();
-    }
-  });
-
   // js/views/schedule.js
   var schedule_exports = {};
   __export(schedule_exports, {
@@ -15946,6 +15844,51 @@ create policy "member reads own row"
       landscape: true
     });
   }
+  function printWindowWall() {
+    const groups = windowWallSheet(state.dailyOrders || []);
+    const count = groups.reduce((sum, group) => sum + group.rows.length, 0);
+    const body = el(
+      "div.print-window-wall",
+      {},
+      el(
+        "p.print-window-missing",
+        {},
+        WINDOW_WALL_MISSING.length ? `Not in the imported Daily Schedule, so these columns are omitted: ${WINDOW_WALL_MISSING.join(", ")}.` : ""
+      ),
+      ...groups.map((group) => el(
+        "section.print-table-group",
+        {},
+        el("h2", {}, group.label),
+        el(
+          "table.print-table",
+          {},
+          el("thead", {}, el("tr", {}, ...WINDOW_WALL_FIELDS.map(([, label]) => el("th", {}, label)))),
+          el(
+            "tbody",
+            {},
+            ...group.rows.map((row) => el("tr", {}, ...WINDOW_WALL_FIELDS.map(([key2]) => el(
+              "td",
+              {},
+              key2 === "qty" ? fmtNum(row.qty) : row[key2] || "\u2014"
+            )))),
+            el(
+              "tr.subtotal",
+              {},
+              el("td", { colspan: String(WINDOW_WALL_FIELDS.length - 1) }, `${group.label} subtotal`),
+              el("td", {}, fmtNum(group.qty))
+            )
+          )
+        )
+      ))
+    );
+    printDocument({
+      title: "Window Wall",
+      subtitle: "Daily Schedule \xB7 grouped by ship week",
+      meta: [`${count} orders`, "Landscape \xB7 two pages"],
+      body,
+      landscape: true
+    });
+  }
   function renderSchedule(rerender, go2) {
     const source = state.dailyOrders || [];
     const dates = [...new Set(source.map((row) => row.cuttingDate).filter(Boolean))].sort();
@@ -15988,7 +15931,13 @@ create policy "member reads own row"
           type: "button",
           disabled: !rows.length,
           onclick: () => printSchedule(date3, groups)
-        }, icon("print", { size: 17 }), "Print results")
+        }, icon("print", { size: 17 }), "Print results"),
+        el("button.print-action.print-window-wall-open", {
+          type: "button",
+          disabled: !windowWallSheet(source).length,
+          title: `Omits ${WINDOW_WALL_MISSING.join(", ")} \u2014 those columns are not in the imported file`,
+          onclick: () => printWindowWall()
+        }, icon("print", { size: 17 }), "Print Window Wall")
       )
     );
     if (!source.length) {
@@ -16169,6 +16118,7 @@ create policy "member reads own row"
       init_ui();
       init_store();
       init_model();
+      init_supervisor_board();
       PAGE2 = 6;
       view2 = { date: null, expanded: {}, scope: "day", query: "", project: "", section: "", status: "", sort: "row", direction: 1, limit: 60, groupLimit: 6 };
       filterPanel = null;
@@ -16949,32 +16899,6 @@ create policy "member reads own row"
     if (added || updated || peopleChanged) save();
     return { added, updated, unchanged, total: added + updated + unchanged };
   }
-  function archiveEmployee(recordOrId) {
-    const candidate = typeof recordOrId === "object" ? recordOrId : null;
-    const suppliedId = String(candidate?.id || recordOrId || "");
-    const existing = suppliedId && !suppliedId.startsWith("legacy:") ? state.employees?.[suppliedId] : null;
-    const name = cleanEmployeeName(existing?.name || candidate?.name);
-    if (!name) return false;
-    const id = existing ? suppliedId : uniqueEmployeeId(null, name);
-    const record = changedEmployee({
-      ...existing || {},
-      id,
-      name,
-      department: cleanEmployeeName(existing?.department || candidate?.department),
-      shift: employeeShift(existing?.shift || candidate?.shift),
-      role: employeeRole(existing?.role || candidate?.role),
-      active: false,
-      appAccess: false,
-      archived: true,
-      aliases: [...new Set([...existing?.aliases || [], ...candidate?.aliases || []].map(cleanEmployeeName).filter(Boolean))],
-      source: existing?.source || "manual",
-      manualFields: ["name", "department", "shift", "role", "active", "appAccess"]
-    });
-    state.employees = { ...state.employees || {}, [id]: record };
-    if (employeeNameKey(state.settings.me) === employeeNameKey(name)) state.settings.me = null;
-    save();
-    return true;
-  }
   var init_employees = __esm({
     "js/employees.js"() {
       init_store();
@@ -17093,22 +17017,6 @@ create policy "member reads own row"
   __export(employees_exports, {
     renderEmployees: () => renderEmployees
   });
-  function cleanName(value2) {
-    return String(value2 || "").trim().replace(/\s+/g, " ");
-  }
-  function initials(name) {
-    const parts = cleanName(name).split(" ").filter(Boolean);
-    return (parts.length > 1 ? parts[0][0] + parts.at(-1)[0] : parts[0]?.slice(0, 2) || "?").toUpperCase();
-  }
-  function shiftLabel2(shift2) {
-    if (shift2 === "AFTERNOON") return "Afternoon shift";
-    if (shift2 === "MIDNIGHT") return "Midnight shift";
-    if (shift2 === "DAY") return "Day shift";
-    return "Shift not set";
-  }
-  function roleLabel(record) {
-    return record.legacy ? "Role not reviewed" : EMPLOYEE_ROLE_LABELS[record.role] || "Employee";
-  }
   async function loadCrewFile(file, rerender) {
     toast(`Reading ${file.name}\u2026`, 6e4);
     try {
@@ -17129,7 +17037,7 @@ create policy "member reads own row"
           "div.banner.info.employee-import-note",
           {},
           icon("users", { size: 17 }),
-          el("span", {}, "Imported employees are directory-only. They do not appear in the tracker user picker unless you change their role and turn on tracker access.")
+          el("span", {}, "Imported employees are directory-only. They stay on assignment lists. Change a role only when the directory itself should say so.")
         ),
         el("p.small.muted", {}, "Name, department and shift were saved. Employee IDs, clothing sizes and source rows were discarded.")
       ));
@@ -17153,319 +17061,46 @@ create policy "member reads own row"
     input.click();
     input.remove();
   }
-  function openEmployeeEditor(record, rerender, origin = null) {
-    const editing = !!record;
-    const legacy = !!record?.legacy;
-    const name = el("input.employee-name-input", {
-      type: "text",
-      autocomplete: "name",
-      value: record?.name || "",
-      placeholder: "Full name",
-      "aria-label": "Employee name"
-    });
-    const department = el("input.employee-department-input", {
-      type: "text",
-      value: record?.department || "",
-      placeholder: "Cutting",
-      "aria-label": "Department"
-    });
-    const shift2 = el(
-      "select.employee-shift-input",
-      { "aria-label": "Employee shift" },
-      el("option", { value: "", selected: !record?.shift }, "Not set"),
-      el("option", { value: "DAY", selected: record?.shift === "DAY" }, "Day \xB7 07:00\u201315:30"),
-      el("option", { value: "AFTERNOON", selected: record?.shift === "AFTERNOON" }, "Afternoon \xB7 15:30\u201300:00"),
-      el("option", { value: "MIDNIGHT", selected: record?.shift === "MIDNIGHT" }, "Midnight \xB7 23:45\u201307:15 (Sun 20:30\u201307:00)")
-    );
-    const role = el(
-      "select.employee-role-input",
-      { "aria-label": "Employee role" },
-      legacy ? el("option", { value: "", selected: true, disabled: true }, "Choose a role") : null,
-      ...EMPLOYEE_ROLES.map((key2) => el("option", {
-        value: key2,
-        selected: !legacy && (record?.role || "EMPLOYEE") === key2
-      }, EMPLOYEE_ROLE_LABELS[key2]))
-    );
-    const active = el("input.employee-active-input", { type: "checkbox", checked: record?.active !== false });
-    const access = el("input.employee-access-input", { type: "checkbox", checked: !legacy && !!record?.appAccess });
-    const accessTitle = el("strong", {}, "Show in app user picker");
-    const accessHelp = el("span", {}, "Only lead hands, supervisors and managers can be enabled.");
-    const error = el("div.banner.bad.employee-form-error", { role: "alert", hidden: true });
-    const syncAccess = () => {
-      const eligible = active.checked && ["LEAD_HAND", "SUPERVISOR", "MANAGER"].includes(role.value);
-      access.disabled = !eligible;
-      if (!eligible) access.checked = false;
-      accessTitle.textContent = eligible ? "Show in app user picker" : "Directory only";
-      accessHelp.textContent = !active.checked ? "Inactive employees cannot use the tracker." : role.value === "EMPLOYEE" || !role.value ? "Employees stay in the directory and assignment lists, but not the tracker user picker." : "Enabled people appear in the \u201CWho are you?\u201D picker on every synced device.";
-    };
-    role.addEventListener("change", syncAccess);
-    active.addEventListener("change", syncAccess);
-    syncAccess();
-    const body = el(
-      "div.employee-editor",
-      {},
-      legacy ? el(
-        "div.banner.warn",
-        {},
-        icon("alert", { size: 17 }),
-        el("span", {}, "This name came from the older user list. Choose the person\u2019s real role before saving.")
-      ) : null,
-      error,
-      el(
-        "div.employee-form-grid",
-        {},
-        el("label.field.employee-form-name", {}, el("span", {}, "Name"), name),
-        el("label.field", {}, el("span", {}, "Department"), department),
-        el("label.field", {}, el("span", {}, "Shift"), shift2),
-        el("label.field", {}, el("span", {}, "Role"), role)
-      ),
-      el(
-        "div.employee-permissions",
-        {},
-        el(
-          "label.employee-check",
-          {},
-          active,
-          el(
-            "span",
-            {},
-            el("strong", {}, "Active employee"),
-            el("span", {}, "Inactive people remain in history but disappear from current assignment lists.")
-          )
-        ),
-        el(
-          "label.employee-check",
-          {},
-          access,
-          el("span", {}, accessTitle, accessHelp)
-        )
-      )
-    );
-    const actions = [];
-    if (editing) actions.push({
-      label: "Archive employee",
-      class: "danger",
-      onClick: async (dlg2) => {
-        const confirmed = await confirmDialog(
-          `Archive ${record.name}?`,
-          "The employee will leave the directory, assignment lists and tracker user picker. Existing production history will remain unchanged.",
-          { confirmLabel: "Archive", danger: true }
-        );
-        if (!confirmed) return;
-        archiveEmployee(record);
-        dlg2.close();
-        toast(`${record.name} archived`);
-        rerender();
-      }
-    });
-    actions.push({
-      label: editing ? "Save changes" : "Add employee",
-      class: "primary",
-      onClick: (dlg2) => {
-        error.hidden = true;
-        if (!role.value) {
-          error.textContent = "Choose the employee\u2019s role.";
-          error.hidden = false;
-          role.focus();
-          return;
-        }
-        try {
-          const saved = upsertEmployee({
-            id: record?.id,
-            originalName: record?.name,
-            aliases: record?.aliases,
-            name: name.value,
-            department: department.value,
-            shift: shift2.value,
-            role: role.value,
-            active: active.checked,
-            appAccess: access.checked
-          });
-          dlg2.close();
-          toast(`${saved.name} ${editing ? "updated" : "added"}`);
-          rerender();
-        } catch (saveError) {
-          error.textContent = saveError.message;
-          error.hidden = false;
-        }
-      }
-    });
-    const dlg = modal(editing ? "Edit employee" : "Add employee", body, { actions, origin });
-    name.focus();
-    return dlg;
-  }
-  function employeeCard(record, rerender) {
-    const access = employeeCanUseApp(record);
-    const current2 = me() === record.name;
-    const meta = [record.department || "Department not set", shiftLabel2(record.shift)].join(" \xB7 ");
-    return el(
-      "article.employee-card" + (current2 ? ".current" : "") + (!record.active ? ".inactive" : ""),
-      {},
-      el("span.employee-avatar", { "aria-hidden": "true" }, initials(record.name)),
-      el(
-        "div.employee-name",
-        {},
-        el("strong", {}, record.name),
-        el("span", {}, meta),
-        el(
-          "div.employee-badges",
-          {},
-          el("span.chip." + (record.legacy ? "warn" : "mute"), {}, roleLabel(record)),
-          !record.active ? el("span.chip.bad", {}, "Inactive") : access ? el("span.chip.ok", {}, "App user") : el("span.chip.mute", {}, "Directory only")
-        )
-      ),
-      el(
-        "div.employee-actions",
-        {},
-        el("button.employee-edit", {
-          type: "button",
-          "aria-label": `Edit ${record.name}`,
-          onclick: (event) => openEmployeeEditor(record, rerender, event.currentTarget)
-        }, icon("pencil", { size: 16 }), "Edit"),
-        access ? current2 ? el("span.employee-current", {}, icon("check", { size: 15 }), "Current app user") : el("button.employee-use", {
-          type: "button",
-          "aria-label": `Use tracker as ${record.name}`,
-          onclick: () => {
-            setCurrentAppUser(record.name);
-            toast(`Tracker is now set to ${record.name}`);
-            rerender();
-          }
-        }, "Use as this person") : null
-      )
-    );
-  }
-  function scopeButton(key2, label, count, rerender) {
-    return el("button.employee-scope" + (view5.scope === key2 ? ".on" : ""), {
-      type: "button",
-      "aria-pressed": String(view5.scope === key2),
-      onclick: () => {
-        view5.scope = key2;
-        rerender();
-      }
-    }, label, el("span", {}, String(count)));
-  }
   function renderEmployees(rerender) {
-    const records = employeeDirectory();
-    const appUsers = records.filter(employeeCanUseApp);
-    const inactive = records.filter((record) => !record.active);
-    const query = view5.q.trim().toLocaleLowerCase();
-    const scoped = view5.scope === "access" ? appUsers : view5.scope === "inactive" ? inactive : records;
-    const shown = query ? scoped.filter((record) => [
-      record.name,
-      record.department,
-      shiftLabel2(record.shift),
-      roleLabel(record)
-    ].some((value2) => String(value2 || "").toLocaleLowerCase().includes(query))) : scoped;
+    const names = directoryPeople();
+    const input = el("input.employee-add-name", {
+      type: "text",
+      "aria-label": "Employee name",
+      placeholder: "Full name"
+    });
+    const add2 = (event) => {
+      event?.preventDefault();
+      const name = input.value.trim();
+      if (!name) return;
+      upsertEmployee({ name, role: "EMPLOYEE", active: true, appAccess: false });
+      input.value = "";
+      toast(`${name} added`);
+      rerender();
+    };
     return el(
       "div.centre.employees-page",
       {},
       el(
         "div.centre-head",
         {},
-        el(
-          "div.row.centre-title-row",
-          {},
-          el(
-            "div.centre-ident",
-            {},
-            el("span.centre-rail", { "aria-hidden": "true" }),
-            el(
-              "div",
-              {},
-              el("h1.centre-title", {}, "Employees"),
-              el("div.centre-sub", {}, `${records.length} in directory \xB7 ${appUsers.length} tracker user${appUsers.length === 1 ? "" : "s"} \xB7 this device: ${me()}`)
-            )
-          )
-        )
+        el("h1.centre-title", {}, "Employees"),
+        el("div.centre-sub", {}, "Names for assigning work. This list is not a sign-in.")
       ),
       el(
-        "section.employee-summary",
-        { "aria-label": "Employee directory summary" },
-        el("div", {}, el("strong", {}, fmtNum(records.length)), el("span", {}, "Employees")),
-        el("div", {}, el("strong", {}, fmtNum(appUsers.length)), el("span", {}, "Tracker users")),
-        el("div", {}, el("strong", {}, fmtNum(inactive.length)), el("span", {}, "Inactive"))
+        "form.employee-add",
+        { onsubmit: add2 },
+        input,
+        el("button.primary.employee-add-submit", { type: "submit" }, "Add name"),
+        el("button.employee-import", { type: "button", onclick: () => chooseCrewFile(rerender) }, "Import names")
       ),
-      el(
-        "section.panel.employee-tools",
-        {},
-        el("header", {}, icon("users", { size: 17 }), el("h2", {}, "Department directory")),
-        el(
-          "div.body.employee-toolbar",
-          {},
-          el(
-            "label.employee-search",
-            {},
-            el("span", {}, "Find an employee"),
-            el(
-              "span.employee-input",
-              {},
-              icon("search", { size: 17 }),
-              el("input", {
-                type: "search",
-                value: view5.q,
-                placeholder: "Search name, department or role",
-                oninput: (event) => {
-                  view5.q = event.target.value;
-                  rerender();
-                }
-              })
-            )
-          ),
-          el(
-            "div.employee-tool-actions",
-            {},
-            el("button.employee-add-open.primary", {
-              type: "button",
-              onclick: (event) => openEmployeeEditor(null, rerender, event.currentTarget)
-            }, icon("plus", { size: 17 }), "Add employee"),
-            el(
-              "button.employee-import",
-              { type: "button", onclick: () => chooseCrewFile(rerender) },
-              icon("upload", { size: 17 }),
-              "Import Abhay\u2019s crew"
-            )
-          )
-        ),
-        el(
-          "div.employee-scopes",
-          { role: "group", "aria-label": "Filter employees" },
-          scopeButton("all", "All", records.length, rerender),
-          scopeButton("access", "Tracker users", appUsers.length, rerender),
-          scopeButton("inactive", "Inactive", inactive.length, rerender)
-        )
-      ),
-      records.length ? el(
-        "div.employee-grid",
-        {},
-        ...shown.map((record) => employeeCard(record, rerender)),
-        !shown.length ? el(
-          "div.empty.employee-empty",
-          {},
-          el("h3", {}, "No matching employee"),
-          el("p", {}, "Try a shorter search or another filter.")
-        ) : null
-      ) : el("div.panel", {}, el(
-        "div.empty",
-        {},
-        el("div.empty-icon", {}, icon("users", { size: 28 })),
-        el("h3", {}, "No employees yet"),
-        el("p", {}, "Add one person or import Abhay\u2019s crew from the internal workbook.")
-      )),
-      el(
-        "div.employee-privacy",
-        {},
-        icon("cloud", { size: 16 }),
-        el("span", {}, "The directory syncs name, department, shift, role and app-user status. The picker is not a login. Roster files, employee IDs and HR details are never uploaded or built into the public website.")
-      )
+      names.length ? el("ul.employee-names", {}, ...names.map((name) => el("li", {}, name))) : el("p", {}, "No names yet. Add one, or import the crew list.")
     );
   }
-  var view5;
   var init_employees2 = __esm({
     "js/views/employees.js"() {
       init_ui();
       init_store();
       init_employees();
-      view5 = { q: "", scope: "all" };
     }
   });
 
@@ -17660,7 +17295,6 @@ create policy "member reads own row"
       ].filter(Boolean)
     });
   }
-  var mineOnly = false;
   var bm = { open: {} };
   var BO_PAGE = 8;
   function mobileBoRow(row, rerender) {
@@ -17768,8 +17402,7 @@ create policy "member reads own row"
         )
       );
     }
-    let groups = allBackOrders();
-    if (mineOnly) groups = groups.filter((g) => g.assignee === me());
+    const groups = allBackOrders();
     const total = groups.reduce((a, g) => a + g.rows.length, 0);
     const pieces = groups.reduce((a, g) => a + g.rows.reduce((b, r) => b + (r.bo.qty || 0), 0), 0);
     const unassigned = allBackOrders().find((g) => !g.assignee)?.rows.length || 0;
@@ -17798,23 +17431,6 @@ create policy "member reads own row"
           el("div.cstat", {}, el("b", {}, fmtNum(pieces)), el("i", {}, "pcs short")),
           el("div.cstat" + (unassigned ? ".warn" : ""), {}, el("b", {}, fmtNum(unassigned)), el("i", {}, "unassigned"))
         )
-      ),
-      el(
-        "div.centre-filters",
-        {},
-        el(
-          "label.row.small.donetoggle",
-          {},
-          el("input", {
-            type: "checkbox",
-            checked: mineOnly,
-            onchange: (e) => {
-              mineOnly = e.target.checked;
-              rerender();
-            }
-          }),
-          `Only mine (${me()})`
-        )
       )
     );
     if (!groups.length) {
@@ -17826,8 +17442,8 @@ create policy "member reads own row"
           "div.empty",
           {},
           el("div.empty-icon", {}, icon("check", { size: 28 })),
-          el("h3", {}, mineOnly ? "Nothing assigned to you" : "No back orders"),
-          el("div", {}, mineOnly ? "Nothing is waiting on you right now." : "Nothing is flagged short of material.")
+          el("h3", {}, "No back orders"),
+          el("div", {}, "Nothing is flagged short of material.")
         ))
       );
     }
@@ -18202,153 +17818,6 @@ create policy "member reads own row"
   init_ui();
   init_store();
   init_model();
-  var REASONS = [
-    "Job cancelled",
-    "Remade under another W/O",
-    "Elevation changed",
-    "Superseded by a later revision"
-  ];
-  function parkDialog(task, rerender) {
-    const key2 = taskStatusKey(task);
-    const cur = parkedFor(key2) || {};
-    const on = !!cur.on;
-    const late = daysLate(task);
-    const reason = el("textarea", {
-      rows: 2,
-      value: cur.reason || "",
-      placeholder: "Why this line is not going to run"
-    });
-    const quick = (text4) => el("button.linkbtn", {
-      type: "button",
-      onclick: () => {
-        reason.value = text4;
-        reason.focus();
-      }
-    }, text4);
-    const body = el(
-      "div",
-      {},
-      el(
-        "div.bo-dialoghead",
-        {},
-        el("span.mono.strong", {}, `W/O ${task.wo}`),
-        task.die ? el("span.die", {}, task.die) : null,
-        el(
-          "span.small.muted",
-          {},
-          `${task.project || ""}${task.floor ? " \xB7 " + task.floor : ""}`.trim()
-        )
-      ),
-      el("p.small.muted", { style: { marginTop: "var(--s3)" } }, on ? "This line is parked. Putting it back returns it to the queue and to every count, exactly as it was." : "Parking takes the line out of the queue, the open count and the shift update. Nothing is deleted \u2014 the status, notes and history stay, and re-importing the workbook will not bring it back."),
-      late > 60 ? el(
-        "p.small.muted",
-        {},
-        icon("clock", { size: 13 }),
-        ` This line is ${late} days past its cutting date.`
-      ) : null,
-      on ? null : el(
-        "label.field",
-        { style: { marginTop: "var(--s3)" } },
-        el("span", {}, "Reason"),
-        reason,
-        el("div.rush-quick", {}, ...REASONS.map(quick))
-      ),
-      cur.at ? el(
-        "div.small.muted",
-        { style: { marginTop: "var(--s3)" } },
-        `Parked by ${cur.by} \xB7 ${fmtWhen(cur.at)}` + (cur.reason ? ` \u2014 ${cur.reason}` : "")
-      ) : null
-    );
-    modal(on ? `Parked \u2014 ${task.wo}` : `Park \u2014 ${task.wo}`, body, {
-      actions: [
-        on ? {
-          label: "Put it back",
-          class: "primary",
-          onClick: (dlg) => {
-            setParked(key2, false);
-            dlg.close();
-            toast("Back in the queue");
-            rerender();
-          }
-        } : {
-          label: "Park it",
-          class: "primary",
-          onClick: (dlg) => {
-            const why = reason.value.trim();
-            if (!why) {
-              toast("A reason is needed \u2014 it is the whole record");
-              reason.focus();
-              return;
-            }
-            setParked(key2, true, why);
-            dlg.close();
-            toast("Parked");
-            rerender();
-          }
-        }
-      ]
-    });
-  }
-  function bulkParkDialog(keys, onDone) {
-    const n = keys.length;
-    const reason = el("textarea", {
-      rows: 2,
-      placeholder: "Why these lines are not going to run"
-    });
-    const quick = (text4) => el("button.linkbtn", {
-      type: "button",
-      onclick: () => {
-        reason.value = text4;
-        reason.focus();
-      }
-    }, text4);
-    const body = el(
-      "div",
-      {},
-      el(
-        "p",
-        { style: { marginTop: 0 } },
-        `Park ${n} line${n === 1 ? "" : "s"}. They leave the queue, the open count and the shift update. Nothing is deleted, and a re-import will not bring them back.`
-      ),
-      el(
-        "label.field",
-        {},
-        el("span", {}, "Reason"),
-        reason,
-        el("div.rush-quick", {}, ...REASONS.map(quick))
-      )
-    );
-    modal(`Park ${n} line${n === 1 ? "" : "s"}`, body, {
-      actions: [{
-        label: "Park them",
-        class: "primary",
-        onClick: (dlg) => {
-          const why = reason.value.trim();
-          if (!why) {
-            toast("A reason is needed \u2014 it is the whole record");
-            reason.focus();
-            return;
-          }
-          const before = setParkedMany(keys, true, why);
-          dlg.close();
-          toastAction(`${n} line${n === 1 ? "" : "s"} parked`, "Undo", () => {
-            restoreParked(before);
-            onDone();
-          });
-          onDone();
-        }
-      }]
-    });
-  }
-  function bulkUnpark(keys, onDone) {
-    const n = keys.length;
-    const before = setParkedMany(keys, false);
-    toastAction(`${n} line${n === 1 ? "" : "s"} back in the queue`, "Undo", () => {
-      restoreParked(before);
-      onDone();
-    });
-    onDone();
-  }
 
   // js/views/manual.js
   init_ui();
@@ -18512,10 +17981,6 @@ create policy "member reads own row"
   init_model();
   init_machines();
   init_motion();
-  function machineLabel3(key2) {
-    const m = MACHINE_BY_KEY[key2];
-    return m ? machineConfig(m).label : key2;
-  }
   var TYPE_A_NAME2 = "__type__";
   function rushDialog(task, rerender) {
     const key2 = taskStatusKey(task);
@@ -18655,278 +18120,6 @@ create policy "member reads own row"
         }
       ].filter(Boolean)
     });
-  }
-  var BUCKETS = [
-    { key: "LATE", label: "Past its date", tone: "bad" },
-    { key: "TODAY", label: "Today", tone: "bad" },
-    { key: "SOON", label: "Next two days", tone: "warn" },
-    { key: "LATER", label: "Later", tone: "mute" },
-    { key: "NODATE", label: "No date given", tone: "mute" }
-  ];
-  function bucketOf(rush, ref) {
-    if (!rush.needBy) return "NODATE";
-    if (rush.needBy < ref) return "LATE";
-    if (rush.needBy === ref) return "TODAY";
-    return rush.needBy <= addDays(ref, 2) ? "SOON" : "LATER";
-  }
-  var mineOnly2 = false;
-  var rushMobileState = { open: {} };
-  var RUSH_PAGE = 4;
-  function rushRowName({ task, rush, machine }) {
-    const need = rush.needBy ? `needed by ${fmtDate(rush.needBy)}` : "no need-by date";
-    const owner = rush.assignee ? `assigned to ${rush.assignee}` : "nobody has been told";
-    return `Work order ${task.wo}, ${task.project || "no project"}, ${need}, ${fmtNum(task.qty)} pieces, ${machineLabel3(machine)}, ${owner} \u2014 edit rush details`;
-  }
-  function desktopRushRow(row, ref, rerender) {
-    const { task, rush, machine } = row;
-    const late = rush.late || rush.needBy === ref;
-    return el(
-      "button.line.rush-line" + (late ? ".is-late" : ".rush"),
-      {
-        type: "button",
-        "aria-label": rushRowName(row),
-        onclick: () => rushDialog(task, rerender)
-      },
-      // Need-by leads the row here, not the work order: on this page the
-      // question is what runs first, and the date is the answer.
-      el(
-        "span.rush-when" + (late ? ".late" : ""),
-        {},
-        el("span.rush-need", {}, rush.needBy ? fmtDate(rush.needBy) : "No date"),
-        el("span.rush-needcap", {}, rush.needBy ? "needed by" : "not set")
-      ),
-      el(
-        "span.line-main",
-        {},
-        el(
-          "span.line-id",
-          {},
-          el("span.mono.strong", {}, task.wo),
-          task.die ? el("span.die", {}, task.die) : null,
-          chip(machineLabel3(machine), "mute")
-        ),
-        el(
-          "span.line-where",
-          {},
-          el("span", {}, task.project || "\u2014"),
-          task.floor ? el("span.muted", {}, " \xB7 " + task.floor) : null
-        ),
-        // Who was told is half of what a rush *is*. A rush nobody owns is the
-        // one most likely to be missed, so it says so outright.
-        el(
-          "span.line-rushband" + (rush.assignee ? "" : ".nobody"),
-          {},
-          icon(rush.assignee ? "bolt" : "alert", { size: 13 }),
-          el(
-            "span",
-            {},
-            el("strong", {}, rush.assignee || "Nobody told"),
-            rush.reason ? el("span", {}, " \u2014 " + rush.reason) : null
-          )
-        )
-      ),
-      el(
-        "span.line-qty",
-        {},
-        el("span.mono", {}, fmtNum(task.qty)),
-        el("span.small.muted", {}, "pcs")
-      )
-    );
-  }
-  function mobileRushRow(row, ref, rerender) {
-    const { task, rush, machine } = row;
-    const late = rush.late || rush.needBy === ref;
-    return el(
-      "button.rush-m-row.rush-line" + (late ? ".is-late" : ".rush"),
-      {
-        type: "button",
-        "aria-label": rushRowName(row),
-        onclick: () => rushDialog(task, rerender)
-      },
-      el(
-        "span.rush-m-main",
-        {},
-        el(
-          "span.rush-m-id",
-          {},
-          el("span.mono.strong", {}, task.wo),
-          task.die ? el("span.die", {}, task.die) : null,
-          chip(machineLabel3(machine), "mute")
-        ),
-        el(
-          "span.rush-m-where",
-          {},
-          el("span", {}, task.project || "\u2014"),
-          task.floor ? el("span.muted", {}, " \xB7 " + task.floor) : null
-        ),
-        el(
-          "span.rush-m-facts",
-          {},
-          el(
-            "span.rush-m-when" + (late ? ".bad" : ""),
-            {},
-            rush.needBy ? `${fmtDate(rush.needBy)} needed by` : "No need-by date"
-          ),
-          el("span.rush-m-qty", {}, `${fmtNum(task.qty)} pcs`)
-        ),
-        el(
-          "span.rush-m-owner" + (rush.assignee ? "" : ".nobody"),
-          {},
-          icon(rush.assignee ? "bolt" : "alert", { size: 13 }),
-          el("strong", {}, rush.assignee || "Nobody told"),
-          rush.reason ? el("span.rush-m-reason", {}, " \u2014 " + rush.reason) : null
-        )
-      ),
-      icon("chevron", { size: 16, cls: "rush-m-go" })
-    );
-  }
-  function mobileRushGroup(bucket, rows, ref, rerender) {
-    const shown = rushMobileState.open[bucket.key] || RUSH_PAGE;
-    const left = Math.max(0, rows.length - shown);
-    return el(
-      "section.rush-m-group",
-      { "data-bucket": bucket.key },
-      el(
-        "div.rush-m-grouphead",
-        {},
-        el("span.rush-m-groupdot." + bucket.tone, { "aria-hidden": "true" }),
-        el("span.rush-m-grouplabel", {}, bucket.label),
-        el("span.rush-m-groupcount." + bucket.tone, {}, String(rows.length))
-      ),
-      ...rows.slice(0, shown).map((row) => mobileRushRow(row, ref, rerender)),
-      left > 0 ? el("button.rush-m-more", {
-        type: "button",
-        onclick: () => {
-          rushMobileState.open[bucket.key] = shown + RUSH_PAGE;
-          rerender();
-        }
-      }, `Show ${Math.min(left, RUSH_PAGE)} more of ${rows.length}`) : null
-    );
-  }
-  function renderRush(rerender, go2) {
-    if (!hasTasks()) {
-      return el(
-        "div.panel",
-        {},
-        el(
-          "div.empty",
-          {},
-          el("div.empty-icon", {}, icon("upload", { size: 28 })),
-          el("h3", {}, "No schedule loaded yet"),
-          el("p", {}, "Import the Rolling and CNC workbooks to get started."),
-          el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
-        )
-      );
-    }
-    const ref = today();
-    const all = allRush(ref);
-    const rows = mineOnly2 ? all.filter((r) => r.rush.assignee === me()) : all;
-    const late = all.filter((r) => bucketOf(r.rush, ref) === "LATE").length;
-    const todayN = all.filter((r) => bucketOf(r.rush, ref) === "TODAY").length;
-    const pieces = rows.reduce((a, r) => a + (r.task.qty || 0), 0);
-    const head = el(
-      "div.centre-head",
-      {},
-      el(
-        "div.row.centre-title-row",
-        {},
-        el(
-          "div.centre-ident",
-          {},
-          el("span.centre-rail", { "aria-hidden": "true" }),
-          el(
-            "div",
-            {},
-            el("h1.centre-title", {}, "Rush"),
-            el("div.centre-sub", {}, "Lines that jump the queue, across every centre")
-          )
-        ),
-        el("span.spacer"),
-        el(
-          "div.centre-stats",
-          {},
-          el(
-            "div.cstat" + (all.length ? ".warn" : ""),
-            {},
-            el("b", {}, fmtNum(all.length)),
-            el("i", {}, "lines")
-          ),
-          el(
-            "div.cstat" + (late ? ".bad" : ""),
-            {},
-            el("b", {}, fmtNum(late)),
-            el("i", {}, "past date")
-          ),
-          el(
-            "div.cstat" + (todayN ? ".bad" : ""),
-            {},
-            el("b", {}, fmtNum(todayN)),
-            el("i", {}, "today")
-          ),
-          el("div.cstat", {}, el("b", {}, fmtNum(pieces)), el("i", {}, "pcs"))
-        )
-      ),
-      el(
-        "div.centre-filters",
-        {},
-        el(
-          "label.row.small.donetoggle",
-          {},
-          el("input", {
-            type: "checkbox",
-            checked: mineOnly2,
-            onchange: (e) => {
-              mineOnly2 = e.target.checked;
-              rerender();
-            }
-          }),
-          `Only mine (${me()})`
-        )
-      )
-    );
-    if (!rows.length) {
-      return el(
-        "div.centre",
-        {},
-        head,
-        el("div.panel", {}, el(
-          "div.empty",
-          {},
-          el("div.empty-icon", {}, icon("check", { size: 28 })),
-          el("h3", {}, mineOnly2 ? "Nothing rushed to you" : "Nothing is rushed"),
-          el("div", {}, mineOnly2 ? "Nobody has put a rush line on you." : "Open any line and use the rush button to put it at the top of its queue.")
-        ))
-      );
-    }
-    const byBucket = new Map(BUCKETS.map((b) => [b.key, []]));
-    for (const r of rows) byBucket.get(bucketOf(r.rush, ref)).push(r);
-    const activeBuckets = BUCKETS.filter((b) => byBucket.get(b.key).length);
-    const sections2 = activeBuckets.map((b) => el(
-      "section.dgroup",
-      {},
-      el(
-        "div.dgroup-head",
-        {},
-        el("span.dgroup-label." + b.tone, {}, b.label),
-        el("span.dgroup-count", {}, String(byBucket.get(b.key).length))
-      ),
-      el(
-        "div.dgroup-body",
-        {},
-        ...byBucket.get(b.key).map((row) => desktopRushRow(row, ref, rerender))
-      )
-    ));
-    return el(
-      "div.centre",
-      {},
-      head,
-      el(
-        "div.rush-m",
-        {},
-        ...activeBuckets.map((b) => mobileRushGroup(b, byBucket.get(b.key), ref, rerender))
-      ),
-      el("div.rush-wide", {}, ...sections2)
-    );
   }
 
   // js/views/routing.js
@@ -19335,17 +18528,13 @@ create policy "member reads own row"
           /* Only ever seen through the Parked filter, since a parked line is out
              of every other view — but seen there it has to say what it is, or
              the filter looks like an ordinary queue. */
-          isParked(t) ? el("span.badge-parked", {
-            title: parkedFor(taskStatusKey(t))?.reason || "Parked \u2014 not going to run"
-          }, icon("square", { size: 11 }), "PARKED") : null,
+          null,
           t.editedAt ? el("span.badge-edited", {
             title: `Edited by ${t.editedBy} \xB7 ${fmtWhen(t.editedAt)}`
           }, "edited") : null,
           // Not in either workbook. Worth saying on the row, because it changes
           // what a re-import will and will not bring up to date.
-          t.manual ? el("span.badge-manual", {
-            title: `Added by hand by ${t.by} \xB7 ${fmtWhen(t.at)} \u2014 not in the workbook`
-          }, icon("pencil", { size: 10 }), "added here") : null,
+          null,
           // Prepped and waiting. The roller wants to know this before starting,
           // and the stager wants to see that it registered.
           isStaged(t) ? el("span.badge-staged", {
@@ -19742,7 +18931,7 @@ create policy "member reads own row"
       el(
         "div.inspector-actions",
         {},
-        action(t.manual ? "Edit job" : "Edit", "pencil", () => t.manual ? manualJobDialog({ machine: t.machine, task: t, rerender }) : editLine(row, rerender)),
+        t.manual ? null : action("Edit", "pencil", () => editLine(row, rerender)),
         action(note ? "Edit note" : "Note", "note", () => noteEditor(row, rerender), note ? "on" : ""),
         canMove ? action(hasQueue(group) ? "Assign" : "Move", "arrow", () => moveDialog([key2], group, rerender)) : null,
         /* Where the rest of this work order has got to. Next to Route on
@@ -19751,7 +18940,6 @@ create policy "member reads own row"
         action("Route", "list", () => routeDialog(t)),
         action("Rush", "bolt", () => rushDialog(t, rerender), rush.on ? "warn" : ""),
         action("Back order", "alert", () => backOrderDialog(t, rerender), bo.on ? "bad" : ""),
-        action(parked ? "Parked" : "Park", "square", () => parkDialog(t, rerender), parked ? "on" : ""),
         action("History", "clock", () => historyDialog(t))
       )
     );
@@ -20022,10 +19210,6 @@ create policy "member reads own row"
       "div.mobile-machine-actions",
       {},
       action("Machine setup", "gear", () => machineSettings(machine, rerender)),
-      action(`Add a job to ${machine.label}`, "plus", () => manualJobDialog({
-        machine: machine.key,
-        rerender
-      })),
       action("Print schedule", "print", () => printMachineSchedule(machine, groups, sum, vs3))
     ), {});
   }
@@ -20484,19 +19668,6 @@ create policy "member reads own row"
           rerender();
         })
       }, icon("arrow", { size: 14 }), "Move to") : null,
-      /* Reviewing a stale pile is the case this exists for: select the group,
-         give one reason, done. On the Parked filter the same button is the way
-         back out, because a one-way door is one nobody uses. */
-      el("button.bulk-btn", {
-        onclick: () => {
-          const done = () => {
-            vs3.selected.clear();
-            rerender();
-          };
-          if (vs3.filter === "PARKED") bulkUnpark(keys, done);
-          else bulkParkDialog(keys, done);
-        }
-      }, icon("square", { size: 14 }), vs3.filter === "PARKED" ? "Put back" : "Park"),
       el("button.bulk-x", {
         title: "Clear selection",
         onclick: () => {
@@ -20511,10 +19682,7 @@ create policy "member reads own row"
     { key: "NOT_STARTED", label: "Not started" },
     { key: "IN_PROGRESS", label: "Running" },
     { key: "RUSH", label: "Rush" },
-    { key: "BO", label: "Back order" },
-    // Last, and named for what it holds rather than for a state a line is in:
-    // this is the review list, not another way to work the queue.
-    { key: "PARKED", label: "Parked" }
+    { key: "BO", label: "Back order" }
   ];
   function printMachineSchedule(machine, groups, sum, vs3) {
     const filter = FILTERS.find((item) => item.key === vs3.filter)?.label || vs3.filter;
@@ -20715,13 +19883,7 @@ create policy "member reads own row"
                 el("button.iconbtn", {
                   title: "Set up this machine",
                   onclick: () => machineSettings(machine, rerender)
-                }, icon("gear", { size: 16 })),
-                // Work the schedules do not have yet — a remake, a service
-                // order, anything phoned in — goes on the machine it will run on.
-                el("button.iconbtn", {
-                  title: `Add a job to ${machine.label}`,
-                  onclick: () => manualJobDialog({ machine: machine.key, rerender })
-                }, icon("plus", { size: 17 }))
+                }, icon("gear", { size: 16 }))
               ),
               el(
                 "div.centre-sub",
@@ -20747,7 +19909,6 @@ create policy "member reads own row"
           stat(sum.inProgress, "running", "work", "play"),
           stat(sum.open, "open", "", "list"),
           stat(sum.overdue, "overdue", "bad", "clock"),
-          sum.parked ? stat(sum.parked, "parked", "mute", "square") : null,
           stat(sum.rush + sum.backOrder, "B/O & rush", "bad", "alert")
         ),
         el("div.progress-cap", {}, `${donePct}% complete \xB7 ${fmtNum(sum.done)} of ${fmtNum(sum.total)} lines done`)
@@ -20824,363 +19985,6 @@ create policy "member reads own row"
     };
   }
 
-  // js/views/today.js
-  init_ui();
-  init_store();
-  init_model();
-  init_machines();
-  init_shifts();
-  function machineLabel4(key2) {
-    const m = MACHINE_BY_KEY[key2];
-    return m ? machineConfig(m).label : key2;
-  }
-  function todoRow(item, ref, rerender) {
-    const carried = item.date < ref;
-    const age = (iso) => iso ? Date.now() - new Date(iso).getTime() : Infinity;
-    const justDone = item.done && age(item.doneAt) < 800;
-    const justAdded = !item.done && age(item.at) < 800;
-    return el(
-      "li.todo" + (item.done ? ".done" : "") + (carried ? ".carried" : "") + (justDone ? ".just-done" : "") + (justAdded ? ".just-added" : ""),
-      {},
-      el(
-        "label.todo-check",
-        {},
-        el("input", {
-          type: "checkbox",
-          checked: !!item.done,
-          "aria-label": (item.done ? "Mark not done: " : "Mark done: ") + item.text,
-          onchange: (e) => {
-            setTodo(item.id, { done: e.target.checked });
-            rerender();
-          }
-        })
-      ),
-      el(
-        "div.todo-main",
-        {},
-        el("div.todo-text", {}, item.text),
-        el(
-          "div.todo-meta",
-          {},
-          // Where a carried job came from matters: three days old is a different
-          // conversation from written this morning.
-          carried ? chip(`from ${fmtDate(item.date)}`, "warn") : null,
-          item.assignee ? el("span.todo-who", {}, icon("dot", { size: 10 }), item.assignee) : null,
-          item.done ? el("span.muted", {}, `done by ${item.doneBy} \xB7 ${fmtWhen(item.doneAt)}`) : el("span.muted", {}, `added by ${item.by} \xB7 ${fmtWhen(item.at)}`)
-        )
-      ),
-      el("button.line-iconbtn", {
-        title: "Remove",
-        onclick: async () => {
-          const ok = await confirmDialog(
-            "Remove this?",
-            item.text,
-            { confirmLabel: "Remove", danger: true }
-          );
-          if (!ok) return;
-          deleteTodo(item.id);
-          toast("Removed");
-          rerender();
-        }
-      }, icon("x", { size: 15 }))
-    );
-  }
-  function listPanel(ref, rerender, go2) {
-    const { open, done, carried } = openTodos(ref);
-    const input = el("input", {
-      placeholder: "Something that needs doing today\u2026",
-      "aria-label": "What needs doing",
-      onkeydown: (e) => {
-        if (e.key === "Enter") add2();
-      }
-    });
-    const people = directoryPeople();
-    const who = el(
-      "select",
-      { "aria-label": "Who it is for", style: { width: "auto", minWidth: "150px" } },
-      el("option", { value: "" }, "Anyone"),
-      ...people.map((p) => el("option", { value: p, selected: p === me() }, p))
-    );
-    function add2() {
-      const text4 = input.value.trim();
-      if (!text4) return;
-      addTodo(text4, { date: ref, assignee: who.value || null });
-      input.value = "";
-      rerender();
-    }
-    async function photoToTodo(origin) {
-      const button2 = origin?.currentTarget;
-      if (button2) button2.disabled = true;
-      try {
-        const { openPhotoTodoDialog: openPhotoTodoDialog2 } = await Promise.resolve().then(() => (init_photo_todos(), photo_todos_exports));
-        openPhotoTodoDialog2({
-          ref,
-          people,
-          defaultAssignee: who.value || null,
-          rerender,
-          go: go2,
-          origin: button2
-        });
-      } catch (error) {
-        toast("Photo to To-Do could not open. Connect once and try again.");
-        console.error("Photo to To-Do failed to load", error);
-      } finally {
-        if (button2) button2.disabled = false;
-      }
-    }
-    return el(
-      "div.panel",
-      {},
-      el(
-        "header",
-        {},
-        icon("list", { size: 14 }),
-        el("h2", {}, "To do"),
-        open.length ? chip(`${open.length} open`, carried ? "warn" : "mute") : null,
-        carried ? chip(`${carried} carried over`, "warn") : null,
-        el("span.spacer"),
-        done.length ? el("span.small.muted", {}, `${done.length} done today`) : null
-      ),
-      el(
-        "div.body",
-        {},
-        el(
-          "div.todo-add",
-          {},
-          input,
-          who,
-          el("button.primary", { onclick: add2 }, icon("plus", { size: 15 }), "Add"),
-          el("button.photo-todo-launch", {
-            onclick: photoToTodo,
-            title: "Turn a photo of notes or a whiteboard into reviewed To-Dos"
-          }, icon("camera", { size: 16 }), "Photo to To-Do")
-        ),
-        open.length || done.length ? el(
-          "ul.list.todo-list",
-          {},
-          ...open.map((t) => todoRow(t, ref, rerender)),
-          ...done.map((t) => todoRow(t, ref, rerender))
-        ) : el(
-          "div.empty",
-          {},
-          el("div.empty-icon", {}, icon("check", { size: 28 })),
-          el("h3", {}, "Nothing on the list"),
-          el("div", {}, "Anything the schedules do not cover goes here \u2014 chasing material, a blade change, a call to make.")
-        )
-      )
-    );
-  }
-  function attentionCard({ label, rows, tone, hint, go: go2, tab, iconName }) {
-    const n = rows.length;
-    return el(
-      "button.att" + (n && tone ? "." + tone : ""),
-      {
-        onclick: () => go2(tab),
-        title: `Open ${label}`
-      },
-      el("span.att-icon", { "aria-hidden": "true" }, icon(iconName, { size: 17 })),
-      el(
-        "span.att-copy",
-        {},
-        el("span.att-n", {}, fmtNum(n)),
-        el("span.att-k", {}, label),
-        el("span.att-hint", {}, n ? hint : "nothing outstanding")
-      )
-    );
-  }
-  function pileList(title, rows, tone, cap = 5) {
-    if (!rows.length) return null;
-    return el(
-      "section.dgroup",
-      {},
-      el(
-        "div.dgroup-head",
-        {},
-        el("span.dgroup-label." + tone, {}, title),
-        el("span.dgroup-count", {}, String(rows.length))
-      ),
-      el(
-        "div.dgroup-body",
-        {},
-        ...rows.slice(0, cap).map(({ task, machine }) => el(
-          "div.line.today-line",
-          {},
-          el(
-            "div.line-main",
-            {},
-            el(
-              "div.line-id",
-              {},
-              el("span.mono.strong", {}, task.wo),
-              task.die ? el("span.die", {}, task.die) : null,
-              chip(machineLabel4(machine), "mute")
-            ),
-            el(
-              "div.line-where",
-              {},
-              el("span", {}, task.project || "\u2014"),
-              task.floor ? el("span.muted", {}, " \xB7 " + task.floor) : null
-            )
-          ),
-          el(
-            "div.line-qty",
-            {},
-            el("span.mono", {}, fmtNum(task.qty)),
-            el("span.small.muted", {}, "pcs")
-          ),
-          el("div.line-date.hide-sm", {}, fmtDate(task.cuttingDate))
-        )),
-        rows.length > cap ? el(
-          "div.small.muted",
-          { style: { padding: "10px 16px" } },
-          `and ${rows.length - cap} more`
-        ) : null
-      )
-    );
-  }
-  function renderToday(rerender, go2) {
-    const ref = today();
-    const { key: shiftKey, shift: shift2, date: shiftDate } = shiftContextAt(ref);
-    const head = el(
-      "div.centre-head",
-      {},
-      el(
-        "div.row.centre-title-row",
-        {},
-        el(
-          "div.centre-ident",
-          {},
-          el("span.centre-rail", { "aria-hidden": "true" }),
-          el(
-            "div",
-            {},
-            el("h1.centre-title", {}, "Today"),
-            el(
-              "div.centre-sub",
-              {},
-              fmtDate(ref, { withDay: true }),
-              el("span.dot-sep", {}, "\xB7"),
-              `${shift2.label} shift`,
-              el("span.dot-sep", {}, "\xB7"),
-              me()
-            )
-          )
-        ),
-        el("span.spacer")
-      )
-    );
-    if (!hasTasks()) {
-      return el(
-        "div.centre",
-        {},
-        head,
-        listPanel(ref, rerender, go2),
-        el("div.panel", { style: { marginTop: "16px" } }, el(
-          "div.empty",
-          {},
-          el("div.empty-icon", {}, icon("upload", { size: 28 })),
-          el("h3", {}, "No schedule loaded yet"),
-          el("p", {}, "Import the workbooks and this page also shows what is running, late, due and short across every machine."),
-          el("button.primary", { onclick: () => go2("setup") }, "Go to Setup")
-        ))
-      );
-    }
-    const b = todayBoard(ref);
-    const written = shiftWritten(shiftDate, shiftKey);
-    return el(
-      "div.centre",
-      {},
-      head,
-      listPanel(ref, rerender, go2),
-      el(
-        "div.panel",
-        { style: { marginTop: "16px" } },
-        el(
-          "header",
-          {},
-          icon("note", { size: 14 }),
-          el("h2", {}, "From the schedules"),
-          el("span.small.muted", {}, "across every machine"),
-          el("span.spacer"),
-          el("span.small.muted", {}, `${b.finishedToday.length} finished today`)
-        ),
-        el(
-          "div.body",
-          {},
-          el(
-            "div.attgrid",
-            {},
-            attentionCard({
-              label: "running now",
-              rows: b.running,
-              tone: "work",
-              hint: "on the machines",
-              go: go2,
-              tab: "rolling",
-              iconName: "play"
-            }),
-            attentionCard({
-              label: "overdue",
-              rows: b.overdue,
-              tone: "bad",
-              hint: "past their cutting date",
-              go: go2,
-              tab: "rolling",
-              iconName: "clock"
-            }),
-            attentionCard({
-              label: "due today",
-              rows: b.dueToday,
-              tone: "warn",
-              hint: "cutting date is today",
-              go: go2,
-              tab: "rolling",
-              iconName: "calendar"
-            }),
-            attentionCard({
-              label: "rush",
-              rows: b.rushNow,
-              tone: "warn",
-              hint: "needed today or already past",
-              go: go2,
-              tab: "rush",
-              iconName: "bolt"
-            }),
-            attentionCard({
-              label: "back orders",
-              rows: b.backOrders,
-              tone: "bad",
-              hint: "short of material",
-              go: go2,
-              tab: "backorders",
-              iconName: "alert"
-            })
-          ),
-          // The one job on the day's list with a deadline attached to the shift
-          // rather than to a machine.
-          el(
-            "div.today-shift" + (written ? ".ok" : ""),
-            {},
-            icon(written ? "check" : "pencil", { size: 15 }),
-            el(
-              "div",
-              {},
-              el("strong", {}, written ? `${shift2.label} shift update written` : `${shift2.label} shift update not written yet`),
-              el("div.small.muted", {}, written ? "Anything else this shift can be added to it." : "Write it up before the shift ends so the next one knows where things stand.")
-            ),
-            el("span.spacer"),
-            el("button" + (written ? "" : ".primary"), {
-              onclick: () => go2("shift")
-            }, written ? "Open it" : "Write it")
-          )
-        )
-      ),
-      pileList("Overdue", b.overdue, "bad"),
-      pileList("Due today", b.dueToday, "warn"),
-      pileList("Running now", b.running, "mute")
-    );
-  }
-
   // js/views/staging.js
   init_ui();
   init_store();
@@ -21188,7 +19992,7 @@ create policy "member reads own row"
   init_machines();
   init_shifts();
   var vs2 = { q: "", showStaged: true };
-  function machineLabel5(key2) {
+  function machineLabel3(key2) {
     const m = MACHINE_BY_KEY[key2];
     return m ? machineConfig(m).label : key2;
   }
@@ -21234,7 +20038,7 @@ create policy "member reads own row"
             title: `What is ${task.die} made of?`,
             onclick: () => dieDialog2(task.die)
           }, task.die) : null,
-          chip(machineLabel5(machine), "mute"),
+          chip(machineLabel3(machine), "mute"),
           rush.on ? el(
             "span.badge-rush" + (rush.late || rush.soon ? ".hot" : ""),
             {},
@@ -21311,13 +20115,13 @@ create policy "member reads own row"
     );
   }
   var sm = { open: {} };
-  var BUCKETS2 = [
+  var BUCKETS = [
     ["overdue", "Overdue", "bad"],
     ["today", "Due today", "warn"],
     ["later", "Still to come", "mute"]
   ];
   var PAGE = 12;
-  function bucketOf2(row, ref) {
+  function bucketOf(row, ref) {
     const d = row.task.cuttingDate;
     if (!d) return "later";
     if (d < ref) return "overdue";
@@ -21384,7 +20188,7 @@ create policy "member reads own row"
         {},
         el("span.stage-m-qty", {}, fmtNum(task.qty), el("small", {}, " pcs")),
         el("span.stage-m-due." + due.tone, {}, due.text),
-        el("span.stage-m-machine", {}, machineLabel5(machine))
+        el("span.stage-m-machine", {}, machineLabel3(machine))
       ),
       staged ? el(
         "div.stage-m-done",
@@ -21457,11 +20261,11 @@ create policy "member reads own row"
   function mobileStaging(todo, staged, rerender) {
     const ref = today();
     const by = { overdue: [], today: [], later: [] };
-    for (const r of todo) by[bucketOf2(r, ref)].push(r);
+    for (const r of todo) by[bucketOf(r, ref)].push(r);
     return el(
       "div.stage-m",
       {},
-      ...BUCKETS2.map(([id, label, tone]) => mobileSection(id, label, tone, by[id], rerender)),
+      ...BUCKETS.map(([id, label, tone]) => mobileSection(id, label, tone, by[id], rerender)),
       vs2.showStaged ? mobileSection("staged", "Staged and ready", "ok", staged, rerender) : null
     );
   }
@@ -22113,6 +20917,155 @@ create policy "member reads own row"
   init_model();
   init_machines();
   init_shifts();
+
+  // js/views/today.js
+  init_ui();
+  init_store();
+  init_model();
+  init_machines();
+  init_shifts();
+  function todoRow(item, ref, rerender) {
+    const carried = item.date < ref;
+    const age = (iso) => iso ? Date.now() - new Date(iso).getTime() : Infinity;
+    const justDone = item.done && age(item.doneAt) < 800;
+    const justAdded = !item.done && age(item.at) < 800;
+    return el(
+      "li.todo" + (item.done ? ".done" : "") + (carried ? ".carried" : "") + (justDone ? ".just-done" : "") + (justAdded ? ".just-added" : ""),
+      {},
+      el(
+        "label.todo-check",
+        {},
+        el("input", {
+          type: "checkbox",
+          checked: !!item.done,
+          "aria-label": (item.done ? "Mark not done: " : "Mark done: ") + item.text,
+          onchange: (e) => {
+            setTodo(item.id, { done: e.target.checked });
+            rerender();
+          }
+        })
+      ),
+      el(
+        "div.todo-main",
+        {},
+        el("div.todo-text", {}, item.text),
+        el(
+          "div.todo-meta",
+          {},
+          // Where a carried job came from matters: three days old is a different
+          // conversation from written this morning.
+          carried ? chip(`from ${fmtDate(item.date)}`, "warn") : null,
+          item.assignee ? el("span.todo-who", {}, icon("dot", { size: 10 }), item.assignee) : null,
+          item.done ? el("span.muted", {}, `done by ${item.doneBy} \xB7 ${fmtWhen(item.doneAt)}`) : el("span.muted", {}, `added by ${item.by} \xB7 ${fmtWhen(item.at)}`)
+        )
+      ),
+      el("button.line-iconbtn", {
+        title: "Remove",
+        onclick: async () => {
+          const ok = await confirmDialog(
+            "Remove this?",
+            item.text,
+            { confirmLabel: "Remove", danger: true }
+          );
+          if (!ok) return;
+          deleteTodo(item.id);
+          toast("Removed");
+          rerender();
+        }
+      }, icon("x", { size: 15 }))
+    );
+  }
+  function listPanel(ref, rerender, go2) {
+    const { open, done, carried } = openTodos(ref);
+    const input = el("input", {
+      placeholder: "Something that needs doing today\u2026",
+      "aria-label": "What needs doing",
+      onkeydown: (e) => {
+        if (e.key === "Enter") add2();
+      }
+    });
+    const people = directoryPeople();
+    const who = el(
+      "select",
+      { "aria-label": "Who it is for", style: { width: "auto", minWidth: "150px" } },
+      el("option", { value: "" }, "Anyone"),
+      ...people.map((p) => el("option", { value: p, selected: p === me() }, p))
+    );
+    function add2() {
+      const text4 = input.value.trim();
+      if (!text4) return;
+      addTodo(text4, { date: ref, assignee: who.value || null });
+      input.value = "";
+      rerender();
+    }
+    async function photoToTodo(origin) {
+      const button2 = origin?.currentTarget;
+      if (button2) button2.disabled = true;
+      try {
+        const { openPhotoTodoDialog: openPhotoTodoDialog2 } = await Promise.resolve().then(() => (init_photo_todos(), photo_todos_exports));
+        openPhotoTodoDialog2({
+          ref,
+          people,
+          defaultAssignee: who.value || null,
+          rerender,
+          go: go2,
+          origin: button2
+        });
+      } catch (error) {
+        toast("Photo to To-Do could not open. Connect once and try again.");
+        console.error("Photo to To-Do failed to load", error);
+      } finally {
+        if (button2) button2.disabled = false;
+      }
+    }
+    return el(
+      "div.panel",
+      {},
+      el(
+        "header",
+        {},
+        icon("list", { size: 14 }),
+        el("h2", {}, "To do"),
+        open.length ? chip(`${open.length} open`, carried ? "warn" : "mute") : null,
+        carried ? chip(`${carried} carried over`, "warn") : null,
+        el("span.spacer"),
+        done.length ? el("span.small.muted", {}, `${done.length} done today`) : null
+      ),
+      el(
+        "div.body",
+        {},
+        el(
+          "div.todo-add",
+          {},
+          input,
+          who,
+          el("button.primary", { onclick: add2 }, icon("plus", { size: 15 }), "Add"),
+          el("button.photo-todo-launch", {
+            onclick: photoToTodo,
+            title: "Turn a photo of notes or a whiteboard into reviewed To-Dos"
+          }, icon("camera", { size: 16 }), "Photo to To-Do")
+        ),
+        open.length || done.length ? el(
+          "ul.list.todo-list",
+          {},
+          ...open.map((t) => todoRow(t, ref, rerender)),
+          ...done.map((t) => todoRow(t, ref, rerender))
+        ) : el(
+          "div.empty",
+          {},
+          el("div.empty-icon", {}, icon("check", { size: 28 })),
+          el("h3", {}, "Nothing on the list"),
+          el("div", {}, "Anything the schedules do not cover goes here \u2014 chasing material, a blade change, a call to make.")
+        )
+      )
+    );
+  }
+  function todoPanel(rerender, go2) {
+    return listPanel(today(), rerender, go2);
+  }
+
+  // js/views/overview.js
+  init_supervisor_board();
   var GROUP_PAGE2 = { Rolling: "rolling", FOM: "fom", CNC: "cnc", Punch: "punch" };
   var PREVIOUS_SHIFT = {
     DAY: { key: "NIGHT", day: -1, fallback: "AFT" },
@@ -22146,7 +21099,7 @@ create policy "member reads own row"
       text: String(log?.notes || "").trim() || rowText || "No written handoff for this shift yet."
     };
   }
-  function machineLabel6(key2) {
+  function machineLabel4(key2) {
     const machine = MACHINE_BY_KEY[key2];
     return machine ? machineConfig(machine).label : key2 || "Unassigned";
   }
@@ -22300,7 +21253,7 @@ create policy "member reads own row"
         "span.overview-watch-main",
         {},
         el("strong", {}, row.task.wo, " ", row.task.project || ""),
-        el("span", {}, context || machineLabel6(row.machine))
+        el("span", {}, context || machineLabel4(row.machine))
       ),
       el("span.overview-watch-qty.mono", {}, `${fmtNum(row.task.qty)} pcs`),
       icon("chevron", { size: 17 })
@@ -22357,6 +21310,56 @@ create policy "member reads own row"
         el("span", {}, label),
         detail ? el("small", {}, detail) : null
       )
+    );
+  }
+  function supervisorStrip(go2) {
+    const board = supervisorBoard();
+    const pile = (title, rows, empty2) => el(
+      "section.sup-list",
+      {},
+      el("h2", {}, title, el("span", {}, String(rows.length))),
+      rows.length ? el("ul", {}, ...rows.slice(0, 6).map((row) => el(
+        "li",
+        {},
+        el("b.mono", {}, row.wo || "\u2014"),
+        row.project ? el("span", {}, ` ${row.project}`) : null
+      ))) : el("p", {}, empty2)
+    );
+    return el(
+      "section.sup-board",
+      { "aria-label": "This shift at a glance" },
+      el(
+        "div.sup-shift",
+        {},
+        el("strong", {}, `${board.shift.shift.label} shift`),
+        board.shift.shift.range ? el("span", {}, board.shift.shift.range) : null
+      ),
+      el("div.sup-centres", {}, ...board.centres.map((centre) => el(
+        "button.sup-centre",
+        {
+          type: "button",
+          onclick: () => go2(centre.page),
+          "aria-label": `${centre.label}: ${centre.done} done of ${centre.plan} planned this shift`
+        },
+        el("span.sup-centre-label", {}, centre.label),
+        el(
+          "span.sup-centre-score",
+          {},
+          el("b", {}, String(centre.done)),
+          el("small", {}, ` / ${centre.plan}`)
+        ),
+        el("span.sup-centre-hint", {}, centre.plan ? "done / planned" : "none dated for this shift")
+      ))),
+      el(
+        "div.sup-counts",
+        {},
+        el("div", {}, el("b", {}, String(board.late.length)), el("span", {}, "Late")),
+        el("div", {}, el("b", {}, String(board.backOrders.length)), el("span", {}, "Back orders")),
+        el("div", {}, el("b", {}, String(board.stagingTodo)), el("span", {}, "To stage"))
+      ),
+      pile("Late", board.late, "Nothing is past its cutting date."),
+      pile("Back orders", board.backOrders, "No open shortages."),
+      pile("Still to stage", board.stagingLines, "Rolling material for this shift is staged or already running.")
     );
   }
   function quickStart(label, detail, iconName, page, go2, on) {
@@ -22480,8 +21483,7 @@ create policy "member reads own row"
           "div.overview-crew",
           {},
           icon("dot", { size: 12 }),
-          shiftContext.live ? crew : "Outside configured shift hours \xB7 attendance not confirmed",
-          me() ? ` \xB7 ${me()}` : ""
+          shiftContext.live ? crew : "Outside configured shift hours \xB7 attendance not confirmed"
         )
       ),
       handoffCard,
@@ -22522,7 +21524,7 @@ create policy "member reads own row"
       "aside.overview-quickstarts",
       {},
       el("h2", {}, "Quick starts"),
-      quickStart("Today", "View today\u2019s plan", "calendar", "today", go2),
+      quickStart("Back orders", "Shortages across the floor", "alert", "backorders", go2),
       quickStart("Stage material", "Prepare upcoming work", "staging", "staging", go2),
       quickStart("Die lookup", "Search dies and components", "search", "dies", go2),
       quickStart(
@@ -22538,6 +21540,8 @@ create policy "member reads own row"
       return el(
         "div.overview",
         {},
+        supervisorStrip(go2),
+        todoPanel(rerender, go2),
         brief,
         renderCommandCenter(rerender, go2),
         el(
@@ -22569,6 +21573,8 @@ create policy "member reads own row"
     return el(
       "div.overview",
       {},
+      supervisorStrip(go2),
+      todoPanel(rerender, go2),
       brief,
       renderCommandCenter(rerender, go2),
       el(
@@ -22580,7 +21586,7 @@ create policy "member reads own row"
           band(
             1,
             first?.status?.key === "IN_PROGRESS" ? "Running now" : "Do now",
-            first?.status?.key === "IN_PROGRESS" ? `On ${machineLabel6(first.machine)} \xB7 the line moving on the floor.` : "One thing to focus on first.",
+            first?.status?.key === "IN_PROGRESS" ? `On ${machineLabel4(first.machine)} \xB7 the line moving on the floor.` : "One thing to focus on first.",
             "work",
             primaryWork(first, ref, go2, rerender)
           ),
@@ -22605,33 +21611,13 @@ create policy "member reads own row"
     );
   }
 
-  // js/views/quick-entry.js
-  init_ui();
-  init_shiftupdate();
-  init_command_center();
-  function quickEntry(rerender, go2) {
-    return el("button.floor-quick-entry", { type: "button", "aria-label": "Quick entry", onclick: () => {
-      modal("Quick entry", el("p", {}, "Record a floor issue or prepare the handover."), { actions: [
-        ...[["downtime", "Downtime"], ["quality", "Quality"], ["action", "Action"]].map(([kind, label]) => ({ label, onClick: (dlg) => {
-          dlg.close();
-          openOperationDialog(kind, rerender);
-        } })),
-        { label: "Handover", onClick: (dlg) => {
-          dlg.close();
-          const { context } = commandSnapshot();
-          focusShiftUpdate(context.date, context.key);
-          go2("shift");
-        } }
-      ] });
-    } }, "+ Quick entry");
-  }
-
   // js/app.js
   init_shiftupdate();
 
   // js/views/data.js
   init_ui();
   init_store();
+  init_cloud();
   init_import_machines();
   init_model();
   init_machines();
@@ -22873,26 +21859,16 @@ create policy "member reads own row"
       }
     );
   }
-  var emailFormFn = null;
-  function cloudSignIn(rerender) {
-    if (emailFormFn) return emailFormFn({ compact: true });
-    Promise.resolve().then(() => (init_signin(), signin_exports)).then((module) => {
-      emailFormFn = module.emailForm;
-      rerender();
-    }).catch(() => {
-    });
-    return el("p.small.muted", {}, "Loading sign-in\u2026");
-  }
   function cloudSection(rerender) {
     const st = cloudStatus();
     const cfg = cloudConfig();
     const body = el("div.body", {});
     if (st.on) {
       const busy = st.pushing || st.pulling;
-      const attention2 = st.error || st.pending;
+      const attention = st.error || st.pending;
       body.append(
         el(
-          "div.banner" + (st.error ? ".bad" : attention2 ? ".warn" : ".ok"),
+          "div.banner" + (st.error ? ".bad" : attention ? ".warn" : ".ok"),
           { style: { marginBottom: "12px" } },
           el(
             "div",
@@ -22906,7 +21882,6 @@ create policy "member reads own row"
             )
           )
         ),
-        cloudSignIn(rerender),
         el(
           "div.row",
           {},
@@ -22922,7 +21897,7 @@ create policy "member reads own row"
             onclick: async () => {
               const ok = await confirmDialog(
                 "Stop syncing this device?",
-                "Work already sent stays in the cloud. This device keeps its own copy and stops sending updates.",
+                "Work already sent stays in the cloud. This device keeps its own copy and stops sending updates until the link is opened again.",
                 { confirmLabel: "Stop syncing" }
               );
               if (!ok) return;
@@ -22936,49 +21911,35 @@ create policy "member reads own row"
       return el("div.panel", {}, el("header", {}, "Sync across devices"), body);
     }
     const url = el("input", {
-      value: cfg?.url || "",
-      placeholder: "https://xxxxxxxx.supabase.co",
+      value: cfg?.url || DEPARTMENT_CLOUD.url,
+      placeholder: DEPARTMENT_CLOUD.url,
       autocapitalize: "off",
       spellcheck: false
     });
     const key2 = el("input", {
-      value: cfg?.key || "",
-      placeholder: "sb_publishable_\u2026 or legacy anon key",
+      value: cfg?.key || DEPARTMENT_CLOUD.key,
+      placeholder: "sb_publishable_\u2026",
       autocapitalize: "off",
       spellcheck: false
     });
-    const site = el("input", { value: cfg?.site || "cutting", placeholder: "cutting" });
+    const site = el("input", { value: cfg?.site || DEPARTMENT_CLOUD.site, placeholder: DEPARTMENT_CLOUD.site });
     body.append(
       el(
         "p.small.muted",
         { style: { marginTop: 0 } },
-        "Connect this device to a free Supabase project and the tracker works on phones too \u2014 statuses, notes, rush, back orders and shift updates all merge line by line, exactly as they do through the shared file."
+        "Opening the shared link connects this device to the Cutting department board. Statuses, notes, rush, back orders and shift updates merge line by line. No sign-in and no name to pick."
       ),
       el(
         "ol.small.muted.cloud-steps",
         {},
-        el("li", {}, "Make a free project at supabase.com, turn on email sign-in, and turn off new sign-ups."),
-        el(
-          "li",
-          {},
-          "Run the setup SQL once \u2014 ",
-          el("button.linkbtn", { onclick: sqlDialog }, "show it"),
-          " \u2014 then invite people and mark editors and the view-only wall screen."
-        ),
-        el(
-          "li",
-          {},
-          "Copy the Project URL and the ",
-          el("strong", {}, "publishable key"),
-          " from Settings \u2192 API Keys, and paste them here. On an older project the same field is called the anon public key \u2014 either works."
-        ),
+        el("li", {}, "The project, publishable key and site name are already filled in."),
+        el("li", {}, "Use Connect only if sync was turned off. The same site name has to be used on every device that should share this board."),
         el(
           "li",
           {},
           el("strong", {}, "Never paste a service_role or secret key here. "),
           "Those bypass every rule on the table, and anything typed into this box ends up in a browser where anyone using the tracker can read it."
-        ),
-        el("li", {}, "Connect, then sign in with the invited email. Use the same site name on every device.")
+        )
       ),
       el(
         "div.grid",
@@ -23031,7 +21992,6 @@ create policy "member reads own row"
   function firstRun(rerender) {
     const mm = state.machineMeta || {};
     const sharing = cloudStatus().on || !!sharedFileName();
-    const users = appPeople();
     const steps = [
       {
         n: 1,
@@ -23049,13 +22009,7 @@ create policy "member reads own row"
         n: 3,
         label: "Set up sharing",
         done: sharing,
-        hint: "Cloud sync for phones, or one file on the shared drive"
-      },
-      {
-        n: 4,
-        label: "Add an app user",
-        done: users.length > 0,
-        hint: "A lead hand, supervisor or manager who uses the tracker"
+        hint: "The shared link connects itself. A shop PC can still use one file on the drive."
       }
     ];
     const left = steps.filter((s) => !s.done);
@@ -23071,7 +22025,7 @@ create policy "member reads own row"
           el(
             "span.small.muted",
             {},
-            `${fmtNum((state.tasks || []).length)} lines loaded \xB7 ${cloudStatus().on ? "syncing to the cloud" : sharedFileName() ? "sharing a file" : ""} \xB7 ${users.length} app user${users.length === 1 ? "" : "s"}`
+            `${fmtNum((state.tasks || []).length)} lines loaded \xB7 ${cloudStatus().on ? "syncing to the cloud" : sharedFileName() ? "sharing a file" : ""}`
           )
         )
       );
@@ -23391,26 +22345,25 @@ create policy "member reads own row"
         )
       )
     );
-    const users = appPeople();
     const employeeCount = employeeDirectory().length;
     const peoplePanel = el(
       "div.panel",
       {},
-      el("header", {}, "Tracker users"),
+      el("header", {}, "Directory"),
       el(
         "div.body",
         {},
         el(
           "p.small.muted",
           { style: { marginTop: 0 } },
-          "Only enabled lead hands, supervisors and managers appear in the app header."
+          "Work is assigned to people in this directory. The tracker does not ask who is using the device."
         ),
-        users.length ? el(
-          "div.tag-row",
+        el(
+          "div.small.muted",
           { style: { marginBottom: "12px" } },
-          ...users.map((person) => el("span.chip" + (person === me() ? ".ok" : ""), {}, person))
-        ) : el("div.small.muted", { style: { marginBottom: "12px" } }, "No tracker users are enabled yet."),
-        el("button", { onclick: () => go2?.("employees") }, icon("users", { size: 16 }), "Manage employees and access")
+          employeeCount ? `${fmtNum(employeeCount)} employee${employeeCount === 1 ? "" : "s"} listed` : "No employees listed yet."
+        ),
+        el("button", { onclick: () => go2?.("employees") }, icon("users", { size: 16 }), "Manage employees")
       )
     );
     const health = [
@@ -23433,10 +22386,10 @@ create policy "member reads own row"
         value: storage.ok ? "Saving normally" : storage.error
       },
       {
-        label: "Tracker access",
-        ok: users.length > 0,
+        label: "Directory",
+        ok: employeeCount > 0,
         icon: "dot",
-        value: users.length ? `${users.length} user${users.length === 1 ? "" : "s"} \xB7 ${employeeCount} employees \xB7 ${me()}` : "Enable a lead hand, supervisor or manager"
+        value: employeeCount ? `${fmtNum(employeeCount)} employee${employeeCount === 1 ? "" : "s"}` : "Add people before assigning work"
       },
       {
         label: "Latest backup",
@@ -23475,372 +22428,6 @@ create policy "member reads own row"
       ),
       el("div", { style: { marginTop: "16px" } }, backupPanel)
     );
-  }
-
-  // js/views/monitor.js
-  init_ui();
-  init_model();
-  init_machines();
-  init_routing();
-  init_shifts();
-  var CYCLE_PAGES = 3;
-  var cycle = 0;
-  var cycleTimer = null;
-  var GROUPS = [
-    { key: "rolling", label: "Rolling", machines: ["roll-auto", "roll-man"] },
-    { key: "fom", label: "FOM", machines: ["fom1", "fom2", "fom3"] },
-    { key: "punch", label: "Multi Punch", machines: ["multipunch", "saw"] },
-    { key: "cnc", label: "CNC / FMC", machines: ["cnc1", "fmc1", "fmc2", "cncfmc"] }
-  ];
-  function machineName(key2) {
-    const machine = MACHINE_BY_KEY[key2];
-    return machine ? machineConfig(machine).label : key2 || "Unassigned";
-  }
-  function visibleMachine(key2) {
-    const machine = MACHINE_BY_KEY[key2];
-    return machine && !machineConfig(machine).hidden;
-  }
-  function taskUrgency(a, b) {
-    if (a.rush?.on !== b.rush?.on) return a.rush?.on ? -1 : 1;
-    if (a.bo?.on !== b.bo?.on) return a.bo?.on ? -1 : 1;
-    const ad = a.task.cuttingDate || "9999-99-99";
-    const bd = b.task.cuttingDate || "9999-99-99";
-    return ad === bd ? String(a.task.wo || "").localeCompare(String(b.task.wo || ""), void 0, { numeric: true }) : ad.localeCompare(bd);
-  }
-  function machineRows(group, status) {
-    return group.machines.filter(visibleMachine).flatMap((machine) => {
-      const rows = status === "IN_PROGRESS" ? runningNow(machine) : tasksForMachine(machine).filter((row) => !isParked(row.task) && row.status.key === status);
-      return rows.map((row) => ({
-        ...row,
-        machine,
-        bo: resolveBackOrder(row.task)
-      }));
-    }).sort(taskUrgency);
-  }
-  function scheduleProgress(machine) {
-    const summary = machineSummary(machine);
-    return summary.total ? Math.round(summary.done / summary.total * 100) : 0;
-  }
-  function groupCard(group) {
-    const live = machineRows(group, "IN_PROGRESS");
-    const waiting = live.length ? [] : machineRows(group, "NOT_STARTED");
-    const rows = live.length ? live : waiting;
-    const row = rows.length ? rows[cycle % rows.length] : null;
-    const running = !!live.length;
-    if (!row) {
-      return el(
-        "section.monitor-now-card.idle",
-        { "aria-label": `${group.label}: idle` },
-        el("div.monitor-now-state", {}, group.label),
-        el("div.monitor-idle-word", {}, "IDLE"),
-        el("div.monitor-card-sub", {}, "No open work scheduled")
-      );
-    }
-    const task = row.task;
-    const progress = scheduleProgress(row.machine);
-    const operator = running && row.status.by ? `Set running by ${row.status.by}` : running ? "Operator not recorded" : task.cuttingDate ? `Due ${fmtDate(task.cuttingDate)}` : "No cutting date";
-    return el(
-      `section.monitor-now-card.${running ? "running" : "waiting"}`,
-      {
-        "aria-label": `${group.label}: ${running ? "running" : "next"} work order ${task.wo}`
-      },
-      el(
-        "div.monitor-now-state",
-        {},
-        group.label,
-        el("span.monitor-machine", {}, machineName(row.machine))
-      ),
-      el(
-        "div.monitor-order-line",
-        {},
-        el("strong.monitor-wo", {}, task.wo || "\u2014"),
-        task.die ? el("span.monitor-die", {}, task.die) : null,
-        el(
-          "span.monitor-qty",
-          {},
-          el("b", {}, fmtNum(task.qty)),
-          el("small", {}, "pcs")
-        )
-      ),
-      el(
-        "div.monitor-project",
-        {},
-        task.project || "No project",
-        task.floor ? el("span", {}, ` \xB7 ${task.floor}`) : null
-      ),
-      el(
-        "div.monitor-card-sub",
-        {},
-        el("span", {}, running ? "RUNNING" : "NEXT"),
-        el("span", {}, operator)
-      ),
-      el(
-        "div.monitor-progress-row",
-        {},
-        el("span.monitor-progress-track", {
-          role: "progressbar",
-          "aria-label": `${machineName(row.machine)} schedule completion`,
-          "aria-valuemin": "0",
-          "aria-valuemax": "100",
-          "aria-valuenow": String(progress)
-        }, el("i", { style: { width: `${progress}%` } })),
-        el("b", {}, `${progress}%`)
-      ),
-      el("div.monitor-progress-caption", {}, `${machineName(row.machine)} schedule complete`)
-    );
-  }
-  function nextWork() {
-    const candidates = GROUPS.flatMap((group) => machineRows(group, "NOT_STARTED").slice(0, 1)).sort(taskUrgency).slice(0, 3);
-    return el(
-      "section.monitor-next",
-      { "aria-label": "Next scheduled work" },
-      el("div.monitor-band-label", {}, "NEXT"),
-      el(
-        "div.monitor-next-list",
-        {},
-        ...candidates.map((row, index) => el(
-          "article.monitor-next-item",
-          {},
-          el("span.monitor-next-rank", {}, String(index + 1)),
-          el(
-            "div.monitor-next-order",
-            {},
-            el("strong", {}, row.task.wo || "\u2014"),
-            row.task.die ? el("span", {}, row.task.die) : null
-          ),
-          el("div.monitor-next-project", {}, row.task.project || "No project"),
-          el(
-            "div.monitor-next-meta",
-            {},
-            machineName(row.machine),
-            row.task.cuttingDate ? ` \xB7 ${fmtDate(row.task.cuttingDate)}` : " \xB7 no date"
-          )
-        )),
-        ...!candidates.length ? [el("div.monitor-next-empty", {}, "No waiting work scheduled")] : []
-      )
-    );
-  }
-  function downIssue() {
-    for (const machine of MACHINES.filter((item) => !item.queue && visibleMachine(item.key))) {
-      const update = shiftUpdateFor(machine.key);
-      if (!update?.down && !update?.staleDown) continue;
-      return {
-        tone: "bad",
-        icon: "gear",
-        label: "MACHINE DOWN",
-        primary: machineName(machine.key),
-        detail: update.notes?.[0] || (update.staleDown ? `Carried from ${fmtDate(update.staleDown)}` : "Reported in the latest shift update")
-      };
-    }
-    return null;
-  }
-  function shortageIssue(board) {
-    const row = [...board.backOrders].sort(taskUrgency)[0];
-    if (!row) return null;
-    return {
-      tone: "bad",
-      icon: "alert",
-      label: "MATERIAL SHORTAGE",
-      primary: `${machineName(row.machine)} \xB7 ${row.task.wo}`,
-      detail: row.bo.note || row.bo.sheetShort || row.task.project || "Material is back ordered"
-    };
-  }
-  function rushIssue(board) {
-    const row = [...board.rushNow].sort(taskUrgency)[0];
-    if (!row) return null;
-    return {
-      tone: "warn",
-      icon: "clock",
-      label: row.rush.late ? "RUSH JOB LATE" : "RUSH JOB",
-      primary: `${machineName(row.machine)} \xB7 ${row.task.wo}`,
-      detail: row.rush.reason || (row.rush.needBy ? `Needed ${fmtDate(row.rush.needBy)}` : row.task.project)
-    };
-  }
-  function sopIssue(ref) {
-    const rows = tasksInScope().map(resolveTask).filter((task) => effectiveTaskStatus(task).key !== "DONE" && !isParked(task)).map((task) => {
-      const machine = assignedMachine(task);
-      const route = routeFor({ ...task, machine });
-      return { task, machine, route, rush: resolveRush(task, ref), bo: resolveBackOrder(task) };
-    }).filter((row2) => row2.route?.at < 0 && row2.route.steps.some((step) => step.machine)).sort(taskUrgency);
-    const row = rows[0];
-    if (!row) return null;
-    const expected = row.route.steps.filter((step) => step.machine).map((step) => step.station).join(" \u2192 ");
-    return {
-      tone: "sop",
-      icon: "list",
-      label: `${SOP.id} DEVIATION`,
-      primary: `${machineName(row.machine)} \xB7 ${row.task.wo}`,
-      detail: expected ? `Expected path: ${expected}` : "The schedule is off the documented route"
-    };
-  }
-  function attention(board, ref) {
-    const critical = downIssue() || shortageIssue(board);
-    const issues = [critical, rushIssue(board), sopIssue(ref)].filter(Boolean);
-    if (issues.length < 3 && critical?.label === "MACHINE DOWN") {
-      const shortage = shortageIssue(board);
-      if (shortage) issues.splice(1, 0, shortage);
-    }
-    const shown = issues.slice(0, 3);
-    return el(
-      "aside.monitor-attention",
-      { "aria-label": "Needs attention" },
-      el("h2", {}, "NEEDS ATTENTION"),
-      el(
-        "div.monitor-attention-list",
-        {},
-        ...shown.map((issue) => el(
-          `article.monitor-alert.${issue.tone}`,
-          {},
-          el("span.monitor-alert-symbol", { "aria-hidden": "true" }, icon(issue.icon, { size: 42 })),
-          el(
-            "div.monitor-alert-copy",
-            {},
-            el("div.monitor-alert-label", {}, issue.label),
-            el("strong", {}, issue.primary),
-            el("span", {}, issue.detail)
-          )
-        )),
-        ...!shown.length ? [el(
-          "div.monitor-all-clear",
-          {},
-          el("strong", {}, "ALL CLEAR"),
-          el("span", {}, "No active blockers or routing conflicts")
-        )] : []
-      )
-    );
-  }
-  function clockParts(now2 = /* @__PURE__ */ new Date()) {
-    return {
-      time: new Intl.DateTimeFormat(void 0, { hour: "numeric", minute: "2-digit" }).format(now2),
-      date: new Intl.DateTimeFormat(void 0, {
-        month: "short",
-        day: "numeric",
-        year: "numeric"
-      }).format(now2)
-    };
-  }
-  function syncCopy(sync) {
-    if (!sync) return { tone: "mute", label: "DEVICE ONLY", detail: "Local storage active" };
-    const label = sync.tone === "ok" ? "SYNCED" : sync.tone === "warn" ? "OFFLINE" : sync.tone === "bad" ? "SYNC ISSUE" : sync.active ? "SYNCING" : "DEVICE ONLY";
-    let detail = sync.label || "";
-    if (detail === "this device only") detail = "Local storage active";
-    if (sync.at) {
-      detail = `Refreshed ${new Intl.DateTimeFormat(void 0, {
-        hour: "numeric",
-        minute: "2-digit",
-        second: "2-digit"
-      }).format(new Date(sync.at))}`;
-    }
-    return { tone: sync.tone || "mute", label, detail };
-  }
-  function monitorHeader(sync) {
-    const now2 = /* @__PURE__ */ new Date();
-    const clock2 = clockParts(now2);
-    const shift2 = shiftStatusAt(now2);
-    const shiftText = shift2.shift ? `${shift2.shift.label} \xB7 ${shift2.shift.range}` : "Off shift \xB7 Day starts 07:00";
-    const connection = syncCopy(sync);
-    const page = cycle % CYCLE_PAGES + 1;
-    return el(
-      "header.monitor-header",
-      {},
-      el(
-        "div.monitor-identity",
-        {},
-        brandLockup(),
-        el(
-          "div.monitor-product",
-          {},
-          el("strong", {}, "BV CUTTING"),
-          el("span.monitor-shift-label", {}, shiftText)
-        )
-      ),
-      el("time.monitor-clock", { "data-keep-focus": "monitor-clock", tabindex: "-1" }, clock2.time),
-      el(
-        "div.monitor-health",
-        {},
-        el(`strong.${connection.tone}`, {}, connection.label),
-        el("span.monitor-refresh", {}, `${connection.detail || "Status current"} \xB7 ${clock2.date}`)
-      ),
-      el(
-        "div.monitor-cycle",
-        { "aria-label": `Automatic rotation page ${page} of ${CYCLE_PAGES}` },
-        el("b", {}, String(page)),
-        ` of ${CYCLE_PAGES}`
-      )
-    );
-  }
-  function pulse(board, all, done, blocked) {
-    const completion = all.length ? Math.round(done / all.length * 100) : 0;
-    const activeMachines = MACHINES.filter((machine) => !machine.queue && visibleMachine(machine.key) && runningNow(machine.key).length).length;
-    const stat = (value2, label, tone = "") => el(
-      `div.monitor-pulse-stat${tone ? "." + tone : ""}`,
-      {},
-      el("strong", {}, value2),
-      el("span", {}, label)
-    );
-    return el(
-      "section.monitor-pulse",
-      { "aria-label": "Department pulse" },
-      stat(`${completion}%`, "schedule complete"),
-      stat(String(activeMachines), "machines running", "work"),
-      stat(fmtNum(board.dueToday.length), "due today"),
-      stat(fmtNum(blocked), "blocked", blocked ? "bad" : "ok")
-    );
-  }
-  function renderMonitorDashboard(sync) {
-    const ref = today();
-    const board = todayBoard(ref);
-    const all = tasksInScope().map(resolveTask).filter((task) => !isParked(task));
-    const done = all.filter((task) => effectiveTaskStatus(task).key === "DONE").length;
-    const down = MACHINES.filter((machine) => !machine.queue && shiftUpdateFor(machine.key)?.down).length;
-    const blocked = board.backOrders.length + down;
-    if (!all.length) {
-      return el(
-        "main.monitor-shell",
-        {},
-        monitorHeader(sync),
-        el(
-          "section.monitor-no-data",
-          {},
-          el("strong", {}, "NO PRODUCTION SCHEDULE LOADED"),
-          el("span", {}, "Load the machine workbooks from Setup on an operator device.")
-        )
-      );
-    }
-    return el(
-      "main.monitor-shell",
-      {},
-      monitorHeader(sync),
-      pulse(board, all, done, blocked),
-      el(
-        "div.monitor-body.monitor-cycle-enter",
-        {},
-        el(
-          "section.monitor-now",
-          { "aria-label": "Running now" },
-          el("div.monitor-band-label", {}, "NOW"),
-          el("div.monitor-now-grid", {}, ...GROUPS.map(groupCard))
-        ),
-        attention(board, ref)
-      ),
-      nextWork()
-    );
-  }
-  function armMonitorRotation(rerender) {
-    if (cycleTimer) return;
-    cycleTimer = setInterval(() => {
-      cycle = (cycle + 1) % CYCLE_PAGES;
-      rerender();
-    }, 2e4);
-  }
-  function refreshMonitorClock() {
-    const clock2 = document.querySelector(".monitor-clock");
-    const shiftLabel3 = document.querySelector(".monitor-shift-label");
-    if (clock2) clock2.textContent = clockParts().time;
-    if (shiftLabel3) {
-      const shift2 = shiftStatusAt();
-      shiftLabel3.textContent = shift2.shift ? `${shift2.shift.label} \xB7 ${shift2.shift.range}` : "Off shift \xB7 Day starts 07:00";
-    }
   }
 
   // js/app.js
@@ -23982,11 +22569,9 @@ create policy "member reads own row"
        about a work order rather than about a machine, which is most of the
        time — 201 of the 272 live work orders touch more than one centre. */
     { key: "jobs", label: "Jobs", kind: "tool", icon: "job", render: renderJobs },
-    { key: "today", label: "Today", kind: "tool", icon: "calendar", render: renderToday },
     { key: "schedule", label: "Daily Schedule", short: "Schedule", kind: "tool", icon: "calendar", render: renderSchedule2 },
     { key: "projects", label: "Projects", kind: "tool", icon: "job", render: renderProjects2 },
     { key: "staging", label: "Staging", short: "Stage", kind: "tool", icon: "staging", render: renderStaging },
-    { key: "rush", label: "Rush", kind: "tool", icon: "bolt", render: renderRush },
     { key: "backorders", label: "Back Orders", short: "B/O", kind: "tool", icon: "alert", render: renderBackOrders },
     { key: "resources", label: "Forms", kind: "tool", icon: "file", render: renderResources2 },
     { key: "employees", label: "Employees", kind: "tool", icon: "users", render: renderEmployees2 },
@@ -23996,6 +22581,10 @@ create policy "member reads own row"
   ];
   takeImplicitSession();
   var current = location.hash.slice(1) || "overview";
+  if (current === "today" || current === "rush") {
+    current = "overview";
+    history.replaceState(null, "", "#overview");
+  }
   if (current === "extrusions") {
     current = "dies";
     history.replaceState(null, "", "#dies");
@@ -24012,22 +22601,6 @@ create policy "member reads own row"
     scheduleRender();
     window.scrollTo({ top: 0 });
   }
-  function whoAmI() {
-    const people = appPeople();
-    const sel = el(
-      "select.whopick",
-      {
-        "aria-label": "Who are you?",
-        onchange: (e) => {
-          setCurrentAppUser(e.target.value);
-          scheduleRender();
-        }
-      },
-      el("option", { value: "", selected: me() === "Unassigned" }, "Select app user"),
-      ...people.map((p) => el("option", { value: p, selected: me() === p }, p))
-    );
-    return sel;
-  }
   var TAB_GROUP = { rolling: "Rolling", fom: "FOM", cnc: "CNC", punch: "Punch" };
   function tabBadge(tab) {
     const { key: key2 } = tab;
@@ -24035,15 +22608,7 @@ create policy "member reads own row"
       const n = (machinesByGroup().get(TAB_GROUP[key2]) || []).reduce((total, machine) => total + openCountFor(machine.key), 0);
       return n ? el("span.tab-badge.centre-count", {}, String(n)) : null;
     }
-    if (key2 === "today") {
-      const n = openTodos().open.length;
-      return n ? el("span.tab-badge.warn", {}, String(n)) : null;
-    }
     if (!hasTasks()) return null;
-    if (key2 === "rush") {
-      const n = allRush().length;
-      return n ? el("span.tab-badge.warn", {}, String(n)) : null;
-    }
     if (key2 === "backorders") {
       const n = allBackOrders().reduce((a, g) => a + g.rows.length, 0);
       return n ? el("span.tab-badge", {}, String(n)) : null;
@@ -24248,28 +22813,28 @@ create policy "member reads own row"
     );
   }
   function openSyncDetails() {
-    const view6 = syncViewState();
+    const view5 = syncViewState();
     const body = el(
       "div.sync-diagnostics",
       {},
       el(
-        "div.sync-summary." + view6.tone,
+        "div.sync-summary." + view5.tone,
         {},
-        el("span.sync-summary-icon", {}, icon(view6.icon, { size: 20 })),
-        el("div", {}, el("strong", {}, view6.label), el("div.small", {}, view6.detail))
+        el("span.sync-summary-icon", {}, icon(view5.icon, { size: 20 })),
+        el("div", {}, el("strong", {}, view5.label), el("div.small", {}, view5.detail))
       ),
-      view6.configured ? el(
+      view5.configured ? el(
         "div.sync-diagnostic-list",
         {},
-        diagnosticCard("Cloud", view6.cloud),
-        diagnosticCard("Shared file", view6.file)
+        diagnosticCard("Cloud", view5.cloud),
+        diagnosticCard("Shared file", view5.file)
       ) : el(
         "p.muted",
         {},
         "This device is saving locally, but its updates are not being shared with another device."
       )
     );
-    const actions = view6.configured ? [
+    const actions = view5.configured ? [
       {
         label: "Retry now",
         class: "primary",
@@ -24299,20 +22864,20 @@ create policy "member reads own row"
   }
   var lastSyncPulseAt = null;
   function syncIndicator() {
-    const view6 = syncViewState();
-    if (view6.at) {
-      if (lastSyncPulseAt && view6.at !== lastSyncPulseAt && !view6.active) {
+    const view5 = syncViewState();
+    if (view5.at) {
+      if (lastSyncPulseAt && view5.at !== lastSyncPulseAt && !view5.active) {
         queueMicrotask(pulseSyncMerge);
       }
-      lastSyncPulseAt = view6.at;
+      lastSyncPulseAt = view5.at;
     }
-    return el(`button.chip.sync-chip.${view6.tone}${view6.active ? ".is-active" : ""}`, {
+    return el(`button.chip.sync-chip.${view5.tone}${view5.active ? ".is-active" : ""}`, {
       type: "button",
-      title: `${view6.detail} Open sync details.`,
-      "aria-label": `${view6.label}. ${view6.detail} Open sync details.`,
+      title: `${view5.detail} Open sync details.`,
+      "aria-label": `${view5.label}. ${view5.detail} Open sync details.`,
       "aria-live": "polite",
       onclick: openSyncDetails
-    }, icon(view6.icon, { size: 14 }), el("span", {}, view6.label));
+    }, icon(view5.icon, { size: 14 }), el("span", {}, view5.label));
   }
   function header() {
     const shift2 = shiftStatusAt();
@@ -24360,13 +22925,12 @@ create policy "member reads own row"
         )
       ),
       mobileRouteButton(),
-      // Setup is configuration, not a page anyone works on, so it sits with the
-      // name picker as a gear rather than taking another slot in a nav row that
-      // had already run out of width.
+      // Setup is configuration, not a page anyone works on, so it sits as a
+      // gear rather than taking another slot in a nav row that had already
+      // run out of width.
       el(
         "div.hdr-right",
         {},
-        whoAmI(),
         el(
           "div.hdr-tools",
           {},
@@ -24463,41 +23027,10 @@ create policy "member reads own row"
       }
     };
   }
-  var renderAuthGate2 = null;
   function render() {
-    const gate2 = authGate();
-    if (gate2 === "sign-in" || gate2 === "not-a-member" || gate2 === "signing-in") {
-      if (!renderAuthGate2) {
-        Promise.resolve().then(() => (init_signin(), signin_exports)).then((module) => {
-          renderAuthGate2 = module.renderAuthGate;
-          scheduleRender();
-        }).catch(() => {
-        });
-        root.replaceChildren(el(
-          "section.signin-screen",
-          {},
-          el("h1", {}, "Please sign in"),
-          el("p", {}, "Loading the sign-in screen. Your work is still saved on this phone.")
-        ));
-        pageMotion = false;
-        return;
-      }
-      root.replaceChildren(renderAuthGate2({
-        gate: gate2,
-        onReady: () => initCloud({ includeBase: true })
-      }));
-      pageMotion = false;
-      return;
-    }
     const restoreFocus = focusAfterRender();
     const tab = TABS.find((t) => t.key === current) || TABS[0];
     const storage = storageStatus();
-    if (document.documentElement.dataset.display === "monitor" && current === "overview") {
-      root.replaceChildren(renderMonitorDashboard(syncViewState()));
-      pageMotion = false;
-      restoreFocus();
-      return;
-    }
     const next = el(
       "main" + (pageMotion ? ".page-enter" : ""),
       {},
@@ -24518,7 +23051,7 @@ create policy "member reads own row"
       ) : null,
       tab.render(scheduleRender, go, syncViewState())
     );
-    root.replaceChildren(header(), next, quickEntry(scheduleRender, go));
+    root.replaceChildren(header(), next);
     pageMotion = false;
     measureHeader();
     settleNav();
@@ -24533,7 +23066,6 @@ create policy "member reads own row"
     });
   }
   function refreshShiftChip() {
-    refreshMonitorClock();
     const node = root.querySelector(".shift-chip");
     if (!node) return;
     const shift2 = shiftStatusAt();
@@ -24562,9 +23094,6 @@ create policy "member reads own row"
       scheduleRender();
     }
   });
-  if (/(^|[?&])(monitor|display=monitor)(&|$)/.test(location.search.slice(1))) {
-    document.documentElement.dataset.display = "monitor";
-  }
   loadLocal();
   applyTheme();
   onChange(() => {
@@ -24573,7 +23102,6 @@ create policy "member reads own row"
   });
   render();
   armShiftClock();
-  if (document.documentElement.dataset.display === "monitor") armMonitorRotation(scheduleRender);
   registerServiceWorker();
   watchConnection(scheduleRender);
   initSharedFile(scheduleRender);

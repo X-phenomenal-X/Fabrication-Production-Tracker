@@ -185,6 +185,10 @@ function pileList(title, rows, tone, cap = 5) {
 
 /* ---------- page ---------- */
 
+export function todoPanel(rerender, go) {
+  return listPanel(today(), rerender, go);
+}
+
 export function renderToday(rerender, go) {
   const ref = today();
   /* Never null. After midnight the Midnight shift still belongs to the date
@@ -200,9 +204,7 @@ export function renderToday(rerender, go) {
           el('div.centre-sub', {},
             fmtDate(ref, { withDay: true }),
             el('span.dot-sep', {}, '·'),
-            `${shift.label} shift`,
-            el('span.dot-sep', {}, '·'),
-            me()))),
+            `${shift.label} shift`))),
       el('span.spacer')));
 
   // The list works with no schedule loaded — chasing material does not depend

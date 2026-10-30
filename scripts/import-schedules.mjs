@@ -44,8 +44,10 @@ node scripts/import-schedules.mjs --rolling <file> --cnc <file> [--daily <file>]
             Sheet: Daily Sched, with a W/O # header
 --dry-run   Print what would change and save nothing
 
-Sign-in is the environment, not the command:
-  SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_EMAIL, SUPABASE_PASSWORD`;
+The cloud is the environment, not the command:
+  SUPABASE_URL and SUPABASE_ANON_KEY (the publishable key)
+  SUPABASE_EMAIL and SUPABASE_PASSWORD are optional
+  TRACKER_SITE defaults to "Cutting Dept."`;
 
 const REQUIRED = {
   rolling: ['Auto', 'Manual', 'Complete'],
@@ -234,7 +236,7 @@ async function signIn(env) {
   const cfg = {
     url: url.replace(/\/+$/, ''),
     key,
-    site: String(env.TRACKER_SITE || 'cutting').trim() || 'cutting',
+    site: String(env.TRACKER_SITE || 'Cutting Dept.').trim() || 'Cutting Dept.',
   };
   setCloudConfig(cfg);
 
@@ -244,6 +246,12 @@ async function signIn(env) {
   const refreshFile = String(env.SUPABASE_REFRESH_TOKEN_FILE || '').trim();
   if (!refresh && refreshFile && fs.existsSync(refreshFile)) {
     refresh = fs.readFileSync(refreshFile, 'utf8').trim();
+  }
+  // The Cutting board is open to the publishable key. Email is only for a
+  // project that has already been locked to invited editors.
+  if (!email && !password && !refresh) {
+    localStorage.removeItem(SESSION_KEY);
+    return cfg;
   }
   let body;
   if (email && password) body = await authRequest(cfg, 'password', { email, password });

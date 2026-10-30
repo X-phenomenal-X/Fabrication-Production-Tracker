@@ -98,7 +98,7 @@ export async function preparePhoto(file) {
 async function requestCandidates({ cfg, image, guidance }) {
   const session = await freshSession();
   if (!session?.accessToken || membershipRole() !== 'editor') {
-    const error = new Error('Sign in as an editor to use photo analysis.');
+    const error = new Error('Photo analysis is unavailable on this shared link.');
     error.status = 401;
     throw error;
   }
@@ -236,8 +236,8 @@ export function openPhotoTodoDialog({
     flow.replaceChildren(
       el('div.photo-todo-intro', {},
         el('div.photo-todo-mark', {}, icon('sparkles', { size: 24 })),
-        el('div', {}, el('h2', {}, 'Sign in as an editor'),
-          el('p', {}, 'Photo analysis is only for an invited editor. Sign in from Setup, then come back. The normal To-Do list still works.'))),
+        el('div', {}, el('h2', {}, 'Photo analysis is unavailable'),
+          el('p', {}, 'This shared link does not ask anyone to sign in. Add the To-Do by hand. The normal list still works.'))),
       errorBanner(),
       privacyNote());
     footer.replaceChildren(

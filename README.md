@@ -974,27 +974,15 @@ Each person connects once to the same JSON file on the network drive
 ### On phones — sync across devices
 
 No phone browser has the File System Access API, so the shared file cannot
-work there. **Setup → Sync across devices** connects the app to a free
-[Supabase](https://supabase.com) project over plain HTTPS instead, and then the
-same board is open on a phone on the floor and a PC in the office at once.
+work there. The shared link connects itself to the Cutting department board
+over plain HTTPS. There is no Setup step, no email sign-in, and no "Who are
+you?" name. A device that still has the old site name `cutting`, or a blank
+site name, is moved onto that same board. Any other site name is left alone.
 
-1. Make a free project at supabase.com.
-2. In Authentication, turn on email sign-in, turn off new sign-ups, and set
-   the site URL and redirect to the Pages address. Invite each person. The
-   tracker has no Create account button.
-3. Run the setup SQL once (Setup shows the same text as
-   `supabase/migrations/20261018120000_tracker_auth.sql`, with a copy button).
-   It creates `tracker_state` and `tracker_members`, then locks both so the
-   public anon role can neither read nor write. Only a signed-in member can
-   read. Only an editor can change the board.
-4. In the SQL editor, add one `tracker_members` row per invited user id.
-   Supervisors and lead hands are `editor`. The wall screen is `viewer`.
-5. Paste the **Project URL** and **publishable key** from Settings → API Keys.
-   A legacy anon key still works as the gateway `apikey`. Never paste a secret
-   or `service_role` key into the browser app.
-6. Connect, then sign in with the invited email. Use the same **site name**
-   on every device. A phone that already has the board keeps its local copy
-   and sends that copy up after the first successful sign-in.
+The project URL, the public publishable key and the site name `Cutting Dept.`
+are built into the client. Never put a secret or `service_role` key in the
+app. The board is the same for everyone who opens the link. Work is still
+assigned to people in the employee directory.
 
 ### Enabling Photo to To-Do
 
@@ -1043,12 +1031,9 @@ If another phone saved in that same moment, the write matches nothing, the
 two copies are merged, and this phone tries again. That is what stops one
 upload from replacing the other.
 
-**Who can open it:** after the setup SQL, the publishable key by itself cannot
-read or write. An invited editor can change the board. The wall account can
-only watch. Until that SQL has been run, a phone that is already syncing keeps
-using the publishable key, so the live shift is not stopped by the new site.
-Once the SQL is in place, a phone that has not signed in yet shows "Please
-sign in" and keeps the work already stored on that phone.
+**Who can open it:** anyone with the link. The app uses the publishable key
+anonymously. Do not run the sign-in lock: that script would stop the shared
+board from opening. A secret or `service_role` key never belongs in the app.
 
 Without either, the app still works fully, storing data in that browser.
 Export / Import moves it between machines.
@@ -1235,12 +1220,10 @@ grounded visual direction before any production styling changes.
   divider, quieter, because they are visited rather than lived in. Rush and
   Back Orders carry an outstanding count on the tab, so nobody has to open a
   page to learn there is nothing on it.
-- **On a phone the header is two rows and 95px.** Row one is identity only —
-  brand, shift, sync — and carries no tap target, because a third 44px control
-  there is what put the old header at 121px. Row two is the centre scroller
-  with the name picker pinned beside it. At 1280px and below the tools fall
-  back to short labels (`B/O`, `Shift`) rather than letting Setup slide off
-  the end of the nav.
+- **On a phone the header is two rows and stays inside 96px.** Row one is
+  brand, shift and sync. Row two is the current page and the header tools.
+  There is no name picker. At 1280px and below the tools fall back to short
+  labels (`B/O`, `Shift`) rather than letting Setup slide off the end of the nav.
 - **The machine header clears the app header** rather than sliding under it:
   `app.js` measures the header into `--hdr-h` on every render, and the sticky
   centre header offsets by it.

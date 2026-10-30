@@ -2,7 +2,7 @@
    Run: node test/store-rules-check.mjs */
 
 import {
-  mergeRecords, state, employeeDirectory, appPeople,
+  mergeRecords, state, employeeDirectory, appPeople, directoryPeople, me, addTodo,
 } from '../js/store.js';
 import { importEmployees, upsertEmployee, archiveEmployee } from '../js/employees.js';
 import { shiftWindow, today } from '../js/model.js';
@@ -92,6 +92,19 @@ if (migrated.line.status !== 'CURRENT') throw new Error('a legacy record beat a 
 state.people = ['Legacy Supervisor', 'Floor Employee'];
 state.employees = {};
 state.settings.me = 'Legacy Supervisor';
+state.taskNote = {
+  kept: { text: 'earlier cut', by: 'Legacy Supervisor', at: '2026-08-01T00:00:00.000Z' },
+};
+// The header no longer asks who is holding the device. New writes share one
+// author, and names already stored on old records stay where they were.
+if (me() !== 'Team') throw new Error('the identity picker is still choosing the author');
+const todoId = addTodo('Neutral author check', { date: '2026-08-28' });
+if (state.todos[todoId]?.by !== 'Team') throw new Error('a new record was not stamped Team');
+if (state.settings.me !== 'Legacy Supervisor') throw new Error('a stored name was erased while reading the author');
+if (state.taskNote.kept.by !== 'Legacy Supervisor') throw new Error('older history was rewritten');
+if (!directoryPeople().includes('Legacy Supervisor') || !directoryPeople().includes('Floor Employee')) {
+  throw new Error('removing the picker dropped a name from assignment lists');
+}
 importEmployees([{
   name: 'Floor Employee', department: 'Cutting', shift: 'AFTERNOON',
   role: 'EMPLOYEE', active: true, appAccess: true,
