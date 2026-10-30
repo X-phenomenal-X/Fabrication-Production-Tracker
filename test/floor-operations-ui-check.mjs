@@ -24,7 +24,7 @@ try {
   const report=page.locator('.command-report').filter({hasText:'V22 timed stoppage'});
   await report.getByRole('button',{name:'Start timer',exact:true}).click();await page.reload();
   await report.getByRole('button',{name:'Stop timer',exact:true}).click();assert.match(await report.textContent(),/Notified/);
-  await page.getByRole('button',{name:'Report a quality issue',exact:true}).click();
+  await page.getByRole('button',{name:'Report quality issue',exact:true}).click();
   await page.getByLabel('Report details').fill('V22 quality hold');await page.getByLabel('containment',{exact:true}).fill('Quarantine labelled bundle');
   await page.getByLabel('rejected',{exact:true}).fill('3');await page.getByLabel('Quality stage').selectOption('Contained');
   const pixel=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=','base64');
