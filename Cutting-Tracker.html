@@ -6672,14 +6672,19 @@ a.resource-download:active, button.resource-download:active { transform: transla
 .employee-names li { padding: var(--s3); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel); }
 .employee-add { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
 .employee-add input { flex: 1 1 180px; min-height: 44px; }
-.print-window-wall { font-size: 11pt; }
-.print-window-wall table { width: 100%; border-collapse: collapse; }
-.print-window-wall th, .print-window-wall td { padding: 4px 5px; font-size: 11pt; }
+.print-window-wall table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.print-window-wall th, .print-window-wall td {
+  padding: 3px 2px; font-size: 7pt; line-height: 1.2;
+  overflow-wrap: anywhere; overflow: hidden; vertical-align: top;
+}
+.print-window-wall th:nth-child(3), .print-window-wall td:nth-child(3) { width: 12%; }
+.print-window-wall th:nth-child(1), .print-window-wall td:nth-child(1) { width: 7%; }
+.print-window-wall th:nth-child(9), .print-window-wall td:nth-child(9) { width: 7%; }
 .print-window-wall tr.subtotal td { font-weight: 750; border-top: 2px solid currentColor; }
-.print-window-missing { font-size: 10pt; margin: 0 0 8px; }
 @media print {
-  .print-window-wall { font-size: 11pt; }
-  .print-window-wall .print-table-group { break-inside: avoid; }
+  .print-window-wall .print-table-group { break-inside: auto; }
+  .print-window-wall thead { display: table-header-group; }
+  .print-window-wall tr { break-inside: avoid; }
 }
 
 </style>
@@ -13350,7 +13355,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
       todos: openTodos(shift2.date)
     };
   }
-  var SUPERVISOR_CENTRES, WINDOW_WALL_FIELDS, WINDOW_WALL_MISSING;
+  var SUPERVISOR_CENTRES, WINDOW_WALL_FIELDS;
   var init_supervisor_board = __esm({
     "js/supervisor-board.js"() {
       init_machines();
@@ -13368,21 +13373,19 @@ a.resource-download:active, button.resource-download:active { transform: transla
         ["project", "Project"],
         ["floor", "Floor"],
         ["qty", "Qty"],
+        ["assembly", "Assembly"],
+        ["vents", "Vents"],
+        ["deframes", "Deframes"],
         ["shipDate", "Ship Date"],
         ["cuttingDate", "Cutting"],
-        ["cutStatus", "Cut"]
-      ]);
-      WINDOW_WALL_MISSING = Object.freeze([
-        "Assembly",
-        "Vents",
-        "Deframes",
-        "Warehouse",
-        "HTS",
-        "Widths",
-        "Punch",
-        "VTML",
-        "SFS",
-        "LVRS/TC PAN"
+        ["warehouse", "Warehouse"],
+        ["cutStatus", "Cut"],
+        ["hts", "HTS"],
+        ["widths", "Widths"],
+        ["punch", "Punch"],
+        ["vtml", "VTML"],
+        ["sfs", "SFS"],
+        ["lvrsTcPan", "LVRS/TC PAN"]
       ]);
     }
   });
@@ -15371,6 +15374,9 @@ ${add2.join("\n")}` : add2.join("\n");
     const parsed = new Date(raw);
     return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
   }
+  function departmentHeader(value2) {
+    return String(value2 || "").toUpperCase().replace(/[^A-Z0-9]+/g, "");
+  }
   function headerMap(sheet) {
     const headings = [];
     for (const row of sheet.rows.filter((row2) => row2.r <= 6)) {
@@ -15381,8 +15387,25 @@ ${add2.join("\n")}` : add2.join("\n");
     }
     const found = {};
     for (const [key2, patterns] of Object.entries(ALIASES3)) {
-      const index = headings.findIndex((heading) => patterns.some((pattern) => pattern.test(String(heading).toUpperCase())));
-      if (index >= 0) found[key2] = index + 1;
+      const indexes = headings.flatMap((heading, index) => patterns.some((pattern) => pattern.test(String(heading).toUpperCase())) ? [index] : []);
+      if (!indexes.length) continue;
+      const preferred = key2 === "cutStatus" ? indexes.find((index) => /^CUT(?:TING)?\s*STATUS$/.test(String(headings[index]).toUpperCase())) : void 0;
+      found[key2] = (preferred ?? indexes[0]) + 1;
+    }
+    const top = sheet.rows.filter((row) => row.r <= 6);
+    const headers = top.filter((row) => (row.cells || []).some((cell) => ALIASES3.wo.some((pattern) => pattern.test(String(cell || "").trim().toUpperCase()))));
+    const candidates = headers.length ? headers : top;
+    const reserved = new Set(Object.entries(found).filter(([key2]) => !Object.hasOwn(DEPARTMENT_NAMES, key2)).map(([, index]) => index));
+    for (const [key2, names] of Object.entries(DEPARTMENT_NAMES)) {
+      const matches2 = [];
+      for (const row of candidates) row.cells.forEach((cell, index) => {
+        if (names.includes(departmentHeader(cell)) && !reserved.has(index + 1)) matches2.push(index + 1);
+      });
+      const unique = [...new Set(matches2)];
+      if (unique.length === 1) {
+        found[key2] = unique[0];
+        reserved.add(unique[0]);
+      }
     }
     return { ...FALLBACK, ...found, color: found.color || null };
   }
@@ -15461,6 +15484,16 @@ ${add2.join("\n")}` : add2.join("\n");
         cutStatus: text2(value(row.cells, columns3.cutStatus)),
         materialStatus: text2(value(row.cells, columns3.materialStatus)),
         color: text2(value(row.cells, columns3.color)),
+        assembly: text2(value(row.cells, columns3.assembly)),
+        vents: text2(value(row.cells, columns3.vents)),
+        deframes: text2(value(row.cells, columns3.deframes)),
+        warehouse: text2(value(row.cells, columns3.warehouse)),
+        hts: text2(value(row.cells, columns3.hts)),
+        widths: text2(value(row.cells, columns3.widths)),
+        punch: text2(value(row.cells, columns3.punch)),
+        vtml: text2(value(row.cells, columns3.vtml)),
+        sfs: text2(value(row.cells, columns3.sfs)),
+        lvrsTcPan: text2(value(row.cells, columns3.lvrsTcPan)),
         section
       });
     }
@@ -15484,11 +15517,11 @@ ${add2.join("\n")}` : add2.join("\n");
       }
     };
   }
-  var DAILY_PARSER_VERSION, SHEET, DAILY_SHEET, PHANTOM_BEFORE2, FALLBACK, ALIASES3;
+  var DAILY_PARSER_VERSION, SHEET, DAILY_SHEET, PHANTOM_BEFORE2, FALLBACK, ALIASES3, DEPARTMENT_NAMES;
   var init_import_daily = __esm({
     "js/import-daily.js"() {
       init_xlsx();
-      DAILY_PARSER_VERSION = 1;
+      DAILY_PARSER_VERSION = 3;
       SHEET = "Daily Sched";
       DAILY_SHEET = SHEET;
       PHANTOM_BEFORE2 = Date.UTC(1990, 0, 1);
@@ -15521,6 +15554,18 @@ ${add2.join("\n")}` : add2.join("\n");
         materialStatus: [/^(MTL|MAT(ERIA)?L)(\s*STATUS)?$/],
         color: [/\bCOLOU?R\b/, /\bFINISH\b/]
       };
+      DEPARTMENT_NAMES = Object.freeze({
+        assembly: ["ASSEMBLY", "ASSY"],
+        vents: ["VENT", "VENTS"],
+        deframes: ["DEFRAME", "DEFRAMES"],
+        warehouse: ["WAREHOUSE"],
+        hts: ["HTS"],
+        widths: ["WIDTH", "WIDTHS"],
+        punch: ["PUNCH"],
+        vtml: ["VTML"],
+        sfs: ["SFS"],
+        lvrsTcPan: ["LVRSTCPAN", "LVRSTCPANEL", "LVRSTCPANELS"]
+      });
     }
   });
 
@@ -15847,45 +15892,42 @@ create policy "member reads own row"
   function printWindowWall() {
     const groups = windowWallSheet(state.dailyOrders || []);
     const count = groups.reduce((sum, group) => sum + group.rows.length, 0);
-    const body = el(
-      "div.print-window-wall",
-      {},
-      el(
-        "p.print-window-missing",
+    const sections2 = groups.map((group) => {
+      const header2 = el(
+        "thead",
         {},
-        WINDOW_WALL_MISSING.length ? `Not in the imported Daily Schedule, so these columns are omitted: ${WINDOW_WALL_MISSING.join(", ")}.` : ""
-      ),
-      ...groups.map((group) => el(
+        el("tr", {}, ...WINDOW_WALL_FIELDS.map(([, label]) => el("th", {}, label)))
+      );
+      const entries = group.rows.map((row) => el(
+        "tr",
+        {},
+        ...WINDOW_WALL_FIELDS.map(([key2]) => el(
+          "td",
+          {},
+          key2 === "qty" ? fmtNum(row.qty) : row[key2] ?? ""
+        ))
+      ));
+      const subtotal = el(
+        "tr.subtotal",
+        {},
+        ...WINDOW_WALL_FIELDS.map(([key2], index) => el(
+          "td",
+          {},
+          index === 0 ? `${group.label} subtotal` : key2 === "qty" ? fmtNum(group.qty) : ""
+        ))
+      );
+      return el(
         "section.print-table-group",
         {},
         el("h2", {}, group.label),
-        el(
-          "table.print-table",
-          {},
-          el("thead", {}, el("tr", {}, ...WINDOW_WALL_FIELDS.map(([, label]) => el("th", {}, label)))),
-          el(
-            "tbody",
-            {},
-            ...group.rows.map((row) => el("tr", {}, ...WINDOW_WALL_FIELDS.map(([key2]) => el(
-              "td",
-              {},
-              key2 === "qty" ? fmtNum(row.qty) : row[key2] || "\u2014"
-            )))),
-            el(
-              "tr.subtotal",
-              {},
-              el("td", { colspan: String(WINDOW_WALL_FIELDS.length - 1) }, `${group.label} subtotal`),
-              el("td", {}, fmtNum(group.qty))
-            )
-          )
-        )
-      ))
-    );
+        el("table.print-table", {}, header2, el("tbody", {}, ...entries, subtotal))
+      );
+    });
     printDocument({
       title: "Window Wall",
       subtitle: "Daily Schedule \xB7 grouped by ship week",
-      meta: [`${count} orders`, "Landscape \xB7 two pages"],
-      body,
+      meta: [`${count} orders`, "Landscape"],
+      body: el("div.print-window-wall", {}, ...sections2),
       landscape: true
     });
   }
@@ -15935,7 +15977,6 @@ create policy "member reads own row"
         el("button.print-action.print-window-wall-open", {
           type: "button",
           disabled: !windowWallSheet(source).length,
-          title: `Omits ${WINDOW_WALL_MISSING.join(", ")} \u2014 those columns are not in the imported file`,
           onclick: () => printWindowWall()
         }, icon("print", { size: 17 }), "Print Window Wall")
       )
