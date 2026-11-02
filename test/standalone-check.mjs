@@ -131,19 +131,37 @@ const afterClick = await inspector.locator('.seg-btn[aria-pressed="true"]').getA
 if (afterClick !== 'In Progress') throw new Error(`expected "In Progress", got "${afterClick}"`);
 
 const key = `roll-auto|${wo}|${die}`;
-const before = await page.evaluate((k) => {
-  const raw = localStorage.getItem('bv.cutting.v1');
-  return raw ? JSON.parse(raw).taskStatus?.[k] || null : null;
-}, key);
+const before = await page.evaluate(async (k) => (await (async () => {
+  const db = await new Promise((res, rej) => {
+    const req = indexedDB.open('bv-cutting', 1);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+  return new Promise((res, rej) => {
+    const tx = db.transaction('handles', 'readonly');
+    const req = tx.objectStore('handles').get('board');
+    req.onsuccess = () => { db.close(); res(req.result ? JSON.parse(req.result) : {}); };
+    req.onerror = () => { db.close(); rej(req.error); };
+  });
+})()).taskStatus?.[k] || null, key);
 step('status set: ' + JSON.stringify(before));
-if (!before) throw new Error('status was not recorded in localStorage');
+if (!before) throw new Error('status was not recorded in IndexedDB');
 
 await page.reload();
 await page.waitForSelector('header.top');
-const after = await page.evaluate((k) => {
-  const raw = localStorage.getItem('bv.cutting.v1');
-  return raw ? JSON.parse(raw).taskStatus?.[k] || null : null;
-}, key);
+const after = await page.evaluate(async (k) => (await (async () => {
+  const db = await new Promise((res, rej) => {
+    const req = indexedDB.open('bv-cutting', 1);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+  return new Promise((res, rej) => {
+    const tx = db.transaction('handles', 'readonly');
+    const req = tx.objectStore('handles').get('board');
+    req.onsuccess = () => { db.close(); res(req.result ? JSON.parse(req.result) : {}); };
+    req.onerror = () => { db.close(); rej(req.error); };
+  });
+})()).taskStatus?.[k] || null, key);
 step('status after reload from disk: ' + JSON.stringify(after));
 if (!after || after.status !== before.status) throw new Error('status did not survive reload from disk');
 
