@@ -1,7 +1,7 @@
 /* App state, persistence, and the shared-file sync.
 
    Two layers of storage:
-   - localStorage: always on, instant, per-device. The app works with nothing else.
+   - IndexedDB: per-device offline snapshot; small preferences stay in localStorage.
    - a shared JSON file on the network drive (File System Access API): optional,
      and what makes the department see each other's updates.
 
@@ -1158,21 +1158,54 @@ export function storageStatus() {
     : { ok: true, error: null, at: null };
 }
 
-function persistLocal(data = snapshot()) {
-  if (typeof localStorage === 'undefined') return false;
+// Serialise writes so a slow earlier transaction cannot overwrite a later save.
+let boardWrite = Promise.resolve();
+let boardGeneration = 0;
+let storagePersistRequested = false;
+
+function boardStorageError(error, action = 'save') {
+  console.warn('IndexedDB offline copy ' + action + ' failed', error);
+  localSaveProblem = {
+    error: 'This device could not ' + (action === 'read' ? 'read' : 'save') + ' its local copy.',
+    detail: error?.message || 'Browser storage is unavailable or full.',
+    at: now(),
+  };
+}
+
+async function boardRecord(mode, value) {
+  const db = await idb();
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(data));
-    localSaveProblem = null;
-    return true;
-  } catch (e) {
-    console.warn('localStorage full or blocked', e);
-    localSaveProblem = {
-      error: 'This device could not save its local copy.',
-      detail: e?.message || 'Browser storage is full or blocked.',
-      at: now(),
-    };
-    return false;
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, mode === 'get' ? 'readonly' : 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      const request = mode === 'get' ? store.get('board')
+        : mode === 'delete' ? store.delete('board') : store.put(value, 'board');
+      let result;
+      request.onsuccess = () => { result = request.result; };
+      tx.oncomplete = () => resolve(result);
+      tx.onerror = () => reject(tx.error || request.error);
+      tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
+    });
+  } finally {
+    db.close();
   }
+}
+
+async function persistLocal(data = snapshot()) {
+  const json = JSON.stringify(data);
+  const generation = ++boardGeneration;
+  const work = boardWrite.catch(() => {}).then(async () => {
+    try {
+      await boardRecord('put', json);
+      if (generation === boardGeneration) localSaveProblem = null;
+      return true;
+    } catch (error) {
+      if (generation === boardGeneration) boardStorageError(error);
+      return false;
+    }
+  });
+  boardWrite = work;
+  return work;
 }
 
 export function save() {
@@ -1180,10 +1213,11 @@ export function save() {
   // copy of the board. Put the last saved snapshot back and leave the cloud
   // alone. Editors and a phone that has not signed in yet save as before.
   if (membershipRole() === 'viewer') {
-    try {
-      const raw = localStorage.getItem(LS_KEY);
+    // Restore the last persisted board asynchronously; viewers never write.
+    void boardWrite.then(() => boardRecord('get', null)).then((raw) => {
       if (raw) apply(JSON.parse(raw));
-    } catch { /* the in-memory copy remains if storage cannot be read */ }
+      emit();
+    }).catch((error) => boardStorageError(error, 'read'));
     noteViewOnly();
     emit();
     return;
@@ -1197,27 +1231,39 @@ export function save() {
   emit();
 }
 
-export function loadLocal() {
+export async function loadLocal() {
+  if (!storagePersistRequested) {
+    storagePersistRequested = true;
+    // Best effort: persistent browser storage is not guaranteed on every device.
+    try { await navigator.storage?.persist?.(); } catch { /* optional API */ }
+  }
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return;
-    const data = JSON.parse(raw);
+    // Wait for any save already queued by the app before reading the board.
+    await boardWrite;
+    let raw = await boardRecord('get');
+    if (!raw) {
+      // Upgrade old installs without losing their only offline copy.
+      let legacy = null;
+      try { legacy = localStorage.getItem(LS_KEY); }
+      catch { /* old localStorage may be blocked even when IndexedDB works */ }
+      if (!legacy) return;
+      const data = JSON.parse(legacy);
+      raw = JSON.stringify(data);
+      const ok = await persistLocal(data);
+      if (!ok) return; // never discard the only existing copy on a failed migration
+      try { localStorage.removeItem(LS_KEY); } catch { /* not needed for recovery */ }
+    }
+    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
     apply(data);
-    // Rewrite immediately if the payload still carries retired fields, so the
-    // cleanup is visible now rather than waiting for the next incidental save.
+    // Retired fields are removed from the offline snapshot during the upgrade.
     const hasRetiredRecords = (data.taskHistory || [])
       .some((entry) => entry?.kind === 'material-order')
       || Object.keys(data.deletions || {}).some((key) => key.startsWith('materialOrders:'));
     if (RETIRED_KEYS.some((k) => data[k] !== undefined) || hasRetiredRecords) {
-      persistLocal();
+      await persistLocal();
     }
-  } catch (e) {
-    console.warn('could not read local data', e);
-    localSaveProblem = {
-      error: 'This device could not read its saved copy.',
-      detail: e?.message || 'Browser storage is unavailable or damaged.',
-      at: now(),
-    };
+  } catch (error) {
+    boardStorageError(error, 'read');
   }
 }
 
@@ -1255,7 +1301,9 @@ export function supportsSharedFile() {
 function idb() {
   return new Promise((res, rej) => {
     const req = indexedDB.open(IDB_NAME, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE);
+    };
     req.onsuccess = () => res(req.result);
     req.onerror = () => rej(req.error);
   });
@@ -1773,6 +1821,19 @@ export function importJson(text, { merge = true } = {}) {
   save();
 }
 
-export function resetAll() {
-  localStorage.removeItem(LS_KEY);
+export async function resetAll() {
+  // Prevent an older in-flight save from bringing the deleted board back.
+  const clear = boardWrite.catch(() => {}).then(async () => {
+    try {
+      await boardRecord('delete');
+      localSaveProblem = null;
+      return true;
+    } catch (error) {
+      boardStorageError(error);
+      return false;
+    }
+  });
+  boardWrite = clear;
+  try { localStorage.removeItem(LS_KEY); } catch { /* may be blocked */ }
+  return clear;
 }
