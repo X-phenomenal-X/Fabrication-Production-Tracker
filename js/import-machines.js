@@ -457,7 +457,7 @@ export async function importMachineWorkbook(arrayBuffer, { kind, fileName = 'sch
     if (!sheet) { report.missing.push(spec.sheet); continue; }
     const hasHeader = sheetHasWorkOrderHeader(sheet, spec.cols.wo || 1);
     const headerlessComplete = kind === 'rolling' && spec.sheet === 'Complete' && !hasHeader
-      && sheet.rows.some((row) => row.r <= 5 && /^\\d+$/.test(String(row.cells?.[(spec.cols.wo || 1) - 1] ?? '').trim()));
+      && sheet.rows.some((row) => row.r <= 5 && /^\d+$/.test(String(row.cells?.[(spec.cols.wo || 1) - 1] ?? '').trim()));
     if (!hasHeader && !headerlessComplete) report.badHeaders.push(spec.sheet);
     if (headerlessComplete) report.notes.push("Complete tab has no header; used Auto's columns");
     const effectiveSpec = headerlessComplete
