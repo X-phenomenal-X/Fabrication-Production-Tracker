@@ -86,13 +86,14 @@ if (cached.entries.includes('/js/extrusion-images.js')) {
 }
 
 // Leave real state behind for the offline reload.
-await page.evaluate(() => {
-  const raw = localStorage.getItem('bv.cutting.v1');
-  const snap = raw ? JSON.parse(raw) : {};
-  snap.todos = { off1: { id: 'off1', text: 'Survives losing the signal', date: '2026-08-14', done: false, at: new Date().toISOString(), by: 'Abhay' } };
-  snap.people = ['Abhay'];
-  snap.settings = { me: 'Abhay' };
-  localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+await page.evaluate(async () => {
+  const m = await import('/js/store.js');
+  m.state.todos = { off1: { id: 'off1', text: 'Survives losing the signal', date: '2026-08-14', done: false, at: new Date().toISOString(), by: 'Abhay' } };
+  m.state.people = ['Abhay'];
+  m.state.settings = { me: 'Abhay' };
+  m.save();
+  // Wait for the fire-and-forget IndexedDB transaction before reloading.
+  await new Promise((res) => setTimeout(res, 150));
 });
 
 /* ---------- pull the plug ---------- */
@@ -121,8 +122,20 @@ if (todo !== 'Survives losing the signal') fail('stored data was lost offline');
 
 await page.fill('.todo-add input', 'Written while offline');
 await page.click('.todo-add button.primary');
-await page.waitForFunction(() => Object.values(
-  JSON.parse(localStorage.getItem('bv.cutting.v1')).todos || {},
+await page.waitForFunction(async () => Object.values(
+  (await (async () => {
+  const db = await new Promise((res, rej) => {
+    const req = indexedDB.open('bv-cutting', 1);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+  return new Promise((res, rej) => {
+    const tx = db.transaction('handles', 'readonly');
+    const req = tx.objectStore('handles').get('board');
+    req.onsuccess = () => { db.close(); res(req.result ? JSON.parse(req.result) : {}); };
+    req.onerror = () => { db.close(); rej(req.error); };
+  });
+})()).todos || {},
 ).some((item) => item.text === 'Written while offline'));
 step('daily work remained readable and writable offline');
 
