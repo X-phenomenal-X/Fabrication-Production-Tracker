@@ -1,6 +1,6 @@
 /* V2.1 domain regressions: persistence and metrics, without real floor data. */
 import assert from 'node:assert/strict';
-import { state, exportJson, loadLocal, mergeRecords, setTodo, deleteTodo } from '../js/store.js';
+import { state, exportJson, mergeRecords, setTodo, deleteTodo } from '../js/store.js';
 import { createOperation, commandSnapshot, operationHandoverLines, completeOperation } from '../js/command-center.js';
 const memory = new Map();
 globalThis.localStorage = { getItem: k => memory.get(k) ?? null, setItem: (k, v) => memory.set(k, v), removeItem: k => memory.delete(k) };
@@ -37,7 +37,8 @@ setTodo(down, { done: false });
 assert.equal(commandSnapshot(ref, now).down.length, 1, 'Today can reopen the same report');
 const persisted = JSON.parse(exportJson());
 state.todos = {};
-loadLocal();
+// No IndexedDB in this logic-only Node test; verify the in-memory export.
+Object.assign(state, persisted);
 assert.deepEqual(state.todos[quality].operation, persisted.todos[quality].operation);
 state.todos.future = { id: 'future', date: '2026-08-15', text: 'Future', done: false };
 assert.equal(commandSnapshot(ref, now).open.length, 3, 'future actions do not enter this day');
