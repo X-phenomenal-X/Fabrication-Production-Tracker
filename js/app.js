@@ -580,7 +580,7 @@ window.addEventListener('hashchange', () => {
   }
 });
 
-loadLocal();
+await loadLocal();
 applyTheme();
 onChange(() => { applyTheme(); scheduleRender(); });
 render();
