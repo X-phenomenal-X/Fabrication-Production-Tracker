@@ -810,6 +810,11 @@ for (const theme of ['light', 'dark']) {
     const page = await ctx.newPage();
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(`${base}/`);
+    // The board restores asynchronously; wait for the initial app render before
+    // sampling layout tokens such as --hdr-h.
+    await page.waitForSelector('header.top');
+    await page.waitForFunction(() =>
+      parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hdr-h')) > 0);
     const got = await page.evaluate((theme) => {
       if (theme) document.documentElement.dataset.theme = theme;
       else delete document.documentElement.dataset.theme;
