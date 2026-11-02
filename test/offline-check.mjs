@@ -138,10 +138,17 @@ await page.click('.todo-add button.primary');
 await page.waitForFunction(() => Object.values(
   document.querySelectorAll('.todo-text'),
 ).some((node) => node.textContent.includes('Written while offline')));
-const offlineBoard = await page.evaluate(browserBoard);
-if (!Object.values(offlineBoard.todos || {}).some((item) => item.text === 'Written while offline')) {
-  fail('offline To-Do did not persist to IndexedDB');
+// The UI changes immediately; its fire-and-forget transaction may complete
+// a little later. Poll the committed board rather than racing the write.
+let committed = false;
+for (let attempt = 0; attempt < 40; attempt++) {
+  const offlineBoard = await page.evaluate(browserBoard);
+  committed = Object.values(offlineBoard.todos || {})
+    .some((item) => item.text === 'Written while offline');
+  if (committed) break;
+  await page.waitForTimeout(100);
 }
+if (!committed) fail('offline To-Do did not persist to IndexedDB');
 step('daily work remained readable and writable offline');
 
 // Engineering Lookup is part of the warmed operational shell even though it is lazy
