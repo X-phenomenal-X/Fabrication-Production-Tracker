@@ -8481,29 +8481,57 @@ a.resource-download:active, button.resource-download:active { transform: transla
   function storageStatus() {
     return localSaveProblem ? { ok: false, ...localSaveProblem } : { ok: true, error: null, at: null };
   }
-  function persistLocal(data = snapshot()) {
-    if (typeof localStorage === "undefined") return false;
+  function boardStorageError(error, action = "save") {
+    console.warn("IndexedDB offline copy " + action + " failed", error);
+    localSaveProblem = {
+      error: "This device could not " + (action === "read" ? "read" : "save") + " its local copy.",
+      detail: error?.message || "Browser storage is unavailable or full.",
+      at: now()
+    };
+  }
+  async function boardRecord(mode, value2) {
+    const db = await idb();
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify(data));
-      localSaveProblem = null;
-      return true;
-    } catch (e) {
-      console.warn("localStorage full or blocked", e);
-      localSaveProblem = {
-        error: "This device could not save its local copy.",
-        detail: e?.message || "Browser storage is full or blocked.",
-        at: now()
-      };
-      return false;
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, mode === "get" ? "readonly" : "readwrite");
+        const store = tx.objectStore(IDB_STORE);
+        const request2 = mode === "get" ? store.get("board") : mode === "delete" ? store.delete("board") : store.put(value2, "board");
+        let result;
+        request2.onsuccess = () => {
+          result = request2.result;
+        };
+        tx.oncomplete = () => resolve(result);
+        tx.onerror = () => reject(tx.error || request2.error);
+        tx.onabort = () => reject(tx.error || new Error("IndexedDB transaction aborted"));
+      });
+    } finally {
+      db.close();
     }
+  }
+  async function persistLocal(data = snapshot()) {
+    if (typeof indexedDB === "undefined") return false;
+    const json = JSON.stringify(data);
+    const generation = ++boardGeneration;
+    const work = boardWrite.catch(() => {
+    }).then(async () => {
+      try {
+        await boardRecord("put", json);
+        if (generation === boardGeneration) localSaveProblem = null;
+        return true;
+      } catch (error) {
+        if (generation === boardGeneration) boardStorageError(error);
+        return false;
+      }
+    });
+    boardWrite = work;
+    return work;
   }
   function save() {
     if (membershipRole() === "viewer") {
-      try {
-        const raw = localStorage.getItem(LS_KEY);
+      void boardWrite.then(() => boardRecord("get", null)).then((raw) => {
         if (raw) apply(JSON.parse(raw));
-      } catch {
-      }
+        emit2();
+      }).catch((error) => boardStorageError(error, "read"));
       noteViewOnly();
       emit2();
       return;
@@ -8513,23 +8541,41 @@ a.resource-download:active, button.resource-download:active { transform: transla
     queueCloudPush();
     emit2();
   }
-  function loadLocal() {
+  async function loadLocal() {
+    if (!storagePersistRequested) {
+      storagePersistRequested = true;
+      try {
+        await navigator.storage?.persist?.();
+      } catch {
+      }
+    }
     try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return;
-      const data = JSON.parse(raw);
+      await boardWrite;
+      let raw = await boardRecord("get");
+      if (!raw) {
+        let legacy = null;
+        try {
+          legacy = localStorage.getItem(LS_KEY);
+        } catch {
+        }
+        if (!legacy) return;
+        const data2 = JSON.parse(legacy);
+        raw = JSON.stringify(data2);
+        const ok = await persistLocal(data2);
+        if (!ok) return;
+        try {
+          localStorage.removeItem(LS_KEY);
+        } catch {
+        }
+      }
+      const data = typeof raw === "string" ? JSON.parse(raw) : raw;
       apply(data);
       const hasRetiredRecords = (data.taskHistory || []).some((entry) => entry?.kind === "material-order") || Object.keys(data.deletions || {}).some((key2) => key2.startsWith("materialOrders:"));
       if (RETIRED_KEYS.some((k) => data[k] !== void 0) || hasRetiredRecords) {
-        persistLocal();
+        await persistLocal();
       }
-    } catch (e) {
-      console.warn("could not read local data", e);
-      localSaveProblem = {
-        error: "This device could not read its saved copy.",
-        detail: e?.message || "Browser storage is unavailable or damaged.",
-        at: now()
-      };
+    } catch (error) {
+      boardStorageError(error, "read");
     }
   }
   function sharedFileName() {
@@ -8553,7 +8599,9 @@ a.resource-download:active, button.resource-download:active { transform: transla
   function idb() {
     return new Promise((res, rej) => {
       const req = indexedDB.open(IDB_NAME, 1);
-      req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE);
+      };
       req.onsuccess = () => res(req.result);
       req.onerror = () => rej(req.error);
     });
@@ -8961,10 +9009,26 @@ a.resource-download:active, button.resource-download:active { transform: transla
     else apply(data);
     save();
   }
-  function resetAll() {
-    localStorage.removeItem(LS_KEY);
+  async function resetAll() {
+    const clear = boardWrite.catch(() => {
+    }).then(async () => {
+      try {
+        await boardRecord("delete");
+        localSaveProblem = null;
+        return true;
+      } catch (error) {
+        boardStorageError(error);
+        return false;
+      }
+    });
+    boardWrite = clear;
+    try {
+      localStorage.removeItem(LS_KEY);
+    } catch {
+    }
+    return clear;
   }
-  var LS_KEY, LS_DEVICE, IDB_NAME, IDB_STORE, RETIRED_KEYS, state, EMPLOYEE_ROLES, EMPLOYEE_ROLE_LABELS, APP_EMPLOYEE_ROLES, listeners2, localSaveProblem, rev, lastNow, deviceClock, DELETABLE, HISTORY_CAP, EDITABLE_FIELDS, BACKORDER_FIELDS, RUSH_FIELDS, fileHandle, fileTimer, fileWritePromise, fileChangeId, fileAckId, fileState, CLOUD_BASE_KEYS, cloudTimer, cloudPoll, cloudBusy, cloudPushPromise, cloudChangeId, cloudAckId, cloudState, cloudBaseDirty;
+  var LS_KEY, LS_DEVICE, IDB_NAME, IDB_STORE, RETIRED_KEYS, state, EMPLOYEE_ROLES, EMPLOYEE_ROLE_LABELS, APP_EMPLOYEE_ROLES, listeners2, localSaveProblem, rev, lastNow, deviceClock, DELETABLE, HISTORY_CAP, EDITABLE_FIELDS, BACKORDER_FIELDS, RUSH_FIELDS, boardWrite, boardGeneration, storagePersistRequested, fileHandle, fileTimer, fileWritePromise, fileChangeId, fileAckId, fileState, CLOUD_BASE_KEYS, cloudTimer, cloudPoll, cloudBusy, cloudPushPromise, cloudChangeId, cloudAckId, cloudState, cloudBaseDirty;
   var init_store = __esm({
     "js/store.js"() {
       init_cloud();
@@ -9095,6 +9159,9 @@ a.resource-download:active, button.resource-download:active { transform: transla
       ];
       BACKORDER_FIELDS = ["flagged", "qty", "assignee", "note"];
       RUSH_FIELDS = ["on", "needBy", "assignee", "reason"];
+      boardWrite = Promise.resolve();
+      boardGeneration = 0;
+      storagePersistRequested = false;
       fileHandle = null;
       fileTimer = null;
       fileWritePromise = null;
@@ -13320,6 +13387,29 @@ a.resource-download:active, button.resource-download:active { transform: transla
     const issues = openTodos(date3).open.map((item) => item.text).filter(Boolean);
     return { rows, notes: issues.join("\n") };
   }
+  function groupLateOrders(late = []) {
+    const orders = /* @__PURE__ */ new Map();
+    for (const line of late) {
+      const wo = String(line.wo || "").trim();
+      if (!orders.has(wo)) orders.set(wo, {
+        wo,
+        project: line.project || "",
+        lines: 0,
+        qty: 0,
+        oldestCuttingDate: line.cuttingDate || "",
+        machines: []
+      });
+      const order = orders.get(wo);
+      order.lines++;
+      order.qty += Number(line.qty) || 0;
+      if (!order.project && line.project) order.project = line.project;
+      if (line.cuttingDate && (!order.oldestCuttingDate || line.cuttingDate < order.oldestCuttingDate)) {
+        order.oldestCuttingDate = line.cuttingDate;
+      }
+      if (line.machine && !order.machines.includes(line.machine)) order.machines.push(line.machine);
+    }
+    return [...orders.values()].sort((a, b) => a.oldestCuttingDate.localeCompare(b.oldestCuttingDate) || a.wo.localeCompare(b.wo, void 0, { numeric: true }));
+  }
   function supervisorBoard(ref = today(), now2 = /* @__PURE__ */ new Date()) {
     const shift2 = shiftContextAt(ref, now2);
     const lines2 = tasksInScope().map((task) => {
@@ -13348,6 +13438,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
       shift: shift2,
       centres: centreShiftProgress(lines2, shift2.date),
       late,
+      lateOrders: groupLateOrders(late),
       backOrders,
       stagingLines: staging.todo.slice(0, 8).map((row) => ({ wo: row.task.wo, project: row.task.project || "" })),
       stagingTodo: staging.todo.length,
@@ -21355,15 +21446,16 @@ create policy "member reads own row"
   }
   function supervisorStrip(go2) {
     const board = supervisorBoard();
-    const pile = (title, rows, empty2) => el(
+    const pile = (title, rows, empty2, { late = false } = {}) => el(
       "section.sup-list",
       {},
-      el("h2", {}, title, el("span", {}, String(rows.length))),
+      el("h2", {}, title, el("span", {}, String(rows.length)), late ? el("small", {}, ` \xB7 ${board.late.length} lines`) : null),
       rows.length ? el("ul", {}, ...rows.slice(0, 6).map((row) => el(
         "li",
         {},
         el("b.mono", {}, row.wo || "\u2014"),
-        row.project ? el("span", {}, ` ${row.project}`) : null
+        row.project ? el("span", {}, ` \xB7 ${row.project}`) : null,
+        late ? el("span", {}, ` \xB7 ${row.lines} lines \xB7 since ${fmtDate(row.oldestCuttingDate)}`) : null
       ))) : el("p", {}, empty2)
     );
     return el(
@@ -21394,11 +21486,11 @@ create policy "member reads own row"
       el(
         "div.sup-counts",
         {},
-        el("div", {}, el("b", {}, String(board.late.length)), el("span", {}, "Late")),
+        el("div", {}, el("b", {}, String(board.lateOrders.length)), el("span", {}, `Late \xB7 ${board.late.length} lines`)),
         el("div", {}, el("b", {}, String(board.backOrders.length)), el("span", {}, "Back orders")),
         el("div", {}, el("b", {}, String(board.stagingTodo)), el("span", {}, "To stage"))
       ),
-      pile("Late", board.late, "Nothing is past its cutting date."),
+      pile("Late", board.lateOrders, "Nothing is past its cutting date.", { late: true }),
       pile("Back orders", board.backOrders, "No open shortages."),
       pile("Still to stage", board.stagingLines, "Rolling material for this shift is staged or already running.")
     );
@@ -22378,7 +22470,7 @@ create policy "member reads own row"
                 "The loaded schedules and every status set in this browser will be deleted. If you are connected to a shared file, that file is not touched.",
                 { confirmLabel: "Clear", danger: true }
               )) {
-                resetAll();
+                await resetAll();
                 location.reload();
               }
             }
@@ -23135,20 +23227,21 @@ create policy "member reads own row"
       scheduleRender();
     }
   });
-  loadLocal();
-  applyTheme();
-  onChange(() => {
+  void loadLocal().then(() => {
     applyTheme();
-    scheduleRender();
+    onChange(() => {
+      applyTheme();
+      scheduleRender();
+    });
+    render();
+    armShiftClock();
+    registerServiceWorker();
+    watchConnection(scheduleRender);
+    initSharedFile(scheduleRender);
+    watchViewOnly(() => toast("This account can only view the board."));
+    onAuth(scheduleRender);
+    bootAuth().then((result) => initCloud({ includeBase: !!result?.signedInNow })).then(() => scheduleRender());
   });
-  render();
-  armShiftClock();
-  registerServiceWorker();
-  watchConnection(scheduleRender);
-  initSharedFile(scheduleRender);
-  watchViewOnly(() => toast("This account can only view the board."));
-  onAuth(scheduleRender);
-  bootAuth().then((result) => initCloud({ includeBase: !!result?.signedInNow })).then(() => scheduleRender());
   window.addEventListener("beforeunload", (e) => {
     if (!hasUnsyncedChanges()) return;
     e.preventDefault();
