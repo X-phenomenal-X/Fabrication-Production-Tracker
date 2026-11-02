@@ -131,7 +131,7 @@ async function loadMachine(file, kind) {
   if (parsed.report.shiftUpdate?.unknown?.length) {
     warnings.push(`Shift update mentions ${parsed.report.shiftUpdate.unknown.join(', ')}, which this tracker does not show.`);
   }
-  const notes = [];
+  const notes = [...(parsed.report.notes || [])];
   if (parsed.report.shiftSheet && parsed.report.shiftSheet !== SHIFT_UPDATE_SHEET) {
     notes.push(`Shift update was read from the tab "${parsed.report.shiftSheet}".`);
   }
