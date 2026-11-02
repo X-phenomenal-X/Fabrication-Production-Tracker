@@ -236,12 +236,13 @@ function healthStat(iconName, value, label, tone = 'work', detail = '') {
 
 function supervisorStrip(go) {
   const board = supervisorBoard();
-  const pile = (title, rows, empty) => el('section.sup-list', {},
-    el('h2', {}, title, el('span', {}, String(rows.length))),
+  const pile = (title, rows, empty, { late = false } = {}) => el('section.sup-list', {},
+    el('h2', {}, title, el('span', {}, String(rows.length)), late ? el('small', {}, ` · ${board.late.length} lines`) : null),
     rows.length
       ? el('ul', {}, ...rows.slice(0, 6).map((row) => el('li', {},
         el('b.mono', {}, row.wo || '—'),
-        row.project ? el('span', {}, ` ${row.project}`) : null)))
+        row.project ? el('span', {}, ` · ${row.project}`) : null,
+        late ? el('span', {}, ` · ${row.lines} lines · since ${fmtDate(row.oldestCuttingDate)}`) : null)))
       : el('p', {}, empty));
   return el('section.sup-board', { 'aria-label': 'This shift at a glance' },
     el('div.sup-shift', {},
@@ -258,10 +259,10 @@ function supervisorStrip(go) {
         el('small', {}, ` / ${centre.plan}`)),
       el('span.sup-centre-hint', {}, centre.plan ? 'done / planned' : 'none dated for this shift')))),
     el('div.sup-counts', {},
-      el('div', {}, el('b', {}, String(board.late.length)), el('span', {}, 'Late')),
+      el('div', {}, el('b', {}, String(board.lateOrders.length)), el('span', {}, `Late · ${board.late.length} lines`)),
       el('div', {}, el('b', {}, String(board.backOrders.length)), el('span', {}, 'Back orders')),
       el('div', {}, el('b', {}, String(board.stagingTodo)), el('span', {}, 'To stage'))),
-    pile('Late', board.late, 'Nothing is past its cutting date.'),
+    pile('Late', board.lateOrders, 'Nothing is past its cutting date.', { late: true }),
     pile('Back orders', board.backOrders, 'No open shortages.'),
     pile('Still to stage', board.stagingLines, 'Rolling material for this shift is staged or already running.'));
 }

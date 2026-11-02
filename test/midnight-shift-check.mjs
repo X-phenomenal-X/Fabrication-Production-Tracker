@@ -1,3 +1,5 @@
+import 'fake-indexeddb/auto';
+import { readNodeBoard, writeNodeBoard } from './idb-test-helpers.mjs';
 /* Midnight is a real shift: 23:45–07:15, saved as NIGHT.
    Work after midnight belongs to the date the shift started.
    Run: node test/midnight-shift-check.mjs */
@@ -123,13 +125,14 @@ const savedKey = saveShiftLog('2026-10-17', 'NIGHT', {
   notes: 'Midnight crew',
 });
 assert.equal(savedKey, '2026-10-17|NIGHT');
-const blob = JSON.parse(memory.get('bv.cutting.v1'));
+await loadLocal(); // drain queued IndexedDB writes
+const blob = await readNodeBoard();
 blob.shiftLogs['2026-08-01|NIGHT'] = {
   date: '2026-08-01', shift: 'NIGHT',
   rows: { fom1: { notes: 'old midnight' } },
 };
-memory.set('bv.cutting.v1', JSON.stringify(blob));
-loadLocal();
+await writeNodeBoard(blob);
+await loadLocal();
 assert.equal(state.shiftLogs['2026-08-01|NIGHT'].rows.fom1.notes, 'old midnight');
 assert.equal(state.shiftLogs['2026-10-17|NIGHT'].notes, 'Midnight crew');
 
@@ -190,9 +193,20 @@ try {
   assert.deepEqual(caret, { start: 2, end: 5 });
 
   await page.getByRole('button', { name: /^Save & next/ }).click();
-  await page.waitForFunction(() => {
-    const raw = localStorage.getItem('bv.cutting.v1');
-    return !!raw && JSON.parse(raw).shiftLogs?.['2026-10-17|NIGHT']?.rows?.fom1?.notes === 'Sills done';
+  await page.waitForFunction(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('bv-cutting', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const raw = await new Promise((resolve, reject) => {
+        const request = db.transaction('handles', 'readonly').objectStore('handles').get('board');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      return !!raw && JSON.parse(raw).shiftLogs?.['2026-10-17|NIGHT']?.rows?.fom1?.notes === 'Sills done';
+    } finally { db.close(); }
   });
 
   const sunday = await browser.newPage({ viewport: { width: 390, height: 844 } });

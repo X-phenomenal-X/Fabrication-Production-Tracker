@@ -1,7 +1,9 @@
+import 'fake-indexeddb/auto';
+import { readNodeBoard } from './idb-test-helpers.mjs';
 import assert from 'node:assert/strict';
 import { machineTarget, machineTargetText } from '../js/floor-operations.js';
 import { MACHINES } from '../js/machines.js';
-import { state, saveShiftLog } from '../js/store.js';
+import { state, saveShiftLog, loadLocal } from '../js/store.js';
 const memory = new Map();
 globalThis.localStorage = { getItem:k=>memory.get(k)??null, setItem:(k,v)=>memory.set(k,v), removeItem:k=>memory.delete(k) };
 const input = { rate: '60', available: '420', setup: '30', bandsaw: '90', actual: '' };
@@ -29,7 +31,9 @@ state.shiftLogs = {}; state.todos = {};
 saveShiftLog('2026-09-10','DAY',{rows:{saw:{targetPlan:saw}},notes:''});
 saveShiftLog('2026-09-11','DAY',{rows:{saw:{targetPlan:machineTarget('saw',{...input,rate:90})}},notes:''});
 assert.equal(state.shiftLogs['2026-09-10|DAY'].rows.saw.targetPlan.target,300,'later shifts cannot change saved standards');
-const persisted = JSON.parse(memory.get('bv.cutting.v1'));
+// Wait for fire-and-forget IndexedDB writes to finish before inspecting the snapshot.
+await loadLocal();
+const persisted = await readNodeBoard();
 assert.deepEqual(persisted.shiftLogs['2026-09-10|DAY'].rows.saw.targetPlan,saw);
 state.shiftLogs['2026-09-10|DAY'].acknowledgement={by:'Test'};
 saveShiftLog('2026-09-10','DAY',{rows:{saw:{targetPlan:zero}}});

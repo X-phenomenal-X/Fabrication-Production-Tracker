@@ -124,6 +124,29 @@ export function buildShiftDraft(date, shiftKey) {
   return { rows, notes: issues.join('\n') };
 }
 
+/** Collapse overdue task lines into distinct work orders for the Overview. */
+export function groupLateOrders(late = []) {
+  const orders = new Map();
+  for (const line of late) {
+    const wo = String(line.wo || '').trim();
+    if (!orders.has(wo)) orders.set(wo, {
+      wo, project: line.project || '', lines: 0, qty: 0,
+      oldestCuttingDate: line.cuttingDate || '', machines: [],
+    });
+    const order = orders.get(wo);
+    order.lines++;
+    order.qty += Number(line.qty) || 0;
+    if (!order.project && line.project) order.project = line.project;
+    if (line.cuttingDate && (!order.oldestCuttingDate || line.cuttingDate < order.oldestCuttingDate)) {
+      order.oldestCuttingDate = line.cuttingDate;
+    }
+    if (line.machine && !order.machines.includes(line.machine)) order.machines.push(line.machine);
+  }
+  return [...orders.values()].sort((a, b) =>
+    a.oldestCuttingDate.localeCompare(b.oldestCuttingDate)
+      || a.wo.localeCompare(b.wo, undefined, { numeric: true }));
+}
+
 export function supervisorBoard(ref = today(), now = new Date()) {
   const shift = shiftContextAt(ref, now);
   const lines = tasksInScope().map((task) => {
@@ -152,6 +175,7 @@ export function supervisorBoard(ref = today(), now = new Date()) {
     shift,
     centres: centreShiftProgress(lines, shift.date),
     late,
+    lateOrders: groupLateOrders(late),
     backOrders,
     stagingLines: staging.todo.slice(0, 8).map((row) => ({ wo: row.task.wo, project: row.task.project || '' })),
     stagingTodo: staging.todo.length,

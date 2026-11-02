@@ -1,3 +1,4 @@
+import { browserBoard } from './idb-test-helpers.mjs';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
@@ -41,7 +42,7 @@ try {
   await page.getByRole('button',{name:'Read saved update',exact:true}).click();
   await page.getByText(/Target 390 windows.*0% of plan/).waitFor();
   await page.reload();
-  assert.equal(await page.evaluate(()=>Object.values(JSON.parse(localStorage.getItem('bv.cutting.v1')).shiftLogs).find(l=>l.rows.multipunch).rows.multipunch.targetPlan.actual),0);
+  assert.equal((await page.evaluate(browserBoard)).shiftLogs && Object.values((await page.evaluate(browserBoard)).shiftLogs).find(l=>l.rows.multipunch).rows.multipunch.targetPlan.actual,0);
   await page.setViewportSize({width:1440,height:1000});
   await page.getByRole('button',{name:'Overview',exact:true}).click();
   await page.getByRole('button',{name:'Write handover',exact:true}).click();

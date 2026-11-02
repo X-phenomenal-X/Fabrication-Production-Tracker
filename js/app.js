@@ -580,7 +580,7 @@ window.addEventListener('hashchange', () => {
   }
 });
 
-loadLocal();
+void loadLocal().then(() => {
 applyTheme();
 onChange(() => { applyTheme(); scheduleRender(); });
 render();
@@ -591,6 +591,7 @@ initSharedFile(scheduleRender);
 watchViewOnly(() => toast('This account can only view the board.'));
 onAuth(scheduleRender);
 bootAuth().then((result) => initCloud({ includeBase: !!result?.signedInNow })).then(() => scheduleRender());
+});
 
 // Browsers intentionally ignore custom before-close wording, but setting
 // returnValue still produces their standard warning while an outbound snapshot

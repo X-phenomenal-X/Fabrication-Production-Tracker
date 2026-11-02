@@ -518,7 +518,7 @@ export function renderData(rerender, go) {
             if (await confirmDialog('Clear everything on this device?',
               'The loaded schedules and every status set in this browser will be deleted. If you are connected to a shared file, that file is not touched.',
               { confirmLabel: 'Clear', danger: true })) {
-              resetAll();
+              await resetAll();
               location.reload();
             }
           },

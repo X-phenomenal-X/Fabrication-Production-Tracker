@@ -129,14 +129,32 @@ await page.evaluate(() => import('/js/store.js').then((m) => {
 step('identity set');
 
 // no old data seeded on boot
-const seeded = await page.evaluate((retired) => import('/js/store.js').then((m) => {
-  const raw = localStorage.getItem('bv.cutting.v1');
+const seeded = await page.evaluate(async (retired) => {
+  const { state } = await import('/js/store.js');
+  const raw = await (async function(mode, value) {
+  const db = await new Promise((resolve, reject) => {
+    const req = indexedDB.open('bv-cutting', 1);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction('handles', mode === 'get' ? 'readonly' : 'readwrite');
+      const store = tx.objectStore('handles');
+      const req = mode === 'get' ? store.get('board')
+        : mode === 'delete' ? store.delete('board') : store.put(value, 'board');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } finally { db.close(); }
+}
+)('get');
   const stored = raw ? JSON.parse(raw) : {};
   return {
-    inState: retired.filter((k) => m.state[k] !== undefined),
+    inState: retired.filter((k) => state[k] !== undefined),
     inStorage: retired.filter((k) => stored[k] !== undefined),
   };
-}), RETIRED);
+}, RETIRED);
 step('retired keys — in state: ' + (seeded.inState.join(',') || 'none') +
   ' | in storage: ' + (seeded.inStorage.join(',') || 'none'));
 if (seeded.inState.length || seeded.inStorage.length) throw new Error('old data is still present');
@@ -144,27 +162,63 @@ if (seeded.inState.length || seeded.inStorage.length) throw new Error('old data 
 // A device that used the short-lived purchasing workspace must shed its rows,
 // related history and tombstones on upgrade. Keeping only the top-level map out
 // of state is not enough: those secondary records also sync between devices.
-await page.evaluate(() => {
+await page.evaluate(async () => {
   const key = 'bv.cutting.v1';
-  const data = JSON.parse(localStorage.getItem(key));
+  const data = JSON.parse((await import('/js/store.js')).exportJson());
   data.materialOrders = { retired: { id: 'retired', die: '80.195', status: 'READY' } };
   data.taskHistory = [...(data.taskHistory || []), {
     id: 'retired-history', key: 'material:retired', kind: 'material-order', at: '2026-08-28T12:00:00Z',
   }];
   data.deletions = { ...(data.deletions || {}), 'materialOrders:old': { at: '2026-08-28T12:00:00Z' } };
   localStorage.setItem(key, JSON.stringify(data));
+  await (async function(mode, value) {
+  const db = await new Promise((resolve, reject) => {
+    const req = indexedDB.open('bv-cutting', 1);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction('handles', mode === 'get' ? 'readonly' : 'readwrite');
+      const store = tx.objectStore('handles');
+      const req = mode === 'get' ? store.get('board')
+        : mode === 'delete' ? store.delete('board') : store.put(value, 'board');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } finally { db.close(); }
+}
+)('delete');
 });
 await page.reload();
 await page.waitForSelector('header.top');
-const retiredPurchasing = await page.evaluate(() => import('/js/store.js').then((m) => {
-  const raw = JSON.parse(localStorage.getItem('bv.cutting.v1'));
+const retiredPurchasing = await page.evaluate(async () => {
+  const m = await import('/js/store.js');
+  const raw = JSON.parse((await (async function(mode, value) {
+  const db = await new Promise((resolve, reject) => {
+    const req = indexedDB.open('bv-cutting', 1);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction('handles', mode === 'get' ? 'readonly' : 'readwrite');
+      const store = tx.objectStore('handles');
+      const req = mode === 'get' ? store.get('board')
+        : mode === 'delete' ? store.delete('board') : store.put(value, 'board');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } finally { db.close(); }
+}
+)('get')) || '{}');
   return {
     stateMap: m.state.materialOrders !== undefined,
     storedMap: raw.materialOrders !== undefined,
     history: (m.state.taskHistory || []).some((entry) => entry.kind === 'material-order'),
     tombstone: Object.keys(m.state.deletions || {}).some((key) => key.startsWith('materialOrders:')),
   };
-}));
+});
 step('retired purchasing cleanup: ' + JSON.stringify(retiredPurchasing));
 if (Object.values(retiredPurchasing).some(Boolean)) throw new Error('retired purchasing data survived upgrade');
 
@@ -1570,7 +1624,7 @@ if (restart.finished !== 'DONE') {
   await night.clock.install({ time: new Date('2026-08-28T03:14:00') });
   await night.addInitScript((snap) => {
     localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
-  }, await page.evaluate(() => JSON.parse(localStorage.getItem('bv.cutting.v1'))));
+  }, await page.evaluate(() => import('/js/store.js').then((m) => JSON.parse(m.exportJson()))));
 
   const rendered = {};
   for (const tab of ['overview', 'today', 'staging', 'shift', 'jobs', 'rolling', 'setup']) {
@@ -2231,7 +2285,7 @@ const photoTodos = await page.evaluate(() => import('/js/store.js').then((m) => 
   rows: Object.values(m.state.todos)
     .filter((todo) => /29604|SA80-235/.test(todo.text))
     .map((todo) => ({ text: todo.text, assignee: todo.assignee })),
-  rawHasImage: (localStorage.getItem('bv.cutting.v1') || '').includes('data:image'),
+  rawHasImage: m.exportJson().includes('data:image'),
 })));
 step('photo to To-Do: ' + JSON.stringify(photoTodos.rows));
 if (photoTodos.rows.length !== 2
@@ -2249,27 +2303,20 @@ if (!/^data:image\/jpeg;base64,/.test(photoRequest?.body?.image || '')
 }
 await page.screenshot({ path: path.join(SHOT, 'today.png'), fullPage: true });
 
-// Browser storage failures must be impossible to miss. A console warning is
-// not enough on the floor: the operator needs a persistent recovery action.
+// A full legacy localStorage quota must not break the IndexedDB save path.
 await page.evaluate(async () => {
-  window.__realStorageSetItem = Storage.prototype.setItem;
+  const original = Storage.prototype.setItem;
   Storage.prototype.setItem = function (key, value) {
     if (key === 'bv.cutting.v1') throw new DOMException('Test quota exceeded', 'QuotaExceededError');
-    return window.__realStorageSetItem.call(this, key, value);
+    return original.call(this, key, value);
   };
   (await import('/js/store.js')).save();
+  Storage.prototype.setItem = original;
 });
-await page.waitForSelector('.storage-alert');
-const storageAlarm = (await page.locator('.storage-alert').textContent()).replace(/\s+/g, ' ').trim();
-step('storage failure alarm: ' + storageAlarm.slice(0, 100) + '…');
-if (!/Do not close this page|exported a backup/.test(storageAlarm)) {
-  throw new Error('storage failure did not give the operator a recovery action');
+await page.waitForTimeout(100);
+if (await page.locator('.storage-alert').count()) {
+  throw new Error('legacy localStorage quota prevented an IndexedDB save');
 }
-await page.evaluate(async () => {
-  Storage.prototype.setItem = window.__realStorageSetItem;
-  (await import('/js/store.js')).save();
-});
-await page.waitForSelector('.storage-alert', { state: 'detached' });
 
 // phone
 await page.click('nav.tabs button:has-text("Rolling")');

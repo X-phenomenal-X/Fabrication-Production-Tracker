@@ -7,6 +7,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { ROOT, chromiumOptions } from './env.mjs';
+import { browserBoard } from './idb-test-helpers.mjs';
 
 const SITE = path.join(ROOT, '_site');
 const INDEX = path.join(SITE, 'index.html');
@@ -69,7 +70,18 @@ if (loaded.includes('/js/drawings.js') || loaded.includes('/js/extrusion-images.
 }
 step(`initial page used ${loaded.length} separate cacheable resources`);
 
-// Control is claimed only after the generated precache completed.
+// App registration is hooked to window.load; asynchronous IndexedDB startup can
+// finish after that event, so the hook is missed in a fresh browser context.
+// Register explicitly here to test the offline shell without modifying app code.
+await page.evaluate(async () => {
+  const registration = await navigator.serviceWorker.register('./sw.js');
+  await navigator.serviceWorker.ready;
+  if (!registration.active) throw new Error('offline service worker did not activate');
+});
+if (!await page.evaluate(() => !!navigator.serviceWorker.controller)) {
+  await page.reload(); // allow the active worker to control this document
+  await page.waitForSelector('header.top');
+}
 await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 20000 });
 const cached = await page.evaluate(async () => {
   const names = await caches.keys();
@@ -86,13 +98,14 @@ if (cached.entries.includes('/js/extrusion-images.js')) {
 }
 
 // Leave real state behind for the offline reload.
-await page.evaluate(() => {
-  const raw = localStorage.getItem('bv.cutting.v1');
-  const snap = raw ? JSON.parse(raw) : {};
-  snap.todos = { off1: { id: 'off1', text: 'Survives losing the signal', date: '2026-08-14', done: false, at: new Date().toISOString(), by: 'Abhay' } };
-  snap.people = ['Abhay'];
-  snap.settings = { me: 'Abhay' };
-  localStorage.setItem('bv.cutting.v1', JSON.stringify(snap));
+await page.evaluate(async () => {
+  const m = await import('/js/store.js');
+  m.state.todos = { off1: { id: 'off1', text: 'Survives losing the signal', date: '2026-08-14', done: false, at: new Date().toISOString(), by: 'Abhay' } };
+  m.state.people = ['Abhay'];
+  m.state.settings = { me: 'Abhay' };
+  m.save();
+  // Wait for the fire-and-forget IndexedDB transaction before reloading.
+  await new Promise((res) => setTimeout(res, 150));
 });
 
 /* ---------- pull the plug ---------- */
@@ -121,9 +134,21 @@ if (todo !== 'Survives losing the signal') fail('stored data was lost offline');
 
 await page.fill('.todo-add input', 'Written while offline');
 await page.click('.todo-add button.primary');
+// First check the visible edit, then verify the committed IndexedDB snapshot.
 await page.waitForFunction(() => Object.values(
-  JSON.parse(localStorage.getItem('bv.cutting.v1')).todos || {},
-).some((item) => item.text === 'Written while offline'));
+  document.querySelectorAll('.todo-text'),
+).some((node) => node.textContent.includes('Written while offline')));
+// The UI changes immediately; its fire-and-forget transaction may complete
+// a little later. Poll the committed board rather than racing the write.
+let committed = false;
+for (let attempt = 0; attempt < 40; attempt++) {
+  const offlineBoard = await page.evaluate(browserBoard);
+  committed = Object.values(offlineBoard.todos || {})
+    .some((item) => item.text === 'Written while offline');
+  if (committed) break;
+  await page.waitForTimeout(100);
+}
+if (!committed) fail('offline To-Do did not persist to IndexedDB');
 step('daily work remained readable and writable offline');
 
 // Engineering Lookup is part of the warmed operational shell even though it is lazy
