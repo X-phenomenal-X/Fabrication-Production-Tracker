@@ -23,7 +23,7 @@ import { readXlsx } from './xlsx.js';
      4  non-numeric work orders retained; shift update pinned to its source tab
      5  live shift-update worksheet renamed from Shift Update 2 to Shift Update
      6  Shift Update still matches when Excel saved a surrounding space */
-export const PARSER_VERSION = 6;
+export const PARSER_VERSION = 7;
 
 const PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
 
@@ -450,12 +450,20 @@ export async function importMachineWorkbook(arrayBuffer, { kind, fileName = 'sch
   report.workbookSheets = wb.sheetNames;
 
   let tasks = [];
+  report.notes = [];
   for (const spec of specs) {
     const actual = resolveSheetName(wb.sheetNames, spec.sheet);
     const sheet = actual ? wb.sheets[actual] : null;
     if (!sheet) { report.missing.push(spec.sheet); continue; }
-    if (!sheetHasWorkOrderHeader(sheet, spec.cols.wo || 1)) report.badHeaders.push(spec.sheet);
-    tasks = tasks.concat(parseMachineSheet(sheet, spec, report));
+    const hasHeader = sheetHasWorkOrderHeader(sheet, spec.cols.wo || 1);
+    const headerlessComplete = kind === 'rolling' && spec.sheet === 'Complete' && !hasHeader
+      && sheet.rows.some((row) => row.r <= 5 && /^\d+$/.test(String(row.cells?.[(spec.cols.wo || 1) - 1] ?? '').trim()));
+    if (!hasHeader && !headerlessComplete) report.badHeaders.push(spec.sheet);
+    if (headerlessComplete) report.notes.push("Complete tab has no header; used Auto's columns");
+    const effectiveSpec = headerlessComplete
+      ? { ...spec, cols: specs.find((entry) => entry.sheet === 'Auto').cols }
+      : spec;
+    tasks = tasks.concat(parseMachineSheet(sheet, effectiveSpec, report));
   }
 
   // The CNC workbook also carries the shift update — the latest word on most
