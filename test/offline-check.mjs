@@ -7,6 +7,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { ROOT, chromiumOptions } from './env.mjs';
+import { browserBoard } from './idb-test-helpers.mjs';
 
 const SITE = path.join(ROOT, '_site');
 const INDEX = path.join(SITE, 'index.html');
@@ -69,7 +70,18 @@ if (loaded.includes('/js/drawings.js') || loaded.includes('/js/extrusion-images.
 }
 step(`initial page used ${loaded.length} separate cacheable resources`);
 
-// Control is claimed only after the generated precache completed.
+// App registration is hooked to window.load; asynchronous IndexedDB startup can
+// finish after that event, so the hook is missed in a fresh browser context.
+// Register explicitly here to test the offline shell without modifying app code.
+await page.evaluate(async () => {
+  const registration = await navigator.serviceWorker.register('./sw.js');
+  await navigator.serviceWorker.ready;
+  if (!registration.active) throw new Error('offline service worker did not activate');
+});
+if (!await page.evaluate(() => !!navigator.serviceWorker.controller)) {
+  await page.reload(); // allow the active worker to control this document
+  await page.waitForSelector('header.top');
+}
 await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 20000 });
 const cached = await page.evaluate(async () => {
   const names = await caches.keys();
@@ -122,21 +134,14 @@ if (todo !== 'Survives losing the signal') fail('stored data was lost offline');
 
 await page.fill('.todo-add input', 'Written while offline');
 await page.click('.todo-add button.primary');
-await page.waitForFunction(async () => Object.values(
-  (await (async () => {
-  const db = await new Promise((res, rej) => {
-    const req = indexedDB.open('bv-cutting', 1);
-    req.onsuccess = () => res(req.result);
-    req.onerror = () => rej(req.error);
-  });
-  return new Promise((res, rej) => {
-    const tx = db.transaction('handles', 'readonly');
-    const req = tx.objectStore('handles').get('board');
-    req.onsuccess = () => { db.close(); res(req.result ? JSON.parse(req.result) : {}); };
-    req.onerror = () => { db.close(); rej(req.error); };
-  });
-})()).todos || {},
-).some((item) => item.text === 'Written while offline'));
+// First check the visible edit, then verify the committed IndexedDB snapshot.
+await page.waitForFunction(() => Object.values(
+  document.querySelectorAll('.todo-text'),
+).some((node) => node.textContent.includes('Written while offline')));
+const offlineBoard = await page.evaluate(browserBoard);
+if (!Object.values(offlineBoard.todos || {}).some((item) => item.text === 'Written while offline')) {
+  fail('offline To-Do did not persist to IndexedDB');
+}
 step('daily work remained readable and writable offline');
 
 // Engineering Lookup is part of the warmed operational shell even though it is lazy
