@@ -106,6 +106,28 @@ function machineOracle(existing, payload) {
 }
 
 const rollingParsed = await importMachineWorkbook(fs.readFileSync(books.rolling), { kind: 'rolling', fileName: 'Rolling Schedule_2026.xlsx' });
+const headerlessRolling = writeBook('rolling-headerless-complete.xlsx', {
+  Auto: [
+    { 1: 'WO#', 2: 'PROJECT', 3: 'FL', 4: 'SA DIE#', 5: ' QTY', 6: 'INT B/O QTY', 7: 'EXT B/O QTY', 8: 'Material', 9: 'Cutting Date', 10: 'Comments', 11: 'Status', 12: 'Product', 13: 'Setup', 14: 'Ship Date', 15: 'Rolling ETA', 16: 'Machining ETA' },
+    { 1: 31509, 2: 'Mill Springer', 3: '11-12 SLD', 4: 'S89.054', 5: 2 },
+  ],
+  Manual: [
+    { 1: 'WO#', 2: 'PROJECT', 3: 'FL', 4: 'SA DIE#', 5: ' QTY' },
+    {},
+    { 1: 31510, 2: 'Mill Springer', 3: '11-12 SLD', 4: 'S89.054', 5: 3 },
+  ],
+  Complete: [
+    { 1: 31508, 2: 'Mill Springer', 3: '11-12 SLD', 4: 'S89.054', 5: 14, 9: date('2026-03-09'), 10: 'Need 5 More', 11: 'Done', 14: date('2026-03-27') },
+  ],
+});
+const headerlessParsed = await importMachineWorkbook(fs.readFileSync(headerlessRolling), { kind: 'rolling' });
+must(!headerlessParsed.report.badHeaders.length, 'headerless Complete was rejected');
+must(headerlessParsed.report.notes.some((note) => note.includes("Complete tab has no header")), 'headerless Complete note missing');
+const completedJob = headerlessParsed.tasks.find((task) => task.wo === '31508');
+must(completedJob?.archived && completedJob.qty === 14 && completedJob.shipDate === '2026-03-27', 'Complete first row or Auto column positions were lost');
+must(headerlessParsed.tasks.some((task) => task.wo === '31510'), 'Manual row 3 was lost');
+step('headerless Complete uses Auto columns without dropping first data row');
+
 const cncParsed = await importMachineWorkbook(fs.readFileSync(books.cnc), { kind: 'cnc', fileName: 'CNC Schedule_Rev E.xlsx' });
 const dailyParsed = await importDailySchedule(fs.readFileSync(books.daily), { fileName: 'Daily Schedule Oct 13 Rev B.xlsx' });
 
