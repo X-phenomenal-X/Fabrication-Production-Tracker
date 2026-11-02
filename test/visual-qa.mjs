@@ -1,3 +1,4 @@
+import { browserBoard } from './idb-test-helpers.mjs';
 /* Visual QA over the sanitized fixture.
 
    Loads test/fixture.mjs into localStorage, then walks every principal screen
@@ -970,8 +971,7 @@ for (const theme of ['light', 'dark']) {
   const wo = await page.$eval('.stage-m-row .mono.strong', (n) => n.textContent.trim());
   await page.click('.stage-m-row .stage-m-stage');
   await page.waitForTimeout(350);
-  const stored = await page.evaluate(() =>
-    Object.keys(JSON.parse(localStorage.getItem('bv.cutting.v1') || '{}').staging || {}).length);
+  const stored = Object.keys((await page.evaluate(browserBoard)).staging || {}).length;
   if (!stored) fail(`staging @ phone: staging ${wo} in one tap did not persist`);
 
   await page.click('.stage-m-row .stage-m-other');
@@ -1270,10 +1270,7 @@ for (const theme of ['light', 'dark']) {
   });
   if (!gesture?.done || !gesture?.note) fail('mobile swipe: labelled Done/Note actions are missing');
   await page.waitForTimeout(360);
-  const saved = await page.evaluate((key) => {
-    const snap = JSON.parse(localStorage.getItem('bv.cutting.v1') || '{}');
-    return snap.taskStatus?.[key]?.status || null;
-  }, gesture?.key);
+  const saved = (await page.evaluate(browserBoard)).taskStatus?.[gesture?.key]?.status || null;
   if (saved !== 'DONE') fail(`mobile swipe: right swipe stored ${saved || 'nothing'}, expected DONE`);
   else note('mobile swipe: right gesture crosses 88px and stores Done');
   await ctx.close();
