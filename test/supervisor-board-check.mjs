@@ -6,7 +6,7 @@ import { addManualTask } from '../js/store.js';
 import {
   applyShiftWindow, buildShiftDraft, centreShiftProgress, machineShiftNotes,
   shipWeekStart, windowWallSheet, WINDOW_WALL_FIELDS,
-  supervisorBoard,
+  supervisorBoard, groupLateOrders,
 } from '../js/supervisor-board.js';
 import { shiftContextAt } from '../js/shifts.js';
 
@@ -94,6 +94,16 @@ if (!draft.rows['roll-auto']?.done.includes('440 Pier') || draft.rows['roll-auto
 }
 if (!draft.notes.includes('Call the mill')) throw new Error('an open to-do was left out of the shift summary');
 
+const grouped = groupLateOrders([
+  { wo: '31698', project: '810 Agnes W', qty: 2, cuttingDate: '2026-08-24', machine: 'fom1' },
+  { wo: '31698', project: '810 Agnes W', qty: 3, cuttingDate: '2026-08-25', machine: 'fom2' },
+  { wo: '31698', project: '810 Agnes W', qty: 4, cuttingDate: '2026-08-24', machine: 'fom1' },
+]);
+if (grouped.length !== 1 || grouped[0].lines !== 3 || grouped[0].qty !== 9
+    || grouped[0].oldestCuttingDate !== '2026-08-24'
+    || grouped[0].machines.join(',') !== 'fom1,fom2') {
+  throw new Error('three overdue lines were not grouped into one W/O: ' + JSON.stringify(grouped));
+}
 const board = supervisorBoard('2026-08-14', new Date(2026, 7, 14, 16, 0));
 if (board.centres.find((centre) => centre.group === 'Rolling').done !== 1) {
   throw new Error('the live board did not count the finished Rolling line');
