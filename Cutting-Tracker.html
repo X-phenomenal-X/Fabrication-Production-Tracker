@@ -9609,6 +9609,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
     });
     report.workbookSheets = wb.sheetNames;
     let tasks = [];
+    report.notes = [];
     for (const spec of specs) {
       const actual = resolveSheetName(wb.sheetNames, spec.sheet);
       const sheet = actual ? wb.sheets[actual] : null;
@@ -9616,8 +9617,12 @@ a.resource-download:active, button.resource-download:active { transform: transla
         report.missing.push(spec.sheet);
         continue;
       }
-      if (!sheetHasWorkOrderHeader(sheet, spec.cols.wo || 1)) report.badHeaders.push(spec.sheet);
-      tasks = tasks.concat(parseMachineSheet(sheet, spec, report));
+      const hasHeader = sheetHasWorkOrderHeader(sheet, spec.cols.wo || 1);
+      const headerlessComplete = kind === "rolling" && spec.sheet === "Complete" && !hasHeader && sheet.rows.some((row) => row.r <= 5 && /^\d+$/.test(String(row.cells?.[(spec.cols.wo || 1) - 1] ?? "").trim()));
+      if (!hasHeader && !headerlessComplete) report.badHeaders.push(spec.sheet);
+      if (headerlessComplete) report.notes.push("Complete tab has no header; used Auto's columns");
+      const effectiveSpec = headerlessComplete ? { ...spec, cols: specs.find((entry) => entry.sheet === "Auto").cols } : spec;
+      tasks = tasks.concat(parseMachineSheet(sheet, effectiveSpec, report));
     }
     let shiftUpdate = null;
     if (kind === "cnc") {
@@ -9649,7 +9654,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
   var init_import_machines = __esm({
     "js/import-machines.js"() {
       init_xlsx();
-      PARSER_VERSION = 6;
+      PARSER_VERSION = 7;
       PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
       WO_HEADING = /^(?:W\/?O\s*#?|WORK\s*ORDER\s*#?|PROJECT|MACHINE|DATE|SHIFT|TOTALS?|SERVICE\s*ORDERS?|BACK\s*ORDERS?)$/i;
       SHEET_MAP = {
