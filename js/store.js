@@ -1192,6 +1192,8 @@ async function boardRecord(mode, value) {
 }
 
 async function persistLocal(data = snapshot()) {
+  // Logic-only Node tests have no browser IndexedDB; offline storage is browser-only.
+  if (typeof indexedDB === 'undefined') return false;
   const json = JSON.stringify(data);
   const generation = ++boardGeneration;
   const work = boardWrite.catch(() => {}).then(async () => {
