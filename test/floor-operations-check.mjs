@@ -1,3 +1,5 @@
+import 'fake-indexeddb/auto';
+import { readNodeBoard } from './idb-test-helpers.mjs';
 import assert from 'node:assert/strict';
 import { state, setTodo, saveShiftLog, exportJson, loadLocal } from '../js/store.js';
 import { createOperation } from '../js/command-center.js';
@@ -39,7 +41,10 @@ saveShiftLog(log.date,log.shift,{acknowledgement:{by:'Incoming',at:end.toISOStri
 assert.ok(handoverAcknowledged(state.shiftLogs['2026-08-14|AFT']));
 saveShiftLog(log.date,log.shift,{notes:'Updated notes'});
 assert.equal(handoverAcknowledged(state.shiftLogs['2026-08-14|AFT']),false);
-const before=JSON.parse(exportJson()); state.todos={};loadLocal();
+const before=JSON.parse(exportJson());
+await loadLocal(); // waits for all outstanding fire-and-forget writes
+state.todos={};
+await loadLocal();
 assert.deepEqual(state.todos[quality].operation,before.todos[quality].operation);
 assert.match(reportCsv([['=HYPERLINK("bad")']]),/"'=HYPERLINK/);
 assert.throws(()=>supervisorSummary('2026-01-01','2026-03-01'),/31 days/);
