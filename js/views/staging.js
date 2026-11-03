@@ -20,7 +20,7 @@ import { MACHINE_BY_KEY } from '../machines.js';
 import { dieDialog } from './die-launcher.js';
 import { SHIFTS, SHIFT_ORDER, shiftContextAt } from '../shifts.js';
 
-const vs = { q: '', showStaged: true };
+const vs = { q: '', showStaged: true, dueFilter: 'all' };
 
 function machineLabel(key) {
   const m = MACHINE_BY_KEY[key];
@@ -275,8 +275,12 @@ export function renderStaging(rerender, go) {
         el('button.primary', { onclick: () => go('setup') }, 'Go to Setup')));
   }
 
-  const { todo, staged } = stagingQueue({ q: vs.q });
+  const queue = stagingQueue({ q: vs.q });
   const ref = today();
+  const cutoff = addDays(ref, 7);
+  const todo = queue.todo.filter(r => vs.dueFilter === 'undated' ? !r.task.cuttingDate
+    : vs.dueFilter === 'due' ? !!r.task.cuttingDate && r.task.cuttingDate <= cutoff : true);
+  const staged = queue.staged;
   const overdue = todo.filter((r) => r.task.cuttingDate && r.task.cuttingDate < ref).length;
   const dueToday = todo.filter((r) => r.task.cuttingDate === ref).length;
 
@@ -311,6 +315,10 @@ export function renderStaging(rerender, go) {
             head._t = setTimeout(rerender, 150);
           },
         })),
+      el('label.row.small', {}, 'Staging filter', el('select', {
+        value: vs.dueFilter, 'aria-label': 'Staging filter',
+        onchange: e => { vs.dueFilter = e.target.value; rerender(); },
+      }, ...[['all', 'All'], ['due', 'Due soon'], ['undated', 'Undated']].map(([value, label]) => el('option', { value }, label)))),
       el('span.spacer'),
       el('label.row.small.donetoggle', {},
         el('input', {
