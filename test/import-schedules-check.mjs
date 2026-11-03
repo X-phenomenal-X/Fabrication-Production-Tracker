@@ -414,7 +414,7 @@ must(cncOnly.saved, 'CNC-only import did not save');
 must(JSON.stringify(workRow()) === workBefore, 'CNC import changed statuses or handovers');
 const savedTasks = baseRow().data.tasks;
 must(savedTasks.some((task) => task.wo === 'ROLL-KEEP'), 'CNC import removed rolling jobs');
-must(savedTasks.some((task) => task.source === 'cnc' && task.machine === 'multipunch'), 'CNC jobs were not added');
+must(!savedTasks.some((task) => task.source === 'cnc' && task.machine === 'multipunch'), 'obsolete CNC punch tasks imported');
 must(!savedTasks.some((task) => task.wo === 'OLD-CNC'), 'a replaced CNC job came back');
 must(baseRow().data.dailyOrders[0].wo === 'KEEP', 'CNC import replaced daily orders');
 must(baseRow().data.projectColorReference.projects.Keep === 'Black', 'CNC import cleared project colours');
