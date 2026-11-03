@@ -659,7 +659,7 @@ for (const theme of ['light', 'dark']) {
 const CONTRAST = `(() => {
   const lum = (c) => {
     const modern = c.startsWith('color(srgb');
-    const [r, g, b] = c.match(/[\\d.]+/g).slice(0, 3).map(Number).map((v) => {
+    const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map(Number).map((v) => {
       // Chromium serializes color-mix() results as color(srgb 0..1) but plain
       // tokens as rgb(0..255). Treating both as 255-based made high-contrast
       // dark text on a pale mixed surface look like a 1.2:1 failure.
@@ -675,7 +675,7 @@ const CONTRAST = `(() => {
   const bgOf = (n) => {
     for (let e = n; e; e = e.parentElement) {
       const bg = getComputedStyle(e).backgroundColor;
-      if (bg && !/rgba?\\(0, 0, 0, 0\\)/.test(bg)) return bg;
+      if (bg && !/rgba?\(0, 0, 0, 0\)/.test(bg)) return bg;
     }
     return 'rgb(255,255,255)';
   };
@@ -1404,12 +1404,12 @@ for (const theme of ['light', 'dark']) {
   const sections = await page.locator('.sup-board .sup-list').evaluateAll(nodes => nodes.map(n => ({
     heading: n.querySelector('h2')?.textContent,
     visible: n.querySelectorAll('.shared-list-items .shared-list-row').length,
-    total: Number((n.querySelector('.shared-show-all')?.textContent || '').match(/\\d+/)?.[0] || n.querySelectorAll('.shared-list-items .shared-list-row').length),
+    total: Number((n.querySelector('.shared-show-all')?.textContent || '').match(/\d+/)?.[0] || n.querySelectorAll('.shared-list-items .shared-list-row').length),
     toggle: n.querySelector('.shared-show-all')?.textContent || '',
   })));
   if (sections.length !== 3 || sections.some(s => s.visible > 5))
     fail('overview @ 390px: work-order lists must cap at five: ' + JSON.stringify(sections));
-  if (sections.some(s => s.total > 5 && !/^Show all \\(\\d+\\)$/.test(s.toggle)))
+  if (sections.some(s => s.total > 5 && !/^Show all \(\d+\)$/.test(s.toggle)))
     fail('overview @ 390px: missing Show all control: ' + JSON.stringify(sections));
   if (sections.some(s => !s.heading || !/^(Late|Back orders|To stage)/.test(s.heading)))
     fail('overview @ 390px: missing unified headings');
