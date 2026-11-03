@@ -4,6 +4,7 @@
    shift's own date. Done is how much of that plan is already finished.
    Parked lines stay in the cloud and out of both counts. */
 
+import { state } from './store.js';
 import { MACHINES, MACHINE_BY_KEY } from './machines.js';
 import {
   addDays, allBackOrders, assignedMachine, effectiveTaskStatus, isParked, openTodos,
@@ -176,6 +177,17 @@ export function supervisorBoard(ref = today(), now = new Date()) {
       machine,
     };
   });
+  // Daily WINDOW WALL Punch cells are authoritative; the CNC workbook's
+  // retired MultiPunch & SAW rows are not part of this queue.
+  for (const order of state.dailyOrders || []) {
+    if (!/WINDOW WALL/i.test(order.section || '') || !order.punchStatus) continue;
+    lines.push({
+      group: 'Punch', machine: 'multipunch', wo: order.wo,
+      project: order.project || '', floor: order.floor || '',
+      qty: order.qty || 0, cuttingDate: order.cuttingDate || '',
+      status: order.punchStatus, parked: false,
+    });
+  }
   const late = lines.filter((line) => !line.parked && line.status !== 'DONE' && line.cuttingDate && line.cuttingDate < shift.date);
   const backOrders = allBackOrders().flatMap((group) => group.rows.map((row) => ({
     wo: row.task.wo,
