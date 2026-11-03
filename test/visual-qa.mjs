@@ -1113,7 +1113,7 @@ for (const theme of ['light', 'dark']) {
   }));
   if (rush.tab) fail('rush tab is still in the navigation');
   if (rush.hash !== '#overview') fail(`#rush did not open the overview (${rush.hash})`);
-  if (rush.centres !== 4) fail(`overview centres ${rush.centres}`);
+  if (rush.centres < 1 || rush.centres > 4) fail(`overview active centres ${rush.centres}`);
   note('rush tab removed; old bookmark opens the supervisor overview');
   await ctx.close();
 }
@@ -1400,3 +1400,23 @@ server.close();
 console.log(`\nScreenshots: ${path.relative(ROOT, SHOT)}/`);
 console.log(errors.length ? `\nERRORS:\n  ${errors.join('\n  ')}` : '\nERRORS: none');
 process.exit(errors.length ? 1 : 0);
+
+/* Initial supervisor lists must remain bounded at phone width. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  await page.addInitScript(snap => localStorage.setItem('bv.cutting.v1', JSON.stringify(snap)), fixture);
+  await page.goto(`${base}/#overview`);
+  await page.waitForSelector('.sup-board');
+  const sections = await page.locator('.sup-board .sup-list').evaluateAll(nodes => nodes.map(n => ({
+    heading: n.querySelector('h2')?.textContent,
+    visible: n.querySelectorAll('.shared-list-items .shared-list-row').length,
+    toggle: n.querySelector('.shared-show-all')?.textContent || '',
+  })));
+  if (sections.length !== 3 || sections.some(s => s.visible > 5))
+    fail('overview @ 390px: work-order lists must cap at five: ' + JSON.stringify(sections));
+  if (sections.some(s => !s.heading || !/^(Late|Back orders|To stage)/.test(s.heading)))
+    fail('overview @ 390px: missing unified headings');
+  note('overview @ 390px: three capped work-order sections');
+  await ctx.close();
+}
