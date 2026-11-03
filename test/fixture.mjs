@@ -98,6 +98,8 @@ export function makeFixture({ today = '2026-08-14', volume = 'heavy' } = {}) {
       materialStatus: i % 13 === 0 ? 'NOT RECEIVED' : 'READY',
       color: ['Charcoal Grey', 'Clear Anodized', 'Black', 'Architectural Bronze'][i % 4],
       section: i % 5 ? 'IN CUTTING' : 'WINDOW WALL',
+      punch: i % 5 === 0 ? 'Punch' : null,
+      punchStatus: i % 5 === 0 ? ['DONE', 'IN_PROGRESS', 'BACK_ORDER', 'NOT_STARTED'][i % 4] : null,
     });
   }
 
