@@ -662,15 +662,15 @@ const CONTRAST = `(() => {
   // color(srgb); unsupported formats must never crash the audit.
   const channels = (colour) => {
     if (typeof colour !== 'string') return null;
-    const match = colour.trim().match(/^(rgba?)\(([^)]+)\)$/i);
+    const match = colour.trim().match(/^(rgba?)\\(([^)]+)\\)$/i);
     if (match) {
-      const parts = match[2].replace(/,/g, ' ').replace(/\//g, ' ').split(/\s+/).filter(Boolean).map(Number);
+      const parts = match[2].replace(/,/g, ' ').replace(/\\//g, ' ').split(/\\s+/).filter(Boolean).map(Number);
       if (parts.length < 3 || parts.slice(0, 3).some(n => !Number.isFinite(n))) return null;
       return [...parts.slice(0, 3).map(n => n / 255), parts[3] == null ? 1 : parts[3]];
     }
-    const srgb = colour.trim().match(/^color\(srgb\s+([^)]*)\)$/i);
+    const srgb = colour.trim().match(/^color\\(srgb\\s+([^)]*)\\)$/i);
     if (srgb) {
-      const parts = srgb[1].replace(/\//g, ' ').split(/\s+/).filter(Boolean).map(Number);
+      const parts = srgb[1].replace(/\\//g, ' ').split(/\\s+/).filter(Boolean).map(Number);
       if (parts.length < 3 || parts.slice(0, 3).some(n => !Number.isFinite(n))) return null;
       return [...parts.slice(0, 3), parts[3] == null ? 1 : parts[3]];
     }
