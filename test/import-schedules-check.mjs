@@ -8,6 +8,7 @@ import os from 'os';
 import path from 'path';
 import { importDailySchedule } from '../js/import-daily.js';
 import { importMachineWorkbook } from '../js/import-machines.js';
+import { punchStatusFromFill } from '../js/import-daily.js';
 import {
   applyDailyImport, applyMachineImport, setDailyImport, setMachineImport, state,
 } from '../js/store.js';
@@ -536,3 +537,11 @@ step(`7 MB Daily Schedule parsed in Node in ${seconds.toFixed(1)}s`);
 await new Promise((resolve) => server.close(resolve));
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log('Schedule import: OK');
+
+for (const [fill, expected] of [
+  ['FF00A000', 'DONE'], ['FFFFFF00', 'IN_PROGRESS'],
+  ['FFFF9900', 'BACK_ORDER'], [null, 'NOT_STARTED'],
+  ['FFFFFFFF', 'NOT_STARTED'],
+]) {
+  must(punchStatusFromFill(fill) === expected, 'Punch fill mapping ' + String(fill));
+}
