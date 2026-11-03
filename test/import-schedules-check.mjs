@@ -136,7 +136,7 @@ must(rollingParsed.tasks.length === 160, `rolling parsed ${rollingParsed.tasks.l
 must(cncParsed.tasks.length === 280, `cnc parsed ${cncParsed.tasks.length}, expected 280`);
 must(dailyParsed.rows.length === 72, `daily parsed ${dailyParsed.rows.length}, expected 72`);
 must(dailyParsed.report.woHeaderFound, 'fixture daily header was not recognised');
-must(cncParsed.report.missing.includes('MultiPunch & SAW') === false, 'fixture CNC is missing MultiPunch & SAW');
+must(!cncParsed.tasks.some(task => task.machine === 'multipunch'), 'obsolete CNC punch lines were imported');
 must(!cncParsed.tasks.some((task) => task.wo === '99999'), 'CNC import must not read a daily order number from nowhere');
 step(`fixtures: rolling ${rollingParsed.tasks.length}, cnc ${cncParsed.tasks.length}, daily ${dailyParsed.rows.length}`);
 
@@ -200,7 +200,7 @@ must(spaced.report.shiftSheet === ' Shift Update', `shift tab resolved to ${spac
 must(spaced.shiftUpdate.shift === 'AFTERNOON', `spaced shift update loaded ${spaced.shiftUpdate?.shift}`);
 must(!JSON.stringify(spaced.shiftUpdate).includes('ARCHIVED'), 'spaced workbook fell through to Shift Update 2');
 must(!spaced.tasks.some((task) => task.wo === '99999'), 'CNC Daily Sched tab became a machine job');
-must(spaced.report.missing.includes('MultiPunch & SAW'), 'current CNC file should report MultiPunch & SAW missing');
+must(!spaced.tasks.some(task => task.machine === 'multipunch'), 'CNC punch lines should be ignored');
 step('leading-space Shift Update is the live tab; CNC Daily Sched is ignored');
 
 const encoded = await importMachineWorkbook(
@@ -509,7 +509,7 @@ seed('base', {
 });
 const current = await runImport(argv('--cnc', currentCnc), { env });
 must(current.saved, 'current CNC file did not import');
-must(current.files[0].warnings.some((warning) => warning.includes('MultiPunch & SAW')), 'missing Multi Punch sheet was not warned');
+must(!current.files[0].warnings.some((warning) => warning.includes('MultiPunch & SAW')), 'obsolete MultiPunch tab should not be required');
 must(current.files[0].notes.some((note) => note.includes(' Shift Update')), 'leading-space tab was not reported');
 must(!baseRow().data.tasks.some((task) => task.wo === 'PUNCH-OLD'), 'old Multi Punch job survived a file that has no such sheet');
 must(baseRow().data.tasks.some((task) => task.wo === 'ROLL-KEEP'), 'current CNC import removed rolling');
