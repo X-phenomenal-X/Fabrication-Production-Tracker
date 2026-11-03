@@ -18,7 +18,7 @@ import { SHIFTS, shiftContextAt } from '../shifts.js';
 import { focusCentreTask, setAnimatedStatus } from './centre.js';
 import { todoPanel } from './today.js';
 import { supervisorBoard } from '../supervisor-board.js';
-import { sectionHeader, listRow, cappedList } from './ui.js';
+import { sectionHeader, listRow, cappedList, statTile, emptyState } from './ui.js';
 
 const GROUP_PAGE = { Rolling: 'rolling', FOM: 'fom', CNC: 'cnc', Punch: 'punch' };
 /* The crew that just handed over. Day follows the Midnight shift that started
@@ -226,10 +226,7 @@ function band(step, title, hint, tone, body) {
 function healthStat(iconName, value, label, tone = 'work', detail = '') {
   return el(`div.overview-health-stat.${tone}`, {},
     el('span.overview-health-icon', { 'aria-hidden': 'true' }, icon(iconName, { size: 22 })),
-    el('div', {},
-      el('strong.mono', {}, value),
-      el('span', {}, label),
-      detail ? el('small', {}, detail) : null));
+    statTile({ value, label, sub: detail, tone }));
 }
 
 function supervisorStrip(go) {
@@ -246,13 +243,13 @@ function supervisorStrip(go) {
     el('div.sup-shift', {},
       el('strong', {}, board.shift.shift.label + ' shift'),
       board.shift.shift.range ? el('span', {}, board.shift.shift.range) : null),
-    el('div.sup-centres', {}, ...board.centres.filter(centre => centre.plan > 0).map(centre => el('button.sup-centre', {
+    el('div.sup-centres', {}, ...(board.centres.some(centre => centre.plan > 0) ? board.centres.filter(centre => centre.plan > 0).map(centre => el('button.sup-centre', {
       type: 'button', onclick: () => go(centre.page),
       'aria-label': centre.label + ': ' + centre.done + ' done of ' + centre.plan + ' planned this shift',
     },
       el('span.sup-centre-label', {}, centre.label),
       el('span.sup-centre-score', {}, el('b', {}, String(centre.done)), el('small', {}, ' / ' + centre.plan)),
-      el('span.sup-centre-hint', {}, 'done / planned')))),
+      el('span.sup-centre-hint', {}, 'done / planned'))) : [emptyState({ icon: 'calendar', text: 'Nothing planned this shift' })])),
     pile('Late', board.lateOrders, 'Nothing is past its cutting date.', board.lateOrders.length, board.late.length + ' lines', 'today'),
     pile('Back orders', board.backOrderGroups, 'No open shortages.', board.backOrderGroups.length, board.backOrders.length + ' lines', 'backorders'),
     pile('To stage', board.stagingDue, 'No rolling work due within seven days.', board.stagingDue.length, board.stagingDueCount + ' lines · ' + board.stagingUndated + ' undated', 'staging'));
