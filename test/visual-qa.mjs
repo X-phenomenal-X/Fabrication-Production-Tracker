@@ -657,27 +657,48 @@ for (const theme of ['light', 'dark']) {
    by have to be legible under shop lighting. This measures the real rendered
    pairs rather than trusting the tokens. */
 const CONTRAST = `(() => {
-  const lum = (c) => {
-    const modern = c.startsWith('color(srgb');
-    const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map(Number).map((v) => {
-      // Chromium serializes color-mix() results as color(srgb 0..1) but plain
-      // tokens as rgb(0..255). Treating both as 255-based made high-contrast
-      // dark text on a pale mixed surface look like a 1.2:1 failure.
-      const s = modern ? v : v / 255;
-      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-    });
+  // Treat transparent layers as transparent rather than trying to measure
+  // them as opaque black. Chromium can serialize CSS colours as rgb/rgba or
+  // color(srgb); unsupported formats must never crash the audit.
+  const channels = (colour) => {
+    if (typeof colour !== 'string') return null;
+    const match = colour.trim().match(/^(rgba?)\(([^)]+)\)$/i);
+    if (match) {
+      const parts = match[2].replace(/,/g, ' ').replace(/\//g, ' ').split(/\s+/).filter(Boolean).map(Number);
+      if (parts.length < 3 || parts.slice(0, 3).some(n => !Number.isFinite(n))) return null;
+      return [...parts.slice(0, 3).map(n => n / 255), parts[3] == null ? 1 : parts[3]];
+    }
+    const srgb = colour.trim().match(/^color\(srgb\s+([^)]*)\)$/i);
+    if (srgb) {
+      const parts = srgb[1].replace(/\//g, ' ').split(/\s+/).filter(Boolean).map(Number);
+      if (parts.length < 3 || parts.slice(0, 3).some(n => !Number.isFinite(n))) return null;
+      return [...parts.slice(0, 3), parts[3] == null ? 1 : parts[3]];
+    }
+    return null;
+  };
+  const opaque = (parts) => !!parts && parts.slice(0, 3).every(Number.isFinite)
+    && Number.isFinite(parts[3]) && parts[3] >= .999;
+  const lum = (colour) => {
+    const rgba = channels(colour);
+    if (!rgba || !opaque(rgba)) return null;
+    const [r, g, b] = rgba.slice(0, 3).map(s =>
+      s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4));
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
   const ratio = (a, b) => {
-    const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+    const values = [lum(a), lum(b)];
+    if (values.some(value => value == null || !Number.isFinite(value))) return null;
+    const [x, y] = values.sort((p, q) => q - p);
     return (x + 0.05) / (y + 0.05);
   };
   const bgOf = (n) => {
     for (let e = n; e; e = e.parentElement) {
       const bg = getComputedStyle(e).backgroundColor;
-      if (bg && !/rgba?\(0, 0, 0, 0\)/.test(bg)) return bg;
+      if (opaque(channels(bg))) return bg;
     }
-    return 'rgb(255,255,255)';
+    // If the whole DOM path is transparent, use the page canvas background.
+    const root = getComputedStyle(document.documentElement).backgroundColor;
+    return opaque(channels(root)) ? root : 'rgb(255,255,255)';
   };
   const out = [];
   const seen = new Set();
@@ -694,8 +715,10 @@ const CONTRAST = `(() => {
       const size = parseFloat(st.fontSize);
       const bold = Number(st.fontWeight) >= 700;
       const large = size >= 18.66 || (size >= 14 && bold);
+      const measured = ratio(st.color, bgOf(n));
+      if (measured == null) continue;
       out.push({
-        sel, r: Math.round(ratio(st.color, bgOf(n)) * 100) / 100,
+        sel, r: Math.round(measured * 100) / 100,
         need: large ? 3 : 4.5, size,
         fg: st.color, bg: bgOf(n),
         where: (n.parentElement?.className || '') + ' > ' + (n.textContent || '').trim().slice(0, 20),
