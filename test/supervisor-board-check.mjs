@@ -117,14 +117,14 @@ if (!state.manualTasks || !Object.values(state.manualTasks).some((task) => task.
 
 console.log('Supervisor board: OK');
 
-const grouped = groupByWo([
+const groupedByWo = groupByWo([
   { wo: '42', project: 'A', qty: 3, cuttingDate: '2026-08-12', machine: 'roll-auto' },
   { wo: '42', qty: 4, cuttingDate: '2026-08-11', machine: 'roll-man' },
   { wo: '43', qty: 2, cuttingDate: '2026-08-13', machine: 'fom1' },
 ]);
-if (grouped.length !== 2 || grouped[0].wo !== '42' || grouped[0].totalQty !== 7 ||
-    grouped[0].lines !== 2 || grouped[0].earliestCuttingDate !== '2026-08-11' ||
-    grouped[0].machines.length !== 2) throw new Error('groupByWo should combine all W/O lines');
+if (groupedByWo.length !== 2 || groupedByWo[0].wo !== '42' || groupedByWo[0].totalQty !== 7 ||
+    groupedByWo[0].lines !== 2 || groupedByWo[0].earliestCuttingDate !== '2026-08-11' ||
+    groupedByWo[0].machines.length !== 2) throw new Error('groupByWo should combine all W/O lines');
 const stagingCheck = stagingDueGroups([
   { wo: '42', group: 'Rolling', status: 'NOT_STARTED', cuttingDate: '2026-08-20' },
   { wo: '42', group: 'Rolling', status: 'NOT_STARTED', cuttingDate: '2026-08-21' },
