@@ -39,6 +39,7 @@ function excelSerial(iso) {
 function cellXml(col, row, value) {
   const ref = `${colName(col)}${row}`;
   if (value == null || value === '') return '';
+  if (value?.fill) return `<c r="${ref}" s="${({ green: 2, yellow: 3, orange: 4 })[value.fill] || 0}" t="inlineStr"><is><t>${esc(value.text || 'X')}</t></is></c>`;
   if (value?.date) return `<c r="${ref}" s="1"><v>${excelSerial(value.date)}</v></c>`;
   if (typeof value === 'number') return `<c r="${ref}"><v>${value}</v></c>`;
   return `<c r="${ref}" t="inlineStr"><is><t>${esc(value)}</t></is></c>`;
@@ -255,7 +256,7 @@ function workbook(sheets, options) {
     + names.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${REL}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')
     + `</Relationships>`;
   const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-    + `<styleSheet xmlns="${XML}"><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>`;
+    + `<styleSheet xmlns="${XML}"><fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00B050"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFF9900"/></patternFill></fill></fills><cellXfs count="5"><xf numFmtId="0"/><xf numFmtId="14"/><xf numFmtId="0" fillId="2"/><xf numFmtId="0" fillId="3"/><xf numFmtId="0" fillId="4"/></cellXfs></styleSheet>`;
   const files = {
     'xl/workbook.xml': wb,
     'xl/_rels/workbook.xml.rels': rels,
