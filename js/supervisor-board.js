@@ -101,7 +101,7 @@ export function buildShiftDraft(date, shiftKey) {
         wo: row.task.wo,
         project: row.task.project || '',
         qty: row.bo.qty,
-    cuttingDate: row.task.cuttingDate || '',
+        cuttingDate: row.task.cuttingDate || '',
       });
     }
   }
