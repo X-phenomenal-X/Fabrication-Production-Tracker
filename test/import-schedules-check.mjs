@@ -555,9 +555,10 @@ fs.rmSync(tmp, { recursive: true, force: true });
 console.log('Schedule import: OK');
 
 for (const [fill, expected] of [
-  ['FF00A000', 'DONE'], ['FFFFFF00', 'IN_PROGRESS'],
-  ['FFFF9900', 'BACK_ORDER'], [null, 'NOT_STARTED'],
-  ['FFFFFFFF', 'NOT_STARTED'],
+  ['92D050', 'DONE'], ['00B050', 'DONE'],
+  ['FFFF00', 'IN_PROGRESS'], ['FFC000', 'BACK_ORDER'],
+  ['ED7D31', 'BACK_ORDER'], ['FFFFFF', 'NOT_STARTED'],
+  [null, 'NOT_STARTED'],
 ]) {
   must(punchStatusFromFill(fill) === expected, 'Punch fill mapping ' + String(fill));
 }
