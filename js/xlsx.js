@@ -108,14 +108,23 @@ function parseStyles(xml) {
   const fills = Array.from(doc.getElementsByTagName('fills')[0]?.getElementsByTagName('fill') || []);
   const indexed = ['000000','FFFFFF','FF0000','00FF00','0000FF','FFFF00','FF00FF','00FFFF'];
   const theme = ['FFFFFF','000000','EEECE1','1F497D','4F81BD','C0504D','9BBB59','8064A2','4BACC6','F79646','0000FF','800080'];
+  const tintColour = (hex, tint) => {
+    const t = Number(tint || 0);
+    if (!Number.isFinite(t) || t === 0) return hex;
+    return [0, 2, 4].map(i => {
+      const value = parseInt(hex.slice(i, i + 2), 16);
+      const adjusted = t < 0 ? value * (1 + t) : value * (1 - t) + 255 * t;
+      return Math.round(Math.max(0, Math.min(255, adjusted))).toString(16).padStart(2, '0');
+    }).join('').toUpperCase();
+  };
   const colour = (node) => {
     if (!node) return null;
     const rgb = node.getAttribute('rgb');
-    if (rgb) return rgb.slice(-6).toUpperCase();
+    if (rgb) return tintColour(rgb.slice(-6).toUpperCase(), node.getAttribute('tint'));
     const t = node.getAttribute('theme');
-    if (t != null) return theme[Number(t)] || null;
+    if (t != null) return theme[Number(t)] ? tintColour(theme[Number(t)], node.getAttribute('tint')) : null;
     const i = node.getAttribute('indexed');
-    return i != null ? (indexed[Number(i)] || null) : null;
+    return i != null && indexed[Number(i)] ? tintColour(indexed[Number(i)], node.getAttribute('tint')) : null;
   };
   const fillColours = fills.map(fill => {
     const pattern = fill.getElementsByTagName('patternFill')[0];
