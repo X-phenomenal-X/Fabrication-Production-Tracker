@@ -140,6 +140,22 @@ must(!cncParsed.tasks.some(task => task.machine === 'multipunch'), 'obsolete CNC
 must(!cncParsed.tasks.some((task) => task.wo === '99999'), 'CNC import must not read a daily order number from nowhere');
 step(`fixtures: rolling ${rollingParsed.tasks.length}, cnc ${cncParsed.tasks.length}, daily ${dailyParsed.rows.length}`);
 
+
+const colouredDaily = await importDailySchedule(fs.readFileSync(writeBook('punch-colours.xlsx', {
+  'Daily Sched': [
+    { 1: 'W/O', 2: 'Job #', 3: 'Project', 4: 'Floor', 5: 'QTY', 6: 'Notes', 7: 'Punch' },
+    { 1: '-' },
+    { 1: 'WINDOW WALL' },
+    { 1: '9001', 2: 'J1', 3: 'Harbour', 4: 'L1', 5: 5, 6: 'A', 7: { fill: 'green', text: ' ' } },
+    { 1: '9002', 2: 'J2', 3: 'Harbour', 4: 'L2', 5: 5, 6: 'B', 7: { fill: 'yellow', text: ' ' } },
+    { 1: '9003', 2: 'J3', 3: 'Harbour', 4: 'L3', 5: 5, 6: 'C', 7: { fill: 'orange', text: ' ' } },
+    { 1: '9004', 2: 'J4', 3: 'Harbour', 4: 'L4', 5: 5, 6: 'D', 7: ' ' },
+  ],
+})));
+must(colouredDaily.rows.map(r => r.punchStatus).join(',') ===
+  'DONE,IN_PROGRESS,BACK_ORDER,NOT_STARTED', 'coloured Punch XLSX cells were not classified');
+step('daily Window Wall Punch fill colours: green/yellow/orange/unfilled');
+
 const prior = {
   tasks: [
     { id: 'old-roll', source: 'rolling', machine: 'roll-auto', wo: 'OLD-ROLL', die: 'A' },
