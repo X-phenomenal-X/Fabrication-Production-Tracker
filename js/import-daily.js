@@ -7,7 +7,7 @@
 
 import { readXlsx } from './xlsx.js';
 
-export const DAILY_PARSER_VERSION = 3;
+export const DAILY_PARSER_VERSION = 4;
 const SHEET = 'Daily Sched';
 export const DAILY_SHEET = SHEET;
 const PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
@@ -110,6 +110,24 @@ function headerMap(sheet) {
   return { ...FALLBACK, ...found, color: found.color || null };
 }
 
+/** Classify the Punch cell's Excel fill, independent of its text. */
+export function punchStatusFromFill(rgb) {
+  if (!rgb) return 'NOT_STARTED';
+  const hex = String(rgb).replace(/[^0-9a-f]/gi, '').slice(-6);
+  if (hex.length !== 6) return 'NOT_STARTED';
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const hi = Math.max(r, g, b), lo = Math.min(r, g, b), d = hi - lo;
+  if (hi < .14 || d < .10 || (lo > .84 && d < .17)) return 'NOT_STARTED';
+  let hue = 0;
+  if (hi === r) hue = ((g - b) / d) % 6;
+  else if (hi === g) hue = (b - r) / d + 2;
+  else hue = (r - g) / d + 4;
+  hue = ((hue * 60) + 360) % 360;
+  const distance = target => Math.min(Math.abs(hue - target), 360 - Math.abs(hue - target));
+  const nearest = [[120, 'DONE'], [60, 'IN_PROGRESS'], [30, 'BACK_ORDER']].sort((a,b) => distance(a[0]) - distance(b[0]))[0];
+  return nearest[1];
+}
+
 function value(cells, col) {
   return col ? cells[col - 1] : null;
 }
@@ -195,6 +213,7 @@ export async function importDailySchedule(arrayBuffer, { fileName = 'Daily Sched
       hts: text(value(row.cells, columns.hts)),
       widths: text(value(row.cells, columns.widths)),
       punch: text(value(row.cells, columns.punch)),
+      punchStatus: /WINDOW WALL/i.test(section || '') ? punchStatusFromFill(row.fillColours?.[columns.punch - 1]) : null,
       vtml: text(value(row.cells, columns.vtml)),
       sfs: text(value(row.cells, columns.sfs)),
       lvrsTcPan: text(value(row.cells, columns.lvrsTcPan)),
