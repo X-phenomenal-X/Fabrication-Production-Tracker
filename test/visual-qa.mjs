@@ -1394,13 +1394,6 @@ for (const theme of ['light', 'dark']) {
   await ctx.close();
 }
 
-await browser.close();
-server.close();
-
-console.log(`\nScreenshots: ${path.relative(ROOT, SHOT)}/`);
-console.log(errors.length ? `\nERRORS:\n  ${errors.join('\n  ')}` : '\nERRORS: none');
-process.exit(errors.length ? 1 : 0);
-
 /* Initial supervisor lists must remain bounded at phone width. */
 {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -1420,3 +1413,11 @@ process.exit(errors.length ? 1 : 0);
   note('overview @ 390px: three capped work-order sections');
   await ctx.close();
 }
+
+await browser.close();
+server.close();
+
+console.log(`\nScreenshots: ${path.relative(ROOT, SHOT)}/`);
+console.log(errors.length ? `\nERRORS:\n  ${errors.join('\n  ')}` : '\nERRORS: none');
+process.exit(errors.length ? 1 : 0);
+
