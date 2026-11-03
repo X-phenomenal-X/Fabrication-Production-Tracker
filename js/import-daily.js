@@ -124,8 +124,10 @@ export function punchStatusFromFill(rgb) {
   else hue = (r - g) / d + 4;
   hue = ((hue * 60) + 360) % 360;
   const distance = target => Math.min(Math.abs(hue - target), 360 - Math.abs(hue - target));
-  const nearest = [[120, 'DONE'], [60, 'IN_PROGRESS'], [30, 'BACK_ORDER']].sort((a,b) => distance(a[0]) - distance(b[0]))[0];
-  return nearest[1];
+  if (hue >= 75 && hue <= 170) return 'DONE';
+  if (hue >= 50 && hue < 75) return 'IN_PROGRESS';
+  if (hue >= 15 && hue < 50) return 'BACK_ORDER';
+  return 'NOT_STARTED';
 }
 
 function value(cells, col) {
