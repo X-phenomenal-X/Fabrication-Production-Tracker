@@ -1404,10 +1404,13 @@ for (const theme of ['light', 'dark']) {
   const sections = await page.locator('.sup-board .sup-list').evaluateAll(nodes => nodes.map(n => ({
     heading: n.querySelector('h2')?.textContent,
     visible: n.querySelectorAll('.shared-list-items .shared-list-row').length,
+    total: Number((n.querySelector('.shared-show-all')?.textContent || '').match(/\\d+/)?.[0] || n.querySelectorAll('.shared-list-items .shared-list-row').length),
     toggle: n.querySelector('.shared-show-all')?.textContent || '',
   })));
   if (sections.length !== 3 || sections.some(s => s.visible > 5))
     fail('overview @ 390px: work-order lists must cap at five: ' + JSON.stringify(sections));
+  if (sections.some(s => s.total > 5 && !/^Show all \\(\\d+\\)$/.test(s.toggle)))
+    fail('overview @ 390px: missing Show all control: ' + JSON.stringify(sections));
   if (sections.some(s => !s.heading || !/^(Late|Back orders|To stage)/.test(s.heading)))
     fail('overview @ 390px: missing unified headings');
   note('overview @ 390px: three capped work-order sections');
