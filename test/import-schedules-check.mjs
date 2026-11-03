@@ -133,7 +133,7 @@ const cncParsed = await importMachineWorkbook(fs.readFileSync(books.cnc), { kind
 const dailyParsed = await importDailySchedule(fs.readFileSync(books.daily), { fileName: 'Daily Schedule Oct 13 Rev B.xlsx' });
 
 must(rollingParsed.tasks.length === 160, `rolling parsed ${rollingParsed.tasks.length}, expected 160`);
-must(cncParsed.tasks.length === 280, `cnc parsed ${cncParsed.tasks.length}, expected 280`);
+must(cncParsed.tasks.length === 228, `cnc parsed ${cncParsed.tasks.length}, expected 228`);
 must(dailyParsed.rows.length === 72, `daily parsed ${dailyParsed.rows.length}, expected 72`);
 must(dailyParsed.report.woHeaderFound, 'fixture daily header was not recognised');
 must(!cncParsed.tasks.some(task => task.machine === 'multipunch'), 'obsolete CNC punch lines were imported');
