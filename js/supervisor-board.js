@@ -4,9 +4,10 @@
    shift's own date. Done is how much of that plan is already finished.
    Parked lines stay in the cloud and out of both counts. */
 
+import { state } from './store.js';
 import { MACHINES, MACHINE_BY_KEY } from './machines.js';
 import {
-  allBackOrders, assignedMachine, effectiveTaskStatus, isParked, openTodos,
+  addDays, allBackOrders, assignedMachine, effectiveTaskStatus, isParked, openTodos,
   resolveTask, shiftWindow, stagingQueue, tasksInScope, today, workInShift,
 } from './model.js';
 import { shiftContextAt } from './shifts.js';
@@ -100,6 +101,7 @@ export function buildShiftDraft(date, shiftKey) {
         wo: row.task.wo,
         project: row.task.project || '',
         qty: row.bo.qty,
+        cuttingDate: row.task.cuttingDate || '',
       });
     }
   }
@@ -125,26 +127,38 @@ export function buildShiftDraft(date, shiftKey) {
 }
 
 /** Collapse overdue task lines into distinct work orders for the Overview. */
-export function groupLateOrders(late = []) {
-  const orders = new Map();
-  for (const line of late) {
+export function groupByWo(lines = []) {
+  const groups = new Map();
+  for (const line of lines) {
     const wo = String(line.wo || '').trim();
-    if (!orders.has(wo)) orders.set(wo, {
-      wo, project: line.project || '', lines: 0, qty: 0,
-      oldestCuttingDate: line.cuttingDate || '', machines: [],
+    if (!groups.has(wo)) groups.set(wo, {
+      wo, project: line.project || '', lines: 0, qty: 0, totalQty: 0,
+      oldestCuttingDate: line.cuttingDate || '', earliestCuttingDate: line.cuttingDate || '', machines: [],
     });
-    const order = orders.get(wo);
-    order.lines++;
-    order.qty += Number(line.qty) || 0;
-    if (!order.project && line.project) order.project = line.project;
-    if (line.cuttingDate && (!order.oldestCuttingDate || line.cuttingDate < order.oldestCuttingDate)) {
-      order.oldestCuttingDate = line.cuttingDate;
+    const group = groups.get(wo);
+    group.lines++;
+    group.qty += Number(line.qty) || 0;
+    group.totalQty = group.qty;
+    if (!group.project && line.project) group.project = line.project;
+    if (line.cuttingDate && (!group.oldestCuttingDate || line.cuttingDate < group.oldestCuttingDate)) {
+      group.oldestCuttingDate = line.cuttingDate;
+      group.earliestCuttingDate = line.cuttingDate;
     }
-    if (line.machine && !order.machines.includes(line.machine)) order.machines.push(line.machine);
+    if (line.machine && !group.machines.includes(line.machine)) group.machines.push(line.machine);
   }
-  return [...orders.values()].sort((a, b) =>
-    a.oldestCuttingDate.localeCompare(b.oldestCuttingDate)
-      || a.wo.localeCompare(b.wo, undefined, { numeric: true }));
+  return [...groups.values()].sort((a, b) =>
+    (a.earliestCuttingDate || '9999').localeCompare(b.earliestCuttingDate || '9999')
+    || a.wo.localeCompare(b.wo, undefined, { numeric: true }));
+}
+
+export const groupLateOrders = groupByWo;
+
+export function stagingDueGroups(lines, shiftDate) {
+  const cutoff = addDays(shiftDate, 7);
+  const eligible = lines.filter(line => line.group === 'Rolling' && !line.parked && line.status === 'NOT_STARTED');
+  const undated = eligible.filter(line => !line.cuttingDate);
+  const due = eligible.filter(line => line.cuttingDate && line.cuttingDate <= cutoff);
+  return { groups: groupByWo(due), count: due.length, undated: undated.length };
 }
 
 export function supervisorBoard(ref = today(), now = new Date()) {
@@ -163,6 +177,17 @@ export function supervisorBoard(ref = today(), now = new Date()) {
       machine,
     };
   });
+  // Daily WINDOW WALL Punch cells are authoritative; the CNC workbook's
+  // retired MultiPunch & SAW rows are not part of this queue.
+  for (const order of state.dailyOrders || []) {
+    if (!/WINDOW WALL/i.test(order.section || '') || !order.punchStatus) continue;
+    lines.push({
+      group: 'Punch', machine: 'multipunch', wo: order.wo,
+      project: order.project || '', floor: order.floor || '',
+      qty: order.qty || 0, cuttingDate: order.cuttingDate || '',
+      status: order.punchStatus, parked: false,
+    });
+  }
   const late = lines.filter((line) => !line.parked && line.status !== 'DONE' && line.cuttingDate && line.cuttingDate < shift.date);
   const backOrders = allBackOrders().flatMap((group) => group.rows.map((row) => ({
     wo: row.task.wo,
@@ -171,12 +196,17 @@ export function supervisorBoard(ref = today(), now = new Date()) {
     qty: row.bo.qty,
   })));
   const staging = stagingQueue({ ref: shift.date });
+  const stagingDue = stagingDueGroups(lines, shift.date);
   return {
     shift,
     centres: centreShiftProgress(lines, shift.date),
     late,
     lateOrders: groupLateOrders(late),
     backOrders,
+    backOrderGroups: groupByWo(backOrders),
+    stagingDue: stagingDue.groups,
+    stagingDueCount: stagingDue.count,
+    stagingUndated: stagingDue.undated,
     stagingLines: staging.todo.slice(0, 8).map((row) => ({ wo: row.task.wo, project: row.task.project || '' })),
     stagingTodo: staging.todo.length,
     stagingReady: staging.staged.length,

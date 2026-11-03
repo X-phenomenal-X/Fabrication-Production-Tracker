@@ -84,8 +84,8 @@ const out = await page.evaluate(async (b64) => {
 
 console.log(JSON.stringify(out, null, 2).slice(0, 3000));
 
-if (books.synthetic && out.totalTasks !== 440) {
-  throw new Error(`expected 440 sanitized tasks, got ${out.totalTasks}`);
+if (books.synthetic && out.totalTasks !== 388) {
+  throw new Error(`expected 388 sanitized tasks, got ${out.totalTasks}`);
 }
 if (!books.synthetic && out.totalTasks < 3000) {
   throw new Error(`expected ~3900 real tasks, got ${out.totalTasks}`);

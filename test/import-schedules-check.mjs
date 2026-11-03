@@ -8,6 +8,7 @@ import os from 'os';
 import path from 'path';
 import { importDailySchedule } from '../js/import-daily.js';
 import { importMachineWorkbook } from '../js/import-machines.js';
+import { punchStatusFromFill } from '../js/import-daily.js';
 import {
   applyDailyImport, applyMachineImport, setDailyImport, setMachineImport, state,
 } from '../js/store.js';
@@ -132,12 +133,28 @@ const cncParsed = await importMachineWorkbook(fs.readFileSync(books.cnc), { kind
 const dailyParsed = await importDailySchedule(fs.readFileSync(books.daily), { fileName: 'Daily Schedule Oct 13 Rev B.xlsx' });
 
 must(rollingParsed.tasks.length === 160, `rolling parsed ${rollingParsed.tasks.length}, expected 160`);
-must(cncParsed.tasks.length === 280, `cnc parsed ${cncParsed.tasks.length}, expected 280`);
+must(cncParsed.tasks.length === 228, `cnc parsed ${cncParsed.tasks.length}, expected 228`);
 must(dailyParsed.rows.length === 72, `daily parsed ${dailyParsed.rows.length}, expected 72`);
 must(dailyParsed.report.woHeaderFound, 'fixture daily header was not recognised');
-must(cncParsed.report.missing.includes('MultiPunch & SAW') === false, 'fixture CNC is missing MultiPunch & SAW');
+must(!cncParsed.tasks.some(task => task.machine === 'multipunch'), 'obsolete CNC punch lines were imported');
 must(!cncParsed.tasks.some((task) => task.wo === '99999'), 'CNC import must not read a daily order number from nowhere');
 step(`fixtures: rolling ${rollingParsed.tasks.length}, cnc ${cncParsed.tasks.length}, daily ${dailyParsed.rows.length}`);
+
+
+const colouredDaily = await importDailySchedule(fs.readFileSync(writeBook('punch-colours.xlsx', {
+  'Daily Sched': [
+    { 1: 'W/O', 2: 'Job #', 3: 'Project', 4: 'Floor', 5: 'QTY', 6: 'Notes', 7: 'Punch' },
+    { 1: '-' },
+    { 1: 'WINDOW WALL' },
+    { 1: '9001', 2: 'J1', 3: 'Harbour', 4: 'L1', 5: 5, 6: 'A', 7: { fill: 'green', text: ' ' } },
+    { 1: '9002', 2: 'J2', 3: 'Harbour', 4: 'L2', 5: 5, 6: 'B', 7: { fill: 'yellow', text: ' ' } },
+    { 1: '9003', 2: 'J3', 3: 'Harbour', 4: 'L3', 5: 5, 6: 'C', 7: { fill: 'orange', text: ' ' } },
+    { 1: '9004', 2: 'J4', 3: 'Harbour', 4: 'L4', 5: 5, 6: 'D', 7: ' ' },
+  ],
+})));
+must(colouredDaily.rows.map(r => r.punchStatus).join(',') ===
+  'DONE,IN_PROGRESS,BACK_ORDER,NOT_STARTED', 'coloured Punch XLSX cells were not classified');
+step('daily Window Wall Punch fill colours: green/yellow/orange/unfilled');
 
 const prior = {
   tasks: [
@@ -199,7 +216,7 @@ must(spaced.report.shiftSheet === ' Shift Update', `shift tab resolved to ${spac
 must(spaced.shiftUpdate.shift === 'AFTERNOON', `spaced shift update loaded ${spaced.shiftUpdate?.shift}`);
 must(!JSON.stringify(spaced.shiftUpdate).includes('ARCHIVED'), 'spaced workbook fell through to Shift Update 2');
 must(!spaced.tasks.some((task) => task.wo === '99999'), 'CNC Daily Sched tab became a machine job');
-must(spaced.report.missing.includes('MultiPunch & SAW'), 'current CNC file should report MultiPunch & SAW missing');
+must(!spaced.tasks.some(task => task.machine === 'multipunch'), 'CNC punch lines should be ignored');
 step('leading-space Shift Update is the live tab; CNC Daily Sched is ignored');
 
 const encoded = await importMachineWorkbook(
@@ -364,7 +381,7 @@ const first = await runImport(argv('--cnc', books.cnc, '--rolling', books.rollin
 must(first.saved && first.changed, 'first import did not save');
 must(seen.workWrites === 0, 'the daily-work package was written');
 must(!workRow(), 'a work row was created');
-must(baseRow().data.tasks.length === 440, `saved ${baseRow().data.tasks.length} jobs, expected 440`);
+must(baseRow().data.tasks.length === 388, `saved ${baseRow().data.tasks.length} jobs, expected 388`);
 must(baseRow().data.dailyOrders.length === 72, 'daily orders were not saved');
 must(!baseRow().data.taskStatus && !baseRow().data.shiftLogs, 'schedules package picked up daily work');
 must(baseRow().data.tasks.some((task) => task.wo === 'MU2026-012' && task.source === 'rolling'), 'rolling job missing');
@@ -397,7 +414,7 @@ must(cncOnly.saved, 'CNC-only import did not save');
 must(JSON.stringify(workRow()) === workBefore, 'CNC import changed statuses or handovers');
 const savedTasks = baseRow().data.tasks;
 must(savedTasks.some((task) => task.wo === 'ROLL-KEEP'), 'CNC import removed rolling jobs');
-must(savedTasks.some((task) => task.source === 'cnc' && task.machine === 'multipunch'), 'CNC jobs were not added');
+must(!savedTasks.some((task) => task.source === 'cnc' && task.machine === 'multipunch'), 'obsolete CNC punch tasks imported');
 must(!savedTasks.some((task) => task.wo === 'OLD-CNC'), 'a replaced CNC job came back');
 must(baseRow().data.dailyOrders[0].wo === 'KEEP', 'CNC import replaced daily orders');
 must(baseRow().data.projectColorReference.projects.Keep === 'Black', 'CNC import cleared project colours');
@@ -508,7 +525,7 @@ seed('base', {
 });
 const current = await runImport(argv('--cnc', currentCnc), { env });
 must(current.saved, 'current CNC file did not import');
-must(current.files[0].warnings.some((warning) => warning.includes('MultiPunch & SAW')), 'missing Multi Punch sheet was not warned');
+must(!current.files[0].warnings.some((warning) => warning.includes('MultiPunch & SAW')), 'obsolete MultiPunch tab should not be required');
 must(current.files[0].notes.some((note) => note.includes(' Shift Update')), 'leading-space tab was not reported');
 must(!baseRow().data.tasks.some((task) => task.wo === 'PUNCH-OLD'), 'old Multi Punch job survived a file that has no such sheet');
 must(baseRow().data.tasks.some((task) => task.wo === 'ROLL-KEEP'), 'current CNC import removed rolling');
@@ -536,3 +553,12 @@ step(`7 MB Daily Schedule parsed in Node in ${seconds.toFixed(1)}s`);
 await new Promise((resolve) => server.close(resolve));
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log('Schedule import: OK');
+
+for (const [fill, expected] of [
+  ['92D050', 'DONE'], ['00B050', 'DONE'],
+  ['FFFF00', 'IN_PROGRESS'], ['FFC000', 'BACK_ORDER'],
+  ['ED7D31', 'BACK_ORDER'], ['FFFFFF', 'NOT_STARTED'],
+  [null, 'NOT_STARTED'],
+]) {
+  must(punchStatusFromFill(fill) === expected, 'Punch fill mapping ' + String(fill));
+}
