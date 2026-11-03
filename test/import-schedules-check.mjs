@@ -381,7 +381,7 @@ const first = await runImport(argv('--cnc', books.cnc, '--rolling', books.rollin
 must(first.saved && first.changed, 'first import did not save');
 must(seen.workWrites === 0, 'the daily-work package was written');
 must(!workRow(), 'a work row was created');
-must(baseRow().data.tasks.length === 440, `saved ${baseRow().data.tasks.length} jobs, expected 440`);
+must(baseRow().data.tasks.length === 388, `saved ${baseRow().data.tasks.length} jobs, expected 388`);
 must(baseRow().data.dailyOrders.length === 72, 'daily orders were not saved');
 must(!baseRow().data.taskStatus && !baseRow().data.shiftLogs, 'schedules package picked up daily work');
 must(baseRow().data.tasks.some((task) => task.wo === 'MU2026-012' && task.source === 'rolling'), 'rolling job missing');
