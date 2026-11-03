@@ -6,7 +6,7 @@ import { addManualTask } from '../js/store.js';
 import {
   applyShiftWindow, buildShiftDraft, centreShiftProgress, machineShiftNotes,
   shipWeekStart, windowWallSheet, WINDOW_WALL_FIELDS,
-  supervisorBoard, groupLateOrders,
+  supervisorBoard, groupLateOrders, groupByWo, stagingDueGroups,
 } from '../js/supervisor-board.js';
 import { shiftContextAt } from '../js/shifts.js';
 
@@ -116,3 +116,22 @@ if (!state.manualTasks || !Object.values(state.manualTasks).some((task) => task.
 }
 
 console.log('Supervisor board: OK');
+
+const grouped = groupByWo([
+  { wo: '42', project: 'A', qty: 3, cuttingDate: '2026-08-12', machine: 'roll-auto' },
+  { wo: '42', qty: 4, cuttingDate: '2026-08-11', machine: 'roll-man' },
+  { wo: '43', qty: 2, cuttingDate: '2026-08-13', machine: 'fom1' },
+]);
+if (grouped.length !== 2 || grouped[0].wo !== '42' || grouped[0].totalQty !== 7 ||
+    grouped[0].lines !== 2 || grouped[0].earliestCuttingDate !== '2026-08-11' ||
+    grouped[0].machines.length !== 2) throw new Error('groupByWo should combine all W/O lines');
+const stagingCheck = stagingDueGroups([
+  { wo: '42', group: 'Rolling', status: 'NOT_STARTED', cuttingDate: '2026-08-20' },
+  { wo: '42', group: 'Rolling', status: 'NOT_STARTED', cuttingDate: '2026-08-21' },
+  { wo: '43', group: 'Rolling', status: 'NOT_STARTED', cuttingDate: '' },
+  { wo: '44', group: 'Rolling', status: 'DONE', cuttingDate: '2026-08-19' },
+  { wo: '45', group: 'Rolling', status: 'NOT_STARTED', cuttingDate: '2026-08-22' },
+  { wo: '46', group: 'CNC', status: 'NOT_STARTED', cuttingDate: '2026-08-19' },
+], '2026-08-14');
+if (stagingCheck.count !== 2 || stagingCheck.groups.length !== 1 ||
+    stagingCheck.undated !== 1) throw new Error('staging due and undated classification failed');
