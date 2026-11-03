@@ -276,7 +276,7 @@ export function renderStaging(rerender, go) {
   }
 
   const queue = stagingQueue({ q: vs.q });
-  const ref = today();
+  const ref = shiftContextAt(today()).date;
   const cutoff = addDays(ref, 7);
   const todo = queue.todo.filter(r => vs.dueFilter === 'undated' ? !r.task.cuttingDate
     : vs.dueFilter === 'due' ? !!r.task.cuttingDate && r.task.cuttingDate <= cutoff : true);
