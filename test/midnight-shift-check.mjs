@@ -238,6 +238,8 @@ try {
 
   await page.goto(`http://127.0.0.1:${server.address().port}/?monitor#overview`);
   await page.locator('.sup-centres').waitFor();
+  const plannedCentres = await page.locator('.sup-centres .sup-centre').count();
+  if (!plannedCentres) assert.match(await page.locator('.sup-centres').innerText(), /Nothing planned this shift/);
   assert.equal(await page.locator('.monitor-clock').count(), 0);
   assert.equal(await page.evaluate(() => document.documentElement.dataset.display || ''), '');
   assert.deepEqual(errors, []);
