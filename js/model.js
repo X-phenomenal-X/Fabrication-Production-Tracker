@@ -469,6 +469,8 @@ function dailyPunchTasks() {
       shipDate: order.shipDate || '', comments: order.notes || '',
       status: order.punchStatus === 'DONE' ? 'DONE' : order.punchStatus === 'IN_PROGRESS' ? 'IP' : 'OPEN',
       punchStatus: order.punchStatus,
+      backOrder: order.punchStatus === 'BACK_ORDER',
+      boStat: order.punchStatus === 'BACK_ORDER' ? 'Punch missing / back order' : null,
     }));
 }
 
