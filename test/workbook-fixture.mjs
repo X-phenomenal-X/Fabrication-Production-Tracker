@@ -136,9 +136,10 @@ function dailyScheduleRows(count = 72) {
     {
       1: 'W/O#', 2: 'JOB CODE', 3: 'PROJECT', 4: 'FLOOR', 5: 'QTY', 6: 'NOTES',
       12: 'SERIES', 13: 'SHIP DATE', 15: 'GLAZING DATE', 16: 'CUTTING DATE',
-      27: 'CUT STATUS', 41: 'MTL STATUS', 42: 'COLOUR / FINISH',
+      7: 'Punch', 27: 'CUT STATUS', 41: 'MTL STATUS', 42: 'COLOUR / FINISH',
     },
     { 1: 'Separate Daily Schedule fixture' },
+    { 1: 'WINDOW WALL' },
   ];
   const statuses = ['IP', 'READY', 'DONE', 'OK', 'B/O'];
   for (let i = 0; i < count; i++) {
@@ -148,6 +149,7 @@ function dailyScheduleRows(count = 72) {
       4: `L${1 + (i % 20)}`, 5: 8 + (i % 48), 6: i % 9 === 0 ? 'Check latest elevation.' : null,
       12: series[i % series.length], 13: dateCell(`2026-08-${String(18 + (i % 6)).padStart(2, '0')}`),
       15: dateCell(`2026-08-${String(16 + (i % 6)).padStart(2, '0')}`), 16: dateCell(date),
+      7: i < 24 ? { fill: ['green', 'yellow', 'orange', 'yellow'][i % 4], text: 'Punch' } : null,
       27: statuses[i % statuses.length], 41: i % 11 === 0 ? 'NOT RECEIVED' : 'READY',
       42: colors[i % colors.length],
     });
