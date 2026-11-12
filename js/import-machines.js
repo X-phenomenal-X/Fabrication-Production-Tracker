@@ -23,7 +23,7 @@ import { readXlsx } from './xlsx.js';
      4  non-numeric work orders retained; shift update pinned to its source tab
      5  live shift-update worksheet renamed from Shift Update 2 to Shift Update
      6  Shift Update still matches when Excel saved a surrounding space */
-export const PARSER_VERSION = 7;
+export const PARSER_VERSION = 8;
 
 const PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
 
@@ -131,11 +131,6 @@ const SHEET_MAP = {
       sheet: 'FOM3', machine: 'fom3',
       cols: { wo: 1, project: 2, floor: 3, die: 4, qty: 5, cuttingDate: 6,
               bo: 7, boStat: 8, dayShift: 9, status: 10, shifts: 11 },
-    },
-    {
-      sheet: 'MultiPunch & SAW', machine: 'multipunch',
-      cols: { wo: 1, project: 2, floor: 3, die: 4, qty: 5, bo: 6, boStat: 7,
-              rolling: 8, cuttingDate: 9, saw: 10, punch: 11, shifts: 12 },
     },
     {
       // No machine column on this sheet — it is one queue for CNC 1, FMC 1 and

@@ -456,7 +456,37 @@ export function isAssigned(task) {
 /** One machine's lines, each paired with its effective status. Rush lines come
     first — that is the whole point of marking one — then soonest cutting date.
     The view decides whether to hide Done lines. */
+/** Daily WINDOW WALL Punch cells provide the Multi Punch work list.
+    No CNC MultiPunch & SAW lines are read into this queue. */
+function dailyPunchTasks() {
+  return (state.dailyOrders || [])
+    .filter(order => /WINDOW WALL/i.test(String(order.section || '')) && order.punchStatus)
+    .map(order => ({
+      id: 'daily-punch:' + order.id,
+      machine: 'multipunch', source: 'daily',
+      wo: order.wo, project: order.project || '', floor: order.floor || '',
+      die: order.series || '', qty: order.qty || 0, cuttingDate: order.cuttingDate || '',
+      shipDate: order.shipDate || '', comments: order.notes || '',
+      status: order.punchStatus === 'DONE' ? 'DONE' : order.punchStatus === 'IN_PROGRESS' ? 'IP' : 'OPEN',
+      punchStatus: order.punchStatus,
+      backOrder: order.punchStatus === 'BACK_ORDER',
+      boStat: order.punchStatus === 'BACK_ORDER' ? 'Punch missing / back order' : null,
+    }));
+}
+
 export function tasksForMachine(machineKey) {
+  if (machineKey === 'multipunch') {
+    return dailyPunchTasks().map(task => ({
+      task,
+      status: state.taskStatus[taskStatusKey(task)]?.status
+        ? effectiveTaskStatus(task)
+        : task.punchStatus === 'BACK_ORDER'
+          ? { key: 'NOT_STARTED', label: 'Not started', tone: 'bad', backOrder: true }
+          : effectiveTaskStatus(task),
+      rush: resolveRush(task),
+    })).sort((a, b) =>
+      (a.task.cuttingDate || '9999').localeCompare(b.task.cuttingDate || '9999'));
+  }
   return tasksInScope()
     .filter((t) => assignedMachine(t) === machineKey)
     .map((t) => resolveTask(t))

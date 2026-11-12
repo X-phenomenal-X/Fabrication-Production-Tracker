@@ -101,10 +101,39 @@ function parseStyles(xml) {
 
   const cellXfs = doc.getElementsByTagName('cellXfs')[0];
   if (!cellXfs) return [];
-  return Array.from(cellXfs.getElementsByTagName('xf')).map((xf) => {
+  const dateFlags = Array.from(cellXfs.getElementsByTagName('xf')).map((xf) => {
     const id = Number(xf.getAttribute('numFmtId') || 0);
     return BUILTIN_DATE_FMTS.has(id) || customDate.has(id);
   });
+  const fills = Array.from(doc.getElementsByTagName('fills')[0]?.getElementsByTagName('fill') || []);
+  const indexed = ['000000','FFFFFF','FF0000','00FF00','0000FF','FFFF00','FF00FF','00FFFF'];
+  const theme = ['FFFFFF','000000','EEECE1','1F497D','4F81BD','C0504D','9BBB59','8064A2','4BACC6','F79646','0000FF','800080'];
+  const tintColour = (hex, tint) => {
+    const t = Number(tint || 0);
+    if (!Number.isFinite(t) || t === 0) return hex;
+    return [0, 2, 4].map(i => {
+      const value = parseInt(hex.slice(i, i + 2), 16);
+      const adjusted = t < 0 ? value * (1 + t) : value * (1 - t) + 255 * t;
+      return Math.round(Math.max(0, Math.min(255, adjusted))).toString(16).padStart(2, '0');
+    }).join('').toUpperCase();
+  };
+  const colour = (node) => {
+    if (!node) return null;
+    const rgb = node.getAttribute('rgb');
+    if (rgb) return tintColour(rgb.slice(-6).toUpperCase(), node.getAttribute('tint'));
+    const t = node.getAttribute('theme');
+    if (t != null) return theme[Number(t)] ? tintColour(theme[Number(t)], node.getAttribute('tint')) : null;
+    const i = node.getAttribute('indexed');
+    return i != null && indexed[Number(i)] ? tintColour(indexed[Number(i)], node.getAttribute('tint')) : null;
+  };
+  const fillColours = fills.map(fill => {
+    const pattern = fill.getElementsByTagName('patternFill')[0];
+    if (!pattern || pattern.getAttribute('patternType') === 'none') return null;
+    return colour(pattern.getElementsByTagName('fgColor')[0]);
+  });
+  dateFlags.fillColours = Array.from(cellXfs.getElementsByTagName('xf')).map(xf =>
+    fillColours[Number(xf.getAttribute('fillId') || 0)] || null);
+  return dateFlags;
 }
 
 function parseSharedStrings(xml) {
@@ -137,6 +166,7 @@ function parseSheet(xml, shared, dateStyles, maxRows) {
   for (const row of doc.getElementsByTagName('row')) {
     if (rows.length >= maxRows) break;
     const cells = [];
+    const fillColours = [];
     let any = false;
 
     for (const c of row.getElementsByTagName('c')) {
@@ -175,11 +205,12 @@ function parseSheet(xml, shared, dateStyles, maxRows) {
 
       if (value !== null && value !== '') any = true;
       cells[idx - 1] = value ?? null;
+      fillColours[idx - 1] = dateStyles.fillColours?.[Number(c.getAttribute('s') || 0)] || null;
       if (idx > widest) widest = idx;
     }
 
     const r = Number(row.getAttribute('r') || rows.length + 1);
-    rows.push({ r, cells, empty: !any });
+    rows.push({ r, cells, fillColours, empty: !any });
   }
 
   return { rows, width: widest };
