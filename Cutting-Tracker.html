@@ -6687,6 +6687,22 @@ a.resource-download:active, button.resource-download:active { transform: transla
   .print-window-wall tr { break-inside: avoid; }
 }
 
+/* Shared mobile-first supervisor components */
+.shared-section-header {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.shared-section-header h2 {display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;margin:0;font-size:1rem}
+.shared-section-header small,.shared-meta,.shared-secondary {color:var(--muted, #777)}
+.shared-inline-count {font-variant-numeric:tabular-nums}
+.shared-capped-list,.shared-list-items {display:grid;gap:12px}
+.shared-list-row {display:flex;align-items:center;flex-wrap:wrap;gap:8px;width:100%;min-height:44px;padding:12px 16px;text-align:left;border:1px solid var(--line, #ddd);border-radius:10px;background:transparent;color:inherit}
+button.shared-list-row {cursor:pointer}
+.shared-show-all {min-height:44px;padding:12px 16px;cursor:pointer}
+.shared-stat-tile {display:grid;gap:4px;padding:16px}
+.shared-empty {display:flex;align-items:center;gap:12px;min-height:44px}
+@media(max-width:599px) {
+  .sup-board,.sup-list,.shared-list-items,.shared-capped-list {display:grid;grid-template-columns:minmax(0,1fr)}
+  .shared-list-row {display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
+}
+
 </style>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231c2245'/%3E%3Crect x='8' y='8' width='9' height='7.5' fill='%2335bce1'/%3E%3Crect x='8' y='16.5' width='9' height='7.5' fill='%231e71ab'/%3E%3Cpath d='M17.5 8h6.25l-3.15 7.5h-3.1zM17.5 16.5h2.7l-2.7 6.5z' fill='%2372b843'/%3E%3C/svg%3E">
 </head>
@@ -9250,10 +9266,38 @@ a.resource-download:active, button.resource-download:active { transform: transla
     }
     const cellXfs = doc.getElementsByTagName("cellXfs")[0];
     if (!cellXfs) return [];
-    return Array.from(cellXfs.getElementsByTagName("xf")).map((xf) => {
+    const dateFlags = Array.from(cellXfs.getElementsByTagName("xf")).map((xf) => {
       const id = Number(xf.getAttribute("numFmtId") || 0);
       return BUILTIN_DATE_FMTS.has(id) || customDate.has(id);
     });
+    const fills = Array.from(doc.getElementsByTagName("fills")[0]?.getElementsByTagName("fill") || []);
+    const indexed = ["000000", "FFFFFF", "FF0000", "00FF00", "0000FF", "FFFF00", "FF00FF", "00FFFF"];
+    const theme = ["FFFFFF", "000000", "EEECE1", "1F497D", "4F81BD", "C0504D", "9BBB59", "8064A2", "4BACC6", "F79646", "0000FF", "800080"];
+    const tintColour = (hex, tint) => {
+      const t = Number(tint || 0);
+      if (!Number.isFinite(t) || t === 0) return hex;
+      return [0, 2, 4].map((i) => {
+        const value2 = parseInt(hex.slice(i, i + 2), 16);
+        const adjusted = t < 0 ? value2 * (1 + t) : value2 * (1 - t) + 255 * t;
+        return Math.round(Math.max(0, Math.min(255, adjusted))).toString(16).padStart(2, "0");
+      }).join("").toUpperCase();
+    };
+    const colour = (node) => {
+      if (!node) return null;
+      const rgb = node.getAttribute("rgb");
+      if (rgb) return tintColour(rgb.slice(-6).toUpperCase(), node.getAttribute("tint"));
+      const t = node.getAttribute("theme");
+      if (t != null) return theme[Number(t)] ? tintColour(theme[Number(t)], node.getAttribute("tint")) : null;
+      const i = node.getAttribute("indexed");
+      return i != null && indexed[Number(i)] ? tintColour(indexed[Number(i)], node.getAttribute("tint")) : null;
+    };
+    const fillColours = fills.map((fill) => {
+      const pattern = fill.getElementsByTagName("patternFill")[0];
+      if (!pattern || pattern.getAttribute("patternType") === "none") return null;
+      return colour(pattern.getElementsByTagName("fgColor")[0]);
+    });
+    dateFlags.fillColours = Array.from(cellXfs.getElementsByTagName("xf")).map((xf) => fillColours[Number(xf.getAttribute("fillId") || 0)] || null);
+    return dateFlags;
   }
   function parseSharedStrings(xml) {
     if (!xml) return [];
@@ -9280,6 +9324,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
     for (const row of doc.getElementsByTagName("row")) {
       if (rows.length >= maxRows) break;
       const cells = [];
+      const fillColours = [];
       let any = false;
       for (const c of row.getElementsByTagName("c")) {
         const ref = c.getAttribute("r") || "";
@@ -9314,10 +9359,11 @@ a.resource-download:active, button.resource-download:active { transform: transla
         }
         if (value2 !== null && value2 !== "") any = true;
         cells[idx - 1] = value2 ?? null;
+        fillColours[idx - 1] = dateStyles.fillColours?.[Number(c.getAttribute("s") || 0)] || null;
         if (idx > widest) widest = idx;
       }
       const r = Number(row.getAttribute("r") || rows.length + 1);
-      rows.push({ r, cells, empty: !any });
+      rows.push({ r, cells, fillColours, empty: !any });
     }
     return { rows, width: widest };
   }
@@ -9654,7 +9700,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
   var init_import_machines = __esm({
     "js/import-machines.js"() {
       init_xlsx();
-      PARSER_VERSION = 7;
+      PARSER_VERSION = 8;
       PHANTOM_BEFORE = Date.UTC(1990, 0, 1);
       WO_HEADING = /^(?:W\/?O\s*#?|WORK\s*ORDER\s*#?|PROJECT|MACHINE|DATE|SHIFT|TOTALS?|SERVICE\s*ORDERS?|BACK\s*ORDERS?)$/i;
       SHEET_MAP = {
@@ -9758,24 +9804,6 @@ a.resource-download:active, button.resource-download:active { transform: transla
               dayShift: 9,
               status: 10,
               shifts: 11
-            }
-          },
-          {
-            sheet: "MultiPunch & SAW",
-            machine: "multipunch",
-            cols: {
-              wo: 1,
-              project: 2,
-              floor: 3,
-              die: 4,
-              qty: 5,
-              bo: 6,
-              boStat: 7,
-              rolling: 8,
-              cuttingDate: 9,
-              saw: 10,
-              punch: 11,
-              shifts: 12
             }
           },
           {
@@ -10647,7 +10675,33 @@ a.resource-download:active, button.resource-download:active { transform: transla
   function isAssigned(task) {
     return !!state.taskAssign?.[taskStatusKey(task)]?.machine;
   }
+  function dailyPunchTasks() {
+    return (state.dailyOrders || []).filter((order) => /WINDOW WALL/i.test(String(order.section || "")) && order.punchStatus).map((order) => ({
+      id: "daily-punch:" + order.id,
+      machine: "multipunch",
+      source: "daily",
+      wo: order.wo,
+      project: order.project || "",
+      floor: order.floor || "",
+      die: order.series || "",
+      qty: order.qty || 0,
+      cuttingDate: order.cuttingDate || "",
+      shipDate: order.shipDate || "",
+      comments: order.notes || "",
+      status: order.punchStatus === "DONE" ? "DONE" : order.punchStatus === "IN_PROGRESS" ? "IP" : "OPEN",
+      punchStatus: order.punchStatus,
+      backOrder: order.punchStatus === "BACK_ORDER",
+      boStat: order.punchStatus === "BACK_ORDER" ? "Punch missing / back order" : null
+    }));
+  }
   function tasksForMachine(machineKey) {
+    if (machineKey === "multipunch") {
+      return dailyPunchTasks().map((task) => ({
+        task,
+        status: state.taskStatus[taskStatusKey(task)]?.status ? effectiveTaskStatus(task) : task.punchStatus === "BACK_ORDER" ? { key: "NOT_STARTED", label: "Not started", tone: "bad", backOrder: true } : effectiveTaskStatus(task),
+        rush: resolveRush(task)
+      })).sort((a, b) => (a.task.cuttingDate || "9999").localeCompare(b.task.cuttingDate || "9999"));
+    }
     return tasksInScope().filter((t) => assignedMachine(t) === machineKey).map((t) => resolveTask(t)).map((task) => ({ task, status: effectiveTaskStatus(task), rush: resolveRush(task) })).sort((a, b) => {
       if (a.rush.on !== b.rush.on) return a.rush.on ? -1 : 1;
       return (a.task.cuttingDate || "9999") < (b.task.cuttingDate || "9999") ? -1 : 1;
@@ -13371,7 +13425,8 @@ a.resource-download:active, button.resource-download:active { transform: transla
           machine: row.machine,
           wo: row.task.wo,
           project: row.task.project || "",
-          qty: row.bo.qty
+          qty: row.bo.qty,
+          cuttingDate: row.task.cuttingDate || ""
         });
       }
     }
@@ -13392,28 +13447,39 @@ a.resource-download:active, button.resource-download:active { transform: transla
     const issues = openTodos(date3).open.map((item) => item.text).filter(Boolean);
     return { rows, notes: issues.join("\n") };
   }
-  function groupLateOrders(late = []) {
-    const orders = /* @__PURE__ */ new Map();
-    for (const line of late) {
+  function groupByWo(lines2 = []) {
+    const groups = /* @__PURE__ */ new Map();
+    for (const line of lines2) {
       const wo = String(line.wo || "").trim();
-      if (!orders.has(wo)) orders.set(wo, {
+      if (!groups.has(wo)) groups.set(wo, {
         wo,
         project: line.project || "",
         lines: 0,
         qty: 0,
+        totalQty: 0,
         oldestCuttingDate: line.cuttingDate || "",
+        earliestCuttingDate: line.cuttingDate || "",
         machines: []
       });
-      const order = orders.get(wo);
-      order.lines++;
-      order.qty += Number(line.qty) || 0;
-      if (!order.project && line.project) order.project = line.project;
-      if (line.cuttingDate && (!order.oldestCuttingDate || line.cuttingDate < order.oldestCuttingDate)) {
-        order.oldestCuttingDate = line.cuttingDate;
+      const group = groups.get(wo);
+      group.lines++;
+      group.qty += Number(line.qty) || 0;
+      group.totalQty = group.qty;
+      if (!group.project && line.project) group.project = line.project;
+      if (line.cuttingDate && (!group.oldestCuttingDate || line.cuttingDate < group.oldestCuttingDate)) {
+        group.oldestCuttingDate = line.cuttingDate;
+        group.earliestCuttingDate = line.cuttingDate;
       }
-      if (line.machine && !order.machines.includes(line.machine)) order.machines.push(line.machine);
+      if (line.machine && !group.machines.includes(line.machine)) group.machines.push(line.machine);
     }
-    return [...orders.values()].sort((a, b) => a.oldestCuttingDate.localeCompare(b.oldestCuttingDate) || a.wo.localeCompare(b.wo, void 0, { numeric: true }));
+    return [...groups.values()].sort((a, b) => (a.earliestCuttingDate || "9999").localeCompare(b.earliestCuttingDate || "9999") || a.wo.localeCompare(b.wo, void 0, { numeric: true }));
+  }
+  function stagingDueGroups(lines2, shiftDate) {
+    const cutoff = addDays(shiftDate, 7);
+    const eligible = lines2.filter((line) => line.group === "Rolling" && !line.parked && line.status === "NOT_STARTED");
+    const undated = eligible.filter((line) => !line.cuttingDate);
+    const due = eligible.filter((line) => line.cuttingDate && line.cuttingDate <= cutoff);
+    return { groups: groupByWo(due), count: due.length, undated: undated.length };
   }
   function supervisorBoard(ref = today(), now2 = /* @__PURE__ */ new Date()) {
     const shift2 = shiftContextAt(ref, now2);
@@ -13431,6 +13497,20 @@ a.resource-download:active, button.resource-download:active { transform: transla
         machine
       };
     });
+    for (const order of state.dailyOrders || []) {
+      if (!/WINDOW WALL/i.test(order.section || "") || !order.punchStatus) continue;
+      lines2.push({
+        group: "Punch",
+        machine: "multipunch",
+        wo: order.wo,
+        project: order.project || "",
+        floor: order.floor || "",
+        qty: order.qty || 0,
+        cuttingDate: order.cuttingDate || "",
+        status: order.punchStatus,
+        parked: false
+      });
+    }
     const late = lines2.filter((line) => !line.parked && line.status !== "DONE" && line.cuttingDate && line.cuttingDate < shift2.date);
     const backOrders = allBackOrders().flatMap((group) => group.rows.map((row) => ({
       wo: row.task.wo,
@@ -13439,21 +13519,27 @@ a.resource-download:active, button.resource-download:active { transform: transla
       qty: row.bo.qty
     })));
     const staging = stagingQueue({ ref: shift2.date });
+    const stagingDue = stagingDueGroups(lines2, shift2.date);
     return {
       shift: shift2,
       centres: centreShiftProgress(lines2, shift2.date),
       late,
       lateOrders: groupLateOrders(late),
       backOrders,
+      backOrderGroups: groupByWo(backOrders),
+      stagingDue: stagingDue.groups,
+      stagingDueCount: stagingDue.count,
+      stagingUndated: stagingDue.undated,
       stagingLines: staging.todo.slice(0, 8).map((row) => ({ wo: row.task.wo, project: row.task.project || "" })),
       stagingTodo: staging.todo.length,
       stagingReady: staging.staged.length,
       todos: openTodos(shift2.date)
     };
   }
-  var SUPERVISOR_CENTRES, WINDOW_WALL_FIELDS;
+  var SUPERVISOR_CENTRES, WINDOW_WALL_FIELDS, groupLateOrders;
   var init_supervisor_board = __esm({
     "js/supervisor-board.js"() {
+      init_store();
       init_machines();
       init_model();
       init_shifts();
@@ -13483,6 +13569,7 @@ a.resource-download:active, button.resource-download:active { transform: transla
         ["sfs", "SFS"],
         ["lvrsTcPan", "LVRS/TC PAN"]
       ]);
+      groupLateOrders = groupByWo;
     }
   });
 
@@ -15449,7 +15536,8 @@ ${add2.join("\n")}` : add2.join("\n");
     DAILY_PARSER_VERSION: () => DAILY_PARSER_VERSION,
     DAILY_SHEET: () => DAILY_SHEET,
     dailySheetHasWorkOrderHeader: () => dailySheetHasWorkOrderHeader,
-    importDailySchedule: () => importDailySchedule
+    importDailySchedule: () => importDailySchedule,
+    punchStatusFromFill: () => punchStatusFromFill
   });
   function text2(value2) {
     if (value2 == null || typeof value2 === "object") return null;
@@ -15504,6 +15592,24 @@ ${add2.join("\n")}` : add2.join("\n");
       }
     }
     return { ...FALLBACK, ...found, color: found.color || null };
+  }
+  function punchStatusFromFill(rgb) {
+    if (!rgb) return "NOT_STARTED";
+    const hex = String(rgb).replace(/[^0-9a-f]/gi, "").slice(-6);
+    if (hex.length !== 6) return "NOT_STARTED";
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const hi = Math.max(r, g, b), lo = Math.min(r, g, b), d = hi - lo;
+    if (hi < 0.14 || d < 0.1 || lo > 0.84 && d < 0.17) return "NOT_STARTED";
+    let hue = 0;
+    if (hi === r) hue = (g - b) / d % 6;
+    else if (hi === g) hue = (b - r) / d + 2;
+    else hue = (r - g) / d + 4;
+    hue = (hue * 60 + 360) % 360;
+    const distance = (target) => Math.min(Math.abs(hue - target), 360 - Math.abs(hue - target));
+    if (hue >= 75 && hue <= 170) return "DONE";
+    if (hue >= 50 && hue < 75) return "IN_PROGRESS";
+    if (hue >= 15 && hue < 50) return "BACK_ORDER";
+    return "NOT_STARTED";
   }
   function value(cells, col) {
     return col ? cells[col - 1] : null;
@@ -15587,6 +15693,7 @@ ${add2.join("\n")}` : add2.join("\n");
         hts: text2(value(row.cells, columns3.hts)),
         widths: text2(value(row.cells, columns3.widths)),
         punch: text2(value(row.cells, columns3.punch)),
+        punchStatus: /WINDOW WALL/i.test(section || "") ? punchStatusFromFill(row.fillColours?.[columns3.punch - 1]) : null,
         vtml: text2(value(row.cells, columns3.vtml)),
         sfs: text2(value(row.cells, columns3.sfs)),
         lvrsTcPan: text2(value(row.cells, columns3.lvrsTcPan)),
@@ -15617,7 +15724,7 @@ ${add2.join("\n")}` : add2.join("\n");
   var init_import_daily = __esm({
     "js/import-daily.js"() {
       init_xlsx();
-      DAILY_PARSER_VERSION = 3;
+      DAILY_PARSER_VERSION = 4;
       SHEET = "Daily Sched";
       DAILY_SHEET = SHEET;
       PHANTOM_BEFORE2 = Date.UTC(1990, 0, 1);
@@ -20128,7 +20235,7 @@ create policy "member reads own row"
   init_model();
   init_machines();
   init_shifts();
-  var vs2 = { q: "", showStaged: true };
+  var vs2 = { q: "", showStaged: true, dueFilter: "all" };
   function machineLabel3(key2) {
     const m = MACHINE_BY_KEY[key2];
     return m ? machineConfig(m).label : key2;
@@ -20421,8 +20528,11 @@ create policy "member reads own row"
         )
       );
     }
-    const { todo, staged } = stagingQueue({ q: vs2.q });
-    const ref = today();
+    const queue = stagingQueue({ q: vs2.q });
+    const ref = shiftContextAt(today()).date;
+    const cutoff = addDays(ref, 7);
+    const todo = queue.todo.filter((r) => vs2.dueFilter === "undated" ? !r.task.cuttingDate : vs2.dueFilter === "due" ? !!r.task.cuttingDate && r.task.cuttingDate <= cutoff : true);
+    const staged = queue.staged;
     const overdue = todo.filter((r) => r.task.cuttingDate && r.task.cuttingDate < ref).length;
     const dueToday = todo.filter((r) => r.task.cuttingDate === ref).length;
     const head = el(
@@ -20491,6 +20601,14 @@ create policy "member reads own row"
             }
           })
         ),
+        el("label.row.small", {}, "Staging filter", el("select", {
+          value: vs2.dueFilter,
+          "aria-label": "Staging filter",
+          onchange: (e) => {
+            vs2.dueFilter = e.target.value;
+            rerender();
+          }
+        }, ...[["all", "All"], ["due", "Due soon"], ["undated", "Undated"]].map(([value2, label]) => el("option", { value: value2 }, label)))),
         el("span.spacer"),
         el(
           "label.row.small.donetoggle",
@@ -21203,6 +21321,67 @@ create policy "member reads own row"
 
   // js/views/overview.js
   init_supervisor_board();
+
+  // js/views/ui.js
+  init_ui();
+  function sectionHeader(title, { count, sub, action } = {}) {
+    return el(
+      "div.shared-section-header",
+      {},
+      el(
+        "h2",
+        {},
+        title,
+        count == null ? null : el("span.shared-inline-count", {}, String(count)),
+        sub ? el("small", {}, " \xB7 " + sub) : null
+      ),
+      action || null
+    );
+  }
+  function listRow({ primary, secondary = "", meta = "", tone = "", onClick } = {}) {
+    const tag = onClick ? "button.shared-list-row" : "div.shared-list-row";
+    return el(
+      tag + (tone ? "." + tone : ""),
+      onClick ? { type: "button", onclick: onClick } : {},
+      el("strong.mono", {}, primary || "\u2014"),
+      secondary ? el("span.shared-secondary", {}, secondary) : null,
+      meta ? el("small.shared-meta", {}, meta) : null
+    );
+  }
+  function cappedList(rows = [], { limit = 5, empty: empty2 = "Nothing to show." } = {}) {
+    const root2 = el("div.shared-capped-list", {});
+    if (!rows.length) {
+      root2.append(el("p.shared-empty-text", {}, empty2));
+      return root2;
+    }
+    const body = el("div.shared-list-items", {}, ...rows.slice(0, limit));
+    root2.append(body);
+    if (rows.length > limit) {
+      let expanded = false;
+      const toggle = el("button.shared-show-all", { type: "button", onclick: () => {
+        expanded = !expanded;
+        body.replaceChildren(...expanded ? rows : rows.slice(0, limit));
+        toggle.textContent = expanded ? "Show less" : "Show all (" + rows.length + ")";
+        toggle.setAttribute("aria-expanded", String(expanded));
+      }, "aria-expanded": "false" }, "Show all (" + rows.length + ")");
+      root2.append(toggle);
+    }
+    return root2;
+  }
+  function statTile({ value: value2, label, sub = "", tone = "" } = {}) {
+    return el(
+      "div.shared-stat-tile" + (tone ? "." + tone : ""),
+      {},
+      el("strong.mono", {}, String(value2 ?? "\u2014")),
+      el("span", {}, label || ""),
+      sub ? el("small", {}, sub) : null
+    );
+  }
+  function emptyState({ icon: symbol = "check", text: text4 = "", action = null } = {}) {
+    return el("div.shared-empty", {}, icon(symbol, { size: 22 }), el("span", {}, text4), action);
+  }
+
+  // js/views/overview.js
   var GROUP_PAGE2 = { Rolling: "rolling", FOM: "fom", CNC: "cnc", Punch: "punch" };
   var PREVIOUS_SHIFT = {
     DAY: { key: "NIGHT", day: -1, fallback: "AFT" },
@@ -21425,13 +21604,7 @@ create policy "member reads own row"
     return el(
       "section.overview-band." + tone,
       {},
-      el(
-        "header.overview-band-head",
-        {},
-        el("span.overview-step", {}, String(step)),
-        el("h2", {}, title),
-        el("span", {}, hint)
-      ),
+      sectionHeader(title, { sub: hint }),
       body
     );
   }
@@ -21440,28 +21613,21 @@ create policy "member reads own row"
       `div.overview-health-stat.${tone}`,
       {},
       el("span.overview-health-icon", { "aria-hidden": "true" }, icon(iconName, { size: 22 })),
-      el(
-        "div",
-        {},
-        el("strong.mono", {}, value2),
-        el("span", {}, label),
-        detail ? el("small", {}, detail) : null
-      )
+      statTile({ value: value2, label, sub: detail, tone })
     );
   }
   function supervisorStrip(go2) {
     const board = supervisorBoard();
-    const pile = (title, rows, empty2, { late = false } = {}) => el(
+    const pile = (title, rows, empty2, count, sub, page) => el(
       "section.sup-list",
       {},
-      el("h2", {}, title, el("span", {}, String(rows.length)), late ? el("small", {}, ` \xB7 ${board.late.length} lines`) : null),
-      rows.length ? el("ul", {}, ...rows.slice(0, 6).map((row) => el(
-        "li",
-        {},
-        el("b.mono", {}, row.wo || "\u2014"),
-        row.project ? el("span", {}, ` \xB7 ${row.project}`) : null,
-        late ? el("span", {}, ` \xB7 ${row.lines} lines \xB7 since ${fmtDate(row.oldestCuttingDate)}`) : null
-      ))) : el("p", {}, empty2)
+      sectionHeader(title, { count, sub }),
+      cappedList(rows.map((row) => listRow({
+        primary: row.wo,
+        secondary: row.project,
+        meta: [row.lines + " lines", row.earliestCuttingDate ? "since " + fmtDate(row.earliestCuttingDate) : "", row.machines?.join(", ")].filter(Boolean).join(" \xB7 "),
+        onClick: () => go2(page)
+      })), { limit: 5, empty: empty2 })
     );
     return el(
       "section.sup-board",
@@ -21469,35 +21635,23 @@ create policy "member reads own row"
       el(
         "div.sup-shift",
         {},
-        el("strong", {}, `${board.shift.shift.label} shift`),
+        el("strong", {}, board.shift.shift.label + " shift"),
         board.shift.shift.range ? el("span", {}, board.shift.shift.range) : null
       ),
-      el("div.sup-centres", {}, ...board.centres.map((centre) => el(
+      el("div.sup-centres", {}, ...board.centres.some((centre) => centre.plan > 0) ? board.centres.filter((centre) => centre.plan > 0).map((centre) => el(
         "button.sup-centre",
         {
           type: "button",
           onclick: () => go2(centre.page),
-          "aria-label": `${centre.label}: ${centre.done} done of ${centre.plan} planned this shift`
+          "aria-label": centre.label + ": " + centre.done + " done of " + centre.plan + " planned this shift"
         },
         el("span.sup-centre-label", {}, centre.label),
-        el(
-          "span.sup-centre-score",
-          {},
-          el("b", {}, String(centre.done)),
-          el("small", {}, ` / ${centre.plan}`)
-        ),
-        el("span.sup-centre-hint", {}, centre.plan ? "done / planned" : "none dated for this shift")
-      ))),
-      el(
-        "div.sup-counts",
-        {},
-        el("div", {}, el("b", {}, String(board.lateOrders.length)), el("span", {}, `Late \xB7 ${board.late.length} lines`)),
-        el("div", {}, el("b", {}, String(board.backOrders.length)), el("span", {}, "Back orders")),
-        el("div", {}, el("b", {}, String(board.stagingTodo)), el("span", {}, "To stage"))
-      ),
-      pile("Late", board.lateOrders, "Nothing is past its cutting date.", { late: true }),
-      pile("Back orders", board.backOrders, "No open shortages."),
-      pile("Still to stage", board.stagingLines, "Rolling material for this shift is staged or already running.")
+        el("span.sup-centre-score", {}, el("b", {}, String(centre.done)), el("small", {}, " / " + centre.plan)),
+        el("span.sup-centre-hint", {}, "done / planned")
+      )) : [emptyState({ icon: "calendar", text: "Nothing planned this shift" })]),
+      pile("Late", board.lateOrders, "Nothing is past its cutting date.", board.lateOrders.length, board.late.length + " lines", "today"),
+      pile("Back orders", board.backOrderGroups, "No open shortages.", board.backOrderGroups.length, board.backOrders.length + " lines", "backorders"),
+      pile("To stage", board.stagingDue, "No rolling work due within seven days.", board.stagingDue.length, board.stagingDueCount + " lines \xB7 " + board.stagingUndated + " undated", "staging")
     );
   }
   function quickStart(label, detail, iconName, page, go2, on) {
